@@ -89,10 +89,12 @@ func TestStore_RecordSpawn(t *testing.T) {
 		t.Fatalf("PendingRunsAwaitingDisposition() = %+v, want one run", pending)
 	}
 	got := pending[0]
-	if got.TicketID != "sandbox://CC-1" || got.Pgid != 4242 || got.BaselineSHA != "deadbeef" || !got.ProcStartedAt.Equal(testNow) {
+	if got.TicketID != "sandbox://CC-1" || got.Pgid != 4242 || got.BaselineSHA != "deadbeef" ||
+		!got.ProcStartedAt.Equal(testNow) {
 		t.Errorf("PendingRunsAwaitingDisposition()[0] = %+v, want CC-1 pgid 4242 baseline deadbeef started %s", got, testNow)
 	}
-	if summary := latestRun(t, store, "sandbox://CC-1"); summary.LogPath != "/state/runs/1.jsonl" || summary.Outcome.IsSome() {
+	if summary := latestRun(t, store, "sandbox://CC-1"); summary.LogPath != "/state/runs/1.jsonl" ||
+		summary.Outcome.IsSome() {
 		t.Errorf("LatestRunsByTicket()[CC-1] = %+v, want the log path set and no outcome yet", summary)
 	}
 }
@@ -160,7 +162,9 @@ func TestStore_RecordDisposition(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		seedOneTicket(t, store)
-		disposition := storepkg.Disposition{RunID: plan.RunID(insertAgentRun(t, store)), Outcome: plan.OutcomePush, EndedAt: testNow}
+		disposition := storepkg.Disposition{
+			RunID: plan.RunID(insertAgentRun(t, store)), Outcome: plan.OutcomePush, EndedAt: testNow,
+		}
 		if err := store.RecordDisposition(t.Context(), disposition); err != nil {
 			t.Fatalf("first RecordDisposition: %v", err)
 		}
@@ -181,7 +185,8 @@ func TestStore_InsertCutFailedRun(t *testing.T) {
 	if got := pendingRuns(t, store); len(got) != 0 {
 		t.Errorf("PendingRunsAwaitingDisposition() = %+v, want none: a cut failure never claims a pgid", got)
 	}
-	if summary := latestRun(t, store, "sandbox://CC-1"); summary.Outcome != option.Some(plan.OutcomeCutFailed) || summary.Pgid.IsSome() {
+	if summary := latestRun(t, store, "sandbox://CC-1"); summary.Outcome != option.Some(plan.OutcomeCutFailed) ||
+		summary.Pgid.IsSome() {
 		t.Errorf("LatestRunsByTicket()[CC-1] = %+v, want cut_failed with no pgid", summary)
 	}
 }
@@ -255,7 +260,9 @@ func TestStore_ActiveLaunchHashes(t *testing.T) {
 	t.Parallel()
 	store := openStore(t)
 	seedOneTicket(t, store)
-	queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
+	queueLaunch(t, store, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow,
+	})
 	applyLaunches(t, store, testNow.Add(time.Second))
 
 	hashes, err := store.ActiveLaunchHashes(t.Context())
@@ -272,7 +279,8 @@ func TestStore_PendingIntentsByTicket(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	seedOneTicket(t, store)
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}}); err != nil {
+	second := []storepkg.Ticket{{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}}
+	if err := store.UpsertTickets(ctx, second); err != nil {
 		t.Fatalf("UpsertTickets(CC-2): %v", err)
 	}
 	for i, q := range []struct {

@@ -37,6 +37,7 @@ func TestProjectsPage(t *testing.T) {
 }
 
 func testCreateProjectGroups(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 
@@ -62,6 +63,7 @@ func testCreateProjectGroups(t *testing.T) {
 }
 
 func testCreateProjectHTMX(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
@@ -78,6 +80,7 @@ func testCreateProjectHTMX(t *testing.T) {
 }
 
 func testCreateProjectRefusesBadInput(t *testing.T) {
+	t.Helper()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"1"}}
 	if rec := do(t, server, http.MethodPost, "/projects", req{Form: form}); rec.Code != http.StatusSeeOther {
@@ -113,6 +116,7 @@ func testCreateProjectRefusesBadInput(t *testing.T) {
 }
 
 func testLooseRepo(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 
@@ -130,6 +134,7 @@ func testLooseRepo(t *testing.T) {
 }
 
 func testNewProjectFormHue(t *testing.T) {
+	t.Helper()
 	server := projectsServer(t)
 	for _, tt := range []struct {
 		name string
@@ -153,6 +158,7 @@ func testNewProjectFormHue(t *testing.T) {
 }
 
 func testEditProjectRenames(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
@@ -174,6 +180,7 @@ func testEditProjectRenames(t *testing.T) {
 }
 
 func testEditProjectRefusals(t *testing.T) {
+	t.Helper()
 	server := projectsServer(t)
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"beta"}, "hue": {"1"}}})
@@ -210,6 +217,7 @@ func testEditProjectRefusals(t *testing.T) {
 }
 
 func testDeleteProject(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}}
@@ -228,6 +236,7 @@ func testDeleteProject(t *testing.T) {
 }
 
 func testRepoSelectMoves(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})

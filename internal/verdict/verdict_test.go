@@ -343,7 +343,10 @@ func evaluateBoundedWait(t *testing.T) {
 		want verdict.Kind
 	}{
 		{name: "zero successful ticks is checking", now: pushedAt, want: verdict.Checking},
-		{name: "the wait elapsed over successful ticks is needs you", now: pushedAt.Add(verdict.BoundedWait), want: verdict.NeedsYou},
+		{
+			name: "the wait elapsed over successful ticks is needs you",
+			now:  pushedAt.Add(verdict.BoundedWait), want: verdict.NeedsYou,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

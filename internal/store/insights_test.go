@@ -47,7 +47,9 @@ func withdraw(t *testing.T, store *storepkg.Store, ticketURL string, at time.Tim
 }
 
 var june10 = storepkg.SpendQuery{
-	Loc: time.UTC, Since: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC), Until: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+	Loc:   time.UTC,
+	Since: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+	Until: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
 }
 
 func mergedSpend(t *testing.T, store *storepkg.Store) []storepkg.TicketSpend {

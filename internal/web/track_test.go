@@ -29,6 +29,7 @@ func TestTrack(t *testing.T) {
 }
 
 func testTrackQueuesOneIntent(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	st := openStore(t)
 	source := web.WithTrackerSource(func(tracker.Kind, string) (tracker.Source, error) {
@@ -71,6 +72,7 @@ func testTrackQueuesOneIntent(t *testing.T) {
 }
 
 func testTrackRedirects(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := openServer(openStore(t), fixedClock(testNow), "")
 
@@ -82,6 +84,7 @@ func testTrackRedirects(t *testing.T) {
 }
 
 func testTrackRejectsBadName(t *testing.T) {
+	t.Helper()
 	st := openStore(t)
 	server := openServer(st, fixedClock(testNow), "")
 
@@ -111,6 +114,7 @@ func testTrackRejectsBadName(t *testing.T) {
 }
 
 func testBannerPolls(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	st := openStore(t)
 	server := openServer(st, fixedClock(testNow), "")
@@ -173,6 +177,7 @@ func consumeTrack(t *testing.T, st *storepkg.Store) {
 }
 
 func testBannerNamesState(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	repo := func(name string, phase plan.RepoPhase, kind plan.RefusalKind, reason, source string) storepkg.Repo {
 		return storepkg.Repo{
@@ -233,6 +238,7 @@ func testBannerNamesState(t *testing.T) {
 }
 
 func testBannerAnswers286(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	st := openStore(t)
 	server := openServer(st, fixedClock(testNow), "")

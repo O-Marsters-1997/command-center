@@ -40,7 +40,8 @@ func TestNewInsightsPage(t *testing.T) {
 			t.Errorf("NewInsightsPage() waste = {HasWaste: %v, WasteY: %v}, want {true %v}", chart.HasWaste, got, want)
 		}
 		if chart.Dots[0].Y >= chart.Dots[1].Y {
-			t.Errorf("NewInsightsPage() dot Y = %v, %v, want the 9%% point above the 2%% point", chart.Dots[0].Y, chart.Dots[1].Y)
+			t.Errorf("NewInsightsPage() dot Y = %v, %v, want the 9%% point above the 2%% point",
+				chart.Dots[0].Y, chart.Dots[1].Y)
 		}
 	})
 

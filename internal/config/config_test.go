@@ -201,7 +201,10 @@ func TestLoad(t *testing.T) {
 			{"spend_limit_5h negative", "spend_limit_5h = -1\n", []string{"spend_limit_5h"}},
 			{"board_poll_seconds zero", "board_poll_seconds = 0\n", []string{"board_poll_seconds"}},
 			{"max_turns negative", "max_turns = -3\n", []string{"max_turns"}},
-			{"argv missing parts", "agent_command = [\"claude\"]\n", []string{"--permission-mode", "{system_prompt}", "{model}"}},
+			{
+				"argv missing parts", "agent_command = [\"claude\"]\n",
+				[]string{"--permission-mode", "{system_prompt}", "{model}"},
+			},
 			{
 				name: "all at once",
 				body: "port = 0\nmax_agents = 0\nspend_limit_5h = 200\nboard_poll_seconds = 0\n" +

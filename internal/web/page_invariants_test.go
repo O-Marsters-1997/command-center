@@ -13,7 +13,9 @@ type renderedPage struct{ name, html string }
 
 func everyPage(t *testing.T) []renderedPage {
 	t.Helper()
-	failed, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed})
+	failed, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	board := newServer(railStore(t, true), testNow)
 	features := threeFeatureServer(t)
 	repos := reposServer(t, new(atomic.Int32))
@@ -105,7 +107,8 @@ func TestPageInvariants(t *testing.T) {
 
 	t.Run("the htmx config forbids eval and injected styles", func(t *testing.T) {
 		t.Parallel()
-		meta := htmltest.Parse(t, renderPath(t, newServer(seededStore(t, testNow), testNow), "/tickets")).One(t, `meta[name="htmx-config"]`)
+		page := renderPath(t, newServer(seededStore(t, testNow), testNow), "/tickets")
+		meta := htmltest.Parse(t, page).One(t, `meta[name="htmx-config"]`)
 		config, _ := meta.Attr("content")
 		for _, want := range []string{`"allowEval":false`, `"includeIndicatorStyles":false`} {
 			if !strings.Contains(config, want) {

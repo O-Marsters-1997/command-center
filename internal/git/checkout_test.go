@@ -100,7 +100,8 @@ func TestEnsureCheckout(t *testing.T) {
 		gittest.Run(t, repoPath, "config", "core.sshCommand", "false")
 		gittest.Run(t, repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
 
-		if err := git.EnsureCheckout(t.Context(), "r", "https://github.com/o/r", repoPath); errors.Is(err, git.ErrOriginMismatch) {
+		err := git.EnsureCheckout(t.Context(), "r", "https://github.com/o/r", repoPath)
+		if errors.Is(err, git.ErrOriginMismatch) {
 			t.Errorf("EnsureCheckout(https form of origin) error = %v, want no ErrOriginMismatch", err)
 		}
 	})
@@ -163,7 +164,8 @@ func FuzzFullName(f *testing.F) {
 			return
 		}
 		normal := git.NormaliseRemote(remote)
-		if !strings.HasPrefix(normal, "github.com/") || !githubFullName.MatchString(strings.TrimPrefix(normal, "github.com/")) {
+		if !strings.HasPrefix(normal, "github.com/") ||
+			!githubFullName.MatchString(strings.TrimPrefix(normal, "github.com/")) {
 			return
 		}
 		if !git.SameRemote(remote, "https://github.com/"+fullName) {

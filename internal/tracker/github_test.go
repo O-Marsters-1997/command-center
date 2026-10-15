@@ -79,14 +79,14 @@ func recordedTracker(t *testing.T, byFeature map[string][]tracker.Ticket) func(a
 		return out
 	}
 	return func(args []string) ([]byte, error) {
-		switch {
-		case args[0] == "label":
+		switch args[0] {
+		case "label":
 			labels := []map[string]string{{"name": "bug"}}
 			for feature := range byFeature {
 				labels = append(labels, map[string]string{"name": feature})
 			}
 			return encode(labels), nil
-		case args[0] == "issue":
+		case "issue":
 			feature := args[slices.Index(args, "--label")+1]
 			issues := []map[string]any{}
 			for _, ticket := range byFeature[feature] {
@@ -99,7 +99,7 @@ func recordedTracker(t *testing.T, byFeature map[string][]tracker.Ticket) func(a
 				})
 			}
 			return encode(issues), nil
-		case args[0] == "api":
+		case "api":
 			deps := []map[string]string{{"html_url": "https://github.com/o/r/issues/99", "state": "closed"}}
 			for _, tickets := range byFeature {
 				for _, ticket := range tickets {
@@ -119,6 +119,7 @@ func recordedTracker(t *testing.T, byFeature map[string][]tracker.Ticket) func(a
 func TestGithubSource(t *testing.T) {
 	t.Parallel()
 	trackertest.RunContract(t, func(t *testing.T, byFeature map[string][]tracker.Ticket) tracker.Source {
+		t.Helper()
 		return sourceReplaying(t, recordedTracker(t, byFeature))
 	})
 }

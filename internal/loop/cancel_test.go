@@ -14,7 +14,9 @@ func TestCancel(t *testing.T) {
 	f := newLoopFixture(t,
 		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
 	for _, ticket := range f.Tickets {
-		launch := storepkg.LaunchRequest{Ticket: ticket.URL, PromptHash: composeHash(ticket.URL), Group: "group-a", At: testAt}
+		launch := storepkg.LaunchRequest{
+			Ticket: ticket.URL, PromptHash: composeHash(ticket.URL), Group: "group-a", At: testAt,
+		}
 		if err := f.Store.QueueLaunchIntent(t.Context(), launch); err != nil {
 			t.Fatalf("QueueLaunchIntent(%s): %v", ticket.URL, err)
 		}

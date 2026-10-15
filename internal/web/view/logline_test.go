@@ -65,7 +65,11 @@ func TestLineOf(t *testing.T) {
 				want:  result{Result: "interrupted", Failed: true},
 			},
 			{name: "no result yet is running", event: agentlog.Event{Kind: agentlog.Cmd}, want: result{Result: "running"}},
-			{name: "a result with no duration shows none", event: agentlog.Event{Kind: agentlog.Cmd, Done: true}, want: result{Result: "✓"}},
+			{
+				name:  "a result with no duration shows none",
+				event: agentlog.Event{Kind: agentlog.Cmd, Done: true},
+				want:  result{Result: "✓"},
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

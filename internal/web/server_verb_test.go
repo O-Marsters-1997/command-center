@@ -193,7 +193,8 @@ func TestVerb(t *testing.T) {
 		t.Parallel()
 		store := seededStore(t, testNow)
 
-		got := do(t, openServer(store, fixedClock(testNow), ""), http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
+		server := openServer(store, fixedClock(testNow), "")
+		got := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
 		if got.Code != http.StatusConflict {
 			t.Fatalf("POST /verb kill on a ready row status = %d, want 409", got.Code)
 		}

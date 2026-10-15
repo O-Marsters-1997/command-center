@@ -221,7 +221,8 @@ func TestServer(t *testing.T) {
 
 	t.Run("pages serve without a cookie", func(t *testing.T) {
 		t.Parallel()
-		if got := do(t, newServer(seededStore(t, testNow), testNow), http.MethodGet, "/tickets", req{}); got.Code != http.StatusOK {
+		server := newServer(seededStore(t, testNow), testNow)
+		if got := do(t, server, http.MethodGet, "/tickets", req{}); got.Code != http.StatusOK {
 			t.Errorf("GET /tickets without a cookie status = %d, want 200", got.Code)
 		}
 	})
@@ -292,7 +293,8 @@ func TestServer(t *testing.T) {
 
 		t.Run(route.name+" refuses a wrong method", func(t *testing.T) {
 			t.Parallel()
-			if got := do(t, newServer(openStore(t), testNow), http.MethodPut, route.target, req{}); got.Code != http.StatusMethodNotAllowed {
+			server := newServer(openStore(t), testNow)
+			if got := do(t, server, http.MethodPut, route.target, req{}); got.Code != http.StatusMethodNotAllowed {
 				t.Errorf("PUT %s status = %d, want 405", route.target, got.Code)
 			}
 		})

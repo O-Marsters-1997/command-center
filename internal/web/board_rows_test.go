@@ -20,7 +20,9 @@ func pushedRowStore(t *testing.T, ticket storepkg.Ticket, tip string, obs plan.O
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
 	dispositionAsPushed(t, store, ticket.URL, testNow)
-	storetest.Pushed(t, store, storetest.PushedOpts{URL: ticket.URL, Tip: tip, Base: "main", BaseTip: "main-tip", At: testNow})
+	storetest.Pushed(t, store, storetest.PushedOpts{
+		URL: ticket.URL, Tip: tip, Base: "main", BaseTip: "main-tip", At: testNow,
+	})
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatalf("SaveObservation: %v", err)
 	}

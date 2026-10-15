@@ -39,7 +39,7 @@ func open(ctx context.Context, configPath string, env config.Env, stdout, stderr
 	}
 	repos, err := trackedRepos(ctx, cfg.DatabaseURL)
 	if err != nil {
-		fmt.Fprintf(stderr, "cc open: cannot read tracked repos: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "cc open: cannot read tracked repos: %v\n", err)
 	}
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
@@ -47,7 +47,7 @@ func open(ctx context.Context, configPath string, env config.Env, stdout, stderr
 		owner, repo, _ := strings.Cut(name, "/")
 		target += "repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo)
 	} else {
-		fmt.Fprintln(stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
+		_, _ = fmt.Fprintln(stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
 	}
 
 	listening, err := daemonListening(cfg.Port)
@@ -55,8 +55,10 @@ func open(ctx context.Context, configPath string, env config.Env, stdout, stderr
 		return fmt.Errorf("probe daemon on port %d: %w", cfg.Port, err)
 	}
 	if !listening {
-		fmt.Fprintf(stderr, "cc open: no daemon listening on port %d\n", cfg.Port)
-		fmt.Fprintln(stdout, target)
+		_, _ = fmt.Fprintf(stderr, "cc open: no daemon listening on port %d\n", cfg.Port)
+		if _, err := fmt.Fprintln(stdout, target); err != nil {
+			return fmt.Errorf("print target: %w", err)
+		}
 		return nil
 	}
 

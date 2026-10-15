@@ -162,7 +162,8 @@ func TestNew(t *testing.T) {
 		configPath := appConfig(t)
 		newApp(t, configPath, testEnv)
 
-		if _, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, testEnv); !errors.Is(err, app.ErrLocked) {
+		logger := slog.New(slog.DiscardHandler)
+		if _, err := app.New(t.Context(), logger, configPath, testEnv); !errors.Is(err, app.ErrLocked) {
 			t.Errorf("New(second instance) error = %v, want %v", err, app.ErrLocked)
 		}
 	})

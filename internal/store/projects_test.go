@@ -60,7 +60,9 @@ func TestStore_CreateProject(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		trackRepos(t, store, "acme/web", "acme/api", "acme/loose")
-		createProject(t, store, storepkg.NewProject{Name: "acme", Hue: 2, Repos: []string{"acme/web", "acme/api"}, At: trackedAt})
+		createProject(t, store, storepkg.NewProject{
+			Name: "acme", Hue: 2, Repos: []string{"acme/web", "acme/api"}, At: trackedAt,
+		})
 
 		want := []storepkg.Project{{Name: "acme", Hue: 2, Repos: []string{"acme/api", "acme/web"}}}
 		if diff := cmp.Diff(want, readProjects(t, store), cmpopts.EquateEmpty()); diff != "" {
@@ -77,7 +79,9 @@ func TestStore_CreateProject(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		trackRepos(t, store, "acme/web", "acme/api")
-		createProject(t, store, storepkg.NewProject{Name: "old", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt})
+		createProject(t, store, storepkg.NewProject{
+			Name: "old", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt,
+		})
 		createProject(t, store, storepkg.NewProject{Name: "new", Hue: 3, Repos: []string{"acme/web"}, At: trackedAt})
 
 		want := []storepkg.Project{
@@ -99,10 +103,18 @@ func TestStore_CreateProject(t *testing.T) {
 			{name: "empty name", project: storepkg.NewProject{Name: "", Hue: 1}, want: storepkg.ErrInvalidProject},
 			{name: "has a space", project: storepkg.NewProject{Name: "a b", Hue: 1}, want: storepkg.ErrInvalidProject},
 			{name: "leading dot", project: storepkg.NewProject{Name: ".acme", Hue: 1}, want: storepkg.ErrInvalidProject},
-			{name: "too long", project: storepkg.NewProject{Name: strings.Repeat("a", 41), Hue: 1}, want: storepkg.ErrInvalidProject},
+			{
+				name:    "too long",
+				project: storepkg.NewProject{Name: strings.Repeat("a", 41), Hue: 1},
+				want:    storepkg.ErrInvalidProject,
+			},
 			{name: "hue zero", project: storepkg.NewProject{Name: "acme", Hue: 0}, want: storepkg.ErrInvalidProject},
 			{name: "hue four", project: storepkg.NewProject{Name: "acme", Hue: 4}, want: storepkg.ErrInvalidProject},
-			{name: "unknown repo", project: storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/ghost"}}, want: storepkg.ErrNotFound},
+			{
+				name:    "unknown repo",
+				project: storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/ghost"}},
+				want:    storepkg.ErrNotFound,
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -125,7 +137,9 @@ func TestStore_CreateProject(t *testing.T) {
 		trackRepos(t, store, "acme/web", "acme/api")
 		createProject(t, store, storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web"}, At: trackedAt})
 
-		err := store.CreateProject(t.Context(), storepkg.NewProject{Name: "ACME", Hue: 1, Repos: []string{"acme/api"}, At: trackedAt})
+		err := store.CreateProject(t.Context(), storepkg.NewProject{
+			Name: "ACME", Hue: 1, Repos: []string{"acme/api"}, At: trackedAt,
+		})
 		if !errors.Is(err, storepkg.ErrProjectExists) {
 			t.Fatalf("CreateProject(ACME) error = %v, want ErrProjectExists", err)
 		}
@@ -190,7 +204,9 @@ func TestStore_EditProject(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		trackRepos(t, store, "acme/web", "acme/api")
-		createProject(t, store, storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt})
+		createProject(t, store, storepkg.NewProject{
+			Name: "acme", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt,
+		})
 
 		if err := store.EditProject(t.Context(), "acme", "acme-co", 1); err != nil {
 			t.Fatalf("EditProject rename: %v", err)

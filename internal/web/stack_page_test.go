@@ -137,7 +137,8 @@ func testBoardStacks(t *testing.T) {
 		if len(marks) != 1 {
 			t.Fatalf("GET /tickets MERGED has %d warnings, want 1", len(marks))
 		}
-		if got, _ := marks[0].Attr("title"); !strings.Contains(got, "worktree is dirty") || strings.Contains(got, "ready-to-merge") {
+		if got, _ := marks[0].Attr("title"); !strings.Contains(got, "worktree is dirty") ||
+			strings.Contains(got, "ready-to-merge") {
 			t.Errorf("GET /tickets MERGED warning title = %q, want the refusal's detail", got)
 		}
 	})

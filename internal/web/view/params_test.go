@@ -119,7 +119,11 @@ func TestParams_PagePath(t *testing.T) {
 		want string
 	}{
 		{name: "unscoped", want: "/tickets"},
-		{name: "all tickets keep their filter", v: view.Params{All: true, Filter: "blocked"}, want: "/tickets?filter=blocked"},
+		{
+			name: "all tickets keep their filter",
+			v:    view.Params{All: true, Filter: "blocked"},
+			want: "/tickets?filter=blocked",
+		},
 		{name: "a feature", v: view.Params{Feature: "project:x", Tickets: []string{"a"}}, want: "/f/project:x?ticket=a"},
 		{name: "a repo", v: view.Params{Repo: "acme/web"}, want: "/repos/acme/web"},
 	}

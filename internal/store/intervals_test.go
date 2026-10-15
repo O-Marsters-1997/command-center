@@ -71,7 +71,8 @@ func TestStore_FitFactors(t *testing.T) {
 		}
 		const wantFactor = 0.02 / sonnetMillionInputUSD
 		if got.Samples != 5 || got.Factor < wantFactor*0.99 || got.Factor > wantFactor*1.01 {
-			t.Errorf("FitFactors()[five_hour] = %d samples, factor %v, want 5 samples within 1%% of %v", got.Samples, got.Factor, wantFactor)
+			t.Errorf("FitFactors()[five_hour] = %d samples, factor %v, want 5 samples within 1%% of %v",
+				got.Samples, got.Factor, wantFactor)
 		}
 	})
 

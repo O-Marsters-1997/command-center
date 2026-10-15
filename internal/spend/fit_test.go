@@ -28,7 +28,10 @@ func TestFit(t *testing.T) {
 			start = end
 		}
 		samples = append(samples,
-			spend.Interval{Window: agentlog.FiveHour, Start: start, End: start.Add(time.Hour), WeightUSD: 5, UtilizationEnd: 0.9},
+			spend.Interval{
+				Window: agentlog.FiveHour, Start: start, End: start.Add(time.Hour),
+				WeightUSD: 5, UtilizationEnd: 0.9,
+			},
 			spend.Interval{Window: agentlog.FiveHour, Start: start, End: start.Add(time.Hour), WeightUSD: 400},
 		)
 

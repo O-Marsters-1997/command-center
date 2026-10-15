@@ -59,6 +59,7 @@ func TestReposPage(t *testing.T) {
 }
 
 func testReposPageListsKnownRepos(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -89,6 +90,7 @@ func testReposPageListsKnownRepos(t *testing.T) {
 }
 
 func testRepoSearchMergesPushable(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -125,6 +127,7 @@ func testRepoSearchMergesPushable(t *testing.T) {
 }
 
 func testRepoSearchMarksDefaultBranch(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -155,6 +158,7 @@ func searchRow(t *testing.T, body, fullName string) htmltest.Node {
 }
 
 func testRepoSearchOneGhCall(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -169,6 +173,7 @@ func testRepoSearchOneGhCall(t *testing.T) {
 }
 
 func testBoardRendersWhilePushableBlocked(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	started := make(chan struct{})
@@ -201,6 +206,7 @@ func testBoardRendersWhilePushableBlocked(t *testing.T) {
 }
 
 func testRepoSearchRefetches(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -223,6 +229,7 @@ type steppingClock struct{ at time.Time }
 func (c *steppingClock) Now() time.Time { return c.at }
 
 func testRepoSearchFallsBack(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	server := openServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "",
@@ -239,6 +246,7 @@ func testRepoSearchFallsBack(t *testing.T) {
 }
 
 func testScopedRepoPage(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	ctx := t.Context()
@@ -253,8 +261,10 @@ func testScopedRepoPage(t *testing.T) {
 
 	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
 		web.WithTrackerSource(trackertest.ByRemote(map[string]tracker.Source{
-			"github.com/acme/alpha": &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:x": nil, "project:y": nil}},
-			"github.com/acme/beta":  &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:z": nil}},
+			"github.com/acme/alpha": &trackertest.Source{
+				ByFeature: map[string][]tracker.Ticket{"project:x": nil, "project:y": nil},
+			},
+			"github.com/acme/beta": &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:z": nil}},
 		})))
 
 	body := renderPath(t, server, "/repos/acme/alpha")
@@ -285,6 +295,7 @@ func testScopedRepoPage(t *testing.T) {
 }
 
 func testScopedRepoPageUnknown(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -305,6 +316,7 @@ func testScopedRepoPageUnknown(t *testing.T) {
 }
 
 func testNoticeRaisesRefusedRepo(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	st := track(t, openStore(t), alphaRepo)
@@ -338,6 +350,7 @@ func testNoticeRaisesRefusedRepo(t *testing.T) {
 }
 
 func testRepoPageRejectsBadName(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32

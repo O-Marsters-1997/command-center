@@ -142,7 +142,8 @@ func TestLaunch(t *testing.T) {
 	t.Run("rejects a malformed hash field", func(t *testing.T) {
 		t.Parallel()
 		form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
-		got := do(t, openServer(seededStore(t, testNow), fixedClock(testNow), ""), http.MethodPost, "/launch", req{Form: form})
+		server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+		got := do(t, server, http.MethodPost, "/launch", req{Form: form})
 		if got.Code != http.StatusBadRequest {
 			t.Errorf("POST /launch hash=deadbeef status = %d, want 400", got.Code)
 		}

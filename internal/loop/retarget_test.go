@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -16,7 +18,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/google/go-cmp/cmp"
 )
 
 func mergeParentIntoMain(t *testing.T, repoPath string) {
@@ -544,7 +545,9 @@ func TestRetarget(t *testing.T) {
 		gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 		mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
-		if out, err := runGitAllowingFailure(t, f.childWorktree, "rebase", "--onto", "origin/main", f.parentTip0); err == nil {
+		if out, err := runGitAllowingFailure(
+			t, f.childWorktree, "rebase", "--onto", "origin/main", f.parentTip0,
+		); err == nil {
 			t.Fatalf("the setup rebase succeeded, want it stopped on a conflict: %s", out)
 		}
 

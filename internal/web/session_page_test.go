@@ -320,7 +320,9 @@ func TestSessionPage(t *testing.T) {
 			t.Errorf("running GET /s/acme/web/1 model chip = %q, want %q", got, config.AgentModel)
 		}
 
-		idle, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed})
+		idle, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+		})
 		main = sessionMain(t, idle, "/s/acme/web/1")
 		main.One(t, ".composer").One(t, `input[name="verb"][value="follow-up"]`)
 		main.One(t, `button[value="re-run"]`)
@@ -348,7 +350,9 @@ func TestSessionPage(t *testing.T) {
 	t.Run("verb keys anchor only where the state offers them", func(t *testing.T) {
 		t.Parallel()
 		running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
-		failed, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed})
+		failed, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+		})
 		for _, tt := range []struct {
 			name            string
 			store           *storepkg.Store
@@ -382,7 +386,9 @@ func TestSessionPage(t *testing.T) {
 
 	t.Run("a merged session anchors remove-worktree and open PR", func(t *testing.T) {
 		t.Parallel()
-		st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomePush})
+		st, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomePush,
+		})
 		obs := plan.Observation{
 			ObservedAt: testNow,
 			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
@@ -503,7 +509,9 @@ func testVerbFromSession(t *testing.T) {
 
 	t.Run("a follow-up queues the prompt and refuses a blank one", func(t *testing.T) {
 		t.Parallel()
-		st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed})
+		st, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+		})
 		srv := newServer(st, testNow)
 
 		rec := do(t, srv, http.MethodPost, "/verb", req{

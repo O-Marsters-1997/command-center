@@ -95,11 +95,16 @@ func TestCandidatesJSON(t *testing.T) {
 		t.Parallel()
 		store := candidateStore(t,
 			storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-			storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-			storepkg.Ticket{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
+			storepkg.Ticket{
+				URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"},
+			},
+			storepkg.Ticket{
+				URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"},
+			},
 			storepkg.Ticket{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
 		)
-		candidates := fetchCandidates(t, newServer(store, testNow), "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
+		candidates := fetchCandidates(t, newServer(store, testNow),
+			"ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
 
 		cc1 := candidateFor(t, candidates, "sandbox://CC-1")
 		if cc1.Label != "now" || cc1.Base != "origin/main" || cc1.Ref != "#CC-1" || cc1.PromptHash == "" {
@@ -216,7 +221,8 @@ func TestCandidatesJSON(t *testing.T) {
 			},
 			storepkg.Ticket{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", Feature: "project:x"},
 		)
-		candidates := fetchCandidates(t, newServer(store, testNow), "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
+		candidates := fetchCandidates(t, newServer(store, testNow),
+			"ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
 
 		got := map[string]string{}
 		for _, c := range candidates {

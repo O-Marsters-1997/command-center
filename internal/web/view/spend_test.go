@@ -44,11 +44,28 @@ func TestSpendCache_Spend(t *testing.T) {
 		want int
 	}{
 		{name: "no log path", path: func(*testing.T) string { return "" }, want: 0},
-		{name: "a live log", path: func(t *testing.T) string { return writeRunLog(t, aliveLine) }, want: 15},
-		{name: "a settled log", path: func(t *testing.T) string { return writeRunLog(t, aliveLine+resultLine) }, want: 15},
+		{
+			name: "a live log",
+			path: func(t *testing.T) string {
+				t.Helper()
+				return writeRunLog(t, aliveLine)
+			},
+			want: 15,
+		},
+		{
+			name: "a settled log",
+			path: func(t *testing.T) string {
+				t.Helper()
+				return writeRunLog(t, aliveLine+resultLine)
+			},
+			want: 15,
+		},
 		{
 			name: "a log not yet written",
-			path: func(t *testing.T) string { return filepath.Join(t.TempDir(), "absent.jsonl") },
+			path: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "absent.jsonl")
+			},
 			want: 0,
 		},
 		{

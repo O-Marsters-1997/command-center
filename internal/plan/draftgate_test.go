@@ -65,7 +65,8 @@ func TestDraftGate(t *testing.T) {
 
 			draft, reason := plan.DraftGate(tt.gating, tt.prs, tt.verdictGreen)
 			if draft != tt.wantDraft {
-				t.Errorf("DraftGate(%v, green %t) draft = %t, want %t (reason %q)", tt.prs, tt.verdictGreen, draft, tt.wantDraft, reason)
+				t.Errorf("DraftGate(%v, green %t) draft = %t, want %t (reason %q)",
+					tt.prs, tt.verdictGreen, draft, tt.wantDraft, reason)
 			}
 			if reason == "" {
 				t.Errorf("DraftGate(%v, green %t) reason = \"\", want one", tt.prs, tt.verdictGreen)

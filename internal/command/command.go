@@ -29,7 +29,9 @@ func (Exec) Output(ctx context.Context, timeout time.Duration, dir, name string,
 
 type ExecutorFunc func(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error)
 
-func (f ExecutorFunc) Output(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error) {
+func (f ExecutorFunc) Output(
+	ctx context.Context, timeout time.Duration, dir, name string, args ...string,
+) ([]byte, error) {
 	return f(ctx, timeout, dir, name, args...)
 }
 

@@ -60,7 +60,9 @@ func TestImport(t *testing.T) {
 		store := openStore(t)
 		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 		const outsider = "https://github.com/acme/alpha/issues/1"
-		seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha"}}
+		seed := []storepkg.ImportedTicket{
+			{Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha"},
+		}
 		if err := store.ImportTickets(ctx, "project:other", seed, testAt); err != nil {
 			t.Fatalf("seed ImportTickets: %v", err)
 		}

@@ -108,6 +108,7 @@ func recordedOutput(t *testing.T, prs []gh.PR) []byte {
 func TestCLI(t *testing.T) {
 	t.Parallel()
 	ghtest.RunContract(t, func(t *testing.T, seed ghtest.Seed) gh.Forge {
+		t.Helper()
 		return fakeGH(func(args []string) ([]byte, error) {
 			var out []byte
 			switch i := slices.Index(args, "--head"); {

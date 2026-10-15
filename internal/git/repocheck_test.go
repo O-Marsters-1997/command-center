@@ -56,7 +56,8 @@ func TestCheckRepo(t *testing.T) {
 				t.Fatalf("CheckRepo(%s) error = %v", tt.fixture, err)
 			}
 			if kind != tt.wantKind || !strings.Contains(reason, tt.wantReason) {
-				t.Errorf("CheckRepo(%s) = %q, %q, want %q and a reason naming %q", tt.fixture, kind, reason, tt.wantKind, tt.wantReason)
+				t.Errorf("CheckRepo(%s) = %q, %q, want %q and a reason naming %q",
+					tt.fixture, kind, reason, tt.wantKind, tt.wantReason)
 			}
 		})
 	}

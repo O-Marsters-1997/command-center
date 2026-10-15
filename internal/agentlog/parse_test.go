@@ -268,7 +268,8 @@ func TestParse(t *testing.T) {
 			}}},
 			{Skill: "tdd"},
 		}
-		if diff := cmp.Diff(want, run.Phases, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(agentlog.Phase{}, "Spend")); diff != "" {
+		diff := cmp.Diff(want, run.Phases, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(agentlog.Phase{}, "Spend"))
+		if diff != "" {
 			t.Errorf("Parse() phases mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -537,7 +538,8 @@ func TestParseLine(t *testing.T) {
 			t.Fatalf("ParseLine(long edit) = %+v, want one event", got)
 		}
 		rows := got[0].Diff.Lines
-		if len(rows) != 81 || rows[80] != (agentlog.DiffLine{Op: agentlog.Keep, Text: "… 21 more lines"}) || got[0].Diff.Added != 100 {
+		truncation := agentlog.DiffLine{Op: agentlog.Keep, Text: "… 21 more lines"}
+		if len(rows) != 81 || rows[80] != truncation || got[0].Diff.Added != 100 {
 			t.Errorf("ParseLine(long edit) diff = %d rows ending %+v, +%d, want 80 rows, a marker for the 21 cut, +100",
 				len(rows), rows[len(rows)-1], got[0].Diff.Added)
 		}

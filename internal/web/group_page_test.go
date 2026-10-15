@@ -103,7 +103,8 @@ func testBoardGroups(t *testing.T) {
 		for _, c := range children {
 			row := webtest.RowFor(t, page, c)
 			if row.State != "queued" || !strings.Contains(row.Ticket.Text(), "sandbox://ROOT") {
-				t.Errorf("GET /board %s = %q with ticket cell %q, want queued after sandbox://ROOT", c, row.State, row.Ticket.Text())
+				t.Errorf("GET /board %s = %q with ticket cell %q, want queued after sandbox://ROOT",
+					c, row.State, row.Ticket.Text())
 			}
 			row.Row.One(t, `input[name="ticket"][value="`+c+`"]`)
 		}

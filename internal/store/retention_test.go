@@ -18,7 +18,8 @@ func TestStore_PruneHistory(t *testing.T) {
 	ago := func(d time.Duration) string { return "'" + now.Add(-d).Format(time.RFC3339) + "'" }
 	day := 24 * time.Hour
 
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}}); err != nil {
+	tickets := []storepkg.Ticket{{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}}
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	const (
@@ -80,6 +81,7 @@ func TestStore_PruneHistory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var got int
 			if err := db.QueryRow(tt.query).Scan(&got); err != nil {
 				t.Fatalf("query %q: %v", tt.query, err)

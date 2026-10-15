@@ -3,6 +3,7 @@ package loop_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,7 +218,7 @@ func TestLaunch(t *testing.T) {
 		if summary.Outcome != option.Some(plan.OutcomeCutFailed) || summary.Pgid.IsSome() {
 			t.Errorf("run = outcome %v, pgid %v, want cut_failed and no pgid", summary.Outcome, summary.Pgid)
 		}
-		if !ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventCutFailed, errForge.Error()) {
+		if !ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventCutFailed, fmt.Sprint(errForge)) {
 			t.Errorf("Events() has no %s event naming %q", storepkg.EventCutFailed, errForge)
 		}
 	})
@@ -232,7 +233,7 @@ func TestLaunch(t *testing.T) {
 			t.Fatalf("RunOnce() error = %v", err)
 		}
 
-		if !ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventSpawnFailed, errSpawn.Error()) {
+		if !ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventSpawnFailed, fmt.Sprint(errSpawn)) {
 			t.Errorf("Events() has no %s event naming %q", storepkg.EventSpawnFailed, errSpawn)
 		}
 	})
@@ -380,7 +381,10 @@ func TestDispose(t *testing.T) {
 				`"five_hour":{"utilization":0.05,"resetsAt":1787665200}}}}` + "\n" + `{"type":"result","total_cost_usd":`,
 			wantUtilization5: 0.05,
 		},
-		{name: "a killed run whose log settled records its cost", log: killedRunAssistantLine + killedRunResultLine, wantCost: 0.42},
+		{
+			name: "a killed run whose log settled records its cost",
+			log:  killedRunAssistantLine + killedRunResultLine, wantCost: 0.42,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

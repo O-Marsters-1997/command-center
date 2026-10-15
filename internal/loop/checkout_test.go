@@ -62,8 +62,11 @@ func TestRepoNameForDir(t *testing.T) {
 			remote: func(string) string { return "git@github.com:o/other.git" },
 		},
 		{
-			name:   "a directory with no origin",
-			dir:    func(t *testing.T, _, _ string) string { return t.TempDir() },
+			name: "a directory with no origin",
+			dir: func(t *testing.T, _, _ string) string {
+				t.Helper()
+				return t.TempDir()
+			},
 			remote: localRemote,
 		},
 	}

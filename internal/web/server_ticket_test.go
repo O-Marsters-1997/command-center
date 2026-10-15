@@ -37,7 +37,9 @@ func TestPostTicket(t *testing.T) {
 		for _, p := range pending {
 			got = append(got, edit{Ticket: p.TicketID, Branch: p.Branch, BlockedBy: p.BlockedBy})
 		}
-		want := []edit{{Ticket: "sandbox://CC-2", Branch: "cc-2-renamed", BlockedBy: []string{"sandbox://CC-1", "sandbox://CC-3"}}}
+		want := []edit{{
+			Ticket: "sandbox://CC-2", Branch: "cc-2-renamed", BlockedBy: []string{"sandbox://CC-1", "sandbox://CC-3"},
+		}}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("pending edit intents mismatch (-want +got):\n%s", diff)
 		}

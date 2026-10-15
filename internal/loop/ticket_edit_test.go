@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestEditTicket(t *testing.T) {

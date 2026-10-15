@@ -1,6 +1,7 @@
 package loop_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -74,7 +75,8 @@ func TestDraftGate(t *testing.T) {
 		f.tick(t)
 
 		failed := f.events(t, "draft_ready_failed")
-		if len(failed) != 1 || failed[0].TicketURL != f.Ticket.URL || !strings.Contains(failed[0].Detail, errForge.Error()) {
+		if len(failed) != 1 || failed[0].TicketURL != f.Ticket.URL ||
+			!strings.Contains(failed[0].Detail, fmt.Sprint(errForge)) {
 			t.Errorf("draft_ready_failed events = %+v, want one naming %q", failed, errForge)
 		}
 

@@ -169,6 +169,7 @@ func TestLogStream(t *testing.T) {
 }
 
 func testLogStreamsOneEventPerLine(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -207,6 +208,7 @@ func testLogStreamsOneEventPerLine(t *testing.T) {
 }
 
 func testLogStreamFilter(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	logPath := writeRunLog(t, mustReadTestdata(t, "run.jsonl"))
@@ -222,6 +224,7 @@ func testLogStreamFilter(t *testing.T) {
 }
 
 func testLogStreamMultiLineOutput(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	logPath := writeRunLog(t, `{"type":"user","message":{"content":[{"type":"tool_result","is_error":true,`+
@@ -248,6 +251,7 @@ func testLogStreamMultiLineOutput(t *testing.T) {
 }
 
 func testLogStreamResumesFromOffset(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -271,6 +275,7 @@ func testLogStreamResumesFromOffset(t *testing.T) {
 }
 
 func testLogStreamEmptyWithoutRun(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -287,6 +292,7 @@ func testLogStreamEmptyWithoutRun(t *testing.T) {
 }
 
 func testLogStreamErrorFrame(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -302,6 +308,7 @@ func testLogStreamErrorFrame(t *testing.T) {
 }
 
 func testLogStreamMalformedOffset(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -315,6 +322,7 @@ func testLogStreamMalformedOffset(t *testing.T) {
 }
 
 func testLogStreamRetiresWhenRunEnded(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -332,6 +340,7 @@ func testLogStreamRetiresWhenRunEnded(t *testing.T) {
 }
 
 func testLogStreamResumesFromLastEventID(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -356,6 +365,7 @@ func testLogStreamResumesFromLastEventID(t *testing.T) {
 }
 
 func testLogStreamFollowsUntilRunEnds(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -406,6 +416,7 @@ func (w flushObserver) Flush() {
 }
 
 func testLogStreamLeavesRunAlone(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -445,6 +456,7 @@ func testLogStreamLeavesRunAlone(t *testing.T) {
 }
 
 func testSessionConnectsToStream(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow
@@ -472,6 +484,7 @@ func testSessionConnectsToStream(t *testing.T) {
 }
 
 func testPageLoadsSSEExtension(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	now := testNow

@@ -14,7 +14,9 @@ import (
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 func railRow(n, feature string, glyph plan.GlyphWord) view.Row {
-	return view.Row{URL: "sandbox://" + n, Repo: "repo", Feature: feature, Glyph: glyph, Verbs: []plan.Verb{plan.VerbReRun}}
+	return view.Row{
+		URL: "sandbox://" + n, Repo: "repo", Feature: feature, Glyph: glyph, Verbs: []plan.Verb{plan.VerbReRun},
+	}
 }
 
 func refs(items []view.RailItem) []string {

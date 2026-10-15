@@ -41,9 +41,15 @@ func TestAsked(t *testing.T) {
 		want option.Option[string]
 	}{
 		{name: "no question file", kind: plan.RunKindAgent, file: option.None[string](), want: option.None[string]()},
-		{name: "agent run asked", kind: plan.RunKindAgent, file: option.Some("Which database?"), want: option.Some("Which database?")},
+		{
+			name: "agent run asked", kind: plan.RunKindAgent,
+			file: option.Some("Which database?"), want: option.Some("Which database?"),
+		},
 		{name: "follow-up run asked", kind: plan.RunKindFollowUp, file: option.Some("Which?"), want: option.Some("Which?")},
-		{name: "unknown kind never asks", kind: plan.RunKindUnknown, file: option.Some("Which?"), want: option.None[string]()},
+		{
+			name: "unknown kind never asks", kind: plan.RunKindUnknown,
+			file: option.Some("Which?"), want: option.None[string](),
+		},
 		{
 			name: "surrounding space is trimmed", kind: plan.RunKindAgent,
 			file: option.Some("\n  Which database?\n\n"), want: option.Some("Which database?"),

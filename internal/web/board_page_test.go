@@ -57,7 +57,8 @@ func TestBoard(t *testing.T) {
 		want := map[string]string{
 			"hx-get": "/board?all=1", "hx-trigger": "every 5s", "hx-sync": "this:drop", "hx-swap": "outerHTML",
 		}
-		if diff := cmp.Diff(want, attrs(root.One(t, "table#board"), "hx-get", "hx-trigger", "hx-sync", "hx-swap")); diff != "" {
+		got := attrs(root.One(t, "table#board"), "hx-get", "hx-trigger", "hx-sync", "hx-swap")
+		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("GET /tickets board poll mismatch (-want +got):\n%s", diff)
 		}
 		if refresh := root.Find(`meta[http-equiv="refresh"]`); len(refresh) != 0 {
@@ -125,7 +126,8 @@ func TestBoard(t *testing.T) {
 			for _, attr := range tag.Attr {
 				got[attr.Key] = attr.Val
 			}
-			formPosts := tag.Data == "form" && got["method"] == "post" && (got["action"] == "/verb" || got["action"] == "/launch/open")
+			formPosts := tag.Data == "form" && got["method"] == "post" &&
+				(got["action"] == "/verb" || got["action"] == "/launch/open")
 			allowed := tag.Data == "table" || tag.Data == "div" || tag.Data == "tr" || tag.Data == "section" ||
 				(tag.Data == "a" && !posts) || (tag.Data == "input" && got["id"] == "rail-search") ||
 				((tag.Data == "input" || tag.Data == "button") && got["hx-target"] == "#board") || formPosts

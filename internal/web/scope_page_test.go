@@ -34,7 +34,9 @@ func threeFeatureStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 	return observedTickets(t,
 		storepkg.Ticket{URL: "sandbox://ROOT", Feature: "board-scope", Branch: "root"},
-		storepkg.Ticket{URL: "sandbox://CHILD", Feature: "board-scope", Branch: "child", BlockedBy: []string{"sandbox://ROOT"}},
+		storepkg.Ticket{
+			URL: "sandbox://CHILD", Feature: "board-scope", Branch: "child", BlockedBy: []string{"sandbox://ROOT"},
+		},
 		storepkg.Ticket{URL: "sandbox://LONE", Feature: "sqlc-migration", Branch: "lone"},
 	)
 }
@@ -118,9 +120,11 @@ func testBoardScope(t *testing.T) {
 			storepkg.Ticket{URL: "sandbox://MINE", Repo: "O-Marsters-1997/command-center", Branch: "mine"},
 			storepkg.Ticket{URL: "sandbox://THEIRS", Repo: "acme/other", Branch: "theirs"},
 		)
-		server := openServer(track(t, store, named("O-Marsters-1997/command-center", "acme/other")...), fixedClock(testNow), "")
+		tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
+		server := openServer(tracked, fixedClock(testNow), "")
 
-		if diff := cmp.Diff([]string{ticketRef("sandbox://MINE")}, boardRefs(t, server, "/board?repo=O-Marsters-1997/command-center")); diff != "" {
+		refs := boardRefs(t, server, "/board?repo=O-Marsters-1997/command-center")
+		if diff := cmp.Diff([]string{ticketRef("sandbox://MINE")}, refs); diff != "" {
 			t.Errorf("GET /board?repo=O-Marsters-1997/command-center refs mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -143,7 +147,8 @@ func testBoardScope(t *testing.T) {
 		)
 		server := openServer(track(t, store, named("repo", "other")...), fixedClock(testNow), "")
 
-		if diff := cmp.Diff([]string{ticketRef("sandbox://MATCH")}, boardRefs(t, server, "/board?feature=board-scope&repo=repo")); diff != "" {
+		refs := boardRefs(t, server, "/board?feature=board-scope&repo=repo")
+		if diff := cmp.Diff([]string{ticketRef("sandbox://MATCH")}, refs); diff != "" {
 			t.Errorf("GET /board?feature=board-scope&repo=repo refs mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -214,25 +219,3 @@ func testBoardScope(t *testing.T) {
 }
 
 var sortStrings = cmpopts.SortSlices(func(a, b string) bool { return a < b })
-
-func scopedTicketURLs(groups []scopeJSONGroup) []string {
-	var urls []string
-	for _, g := range groups {
-		if g.Root != nil {
-			urls = append(urls, g.Root.URL)
-		}
-		for _, c := range g.Children {
-			urls = append(urls, c.URL)
-		}
-	}
-	return urls
-}
-
-type scopeJSONGroup struct {
-	Root *struct {
-		URL string `json:"url"`
-	} `json:"root"`
-	Children []struct {
-		URL string `json:"url"`
-	} `json:"children"`
-}

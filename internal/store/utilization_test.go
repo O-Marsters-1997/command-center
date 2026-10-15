@@ -37,7 +37,8 @@ func TestStore_RecordReadings(t *testing.T) {
 	gauges := latestReadings(t, store)
 	got, ok := gauges[agentlog.FiveHour]
 	if len(gauges) != 1 || !ok || got.Utilization != 0.05 || !got.ResetsAt.Equal(resetsAt) {
-		t.Errorf("LatestReadings() after recording one reading twice = %+v, want one five_hour gauge at 0.05 resetting %s", gauges, resetsAt)
+		t.Errorf("LatestReadings() after recording one reading twice = %+v, "+
+			"want one five_hour gauge at 0.05 resetting %s", gauges, resetsAt)
 	}
 }
 
@@ -63,7 +64,8 @@ func TestStore_LatestReadings(t *testing.T) {
 		)
 
 		gauges := latestReadings(t, store)
-		if len(gauges) != 2 || gauges[agentlog.FiveHour].Utilization != 0.42 || gauges[agentlog.SevenDay].Utilization != 0.19 {
+		if len(gauges) != 2 || gauges[agentlog.FiveHour].Utilization != 0.42 ||
+			gauges[agentlog.SevenDay].Utilization != 0.19 {
 			t.Errorf("LatestReadings() = %+v, want five_hour 0.42 and seven_day 0.19", gauges)
 		}
 	})

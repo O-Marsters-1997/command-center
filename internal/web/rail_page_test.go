@@ -245,8 +245,22 @@ func TestRail(t *testing.T) {
 			store func(*testing.T) *storepkg.Store
 			want  string
 		}{
-			{name: "one live", store: func(t *testing.T) *storepkg.Store { return detailStore(t, writeLog(t, 1), now, now) }, want: "1 live"},
-			{name: "idle", store: func(t *testing.T) *storepkg.Store { return shellStore(t, &now, "") }, want: "0 live"},
+			{
+				name: "one live",
+				store: func(t *testing.T) *storepkg.Store {
+					t.Helper()
+					return detailStore(t, writeLog(t, 1), now, now)
+				},
+				want: "1 live",
+			},
+			{
+				name: "idle",
+				store: func(t *testing.T) *storepkg.Store {
+					t.Helper()
+					return shellStore(t, &now, "")
+				},
+				want: "0 live",
+			},
 			{name: "a live run whose row reads base gone", store: baseGoneLiveStore, want: "1 live"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -260,8 +274,11 @@ func TestRail(t *testing.T) {
 
 	t.Run("verb buttons carry no key", func(t *testing.T) {
 		t.Parallel()
-		failed, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed})
-		buttons := htmltest.Parse(t, renderPath(t, newServer(failed, testNow), "/rail")).One(t, "#rail-body").Find(`button[name="verb"]`)
+		failed, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+		})
+		rail := htmltest.Parse(t, renderPath(t, newServer(failed, testNow), "/rail"))
+		buttons := rail.One(t, "#rail-body").Find(`button[name="verb"]`)
 		if len(buttons) == 0 {
 			t.Fatal("GET /rail has no verb buttons")
 		}

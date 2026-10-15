@@ -288,7 +288,8 @@ func TestBuildLogDetail(t *testing.T) {
 	t.Run("worked line", func(t *testing.T) {
 		t.Parallel()
 		ran := func(ms int) string {
-			return toolCalls("Read") + fmt.Sprintf(`{"type":"result","subtype":"success","duration_ms":%d,"num_turns":1}`, ms) + "\n"
+			result := fmt.Sprintf(`{"type":"result","subtype":"success","duration_ms":%d,"num_turns":1}`, ms)
+			return toolCalls("Read") + result + "\n"
 		}
 		tests := []struct {
 			name      string
@@ -377,7 +378,11 @@ func TestBuildLogDetail(t *testing.T) {
 			{name: "one command", tools: []string{"Bash"}, want: "Ran 1 command"},
 			{name: "edits and runs", tools: []string{"Edit", "Bash", "Bash", "Bash"}, want: "Edited 1 file, ran 3 commands"},
 			{name: "only other tools", tools: []string{"WebFetch", "WebFetch"}, want: "Used 2 tools"},
-			{name: "other tools after named ones", tools: []string{"Glob", "Grep", "WebFetch"}, want: "Searched twice, used 1 other tool"},
+			{
+				name:  "other tools after named ones",
+				tools: []string{"Glob", "Grep", "WebFetch"},
+				want:  "Searched twice, used 1 other tool",
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -404,7 +409,8 @@ func TestBuildLogDetail(t *testing.T) {
 		}
 
 		live := sessionLog[:strings.LastIndex(strings.TrimSuffix(sessionLog, "\n"), "\n")+1]
-		alive := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, live), Streaming: true, TicketURL: "x"}, view.LogAll)
+		source := view.LogSource{Path: writeRunLog(t, live), Streaming: true, TicketURL: "x"}
+		alive := logDetail(t, testLine, source, view.LogAll)
 		if alive.Final != "" {
 			t.Errorf("BuildLogDetail(live session).Final = %q, want none", alive.Final)
 		}
@@ -453,7 +459,11 @@ func TestBuildLogDetail(t *testing.T) {
 			want []string
 		}{
 			{name: "from the structured result", log: string(body), want: []string{"+3 -2", "+3 -0", "+3 -1"}},
-			{name: "from the inputs when there is no result", log: stripToolUseResults(string(body)), want: []string{"+1 -1", "+3 -0", "+5 -0"}},
+			{
+				name: "from the inputs when there is no result",
+				log:  stripToolUseResults(string(body)),
+				want: []string{"+1 -1", "+3 -0", "+5 -0"},
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

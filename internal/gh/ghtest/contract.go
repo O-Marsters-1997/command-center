@@ -22,7 +22,9 @@ func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) 
 		Number: 41, HeadRef: "cc-1-first", HeadOid: "aaa", BaseRef: "main", BaseOid: "bbb",
 		AuthorLogin: "o", IsDraft: true, State: gh.Open, Labels: []string{"keep-open"},
 	}
-	merged := gh.PR{Number: 40, HeadRef: "cc-2-second", HeadOid: "ccc", BaseRef: "main", State: gh.Merged, MergedAt: mergedAt}
+	merged := gh.PR{
+		Number: 40, HeadRef: "cc-2-second", HeadOid: "ccc", BaseRef: "main", State: gh.Merged, MergedAt: mergedAt,
+	}
 	closed := gh.PR{Number: 39, HeadRef: "cc-3-third", HeadOid: "ddd", BaseRef: "main", State: gh.Closed}
 
 	t.Run("List of an empty forge", func(t *testing.T) {

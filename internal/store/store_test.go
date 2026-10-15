@@ -447,7 +447,10 @@ func TestStore_TicketEventsAfter(t *testing.T) {
 		}
 		want := []storepkg.Event{
 			{ID: all[0].ID, At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPushed},
-			{ID: all[1].ID, At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshed, Detail: "late write, old time"},
+			{
+				ID: all[1].ID, At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1",
+				Kind: storepkg.EventRefreshed, Detail: "late write, old time",
+			},
 		}
 		if diff := cmp.Diff(want, all); diff != "" {
 			t.Errorf("TicketEventsAfter(CC-1, 0) mismatch (-want +got):\n%s", diff)
@@ -467,7 +470,8 @@ func TestStore_TicketEventsAfter(t *testing.T) {
 		ctx := t.Context()
 		store := openStore(t)
 		const ticketURL = "sandbox://CC-1"
-		if err := store.UpsertTickets(ctx, []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}); err != nil {
+		tickets := []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}
+		if err := store.UpsertTickets(ctx, tickets); err != nil {
 			t.Fatalf("UpsertTickets: %v", err)
 		}
 		const pageSize = 3
@@ -489,7 +493,8 @@ func TestStore_TicketEventsAfter(t *testing.T) {
 				t.Fatalf("TicketEventsAfter(%s, %d, %d): %v", ticketURL, afterID, pageSize, err)
 			}
 			if len(page) > pageSize {
-				t.Fatalf("TicketEventsAfter(%s, %d, %d) = %d events, want at most %d", ticketURL, afterID, pageSize, len(page), pageSize)
+				t.Fatalf("TicketEventsAfter(%s, %d, %d) = %d events, want at most %d",
+					ticketURL, afterID, pageSize, len(page), pageSize)
 			}
 			for _, e := range page {
 				got = append(got, e.Kind)

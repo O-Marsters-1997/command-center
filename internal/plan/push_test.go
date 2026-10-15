@@ -19,18 +19,27 @@ func TestPushRefused(t *testing.T) {
 		refused  bool
 		wantPath string
 	}{
-		{name: "workflow file", paths: []string{".github/workflows/ci.yml"}, refused: true, wantPath: ".github/workflows/ci.yml"},
+		{
+			name: "workflow file", paths: []string{".github/workflows/ci.yml"},
+			refused: true, wantPath: ".github/workflows/ci.yml",
+		},
 		{name: "root mergify config", paths: []string{".mergify.yml"}, refused: true, wantPath: ".mergify.yml"},
 		{name: "the repo settings file", paths: []string{plan.SettingsFile}, refused: true, wantPath: plan.SettingsFile},
 		{
 			name: "the repo settings file whatever the deny list says", paths: []string{plan.SettingsFile},
 			policy: plan.Policy{Deny: []string{"nothing/**"}}, refused: true, wantPath: plan.SettingsFile,
 		},
-		{name: "nested package.json", paths: []string{"packages/foo/package.json"}, refused: true, wantPath: "packages/foo/package.json"},
+		{
+			name: "nested package.json", paths: []string{"packages/foo/package.json"},
+			refused: true, wantPath: "packages/foo/package.json",
+		},
 		{name: "pnpm lockfile", paths: []string{"pnpm-lock.yaml"}, refused: true, wantPath: "pnpm-lock.yaml"},
 		{name: "bun lockfile", paths: []string{"web/bun.lock"}, refused: true, wantPath: "web/bun.lock"},
 		{name: "npmrc", paths: []string{".npmrc"}, refused: true, wantPath: ".npmrc"},
-		{name: "local env file", paths: []string{".env.development.local"}, refused: true, wantPath: ".env.development.local"},
+		{
+			name: "local env file", paths: []string{".env.development.local"},
+			refused: true, wantPath: ".env.development.local",
+		},
 		{
 			name: "per-repo deny addition", paths: []string{"scripts/gen.sh"},
 			policy: plan.Policy{Deny: []string{"scripts/gen.sh"}}, refused: true, wantPath: "scripts/gen.sh",

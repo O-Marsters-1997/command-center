@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestChecksLanded(t *testing.T) {

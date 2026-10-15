@@ -62,7 +62,8 @@ func TestObservation(t *testing.T) {
 			t.Fatalf("Unmarshal(saved observation) error = %v", err)
 		}
 		cc1 := plan.BranchRef{Repo: "repo", Branch: "cc-1"}
-		if pr := obs.PRs[cc1]; pr.State != plan.Merged || pr.Number != 7 || pr.Checks["CI"].Conclusion != "SUCCESS" || !pr.IsDraft {
+		if pr := obs.PRs[cc1]; pr.State != plan.Merged || pr.Number != 7 ||
+			pr.Checks["CI"].Conclusion != "SUCCESS" || !pr.IsDraft {
 			t.Errorf("Unmarshal(saved).PRs[cc-1] = %+v, want the saved fields intact", pr)
 		}
 		if !obs.Runs["t"].Alive || obs.BranchTips[cc1] != "abc" {

@@ -34,7 +34,9 @@ func TestIntervals(t *testing.T) {
 				Window: agentlog.FiveHour, Start: at, End: at.Add(time.Hour),
 				UtilizationStart: 0.10, UtilizationEnd: 0.30, WeightUSD: 8,
 			}},
-			wantLatest: map[agentlog.Window]agentlog.Reading{agentlog.FiveHour: reading(agentlog.FiveHour, 0.30, at.Add(time.Hour))},
+			wantLatest: map[agentlog.Window]agentlog.Reading{
+				agentlog.FiveHour: reading(agentlog.FiveHour, 0.30, at.Add(time.Hour)),
+			},
 		},
 		{
 			name:       "no previous reading closes nothing yet",
@@ -48,10 +50,12 @@ func TestIntervals(t *testing.T) {
 			wantLatest: map[agentlog.Window]agentlog.Reading{agentlog.FiveHour: reading(agentlog.FiveHour, 0.20, at)},
 		},
 		{
-			name:       "a pair straddling a reset is skipped",
-			readings:   []agentlog.Reading{reading(agentlog.FiveHour, 0.10, at.Add(time.Hour))},
-			previous:   map[agentlog.Window]agentlog.Reading{agentlog.FiveHour: reading(agentlog.FiveHour, 0.95, at)},
-			wantLatest: map[agentlog.Window]agentlog.Reading{agentlog.FiveHour: reading(agentlog.FiveHour, 0.10, at.Add(time.Hour))},
+			name:     "a pair straddling a reset is skipped",
+			readings: []agentlog.Reading{reading(agentlog.FiveHour, 0.10, at.Add(time.Hour))},
+			previous: map[agentlog.Window]agentlog.Reading{agentlog.FiveHour: reading(agentlog.FiveHour, 0.95, at)},
+			wantLatest: map[agentlog.Window]agentlog.Reading{
+				agentlog.FiveHour: reading(agentlog.FiveHour, 0.10, at.Add(time.Hour)),
+			},
 		},
 	}
 	for _, tt := range tests {

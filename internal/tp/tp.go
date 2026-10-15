@@ -41,7 +41,9 @@ type CLI struct {
 }
 
 func (c CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	if _, err := command.OrExec(c.Exec).Output(ctx, LongTimeout, repoPath, "tp", "new", branch, "--base", baseRef); err != nil {
+	if _, err := command.OrExec(c.Exec).Output(
+		ctx, LongTimeout, repoPath, "tp", "new", branch, "--base", baseRef,
+	); err != nil {
 		return fmt.Errorf("create worktree %s: %w", branch, err)
 	}
 	return nil
@@ -52,7 +54,9 @@ func (c CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMod
 	if err != nil {
 		return fmt.Errorf("resolve remove mode for %s: %w", branch, err)
 	}
-	if _, err := command.OrExec(c.Exec).Output(ctx, command.DefaultTimeout, repoPath, "tp", "remove", flag, branch); err != nil {
+	if _, err := command.OrExec(c.Exec).Output(
+		ctx, command.DefaultTimeout, repoPath, "tp", "remove", flag, branch,
+	); err != nil {
 		return fmt.Errorf("remove worktree %s: %w", branch, err)
 	}
 	return nil

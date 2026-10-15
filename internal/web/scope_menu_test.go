@@ -22,7 +22,8 @@ func testLayoutScopeMenu(t *testing.T) {
 			t.Fatalf("CreateProject(acme): %v", err)
 		}
 
-		menu := htmltest.Parse(t, renderPath(t, openServer(st, fixedClock(testNow), ""), "/tickets")).One(t, "[data-scope-menu]")
+		page := renderPath(t, openServer(st, fixedClock(testNow), ""), "/tickets")
+		menu := htmltest.Parse(t, page).One(t, "[data-scope-menu]")
 		if got := menu.One(t, "summary").Text(); !strings.Contains(got, "All projects") {
 			t.Errorf("GET /tickets scope summary = %q, want All projects", got)
 		}

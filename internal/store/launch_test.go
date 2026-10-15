@@ -88,8 +88,12 @@ func TestStore_ApplyLaunchIntents(t *testing.T) {
 		dsn := cctest.DSN(t)
 		store := openStoreAt(t, dsn)
 		launchTickets(t, store, "sandbox://CC-1", "sandbox://CC-2")
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-a", At: testNow})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow,
+		})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-a", At: testNow,
+		})
 		applyLaunches(t, store, testNow.Add(time.Second))
 
 		memberships := readMemberships(t, store)
@@ -109,8 +113,12 @@ func TestStore_ApplyLaunchIntents(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		launchTickets(t, store, "sandbox://CC-1", "sandbox://CC-2")
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-b", At: testNow})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow,
+		})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-b", At: testNow,
+		})
 		applyLaunches(t, store, testNow.Add(time.Second))
 
 		if got := readEvents(t, store); len(got) != 2 {
@@ -122,7 +130,9 @@ func TestStore_ApplyLaunchIntents(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		launchTickets(t, store, "sandbox://CC-1")
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow,
+		})
 		applyLaunches(t, store, testNow.Add(time.Second))
 		applyLaunches(t, store, testNow.Add(2*time.Second))
 
@@ -171,7 +181,9 @@ func TestStore_LaunchMemberships(t *testing.T) {
 		if _, err := store.CancelLaunchesFor(t.Context(), ticket); err != nil {
 			t.Fatalf("CancelLaunchesFor(%s): %v", ticket, err)
 		}
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash-2", Group: "group-b", At: testNow.Add(3 * time.Second)})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: ticket, PromptHash: "hash-2", Group: "group-b", At: testNow.Add(3 * time.Second),
+		})
 		applyLaunches(t, store, testNow.Add(4*time.Second))
 
 		if got := readMemberships(t, store)[ticket]; got.Cancelled || got.LaunchID == 0 {
@@ -230,7 +242,9 @@ func TestStore_FeatureFirstLaunch(t *testing.T) {
 		ticket string
 		at     time.Time
 	}{{"sandbox://CC-2", later}, {"sandbox://CC-1", first}} {
-		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: launch.ticket, PromptHash: "hash", Group: launch.ticket, At: launch.at})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: launch.ticket, PromptHash: "hash", Group: launch.ticket, At: launch.at,
+		})
 		applyLaunches(t, store, launch.at)
 	}
 

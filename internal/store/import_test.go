@@ -207,7 +207,9 @@ func TestStore_ImportTickets(t *testing.T) {
 				t.Fatalf("SaveObservation: %v", err)
 			}
 		}
-		importOrFail := func(t *testing.T, store *storepkg.Store, feature string, at time.Time, ts ...storepkg.ImportedTicket) {
+		importOrFail := func(
+			t *testing.T, store *storepkg.Store, feature string, at time.Time, ts ...storepkg.ImportedTicket,
+		) {
 			t.Helper()
 			if err := store.ImportTickets(t.Context(), feature, ts, at); err != nil {
 				t.Fatalf("ImportTickets(%s): %v", feature, err)
@@ -378,7 +380,9 @@ func TestStore_ImportTickets(t *testing.T) {
 		if !ok {
 			t.Fatalf("ImportTickets(project:y) error = %v, want a *FeatureClosureError", err)
 		}
-		want := storepkg.FeatureClosureError{Feature: "project:y", URL: blocked, Blocker: outsider, BlockerFeature: "project:x"}
+		want := storepkg.FeatureClosureError{
+			Feature: "project:y", URL: blocked, Blocker: outsider, BlockerFeature: "project:x",
+		}
 		if diff := cmp.Diff(want, *closure); diff != "" {
 			t.Errorf("ImportTickets(project:y) closure mismatch (-want +got):\n%s", diff)
 		}
@@ -393,7 +397,8 @@ func TestStore_ImportTickets(t *testing.T) {
 		dependent := tracker.Ticket{
 			URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent", BlockedBy: []string{unseen},
 		}
-		err := openStore(t).ImportTickets(t.Context(), "project:x", []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}, testNow)
+		imported := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+		err := openStore(t).ImportTickets(t.Context(), "project:x", imported, testNow)
 		closure, ok := errors.AsType[*storepkg.FeatureClosureError](err)
 		if !ok {
 			t.Fatalf("ImportTickets() error = %v, want a *FeatureClosureError", err)
