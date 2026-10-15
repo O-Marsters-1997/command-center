@@ -22,12 +22,6 @@ func openStore(t *testing.T) *store.Store {
 	return cctest.Store(t)
 }
 
-type frozenClock struct{ at time.Time }
-
-func (c frozenClock) Now() time.Time { return c.at }
-
-func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
-
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
 	runID, err := st.InsertRunSkeleton(t.Context(), store.RunSkeleton{
@@ -63,12 +57,12 @@ func (f nudgeFunc) Nudge() { f() }
 
 func openNudgingServer(st *store.Store, nudge func(), opts ...web.Option) *web.Server {
 	return web.NewServer(web.Deps{
-		Logger: slog.New(slog.DiscardHandler), Store: st, Clock: fixedClock(testNow), Nudger: nudgeFunc(nudge),
+		Logger: slog.New(slog.DiscardHandler), Store: st, Clock: cctest.Clock{At: testNow}, Nudger: nudgeFunc(nudge),
 	}, opts...)
 }
 
 func newServer(st *store.Store, now time.Time, opts ...web.Option) *web.Server {
-	return openServer(st, fixedClock(now), "", opts...)
+	return openServer(st, cctest.Clock{At: now}, "", opts...)
 }
 
 type req struct {

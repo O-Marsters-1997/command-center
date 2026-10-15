@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -40,7 +42,7 @@ func TestRecordMergedEvents(t *testing.T) {
 			}
 			observed := plan.Observation{PRs: map[plan.BranchRef]plan.PR{branchRef(ticket.Repo, ticket.Branch): tt.pr}}
 			lp := newLoop(store, func(context.Context) (plan.Observation, error) { return observed, nil },
-				fixedClock(testAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+				cctest.Clock{At: testAt}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 			for tick := range 2 {
 				if err := lp.RunOnce(ctx); err != nil {
 					t.Fatalf("RunOnce tick %d: %v", tick, err)

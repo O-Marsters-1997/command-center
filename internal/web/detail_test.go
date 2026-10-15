@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"golang.org/x/net/html"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
@@ -265,7 +267,7 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 	}
 
 	server = web.NewServer(web.Deps{
-		Logger: slog.New(slog.DiscardHandler), Store: store, Clock: fixedClock(now), BoardPollSeconds: 1,
+		Logger: slog.New(slog.DiscardHandler), Store: store, Clock: cctest.Clock{At: now}, BoardPollSeconds: 1,
 	})
 	board = htmltest.Parse(t, boardBody(t, server)).One(t, "table#board")
 	if got, _ := board.Attr("hx-trigger"); got != "every 1s" {

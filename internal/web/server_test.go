@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
@@ -188,7 +190,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	repos := named("repo")
-	server := openServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: at}, "")
 	page := renderPage(t, server)
 
 	parent := webtest.RowFor(t, page, "sandbox://PARENT")
@@ -238,7 +240,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	}
 
 	repos := named("repo")
-	server := openServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: at}, "")
 	page := renderPage(t, server)
 
 	row := webtest.RowFor(t, page, ticket.URL)
@@ -317,7 +319,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	}
 
 	repos := named("repo")
-	server := openServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: at}, "")
 	page := renderPage(t, server)
 
 	row := webtest.RowFor(t, page, "sandbox://CC-1")
@@ -330,7 +332,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	server := openServer(seededStore(t, testNow), cctest.Clock{At: testNow}, "")
 
 	rec := do(t, server, http.MethodGet, "/nope", req{})
 	if rec.Code != http.StatusNotFound {
@@ -481,7 +483,7 @@ func TestLaunchOpenRedirectsToFeature(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	server := openServer(seededStore(t, testNow), cctest.Clock{At: testNow}, "")
 	got := do(t, server, http.MethodPost, "/launch?ticket=sandbox://CC-1", req{})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
 		t.Errorf("POST /launch = %d %q, want 303 /", got.Code, got.Location)
@@ -491,7 +493,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	server := openServer(seededStore(t, testNow), cctest.Clock{At: testNow}, "")
 	got := do(t, server, http.MethodGet, "/preview?ticket=sandbox://CC-1", req{})
 	if got.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", got.Code)
@@ -522,7 +524,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 	candidateResp := do(t, server, http.MethodGet, "/launch/candidates.json?"+query, req{})
 	if candidateResp.Code != http.StatusOK {
 		t.Fatalf("GET candidates = %d, want 200: %s", candidateResp.Code, candidateResp.Body)
@@ -615,7 +617,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 	got := do(t, server, http.MethodPost, "/launch?ticket=sandbox://CC-1", req{})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
 		t.Fatalf("POST /launch = %d %q, want 303 /", got.Code, got.Location)
@@ -759,7 +761,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 
 	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
 	recomposed := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"}))
@@ -798,7 +800,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := seededStore(t, testNow)
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 
 	form := url.Values{
 		"ticket": {"sandbox://CC-1"},
@@ -827,7 +829,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	server := openServer(seededStore(t, testNow), cctest.Clock{At: testNow}, "")
 
 	form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
 	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
@@ -863,7 +865,7 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatalf("SaveObservation: %v", err)
 		}
-		server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
+		server := openServer(track(t, store, named("repo")...), cctest.Clock{At: at}, "")
 		return webtest.RowFor(t, renderPage(t, server), ticket.URL)
 	}
 

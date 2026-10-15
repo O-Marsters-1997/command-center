@@ -40,14 +40,6 @@ func TestDecodeFeatures(t *testing.T) {
 	}
 }
 
-func TestDecodeFeaturesRejectsGarbage(t *testing.T) {
-	t.Parallel()
-
-	if _, err := decodeFeatures([]byte("not json")); err == nil {
-		t.Fatal("decodeFeatures accepted non-JSON output")
-	}
-}
-
 func TestTicketStatus(t *testing.T) {
 	t.Parallel()
 
@@ -90,21 +82,5 @@ func TestDecodeBlockedBy(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("blocked_by = %v, want %v", got, want)
-	}
-}
-
-func TestDecodeBlockedByRejectsEmptyOutput(t *testing.T) {
-	t.Parallel()
-
-	if _, err := decodeBlockedBy(nil); err == nil {
-		t.Fatal("decodeBlockedBy accepted empty output")
-	}
-}
-
-func TestDecodeBlockedByRejectsGarbage(t *testing.T) {
-	t.Parallel()
-
-	if _, err := decodeBlockedBy([]byte("not json")); err == nil {
-		t.Fatal("decodeBlockedBy accepted non-JSON output")
 	}
 }

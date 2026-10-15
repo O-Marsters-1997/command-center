@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -15,7 +17,7 @@ var soloRepo = storepkg.Repo{Name: "acme/solo", Remote: "git@github.com:acme/sol
 
 func projectsServer(t *testing.T) *web.Server {
 	t.Helper()
-	return openServer(track(t, openStore(t), alphaRepo, betaRepo, soloRepo), fixedClock(testNow), "")
+	return openServer(track(t, openStore(t), alphaRepo, betaRepo, soloRepo), cctest.Clock{At: testNow}, "")
 }
 
 func TestCreateProjectGroupsItsReposUnderASquare(t *testing.T) {

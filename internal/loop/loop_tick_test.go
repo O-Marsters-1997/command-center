@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -38,7 +40,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake,
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(time.Minute)}, cfg, ws, fake,
 		loop.WithForge(&recordingForge{}), loop.WithWorktrees(&recordingWorktrees{}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -88,7 +90,7 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake, loop.WithForge(forge))
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(time.Minute)}, cfg, ws, fake, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

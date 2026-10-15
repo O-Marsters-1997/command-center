@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -26,7 +28,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	at := testAt
 	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
-		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		cctest.Clock{At: at}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
 	for i := range 3 {
 		if err := ok.RunOnce(ctx); err != nil {
@@ -37,7 +39,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	boom := errors.New("gh pr list: exit status 1")
 	failing := newLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
-	}, fixedClock(at.Add(time.Hour)), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	}, cctest.Clock{At: at.Add(time.Hour)}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	for i := range 50 {
 		if err := failing.RunOnce(ctx); err == nil {
 			t.Fatalf("RunOnce %d returned nil for a forced-failure observe", i)

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,29 +28,50 @@ func fakeTp(t *testing.T, exitCode int) (bin, argsPath string) {
 }
 
 func TestTpInvocations(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name     string
 		wantArgv string
+		mode     git.RemoveMode
+		create   bool
+		exitCode int
+		wantErr  string
 	}{
-		{name: "New passes the base", wantArgv: "new cc-1-first --base origin/main"},
-		{name: "Remove merged", wantArgv: "remove --merged cc-1-first"},
-		{name: "Remove forced", wantArgv: "remove --force cc-1-first"},
+		{name: "New passes the base", wantArgv: "new cc-1-first --base origin/main", create: true, wantErr: "<nil>"},
+		{name: "Remove merged", wantArgv: "remove --merged cc-1-first", mode: git.RemoveMerged, wantErr: "<nil>"},
+		{name: "Remove forced", wantArgv: "remove --force cc-1-first", mode: git.RemoveForced, wantErr: "<nil>"},
+		{name: "New failure", wantArgv: "new cc-1-first --base origin/main", create: true, exitCode: 1,
+			wantErr: "create worktree cc-1-first: tp new cc-1-first --base origin/main in {dir}: exit status 1: "},
+		{name: "Remove merged failure", wantArgv: "remove --merged cc-1-first", mode: git.RemoveMerged, exitCode: 1,
+			wantErr: "remove worktree cc-1-first: tp remove --merged cc-1-first in {dir}: exit status 1: "},
+		{name: "Remove forced failure", wantArgv: "remove --force cc-1-first", mode: git.RemoveForced, exitCode: 1,
+			wantErr: "remove worktree cc-1-first: tp remove --force cc-1-first in {dir}: exit status 1: "},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			repoPath := t.TempDir()
-			bin, argsPath := fakeTp(t, 0)
-			runTpChild(t, tpChild{bin: bin, repoPath: repoPath, action: tt.name})
-
+			dir := t.TempDir()
+			bin, argsPath := fakeTp(t, tt.exitCode)
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			var err error
+			if tt.create {
+				err = (git.CLI{}).New(t.Context(), dir, "cc-1-first", "origin/main")
+			} else {
+				err = (git.CLI{}).Remove(t.Context(), dir, "cc-1-first", tt.mode)
+			}
+			want := strings.ReplaceAll(tt.wantErr, "{dir}", dir)
+			if got := fmt.Sprint(err); got != want {
+				t.Errorf("CLI(%s) = %q, want %q", tt.name, got, want)
+			}
+			var cmdErr *command.Error
+			if got, want := errors.As(err, &cmdErr), tt.exitCode != 0; got != want {
+				t.Errorf("CLI(%s) command error = %v, want %v", tt.name, got, want)
+			}
 			got, err := os.ReadFile(argsPath)
 			if err != nil {
 				t.Fatalf("read recorded args: %v", err)
 			}
 			lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
-			wantDir, err := filepath.EvalSymlinks(repoPath)
+			wantDir, err := filepath.EvalSymlinks(dir)
 			if err != nil {
 				t.Fatalf("EvalSymlinks(repoPath): %v", err)
 			}
@@ -69,85 +89,10 @@ func TestTpInvocations(t *testing.T) {
 	}
 }
 
-func TestTpFailureNamesTheBranch(t *testing.T) {
-	t.Parallel()
-	for _, action := range []string{"New", "Remove", "Remove forced"} {
-		t.Run(action, func(t *testing.T) {
-			t.Parallel()
-			bin, _ := fakeTp(t, 1)
-			runTpChild(t, tpChild{bin: bin, repoPath: t.TempDir(), action: action, failing: true})
-		})
-	}
-}
-
 func TestRemoveUnknownMode(t *testing.T) {
 	t.Parallel()
 	err := (git.CLI{}).Remove(t.Context(), t.TempDir(), "cc-1", git.RemoveUnknown)
 	if err == nil {
 		t.Fatal("Remove(RemoveUnknown) = nil, want error")
-	}
-}
-
-type tpChild struct {
-	bin, repoPath, action string
-	failing               bool
-}
-
-func runTpChild(t *testing.T, child tpChild) {
-	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestTpChild$")
-	cmd.Env = append(os.Environ(),
-		"PATH="+child.bin+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"CC_TEST_TP_ACTION="+child.action,
-		"CC_TEST_TP_REPO="+child.repoPath,
-		"CC_TEST_TP_FAIL="+strconv.FormatBool(child.failing),
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("tp child: %v: %s", err, out)
-	}
-}
-
-func TestTpChild(t *testing.T) {
-	t.Parallel()
-	action := os.Getenv("CC_TEST_TP_ACTION")
-	if action == "" {
-		return
-	}
-	repo := os.Getenv("CC_TEST_TP_REPO")
-	var err error
-	switch action {
-	case "New", "New passes the base":
-		err = (git.CLI{}).New(t.Context(), repo, "cc-1-first", "origin/main")
-	case "Remove", "Remove merged":
-		err = (git.CLI{}).Remove(t.Context(), repo, "cc-1-first", git.RemoveMerged)
-	case "Remove forced":
-		err = (git.CLI{}).Remove(t.Context(), repo, "cc-1-first", git.RemoveForced)
-	default:
-		t.Fatalf("unknown tp action %q", action)
-	}
-	if os.Getenv("CC_TEST_TP_FAIL") == "true" {
-		var cmdErr *command.Error
-		if !errors.As(err, &cmdErr) {
-			t.Fatalf("CLI(%s) = %v, want *command.Error", action, err)
-		}
-		want := "tp new cc-1-first --base origin/main"
-		switch action {
-		case "Remove":
-			want = "tp remove --merged cc-1-first"
-		case "Remove forced":
-			want = "tp remove --force cc-1-first"
-		}
-		if cmdErr.Cmd != want || cmdErr.Dir != repo {
-			t.Errorf("CLI(%s) command = %q in %q, want %q in %q", action, cmdErr.Cmd, cmdErr.Dir, want, repo)
-		}
-		prefix := "create worktree cc-1-first: "
-		if action != "New" {
-			prefix = "remove worktree cc-1-first: "
-		}
-		if got, want := fmt.Sprint(err), prefix+fmt.Sprint(cmdErr); got != want {
-			t.Errorf("CLI(%s) error = %q, want one context prefix %q", action, err, prefix)
-		}
-	} else if err != nil {
-		t.Errorf("CLI(%s) = %v, want nil", action, err)
 	}
 }

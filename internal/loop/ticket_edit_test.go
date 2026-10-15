@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -32,7 +34,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 		t.Fatalf("QueueEditTicketIntent(CC-2): %v", err)
 	}
 
-	lp := newLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	lp := newLoop(store, noOpObserve, cctest.Clock{At: at}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -86,7 +88,8 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	}
 
 	lp := newLoop(
-		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
+		store, noOpObserve, cctest.Clock{At: at.Add(time.Minute)}, config.Config{}, config.Workspace{},
+		runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)

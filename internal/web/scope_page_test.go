@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
@@ -36,7 +38,7 @@ func threeRepoServer(t *testing.T) *web.Server {
 	t.Helper()
 	at := testNow
 	repos := named("repo", "services", "other")
-	return openServer(track(t, threeRepoStore(t), repos...), fixedClock(at), "")
+	return openServer(track(t, threeRepoStore(t), repos...), cctest.Clock{At: at}, "")
 }
 
 func TestBoardScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
@@ -80,7 +82,7 @@ func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
 	}
 	storetest.Tickets(t, store, tickets...)
 	tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
-	server := openServer(tracked, fixedClock(testNow), "")
+	server := openServer(tracked, cctest.Clock{At: testNow}, "")
 
 	page := renderPath(t, server, "/board?repo=O-Marsters-1997/command-center")
 	if refs := ticketRefs(webtest.BoardRows(t, page)); !slices.Equal(refs, []string{ticketRef("sandbox://MINE")}) {
@@ -146,7 +148,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 	repos := named("repo", "other")
-	server := openServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: at}, "")
 
 	page := renderPath(t, server, "/board?feature=board-scope&repo=repo")
 	if refs := ticketRefs(webtest.BoardRows(t, page)); !slices.Equal(refs, []string{ticketRef("sandbox://MATCH")}) {

@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -19,7 +21,7 @@ func TestTrackQueuesOneIntentWithoutConsultingTracker(t *testing.T) {
 		t.Error("track handler consulted tracker source")
 		return nil, nil
 	})
-	server := openServer(st, fixedClock(testNow), "", source)
+	server := openServer(st, cctest.Clock{At: testNow}, "", source)
 
 	request := req{Form: url.Values{"repo": {"acme/new"}}, Header: http.Header{"Hx-Request": {"true"}}}
 	first := do(t, server, http.MethodPost, "/repos/track", request)
@@ -61,7 +63,7 @@ func TestTrackQueuesOneIntentWithoutConsultingTracker(t *testing.T) {
 
 func TestTrackWithoutHTMXRedirectsToTheRepoPage(t *testing.T) {
 	t.Parallel()
-	server := openServer(openStore(t), fixedClock(testNow), "")
+	server := openServer(openStore(t), cctest.Clock{At: testNow}, "")
 
 	rec := do(t, server, http.MethodPost, "/repos/track", req{Form: url.Values{"repo": {"acme/new"}}})
 
@@ -72,7 +74,7 @@ func TestTrackWithoutHTMXRedirectsToTheRepoPage(t *testing.T) {
 
 func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 	st := openStore(t)
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 
 	for _, tt := range []struct{ name, repo string }{
 		{name: "empty"},
@@ -102,7 +104,7 @@ func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	t.Parallel()
 	st := openStore(t)
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 	request := req{Form: url.Values{"repo": {"acme/new"}}, Header: http.Header{"Hx-Request": {"true"}}}
 	do(t, server, http.MethodPost, "/repos/track", request)
 
@@ -183,7 +185,7 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 			t.Fatalf("UpsertRepo(%q): %v", r.Name, err)
 		}
 	}
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 	if err := st.QueueVerbIntent(t.Context(), "acme/queued", plan.VerbTrack, testNow); err != nil {
 		t.Fatalf("QueueVerbIntent(acme/queued): %v", err)
 	}
@@ -224,7 +226,7 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 func TestBannerAnswers286OnceTheStateIsTerminal(t *testing.T) {
 	t.Parallel()
 	st := openStore(t)
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 	request := req{Form: url.Values{"repo": {"acme/new"}}, Header: http.Header{"Hx-Request": {"true"}}}
 	do(t, server, http.MethodPost, "/repos/track", request)
 

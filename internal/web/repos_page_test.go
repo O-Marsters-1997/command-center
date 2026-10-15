@@ -9,11 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -30,7 +33,7 @@ var pushable = []gh.RepoSummary{
 
 func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 	t.Helper()
-	return openServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "",
+	return openServer(track(t, openStore(t), alphaRepo, betaRepo), cctest.Clock{At: testNow}, "",
 		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 			calls.Add(1)
 			return pushable, nil
@@ -152,7 +155,7 @@ func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	server := openServer(openStore(t), fixedClock(testNow), "", web.WithPushableSource(
+	server := openServer(openStore(t), cctest.Clock{At: testNow}, "", web.WithPushableSource(
 		func(context.Context) ([]gh.RepoSummary, error) {
 			close(started)
 			<-release
@@ -209,7 +212,7 @@ func (c *steppingClock) Now() time.Time { return c.at }
 func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "",
+	server := openServer(track(t, openStore(t), alphaRepo), cctest.Clock{At: testNow}, "",
 		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 			return nil, errors.New("gh: not logged in")
 		}))
@@ -235,10 +238,10 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
-		web.WithTrackerSource(resolveByRemote(map[string]tracker.Source{
-			"github.com/acme/alpha": fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}},
-			"github.com/acme/beta":  fakeTrackerSource{features: []tracker.Feature{"project:z"}},
+	server := openServer(track(t, store, alphaRepo, betaRepo), cctest.Clock{At: testNow}, "",
+		web.WithTrackerSource(trackertest.ByRemote(map[string]*trackertest.Source{
+			"github.com/acme/alpha": {Features: []tracker.Feature{"project:x", "project:y"}},
+			"github.com/acme/beta":  {Features: []tracker.Feature{"project:z"}},
 		})))
 
 	body := renderPath(t, server, "/repos/acme/alpha")
@@ -336,7 +339,7 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	if err := st.UpsertRepo(t.Context(), refused); err != nil {
 		t.Fatalf("UpsertRepo(%q): %v", refused.Name, err)
 	}
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 
 	for _, tt := range []struct{ name, path string }{
 		{name: "tickets", path: "/tickets"},

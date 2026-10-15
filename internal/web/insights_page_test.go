@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
@@ -15,7 +17,7 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	repos := named("cc-sandbox")
-	server := openServer(track(t, store, repos...), fixedClock(testNow.Add(31*24*time.Hour)), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: testNow.Add(31 * 24 * time.Hour)}, "")
 
 	root := htmltest.Parse(t, renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a"))
 	root.One(t, `a[href="/insights?feature=feat-a"]`)

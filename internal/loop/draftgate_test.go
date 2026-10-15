@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -116,7 +118,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
 	}
 
-	server := openServer(f.Store, fixedClock(testAt), "")
+	server := openServer(f.Store, cctest.Clock{At: testAt}, "")
 	page := renderPage(t, server)
 	row := webtest.RowFor(t, page, "sandbox://CC-1")
 	if row.State == "base_gone" {
@@ -187,7 +189,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	server := openServer(store, fixedClock(testAt), "")
+	server := openServer(store, cctest.Clock{At: testAt}, "")
 	page := renderPage(t, server)
 
 	child := webtest.RowFor(t, page, "sandbox://CHILD")

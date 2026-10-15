@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -29,7 +31,7 @@ func trackLoop(t *testing.T, st *storepkg.Store, validations *[]string) *loop.Lo
 		return repo, nil
 	}
 	return newLoopWithDeps(loop.Deps{
-		Store: st, Observe: idle, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Store: st, Observe: idle, Clock: cctest.Clock{At: testAt}, Config: cfg, Workspace: ws,
 		Runner: runner.ProcessRunner{}, RemoteOf: remoteOf, Validate: validate,
 	})
 }

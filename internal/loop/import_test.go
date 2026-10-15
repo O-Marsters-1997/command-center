@@ -1,47 +1,20 @@
 package loop_test
 
 import (
-	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
-
-type fakeTrackerSource struct {
-	features    []tracker.Feature
-	tickets     map[string][]tracker.Ticket
-	ticketCalls *int
-}
-
-func (f fakeTrackerSource) Features(context.Context) ([]tracker.Feature, error) {
-	return f.features, nil
-}
-
-func (f fakeTrackerSource) Tickets(_ context.Context, feature string) ([]tracker.Ticket, error) {
-	if f.ticketCalls != nil {
-		*f.ticketCalls++
-	}
-	return f.tickets[feature], nil
-}
-
-func resolveByRemote(byRemote map[string]tracker.Source) tracker.Resolver {
-	return func(_ tracker.Kind, remote string) (tracker.Source, error) {
-		src, ok := byRemote[remote]
-		if !ok {
-			return nil, fmt.Errorf("resolveByRemote: no source for %q", remote)
-		}
-		return src, nil
-	}
-}
 
 func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	t.Parallel()
@@ -53,9 +26,9 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 
-	src := fakeTrackerSource{
-		features: []tracker.Feature{"project:x"},
-		tickets: map[string][]tracker.Ticket{
+	src := &trackertest.Source{
+		Features: []tracker.Feature{"project:x"},
+		Tickets: map[string][]tracker.Ticket{
 			"project:x": {{
 				URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x", Body: "b", Status: "ready",
 			}},
@@ -65,9 +38,9 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	cfg := config.Config{}
 
 	lp := newLoopWithDeps(loop.Deps{
-		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: cfg,
+		Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at}, Config: cfg,
 		Runner:  runner.ProcessRunner{},
-		Tracker: resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}),
+		Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
 	})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -126,15 +99,15 @@ func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 			if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
 				t.Fatalf("QueueVerbIntent(project:y, import): %v", err)
 			}
-			src := fakeTrackerSource{
-				features: []tracker.Feature{"project:y"},
-				tickets:  map[string][]tracker.Ticket{"project:y": {tt.imported}},
+			src := &trackertest.Source{
+				Features: []tracker.Feature{"project:y"},
+				Tickets:  map[string][]tracker.Ticket{"project:y": {tt.imported}},
 			}
 			trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 			lp := newLoopWithDeps(loop.Deps{
-				Store: store, Observe: noOpObserve, Clock: fixedClock(at.Add(time.Hour)),
+				Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at.Add(time.Hour)},
 				Runner:  runner.ProcessRunner{},
-				Tracker: resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}),
+				Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
 			})
 			if err := lp.RunOnce(ctx); err != nil {
 				t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
@@ -187,9 +160,9 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 
-	src := fakeTrackerSource{
-		features: []tracker.Feature{"project:x"},
-		tickets: map[string][]tracker.Ticket{
+	src := &trackertest.Source{
+		Features: []tracker.Feature{"project:x"},
+		Tickets: map[string][]tracker.Ticket{
 			"project:x": {{
 				URL: "https://linear.app/acme/issue/eng-1", Number: 1, Title: "Add x", Status: "ready",
 			}},
@@ -203,9 +176,9 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 	}
 
 	lp := newLoopWithDeps(loop.Deps{
-		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: cfg,
+		Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at}, Config: cfg,
 		Runner:  runner.ProcessRunner{},
-		Tracker: resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}),
+		Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
 	})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)

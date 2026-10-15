@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -30,13 +31,6 @@ type manualWaiter struct {
 }
 
 func newManualClock(at time.Time) *manualClock { return &manualClock{now: at} }
-
-type frozenClock struct{ at time.Time }
-
-func (c frozenClock) Now() time.Time                       { return c.at }
-func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
-
-func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
 
 func (c *manualClock) Now() time.Time {
 	c.mu.Lock()
@@ -82,7 +76,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	}
 	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		cctest.Clock{At: at}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -115,7 +109,7 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := newLoop(store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	lp := newLoop(store, stub, cctest.Clock{At: at}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -147,7 +141,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(good), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		cctest.Clock{At: good}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := ok.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -160,7 +154,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	boom := errors.New("gh pr list: exit status 1")
 	failing := newLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
-	}, fixedClock(bad), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	}, cctest.Clock{At: bad}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
 	err := failing.RunOnce(ctx)
 	if err == nil {

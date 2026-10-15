@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -62,7 +64,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatalf("SaveObservation: %v", err)
 	}
-	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
+	server := openServer(track(t, store, named("repo")...), cctest.Clock{At: now}, "")
 
 	target := "/tickets?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
 	rec := do(t, server, http.MethodGet, target, req{})

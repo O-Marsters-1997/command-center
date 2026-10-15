@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -26,7 +28,7 @@ func TestVerbQueuesExactlyOneKillOrCancelIntent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			store := tt.seed(t)
-			server := openServer(store, fixedClock(testNow), "")
+			server := openServer(store, cctest.Clock{At: testNow}, "")
 			got := do(t, server, http.MethodPost, "/verb?verb="+string(tt.verb)+"&ticket=sandbox://CC-1", req{})
 			if got.Code != http.StatusSeeOther || got.Location != "/" {
 				t.Fatalf("POST %s = %d %q, want 303 /", tt.verb, got.Code, got.Location)
@@ -45,7 +47,7 @@ func TestVerbQueuesExactlyOneKillOrCancelIntent(t *testing.T) {
 func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	server := openServer(seededStore(t, testNow), cctest.Clock{At: testNow}, "")
 
 	tests := []struct{ name, query string }{
 		{name: "unknown ticket", query: "verb=kill&ticket=sandbox://GHOST"},
@@ -68,7 +70,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	t.Parallel()
 
 	store := seededRunning(t)
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 	form := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}
 	got := do(t, server, http.MethodPost, "/verb", req{Form: form})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
@@ -87,7 +89,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededRunning(t), fixedClock(testNow), ""))
+	srv := httptest.NewServer(openServer(seededRunning(t), cctest.Clock{At: testNow}, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
@@ -116,7 +118,7 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 
 func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 	store := seededStore(t, testNow)
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 
 	tests := []struct {
 		name   string
@@ -151,7 +153,7 @@ func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 	t.Parallel()
 
 	store := seededFailed(t)
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 
 	form := url.Values{
 		"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}, "prompt": {"fix the flaky test"},
@@ -177,7 +179,7 @@ func TestVerbAnswers409WhenTheRowsStateDoesNotOfferIt(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, testNow)
-	server := openServer(store, fixedClock(testNow), "")
+	server := openServer(store, cctest.Clock{At: testNow}, "")
 	got := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
 	if got.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: a ready row does not offer kill", got.Code)

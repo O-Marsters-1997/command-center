@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -78,7 +80,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	}
 	return &steerFixture{
 		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, runsDir: ws.RunsDir, at: at,
-		loop: newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, rn),
+		loop: newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, rn),
 	}
 }
 

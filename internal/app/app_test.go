@@ -22,7 +22,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/hx"
@@ -40,7 +39,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 
 	ctx := t.Context()
 	inst, err := app.New(
-		ctx, slog.New(slog.DiscardHandler), configPath, testEnv, app.WithClock(fixedClock(at)), app.WithObserver(stub),
+		ctx, slog.New(slog.DiscardHandler), configPath, testEnv, app.WithClock(cctest.Clock{At: at}), app.WithObserver(stub),
 	)
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -230,13 +229,6 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 		t.Fatal("Run kept running though the server could not bind")
 	}
 }
-
-type frozenClock struct{ at time.Time }
-
-func (c frozenClock) Now() time.Time                       { return c.at }
-func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
-
-func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
 
 var testEnv = config.Env{Home: "/home/test", UserConfigDir: "/home/test/.config"}
 

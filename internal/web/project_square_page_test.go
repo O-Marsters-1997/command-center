@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -23,7 +25,7 @@ func squareServer(t *testing.T) (session, board string) {
 		storepkg.Ticket{URL: acmeTicket, Repo: "acme/alpha", Branch: "one", Feature: "Billing"},
 		storepkg.Ticket{URL: looseTicket, Repo: "acme/solo", Branch: "two", Feature: "Billing"},
 	)
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}}
 	rec := do(t, server, http.MethodPost, "/projects", req{Form: form})
 	if rec.Code != 303 {

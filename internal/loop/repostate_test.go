@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -58,7 +60,7 @@ func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 		return repo, nil
 	}
 	lp := newLoopWithDeps(loop.Deps{
-		Store: st, Observe: idle, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Store: st, Observe: idle, Clock: cctest.Clock{At: testAt}, Config: cfg, Workspace: ws,
 		Runner: runner.ProcessRunner{}, Validate: validate,
 	})
 
@@ -95,7 +97,7 @@ func TestAValidatorThatCannotAnswerLeavesTheRepoCloningAndTheOthersSettle(t *tes
 		return repo, nil
 	}
 	lp := newLoopWithDeps(loop.Deps{
-		Store: st, Observe: idle, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Store: st, Observe: idle, Clock: cctest.Clock{At: testAt}, Config: cfg, Workspace: ws,
 		Runner: runner.ProcessRunner{}, Validate: validate,
 	})
 
@@ -195,7 +197,7 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 	}
 	forge := &recordingForge{}
 	observer := loop.NewObserver(st, forge, cfg)
-	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+	lp := newLoop(st, observer, cctest.Clock{At: testAt}, cfg, ws, runner.ProcessRunner{},
 		loop.WithForge(forge), loop.WithWorktrees(&recordingWorktrees{}))
 	tick := func() storepkg.Repo {
 		t.Helper()
@@ -235,7 +237,7 @@ func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t 
 	upsertRepoAs(t, st, "repo", plan.RepoRefused)
 	forge := &recordingForge{}
 	observer := loop.NewObserver(st, forge, cfg)
-	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+	lp := newLoop(st, observer, cctest.Clock{At: testAt}, cfg, ws, runner.ProcessRunner{},
 		loop.WithForge(forge), loop.WithWorktrees(&recordingWorktrees{}))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
