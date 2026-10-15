@@ -48,14 +48,14 @@ func TestOptionJSON(t *testing.T) {
 	in := doc{A: option.Some(0), B: option.None[string]()}
 	b, err := json.Marshal(in)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Marshal(option document): %v", err)
 	}
 	if got, want := string(b), `{"a":0,"b":null}`; got != want {
 		t.Fatalf("marshal = %s, want %s", got, want)
 	}
 	var out doc
 	if err := json.Unmarshal(b, &out); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Unmarshal(option document): %v", err)
 	}
 	if out != in {
 		t.Errorf("round trip = %v, want %v", out, in)

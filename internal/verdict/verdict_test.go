@@ -381,8 +381,6 @@ func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 	}
 }
 
-// compatPredicate is a two-check predicate standing in for a real repo's, one leaf named as the
-// cross-repo compat check.
 func compatPredicate() verdict.Predicate {
 	return verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "GraphQL production compatibility"},

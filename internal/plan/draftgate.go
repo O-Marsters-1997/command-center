@@ -2,8 +2,6 @@ package plan
 
 import "fmt"
 
-// GatingBlockers returns t's blockers in another repo: edges Unlocked skips entirely but
-// DraftGate needs.
 func GatingBlockers(t Ticket, byURL map[TicketURL]Ticket) []Ticket {
 	var gating []Ticket
 	for _, blockerURL := range t.BlockedBy {
@@ -15,15 +13,6 @@ func GatingBlockers(t Ticket, byURL map[TicketURL]Ticket) []Ticket {
 	return gating
 }
 
-// OpensAsDraft decides whether a ticket's pull request is created as a draft: any ticket with a
-// gating edge. DraftGate decides the steady state afterwards.
-func OpensAsDraft(t Ticket, byURL map[TicketURL]Ticket) bool {
-	return len(GatingBlockers(t, byURL)) > 0
-}
-
-// DraftGate decides whether a consumer's pull request stays a draft: any gating blocker
-// unmerged, or its own verdict not green. It never asks to re-draft, as GitHub has no such
-// affordance.
 func DraftGate(gating []Ticket, prs map[string]PRState, verdictGreen bool) (draft bool, reason Reason) {
 	var closed, unresolved []TicketURL
 	for _, g := range gating {

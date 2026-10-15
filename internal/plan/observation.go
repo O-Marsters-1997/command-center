@@ -10,8 +10,6 @@ type CheckState struct {
 	StartedAt  time.Time `json:"started_at"`
 }
 
-// PR is one pull request as the tick observed it. The JSON tags are the persisted
-// observation's shape, so a row saved before PR moved here still loads.
 type PR struct {
 	Number      int                   `json:"number"`
 	HeadRef     string                `json:"head_ref"`
@@ -30,8 +28,6 @@ type RunObservation struct {
 	Alive bool `json:"alive"`
 }
 
-// Observation is everything one tick read from the world, persisted so the page renders after
-// a restart. It holds facts, never state labels.
 type Observation struct {
 	ObservedAt        time.Time                        `json:"observed_at"`
 	PRs               map[BranchRef]PR                 `json:"prs"`
@@ -44,15 +40,10 @@ type Observation struct {
 	MidMerge          map[BranchRef]bool               `json:"mid_merge"`
 	ConflictsWithBase map[BranchRef]bool               `json:"conflicts_with_base"`
 	ConflictsWithPeer map[BranchRef]map[BranchRef]bool `json:"conflicts_with_peer"`
-	// Settings is each repo's .command-centre.toml as origin/main held it this tick, keyed by repo
-	// name. A repo whose file would not read is in SettingsErrors instead.
-	Settings       map[string]RepoSettings `json:"settings"`
-	SettingsErrors map[string]string       `json:"settings_errors"`
-	// SettingsSources says where each Settings entry came from: "defaults" or "origin/main".
-	SettingsSources map[string]string `json:"settings_sources"`
-	// RepoErrors is each repo this tick could not observe, keyed by repo name. Its other entries
-	// carry the last tick's values.
-	RepoErrors map[string]string `json:"repo_errors"`
+	Settings          map[string]RepoSettings          `json:"settings"`
+	SettingsErrors    map[string]string                `json:"settings_errors"`
+	SettingsSources   map[string]string                `json:"settings_sources"`
+	RepoErrors        map[string]string                `json:"repo_errors"`
 }
 
 func NewObservation(at time.Time) Observation {
