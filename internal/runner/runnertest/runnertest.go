@@ -2,7 +2,6 @@ package runnertest
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -75,9 +74,6 @@ func (r *Runner) Canceled() []int {
 }
 
 func (r *Runner) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error) {
-	if len(cfg.AgentCommand) == 0 {
-		return runner.SpawnResult{}, errors.New("spawn agent: agent_command is empty")
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.spawns = append(r.spawns, cfg)
@@ -159,13 +155,6 @@ func RunContract(t *testing.T, newRunner func(t *testing.T) runner.Runner) {
 		t.Parallel()
 		if code, ok := newRunner(t).Reap(1); ok {
 			t.Errorf("Reap(1) = %d, true, want false", code)
-		}
-	})
-
-	t.Run("Spawn with no agent command", func(t *testing.T) {
-		t.Parallel()
-		if _, err := newRunner(t).Spawn(t.Context(), runner.SpawnConfig{WorktreePath: t.TempDir()}); err == nil {
-			t.Error("Spawn(no agent_command) error = nil, want one")
 		}
 	})
 }

@@ -100,6 +100,13 @@ type failingCut struct{ *tptest.Worktrees }
 
 func (failingCut) New(context.Context, string, string, string) error { return errForge }
 
+type refusingRemove struct {
+	*tptest.Worktrees
+	err error
+}
+
+func (r refusingRemove) Remove(context.Context, string, string, tp.RemoveMode) error { return r.err }
+
 type failingRemove struct{ *tptest.Worktrees }
 
 func (failingRemove) Remove(context.Context, string, string, tp.RemoveMode) error { return errForge }

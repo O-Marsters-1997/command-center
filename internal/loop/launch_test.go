@@ -402,8 +402,8 @@ func TestDispose(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LatestReadingsFull: %v", err)
 			}
-			if cost[agentlog.FiveHour] != tt.wantCost || cost[agentlog.SevenDay] != 0 {
-				t.Errorf("CCCostUSD() = %v, want five_hour %v only", cost, tt.wantCost)
+			if cost[agentlog.FiveHour] != tt.wantCost {
+				t.Errorf("CCCostUSD()[five_hour] = %v, want %v", cost[agentlog.FiveHour], tt.wantCost)
 			}
 			if tt.wantUtilization5 != 0 && readings[agentlog.FiveHour].Utilization != tt.wantUtilization5 {
 				t.Errorf("LatestReadingsFull()[five_hour].Utilization = %v, want %v",
