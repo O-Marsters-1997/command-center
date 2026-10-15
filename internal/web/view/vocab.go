@@ -1,7 +1,6 @@
 package view
 
 import (
-	"fmt"
 	"slices"
 )
 
@@ -37,9 +36,8 @@ const (
 )
 
 var (
-	allLogFilters   = []LogFilter{LogAll, LogSkills, LogTools, LogFails}
-	allSectionKeys  = []SectionKey{SectionNeedsYou, SectionInProgress, SectionReady, SectionBlocked, SectionDone}
-	allBannerStates = []BannerState{BannerUntracked, BannerCloning, BannerReady, BannerRefused}
+	allLogFilters  = []LogFilter{LogAll, LogSkills, LogTools, LogFails}
+	allSectionKeys = []SectionKey{SectionNeedsYou, SectionInProgress, SectionReady, SectionBlocked, SectionDone}
 )
 
 func ParseLogFilter(s string) LogFilter {
@@ -47,18 +45,4 @@ func ParseLogFilter(s string) LogFilter {
 		return f
 	}
 	return LogAll
-}
-
-func ParseSectionKey(s string) (SectionKey, error) {
-	if k := SectionKey(s); slices.Contains(allSectionKeys, k) {
-		return k, nil
-	}
-	return SectionUnknown, fmt.Errorf("unknown section key %q", s)
-}
-
-func ParseBannerState(s string) (BannerState, error) {
-	if b := BannerState(s); slices.Contains(allBannerStates, b) {
-		return b, nil
-	}
-	return BannerUnknown, fmt.Errorf("unknown banner state %q", s)
 }

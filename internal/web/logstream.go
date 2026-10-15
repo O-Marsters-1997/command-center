@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"io/fs"
 	"net/http"
@@ -222,7 +223,7 @@ func sendLines(w io.Writer, tail *agentlog.Tail, follow *logFollow) (sent int, e
 func writeEvent(w io.Writer, id int64, data string) error {
 	var frame strings.Builder
 	fmt.Fprintf(&frame, "id: %d\n", id)
-	for _, line := range strings.Split(data, "\n") {
+	for line := range strings.SplitSeq(data, "\n") {
 		fmt.Fprintf(&frame, "data: %s\n", line)
 	}
 	frame.WriteString("\n")
@@ -230,4 +231,17 @@ func writeEvent(w io.Writer, id int64, data string) error {
 		return fmt.Errorf("%w: %w", errClientGone, err)
 	}
 	return nil
+}
+
+func renderLogLine(line view.LogLine) (template.HTML, error) {
+	line.Verb, line.Arg = flatten(line.Verb), flatten(line.Arg)
+	var buf strings.Builder
+	if err := templates.ExecuteTemplate(&buf, "logline", line); err != nil {
+		return "", fmt.Errorf("render log line: %w", err)
+	}
+	return template.HTML(buf.String()), nil
+}
+
+func flatten(s string) string {
+	return strings.ReplaceAll(s, "\n", " ")
 }

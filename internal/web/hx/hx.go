@@ -17,7 +17,3 @@ const (
 func IsRequest(r *http.Request) bool {
 	return r.Header.Get(HeaderRequest) == "true" && r.Header.Get(HeaderHistoryRestore) != "true"
 }
-
-func CurrentURL(r *http.Request) string {
-	return r.Header.Get(HeaderCurrentURL)
-}

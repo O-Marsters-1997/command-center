@@ -276,3 +276,28 @@ func TestHandleCandidatesJSONAnswersJSONRegardlessOfHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestLaunchRoutesRejectMissingSelection(t *testing.T) {
+	t.Parallel()
+	server := newServer(openStore(t), testNow)
+	for _, tt := range []struct {
+		name   string
+		method string
+		path   string
+		form   url.Values
+	}{
+		{name: "open", method: http.MethodPost, path: "/launch/open", form: url.Values{}},
+		{name: "candidates", method: http.MethodGet, path: "/launch/candidates"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			response := do(t, server, tt.method, tt.path, req{Form: tt.form})
+			if response.Code != http.StatusBadRequest {
+				t.Errorf("%s %s status = %d, want 400", tt.method, tt.path, response.Code)
+			}
+			if !strings.Contains(response.Body, "either feature or at least one ticket is required") {
+				t.Errorf("%s %s body = %q, want missing-selection error", tt.method, tt.path, response.Body)
+			}
+		})
+	}
+}

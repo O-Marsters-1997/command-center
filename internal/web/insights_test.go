@@ -58,19 +58,19 @@ func fetchInsights(t *testing.T, server *web.Server, query string) (resp, insigh
 	return response, body
 }
 
-func TestInsightsNamesTheLocationTheServerWasGiven(t *testing.T) {
-	t.Parallel()
-
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		t.Fatalf("LoadLocation(Europe/Paris): %v", err)
-	}
-	server := newServer(openStore(t), testNow, web.WithLocation(paris))
+func TestInsightsNamesTheLocalLocation(t *testing.T) {
+	server := newServer(openStore(t), testNow)
 
 	_, body := fetchInsights(t, server, "")
 
-	if body.Timezone != "Europe/Paris" {
-		t.Errorf("timezone = %q, want Europe/Paris", body.Timezone)
+	loc, err := time.LoadLocation(body.Timezone)
+	if err != nil {
+		t.Fatalf("LoadLocation(%q): %v", body.Timezone, err)
+	}
+	_, gotOffset := testNow.In(loc).Zone()
+	_, wantOffset := testNow.In(time.Local).Zone()
+	if gotOffset != wantOffset {
+		t.Errorf("timezone %q offset = %d, want local offset %d", body.Timezone, gotOffset, wantOffset)
 	}
 }
 

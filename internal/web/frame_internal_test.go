@@ -55,41 +55,35 @@ func TestWriteJSONEncodeFailureAnswers500WithoutPartialBody(t *testing.T) {
 	}
 }
 
-func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
+func TestPushableFetchSharesResultAcrossConcurrentRequests(t *testing.T) {
 	t.Parallel()
-
 	started := make(chan struct{})
 	release := make(chan struct{})
+	calls := 0
 	cache := pushableCache{list: func(context.Context) ([]gh.RepoSummary, error) {
+		calls++
 		close(started)
 		<-release
 		return []gh.RepoSummary{{FullName: "first"}}, nil
 	}}
-	now := frameTestNow
-	done := make(chan error, 1)
+	done := make(chan error, 2)
 	go func() {
-		_, err := cache.get(t.Context(), now)
+		_, err := cache.get(t.Context(), frameTestNow)
 		done <- err
 	}()
 	<-started
-	lockAvailable := make(chan struct{})
 	go func() {
-		cache.mu.Lock()
-		close(lockAvailable)
-		cache.mu.Unlock()
+		_, err := cache.get(t.Context(), frameTestNow)
+		done <- err
 	}()
-	select {
-	case <-lockAvailable:
-	case <-time.After(time.Second):
-		close(release)
-		t.Fatal("pushable fetch held the cache mutex during I/O")
-	}
 	close(release)
-	if err := <-done; err != nil {
-		t.Fatalf("get() = %v", err)
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Errorf("get() = %v, want nil", err)
+		}
 	}
-	if repos, err := cache.get(t.Context(), now); err != nil || len(repos) != 1 || repos[0].FullName != "first" {
-		t.Errorf("cached get() = %v, %v, want first repo", repos, err)
+	if calls != 1 {
+		t.Errorf("list calls = %d, want 1", calls)
 	}
 }
 

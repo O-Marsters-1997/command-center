@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
-	ref := view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: r.PathValue("n")}
+	ref := sessionRef(r)
 	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, r.URL.Query().Get("log") == "raw")
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
@@ -19,12 +19,16 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleSessionActions(w http.ResponseWriter, r *http.Request) error {
-	ref := view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: r.PathValue("n")}
+	ref := sessionRef(r)
 	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, false)
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
 	return renderFragment(w, r, page.TranscriptPath, "sessionActions", page)
+}
+
+func sessionRef(r *http.Request) view.SessionRef {
+	return view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: r.PathValue("n")}
 }
 
 func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL string, verb plan.Verb) error {

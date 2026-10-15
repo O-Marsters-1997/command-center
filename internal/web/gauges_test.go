@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"log/slog"
 	"slices"
 	"testing"
 	"time"
@@ -106,7 +107,10 @@ func TestSpendLimitNotice(t *testing.T) {
 				t.Fatalf("RecordReadings: %v", err)
 			}
 
-			server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
+			server := web.NewServer(web.Deps{
+				Logger: slog.New(slog.DiscardHandler), Store: store,
+				Clock: fixedClock(observedAt.Add(45 * time.Second)), SpendLimit5h: 80,
+			})
 			notices := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "#notices")
 			if got := notices.Text(); got != tt.want {
 				t.Errorf("notices.Text() = %q, want %q in %s", got, tt.want, notices.HTML())
