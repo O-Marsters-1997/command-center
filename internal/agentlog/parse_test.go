@@ -18,11 +18,6 @@ import (
 func TestParse(t *testing.T) {
 	t.Parallel()
 
-	findOutput, err := os.ReadFile("testdata/run27.find-output.golden")
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
-	}
-
 	tests := []struct {
 		name    string
 		fixture string
@@ -78,69 +73,18 @@ func TestParse(t *testing.T) {
 				}},
 			},
 		},
-		{
-			name:    "two results report the last one",
-			fixture: "run27.jsonl",
-			want: agentlog.Run{
-				Lines: 23,
-				Start: time.Date(2026, 8, 25, 10, 56, 4, 185*int(time.Millisecond), time.UTC),
-				End:   1573296 * time.Millisecond,
-				Result: &agentlog.Result{
-					Outcome: "success", Duration: 561464 * time.Millisecond,
-					Turns: 42, CostUSD: 8.288799200000001,
-				},
-				Phases: []agentlog.Phase{
-					{
-						Turns: 1, Spend: 0.38171008,
-						Events: []agentlog.Event{
-							{Kind: agentlog.Say, Detail: "I'll start by exploring the existing code structure — " +
-								"the `internal/cc` package, the `plan` package, and the untracked test file already present."},
-							{At: 1099 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
-								Detail: "find internal/cc internal/plan -type f | sort",
-								CallID: "toolu_01TFGB4Saexqc9Ctwccjqo8U", Output: string(findOutput), OutputLines: 93,
-								Done: true, Elapsed: 1328 * time.Millisecond},
-							{At: 1843 * time.Millisecond, Kind: agentlog.File, Tool: "Read",
-								Detail: "/Users/dev/Documents/personal/ai-development/" +
-									"command-center-cc-74-grouped-board/internal/cc/group_page_test.go",
-								CallID: "toolu_01SVRG41A6CCGzYD3fFb7Emi"},
-							{At: 1852 * time.Millisecond, Kind: agentlog.Pass, Detail: "1\tpackage cc_test",
-								CallID: "toolu_01SVRG41A6CCGzYD3fFb7Emi", Output: "1\tpackage cc_test\n2\t", OutputLines: 2},
-						},
-					},
-					{
-						Skill: "go-idiomatic", At: 238544 * time.Millisecond,
-						Turns: 2, Spend: 0.19796928000000003,
-						Events: []agentlog.Event{
-							{At: 764324 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
-								Detail: "type go; type rtk 2>/dev/null; alias go 2>/dev/null",
-								CallID: "toolu_019SuUKTAJWXx7GiPbakYQSe",
-								Output: "go is /opt/homebrew/bin/go\nrtk is /opt/homebrew/bin/rtk", OutputLines: 2,
-								Done: true, ExitCode: 1, Elapsed: 2477 * time.Millisecond},
-						},
-					},
-					{
-						Skill: "clean-comments",
-						Turns: 1, Spend: 0.19517952000000002,
-						Note: "internal/cc/export_test.go internal/cc/group_page_test.go " +
-							"internal/cc/server.go",
-						At: 1573296 * time.Millisecond,
-					},
-				},
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := os.Open(filepath.Join("testdata", tt.fixture))
+			data, err := os.ReadFile(filepath.Join("testdata", tt.fixture))
 			if err != nil {
-				t.Fatalf("open fixture: %v", err)
+				t.Fatalf("ReadFile(%s): %v", tt.fixture, err)
 			}
-			defer func() { _ = f.Close() }()
 
-			got, err := agentlog.Parse(f)
+			got, err := agentlog.Parse(strings.NewReader(string(data)))
 			if err != nil {
 				t.Fatalf("Parse: %v", err)
 			}

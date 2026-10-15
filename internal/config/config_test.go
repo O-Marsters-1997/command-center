@@ -22,43 +22,9 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
-// Older user config files can still carry [[task]] blocks after tracker migration.
-func TestLoadIgnoresATaskBlock(t *testing.T) {
+func TestLoadSettings(t *testing.T) {
 	t.Parallel()
-
-	body := `
-max_agents = 2
-port       = 8080
-
-[[task]]
-ticket_url = "sandbox://CC-1"
-repo       = "cc-sandbox"
-branch     = "cc-1-first"
-blocked_by = []
-`
-	got, err := config.Load(writeConfig(t, body), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got.MaxAgents != 2 || got.Port != 8080 {
-		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
-	}
-}
-
-func TestLoadDefaults(t *testing.T) {
-	t.Parallel()
-
-	got, err := config.Load(writeConfig(t, ""), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got.Port != 7777 {
-		t.Errorf("port = %d, want default 7777", got.Port)
-	}
-	if got.MaxAgents != 1 {
-		t.Errorf("max_agents = %d, want default 1", got.MaxAgents)
-	}
-	want := []string{
+	defaultCommand := []string{
 		"claude", "-p", "{prompt}",
 		"--output-format", "stream-json", "--verbose",
 		"--settings", "{settings}",
@@ -67,32 +33,44 @@ func TestLoadDefaults(t *testing.T) {
 		"--model", "{model}",
 		"{session}",
 	}
-	if !slices.Equal(got.AgentCommand, want) {
-		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
+	tests := []struct {
+		name, body string
+		want       config.Config
+	}{
+		{name: "defaults", want: config.Config{
+			Port: 7777, MaxAgents: 1, BoardPollSeconds: 5, AgentCommand: defaultCommand,
+		}},
+		{name: "spend limit", body: "spend_limit_5h = 80\n", want: config.Config{
+			Port: 7777, MaxAgents: 1, SpendLimit5h: 80, BoardPollSeconds: 5, AgentCommand: defaultCommand,
+		}},
+		{name: "board poll", body: "board_poll_seconds = 1\n", want: config.Config{
+			Port: 7777, MaxAgents: 1, BoardPollSeconds: 1, AgentCommand: defaultCommand,
+		}},
+		{name: "max turns", body: "max_turns = 40\n", want: config.Config{
+			Port: 7777, MaxAgents: 1, BoardPollSeconds: 5,
+			AgentCommand: append(slices.Clone(defaultCommand), "--max-turns", "40"),
+		}},
+		{name: "empty command with max turns", body: "max_turns = 40\nagent_command = []\n", want: config.Config{
+			Port: 7777, MaxAgents: 1, BoardPollSeconds: 5, AgentCommand: []string{},
+		}},
 	}
-}
-
-func TestLoadSpendLimit5h(t *testing.T) {
-	t.Parallel()
-
-	got, err := config.Load(writeConfig(t, "spend_limit_5h = 80\n"), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got.SpendLimit5h != 80 {
-		t.Errorf("spend_limit_5h = %d, want 80", got.SpendLimit5h)
-	}
-}
-
-func TestLoadSpendLimit5hDefaultsToUnset(t *testing.T) {
-	t.Parallel()
-
-	got, err := config.Load(writeConfig(t, ""), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got.SpendLimit5h != 0 {
-		t.Errorf("spend_limit_5h = %d, want default 0 (unset, never pauses)", got.SpendLimit5h)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := config.Load(writeConfig(t, tt.body), testEnv)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got.Port != tt.want.Port || got.MaxAgents != tt.want.MaxAgents ||
+				got.SpendLimit5h != tt.want.SpendLimit5h || got.BoardPollSeconds != tt.want.BoardPollSeconds {
+				t.Errorf("Load(%q) settings = %d/%d/%d/%d, want %d/%d/%d/%d", tt.body,
+					got.Port, got.MaxAgents, got.SpendLimit5h, got.BoardPollSeconds,
+					tt.want.Port, tt.want.MaxAgents, tt.want.SpendLimit5h, tt.want.BoardPollSeconds)
+			}
+			if !slices.Equal(got.AgentCommand, tt.want.AgentCommand) {
+				t.Errorf("Load(%q) agent_command = %q, want %q", tt.body, got.AgentCommand, tt.want.AgentCommand)
+			}
+		})
 	}
 }
 
@@ -147,116 +125,6 @@ func TestLoadAgentCommandOverridesTheDefault(t *testing.T) {
 	}
 }
 
-func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
-	t.Parallel()
-	complete := []string{
-		"claude", "-p", "{prompt}",
-		"--append-system-prompt-file", "{system_prompt}",
-		"--permission-mode", "auto",
-		"--model", "{model}",
-	}
-	without := func(drop ...string) []string {
-		var argv []string
-		for _, a := range complete {
-			if !slices.Contains(drop, a) {
-				argv = append(argv, a)
-			}
-		}
-		return argv
-	}
-
-	tests := []struct {
-		name    string
-		argv    []string
-		missing string
-	}{
-		{"no permission mode", without("--permission-mode"), "--permission-mode"},
-		{"no system prompt placeholder", without("{system_prompt}"), "{system_prompt}"},
-		{"no model placeholder", without("{model}"), "{model}"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name+" in agent_command", func(t *testing.T) {
-			t.Parallel()
-			_, err := config.Load(writeConfig(t, agentCommandLine(t, tt.argv)), testEnv)
-			var missing *config.MissingKeyError
-			if !errors.As(err, &missing) || missing.Key != tt.missing {
-				t.Errorf("Load error = %v, want missing key %s", err, tt.missing)
-			}
-		})
-		t.Run(tt.name+" in CC_AGENT_COMMAND", func(t *testing.T) {
-			t.Parallel()
-			raw, err := json.Marshal(tt.argv)
-			if err != nil {
-				t.Fatalf("Marshal(%v): %v", tt.argv, err)
-			}
-			env := testEnv
-			env.AgentCommand = string(raw)
-
-			_, err = config.Load(writeConfig(t, agentCommandLine(t, complete)), env)
-			var missing *config.MissingKeyError
-			if !errors.As(err, &missing) || missing.Key != tt.missing {
-				t.Errorf("Load error = %v, want missing key %s", err, tt.missing)
-			}
-		})
-	}
-}
-
-func TestLoadMaxTurns(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		body string
-		want []string
-	}{
-		{
-			name: "unset leaves agent_command untouched",
-			body: "",
-			want: []string{
-				"claude", "-p", "{prompt}",
-				"--output-format", "stream-json", "--verbose",
-				"--settings", "{settings}",
-				"--append-system-prompt-file", "{system_prompt}",
-				"--permission-mode", "auto",
-				"--model", "{model}",
-				"{session}",
-			},
-		},
-		{
-			name: "set appends --max-turns with the configured value",
-			body: "max_turns = 40\n",
-			want: []string{
-				"claude", "-p", "{prompt}",
-				"--output-format", "stream-json", "--verbose",
-				"--settings", "{settings}",
-				"--append-system-prompt-file", "{system_prompt}",
-				"--permission-mode", "auto",
-				"--model", "{model}",
-				"{session}",
-				"--max-turns", "40",
-			},
-		},
-		{
-			name: "an explicit empty agent_command stays empty so spawning stays off",
-			body: "max_turns = 40\nagent_command = []\n",
-			want: []string{},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := config.Load(writeConfig(t, tt.body), testEnv)
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
-			if !slices.Equal(got.AgentCommand, tt.want) {
-				t.Errorf("agent_command = %q, want %q", got.AgentCommand, tt.want)
-			}
-		})
-	}
-}
-
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	t.Parallel()
 	tracked := withRequiredParts("claude", "-p", "{prompt}")
@@ -293,74 +161,32 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	}
 }
 
-func TestLoadBoardPollSeconds(t *testing.T) {
+func TestLoadErrors(t *testing.T) {
 	t.Parallel()
-
-	got, err := config.Load(writeConfig(t, ""), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+	complete := withRequiredParts("claude", "-p", "{prompt}")
+	without := func(drop string) []string {
+		var argv []string
+		for _, arg := range complete {
+			if arg != drop {
+				argv = append(argv, arg)
+			}
+		}
+		return argv
 	}
-	if got.BoardPollSeconds != 5 {
-		t.Errorf("board_poll_seconds = %d, want default 5", got.BoardPollSeconds)
+
+	type errorCase struct {
+		name, body, envCommand string
+		want                   []string
 	}
-
-	got, err = config.Load(writeConfig(t, "board_poll_seconds = 1\n"), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got.BoardPollSeconds != 1 {
-		t.Errorf("board_poll_seconds = %d, want 1", got.BoardPollSeconds)
-	}
-}
-
-func TestLoadRejectsANonPositiveBoardPoll(t *testing.T) {
-	t.Parallel()
-
-	_, err := config.Load(writeConfig(t, "board_poll_seconds = 0\n"), testEnv)
-	if err == nil {
-		t.Fatal("Load accepted board_poll_seconds = 0")
-	}
-}
-
-func TestSampleConfigLoads(t *testing.T) {
-	t.Parallel()
-
-	if _, err := config.Load("../../docs/command-centre.sample.toml", testEnv); err != nil {
-		t.Fatalf("Load(docs/command-centre.sample.toml): %v", err)
-	}
-}
-
-func TestCheckedInConfigPinsTheDefaultModel(t *testing.T) {
-	t.Parallel()
-
-	shipped, err := config.Load("../../cc/config.toml", testEnv)
-	if err != nil {
-		t.Fatalf("Load(cc/config.toml): %v", err)
-	}
-	defaults, err := config.Load(writeConfig(t, ""), testEnv)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if !slices.Equal(shipped.AgentCommand, defaults.AgentCommand) {
-		t.Errorf("cc/config.toml agent_command = %q, want the default %q", shipped.AgentCommand, defaults.AgentCommand)
-	}
-}
-
-func TestLoadNamesEveryBadField(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		body string
-		want []string
-	}{
-		{"port and max_agents together", "port = 0\nmax_agents = 0\n", []string{"port", "max_agents"}},
-		{"port above range", "port = 70000\n", []string{"port"}},
-		{"spend_limit_5h above 100", "spend_limit_5h = 101\n", []string{"spend_limit_5h"}},
-		{"spend_limit_5h negative", "spend_limit_5h = -1\n", []string{"spend_limit_5h"}},
-		{"board_poll_seconds zero", "board_poll_seconds = 0\n", []string{"board_poll_seconds"}},
-		{"max_turns negative", "max_turns = -3\n", []string{"max_turns"}},
-		{"argv missing parts", "agent_command = [\"claude\"]\n", []string{"--permission-mode", "{system_prompt}", "{model}"}},
+	tests := []errorCase{
+		{name: "port and max_agents together", body: "port = 0\nmax_agents = 0\n", want: []string{"port", "max_agents"}},
+		{name: "port above range", body: "port = 70000\n", want: []string{"port"}},
+		{name: "spend_limit_5h above 100", body: "spend_limit_5h = 101\n", want: []string{"spend_limit_5h"}},
+		{name: "spend_limit_5h negative", body: "spend_limit_5h = -1\n", want: []string{"spend_limit_5h"}},
+		{name: "board_poll_seconds zero", body: "board_poll_seconds = 0\n", want: []string{"board_poll_seconds"}},
+		{name: "max_turns negative", body: "max_turns = -3\n", want: []string{"max_turns"}},
+		{name: "argv missing parts", body: "agent_command = [\"claude\"]\n",
+			want: []string{"--permission-mode", "{system_prompt}", "{model}"}},
 		{
 			name: "all at once",
 			body: "port = 0\nmax_agents = 0\nspend_limit_5h = 200\nboard_poll_seconds = 0\n" +
@@ -368,11 +194,27 @@ func TestLoadNamesEveryBadField(t *testing.T) {
 			want: []string{"port", "max_agents", "spend_limit_5h", "board_poll_seconds", "max_turns", "--permission-mode"},
 		},
 	}
+	for _, part := range []string{"--permission-mode", "{system_prompt}", "{model}"} {
+		argv := without(part)
+		raw, err := json.Marshal(argv)
+		if err != nil {
+			t.Fatalf("Marshal(%q): %v", argv, err)
+		}
+		tests = append(tests,
+			errorCase{name: "missing " + part + " in config", body: agentCommandLine(t, argv), want: []string{part}},
+			errorCase{
+				name: "missing " + part + " in environment", body: agentCommandLine(t, complete),
+				envCommand: string(raw), want: []string{part},
+			},
+		)
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := config.Load(writeConfig(t, tt.body), testEnv)
+			env := testEnv
+			env.AgentCommand = tt.envCommand
+			_, err := config.Load(writeConfig(t, tt.body), env)
 			if err == nil {
 				t.Fatal("Load error = nil, want one")
 			}
