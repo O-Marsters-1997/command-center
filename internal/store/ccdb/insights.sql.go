@@ -39,9 +39,6 @@ type BoardTicketSpendRow struct {
 	FollowUpUsd float64
 }
 
-// One row per ticket in scope, weighing every run disposed before its own pr_merged event when
-// merged, or every run disposed so far when still open -- the same weighing MergedTicketSpend
-// uses, generalised past merged-only tickets and off any date window (ADR 10).
 func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendParams) ([]BoardTicketSpendRow, error) {
 	rows, err := q.db.QueryContext(ctx, boardTicketSpend, arg.Repo, arg.Feature)
 	if err != nil {
@@ -159,7 +156,6 @@ type WithdrawnTicketWasteParams struct {
 	Until    time.Time
 }
 
-// Every disposed run belonging to a ticket withdrawn without ever merging.
 func (q *Queries) WithdrawnTicketWaste(ctx context.Context, arg WithdrawnTicketWasteParams) (float64, error) {
 	row := q.db.QueryRowContext(ctx, withdrawnTicketWaste,
 		arg.Repo,
