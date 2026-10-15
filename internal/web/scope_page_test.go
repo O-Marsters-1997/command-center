@@ -27,7 +27,7 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 	}
 	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(t.Context(), plan.Observation{ObservedAt: testNow}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -111,7 +111,7 @@ func threeFeatureStore(t *testing.T) *storepkg.Store {
 	}
 	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(t.Context(), plan.Observation{ObservedAt: testNow}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -143,7 +143,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	repos := named("repo", "other")
 	server := openServer(track(t, store, repos...), fixedClock(at), "")

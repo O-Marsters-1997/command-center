@@ -70,7 +70,7 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 	}
 	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	query := "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3"
@@ -135,7 +135,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		Settings: map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	repos := named("repo")
@@ -159,10 +159,10 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent(sandbox://CC-1): %v", err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 
 	candidates := fetchCandidates(t, newServer(store, testNow), "feature=project%3Ax")
@@ -189,7 +189,7 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 	}
 	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	candidates := fetchCandidates(t, newServer(store, testNow),
@@ -227,7 +227,7 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 	}
 	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	query := "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3"
@@ -257,7 +257,7 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 	}
 	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	candidates := fetchCandidates(t, newServer(store, testNow), "feature=widgets")

@@ -17,8 +17,6 @@ const insightsDefaultRangeDays = 30
 
 const insightsDateFormat = "2006-01-02"
 
-// InsightsResponse is GET /insights.json: each merged ticket in the window as a share of the
-// weekly limit.
 type InsightsResponse struct {
 	Since        string              `json:"since"`
 	Until        string              `json:"until"`
@@ -37,8 +35,7 @@ type insightsPointJSON struct {
 	FollowUpPctWeek float64 `json:"follow_up_pct_week"`
 }
 
-// civilDate strips t to its own wall-clock year, month and day, encoded at UTC midnight since
-// Postgres's date type carries no zone of its own.
+// Postgres dates have no timezone; encode the wall-clock date at UTC midnight.
 func civilDate(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
@@ -52,8 +49,7 @@ func parseSinceOrDefault(raw string, until time.Time) time.Time {
 	return since
 }
 
-// insightsTimezone names loc for the query and the response. time.Local's String is always the
-// literal "Local", never an IANA name, so that case alone falls through to systemTimezoneName.
+// time.Local.String() returns "Local", not an IANA name usable in the query.
 func insightsTimezone(loc *time.Location) string {
 	if name := loc.String(); name != "Local" {
 		return name
@@ -118,8 +114,6 @@ func buildMergedRows(points []insightsPointJSON, timezone string) []MergedRow {
 	return rows
 }
 
-// Limit is one rate-limit window on the insights page. ResetsIn is empty when no reading has
-// reported a reset time.
 type Limit struct {
 	Label    string
 	Pct      int
@@ -127,8 +121,6 @@ type Limit struct {
 	ResetsAt string
 }
 
-// SpendSplit is the chart's spend by kind, as a share of the weekly limit. Its rows sum to Total,
-// the sum of the chart's dots.
 type SpendSplit struct {
 	Rows  []SplitRow
 	Total float64
@@ -198,8 +190,6 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	}, nil
 }
 
-// Insights reads the merged-ticket spend between ?since= (default thirty days back) and today in
-// now's own zone, narrowed by ?repo= and ?feature=.
 func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (InsightsResponse, error) {
 	tz := insightsTimezone(now.Location())
 	until := civilDate(now)

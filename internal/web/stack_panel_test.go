@@ -25,7 +25,7 @@ func stackStore(t *testing.T) *storepkg.Store {
 	}
 	storetest.Tickets(t, st, tickets...)
 	if err := st.SaveObservation(ctx, plan.Observation{ObservedAt: testNow}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return st
 }
@@ -61,7 +61,7 @@ func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.
 	}
 	if err := st.EditTicket(t.Context(), "https://github.com/acme/web/issues/3", "cc-3",
 		[]string{"https://github.com/acme/web/issues/1"}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("EditTicket(%q): %v", "https://github.com/acme/web/issues/3", err)
 	}
 	page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/3"))
 	panel := page.One(t, ".stack-panel")

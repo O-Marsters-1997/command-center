@@ -29,8 +29,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load query offset: %w", err)
 	}
-	// A reconnecting browser sends the offset of the last event it swapped, which outranks the
-	// offset the fragment was rendered with (WHATWG HTML § server-sent events).
+	// Last-Event-ID takes precedence on reconnect (WHATWG HTML § server-sent events).
 	if resumed, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil && resumed >= 0 {
 		offset = resumed
 	}
@@ -93,8 +92,7 @@ func (s *Server) followLog(ctx context.Context, w io.Writer, flusher *http.Respo
 			return fmt.Errorf("flush stream: %w", err)
 		}
 		if f.Ended && sent == 0 {
-			// Without a sentinel the browser treats the close as a dropped connection and
-			// reconnects for ever; sse-close on the <pre> retires the EventSource on this.
+			// EventSource reconnects when the server closes without an explicit end event.
 			return writeEnd(w, flusher)
 		}
 		select {

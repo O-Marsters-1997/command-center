@@ -33,7 +33,7 @@ func TestVerbQueuesExactlyOneKillOrCancelIntent(t *testing.T) {
 			}
 			pending, err := store.PendingVerbIntents(t.Context(), tt.verb)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("PendingVerbIntents(%s): %v", tt.verb, err)
 			}
 			if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 				t.Fatalf("pending %s intents = %+v, want one for sandbox://CC-1", tt.verb, pending)
@@ -77,7 +77,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
@@ -92,13 +92,13 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewRequest(POST /verb): %v", err)
 	}
 	req.Header.Set("Origin", srv.URL)
 
 	resp, err := srv.Client().Do(req)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Do(POST /verb): %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
@@ -109,13 +109,12 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadAll(response body): %v", err)
 	}
 	htmltest.Parse(t, string(body)).One(t, `main#main[data-home]`).One(t, `a[href="/tickets"]`)
 }
 
 func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
-
 	store := seededStore(t, testNow)
 	server := openServer(store, fixedClock(testNow), "")
 
@@ -141,7 +140,7 @@ func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(follow-up): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Fatalf("pending follow-up intents = %+v, want none queued", pending)
@@ -164,7 +163,7 @@ func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(follow-up): %v", err)
 	}
 	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending follow-up intents = %+v, want exactly one for sandbox://CC-1", pending)
@@ -189,7 +188,7 @@ func TestVerbAnswers409WhenTheRowsStateDoesNotOfferIt(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending kill intents = %+v, want none queued on a 409", pending)

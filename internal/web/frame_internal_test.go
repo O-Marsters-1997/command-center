@@ -20,6 +20,8 @@ var frameTestNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 func (boardTestClock) Now() time.Time { return frameTestNow }
 
 func TestWriteJSONDoesNotWriteOnEncodeFailure(t *testing.T) {
+	t.Parallel()
+
 	w := httptest.NewRecorder()
 	err := writeJSON(w, []any{"first", make(chan int)})
 	if err == nil {
@@ -37,6 +39,8 @@ func TestWriteJSONDoesNotWriteOnEncodeFailure(t *testing.T) {
 }
 
 func TestWriteJSONEncodeFailureAnswers500WithoutPartialBody(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{logger: slog.New(slog.DiscardHandler)}
 	h := s.handle(func(w http.ResponseWriter, _ *http.Request) error {
 		return writeJSON(w, []any{"first", make(chan int)})
@@ -52,6 +56,8 @@ func TestWriteJSONEncodeFailureAnswers500WithoutPartialBody(t *testing.T) {
 }
 
 func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
+	t.Parallel()
+
 	started := make(chan struct{})
 	release := make(chan struct{})
 	cache := pushableCache{list: func(context.Context) ([]gh.RepoSummary, error) {
@@ -88,6 +94,8 @@ func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
 }
 
 func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
+	t.Parallel()
+
 	st := cctest.Store(t)
 
 	started := make(chan struct{})

@@ -78,14 +78,11 @@ func (c *Chrome) scopeToProject(p store.Project) {
 	c.ProjectInitial = initial(p.Name)
 }
 
-// Age is a relative time the server renders and the page's clock keeps current. Stamp is the
-// instant the browser counts from, and is empty when there is none to count from.
 type Age struct {
 	Age   string
 	Stamp string
 }
 
-// RefusedRepo is a tracked repo the loop refused to work, linked to its own page.
 type RefusedRepo struct {
 	Name   string
 	Reason string

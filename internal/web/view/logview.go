@@ -16,11 +16,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// LineRenderer turns one log line into its markup.
 type LineRenderer func(LogLine) (template.HTML, error)
 
-// KindShown decides, for one of the four ?log= modes, whether an event's kind renders as a line.
-// Phase headers always render regardless of mode; this only gates the lines inside them.
 func KindShown(mode LogFilter, k agentlog.Kind) bool {
 	switch mode {
 	case LogSkills:
@@ -160,8 +157,6 @@ func mergeRecords(run *agentlog.Run, records []store.Event) {
 	}
 }
 
-// wholeLines reads path's complete lines only: an agent flushes mid-line, so a trailing partial
-// line is left for the live SSE tail.
 func wholeLines(path string) ([]byte, int64, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -170,6 +165,7 @@ func wholeLines(path string) ([]byte, int64, error) {
 	if err != nil {
 		return nil, 0, fmt.Errorf("read agent log %s: %w", path, err)
 	}
+	// External agent log writers may leave a partial line; the SSE tail must receive it instead.
 	end := bytes.LastIndexByte(data, '\n')
 	if end < 0 {
 		return nil, 0, nil

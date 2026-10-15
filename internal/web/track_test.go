@@ -92,7 +92,7 @@ func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 	}
 	intents, err := st.PendingVerbIntents(t.Context(), plan.VerbTrack)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(track): %v", err)
 	}
 	if len(intents) != 0 {
 		t.Errorf("pending track intents = %+v, want none", intents)
@@ -130,7 +130,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 		Name: "acme/new", Remote: "git@github.com:acme/new.git", Phase: plan.RepoReady, TrackedAt: testNow,
 	}
 	if err := st.UpsertRepo(t.Context(), repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo(%q): %v", repo.Name, err)
 	}
 	consumeTrack(t, st)
 
@@ -152,11 +152,11 @@ func consumeTrack(t *testing.T, st *storepkg.Store) {
 	t.Helper()
 	intents, err := st.PendingVerbIntents(t.Context(), plan.VerbTrack)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(track): %v", err)
 	}
 	for _, intent := range intents {
 		if err := st.ConsumeVerbIntent(t.Context(), intent.ID, testNow); err != nil {
-			t.Fatal(err)
+			t.Fatalf("ConsumeVerbIntent(%d): %v", intent.ID, err)
 		}
 	}
 }
@@ -180,12 +180,12 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 		repo("acme/badtoml", plan.RepoRefused, plan.RefusalSettingsParse, "toml: line 3", ""),
 	} {
 		if err := st.UpsertRepo(t.Context(), r); err != nil {
-			t.Fatal(err)
+			t.Fatalf("UpsertRepo(%q): %v", r.Name, err)
 		}
 	}
 	server := openServer(st, fixedClock(testNow), "")
 	if err := st.QueueVerbIntent(t.Context(), "acme/queued", plan.VerbTrack, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(acme/queued): %v", err)
 	}
 
 	for _, tt := range []struct{ name, state string }{
@@ -238,7 +238,7 @@ func TestBannerAnswers286OnceTheStateIsTerminal(t *testing.T) {
 		Name: "acme/new", Remote: "git@github.com:acme/new.git", Phase: plan.RepoReady, TrackedAt: testNow,
 	}
 	if err := st.UpsertRepo(t.Context(), repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo(%q): %v", repo.Name, err)
 	}
 	consumeTrack(t, st)
 

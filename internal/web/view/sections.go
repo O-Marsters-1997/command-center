@@ -2,7 +2,6 @@ package view
 
 import "github.com/O-Marsters-1997/command-center/internal/plan"
 
-// Section is one attention band of the board: the rows whose glyphs share a section key.
 type Section struct {
 	Key   SectionKey
 	Glyph plan.GlyphWord
@@ -35,8 +34,6 @@ func sectionKey(glyph plan.GlyphWord) SectionKey {
 	return SectionDone
 }
 
-// Sectioned buckets rows into the fixed attention order, keeping each row's relative order and
-// dropping empty sections.
 func Sectioned(rows []Row) []Section {
 	var out []Section
 	for _, s := range sectionOrder {
@@ -55,8 +52,6 @@ func Sectioned(rows []Row) []Section {
 	return out
 }
 
-// FilterTab is one pill of the all-tickets page: a section key (or "all"), its link and whether it
-// is the filter in force.
 type FilterTab struct {
 	Key     SectionKey
 	Title   string
@@ -99,8 +94,6 @@ func filterTabs(sections []Section, params Params) []FilterTab {
 	return tabs
 }
 
-// nameDependencies fills each row's After (its unmet blockers, for a blocked row) and Unlocks
-// (every ticket waiting on it) as ticket refs.
 func nameDependencies(rows []Row, tickets []plan.Ticket) {
 	unlocks := plan.Unlocks(tickets)
 	glyphByURL := make(map[string]plan.GlyphWord, len(rows))

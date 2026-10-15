@@ -45,8 +45,6 @@ var templates = template.Must(template.New("").
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
 
-// Server is the status page plus the launch, authorisation and features routes. It only queues
-// intents; it never writes the database directly.
 type Server struct {
 	logger           *slog.Logger
 	store            *store.Store
@@ -63,8 +61,6 @@ type Server struct {
 
 const pushableTTL = time.Minute
 
-// pushableCache holds the last successful gh listing for pushableTTL, so a burst of keystrokes
-// makes one gh call.
 type pushableCache struct {
 	mu      sync.Mutex
 	flight  singleflight.Group
@@ -490,8 +486,6 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	if len(requested) == 0 {
 		return errorf(http.StatusBadRequest, "at least one ticket is required")
 	}
-	// One `hash` field per launchable row, each naming its own ticket: an unchecked row still posts
-	// its hidden hash, so pairing by position would pair the survivors wrong.
 	previewed := make(map[string]string, len(r.Form["hash"]))
 	for _, field := range r.Form["hash"] {
 		ticketURL, hash, ok := strings.Cut(field, " ")
@@ -784,9 +778,9 @@ func (s *Server) searchRepos(ctx context.Context, query string) (view.RepoSearch
 	return search, nil
 }
 
-func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
+func ticketByURL(tickets []store.Ticket, ticketURL string) (store.Ticket, bool) {
 	for _, t := range tickets {
-		if t.URL == url {
+		if t.URL == ticketURL {
 			return t, true
 		}
 	}

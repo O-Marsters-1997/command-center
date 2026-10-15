@@ -30,7 +30,7 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 
 	pending, err := store.PendingEditTicketIntents(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents: %v", err)
 	}
 	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-2" {
 		t.Fatalf("pending edit intents = %+v, want exactly one for sandbox://CC-2", pending)
@@ -44,7 +44,7 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 
 	tickets, err := store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	for _, ticket := range tickets {
 		if ticket.URL == "sandbox://CC-2" && ticket.Branch != "cc-2-second" {
@@ -69,7 +69,7 @@ func TestPostTicketRefusesBranchChangeWhenWorktreeExists(t *testing.T) {
 
 	pending, err := store.PendingEditTicketIntents(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents: %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending edit intents = %+v, want none: the refusal must not queue anything", pending)
@@ -89,7 +89,7 @@ func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 
 	pending, err := store.PendingEditTicketIntents(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents: %v", err)
 	}
 	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending edit intents = %+v, want exactly one for sandbox://CC-1", pending)
@@ -136,6 +136,9 @@ func TestSessionPageRendersEditFormPrefilled(t *testing.T) {
 		"ticket": "https://github.com/o/r/issues/2", "branch": "cc-2-second",
 		"blocked_by": "https://github.com/o/r/issues/1",
 	} {
-		form.One(t, `input[name="`+name+`"][value="`+value+`"]`)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			form.One(t, `input[name="`+name+`"][value="`+value+`"]`)
+		})
 	}
 }

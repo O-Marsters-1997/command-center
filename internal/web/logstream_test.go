@@ -38,12 +38,12 @@ func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)
 	}
 	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: logPath,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	return store, runID
 }
@@ -53,12 +53,12 @@ func appendLines(t *testing.T, path string, lines ...string) {
 
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("OpenFile(%s): %v", path, err)
 	}
 	defer func() { _ = f.Close() }()
 	for _, line := range lines {
 		if _, err := f.WriteString(line + "\n"); err != nil {
-			t.Fatal(err)
+			t.Fatalf("WriteString(%s): %v", path, err)
 		}
 	}
 }
@@ -73,7 +73,7 @@ func renderedToolLine(t *testing.T, text string) string {
 
 	html, err := web.RenderLogLine(agentlog.Event{Kind: agentlog.Cmd, Tool: "Bash", Detail: text}, false)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RenderLogLine: %v", err)
 	}
 	return string(html)
 }
@@ -85,7 +85,7 @@ func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
 		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.None[int](),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 }
 
@@ -307,7 +307,7 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 
 	runs, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
 	run := runs[logTicket]
 	if run.Outcome.IsSome() || run.EndedAt.IsSome() {
@@ -325,7 +325,7 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	logPath := writeLog(t, 3)
 	info, err := os.Stat(logPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Stat(%s): %v", logPath, err)
 	}
 	ticket := "https://github.com/o/r/issues/76"
 	server := newServer(detailStore(t, logPath, now, now), now)

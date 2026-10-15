@@ -15,7 +15,7 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	repos := named("cc-sandbox")
-	server := openServer(track(t, store, repos...), fixedClock(time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)), "")
+	server := openServer(track(t, store, repos...), fixedClock(testNow.Add(31*24*time.Hour)), "")
 
 	root := htmltest.Parse(t, renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a"))
 	root.One(t, `a[href="/insights?feature=feat-a"]`)
@@ -30,7 +30,7 @@ func TestInsightsPageRendersMergedTicketsAsAnSVGChart(t *testing.T) {
 
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	now := testNow.Add(31*24*time.Hour + 3*time.Hour)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
@@ -42,13 +42,13 @@ func TestInsightsPageShowsEachLimitsResetTime(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t)
-	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	now := testNow.Add(31*24*time.Hour + 3*time.Hour)
 	reading := agentlog.Reading{
 		Window: agentlog.FiveHour, Utilization: 0.42,
 		ResetsAt: now.Add(2*time.Hour + 5*time.Minute), At: now,
 	}
 	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordReadings: %v", err)
 	}
 
 	main := htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights")).One(t, "main#main")
