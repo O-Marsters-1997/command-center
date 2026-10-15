@@ -16,10 +16,12 @@ func requireBuiltStylesheet(t *testing.T) {
 }
 
 func TestBuiltStylesheetScansTemplates(t *testing.T) {
+	t.Parallel()
+
 	requireBuiltStylesheet(t)
 	css, err := os.ReadFile("assets/dist/app.css")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(assets/dist/app.css): %v", err)
 	}
 	if !strings.Contains(string(css), ".sr-only{") {
 		t.Fatal("assets/dist/app.css has no .sr-only rule: web/app.css's @source declaration " +

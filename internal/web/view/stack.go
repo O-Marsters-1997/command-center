@@ -7,7 +7,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// StackLink is one ticket in a session's feature stack: a blocker, or a ticket waiting on it.
 type StackLink struct {
 	Ref   string
 	Title string
@@ -16,7 +15,6 @@ type StackLink struct {
 	Path  string
 }
 
-// Stack is the session's place in its feature: what it waits on and what merging it unlocks.
 type Stack struct {
 	Blockers  []StackLink
 	Unlocks   []StackLink

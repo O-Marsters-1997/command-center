@@ -20,6 +20,8 @@ func (f *failingTB) Fatalf(format string, args ...any) {
 }
 
 func TestSelectors(t *testing.T) {
+	t.Parallel()
+
 	page := htmltest.Parse(t, `<div id="board"><section class="group active">`+
 		`<a href="/one" data-key="a b">One</a></section> `+
 		`<section class="group"><a href="/two">Two</a></section></div>`)
@@ -34,6 +36,7 @@ func TestSelectors(t *testing.T) {
 		{"compound descendant", `div#board section.group.active a[href="/one"]`, "One"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			nodes := page.Find(tc.selector)
 			if len(nodes) == 0 || nodes[0].Text() != tc.want {
 				t.Errorf("Find(%q) = %v, want first text %q", tc.selector, nodes, tc.want)
@@ -43,6 +46,8 @@ func TestSelectors(t *testing.T) {
 }
 
 func TestNestedMatchingAncestorsFindOneDescendant(t *testing.T) {
+	t.Parallel()
+
 	page := htmltest.Parse(t, `<div><div><a href="/one">One</a></div></div>`)
 	if got := page.One(t, "div a").Text(); got != "One" {
 		t.Errorf("One(div a) = %q, want One", got)
@@ -50,9 +55,12 @@ func TestNestedMatchingAncestorsFindOneDescendant(t *testing.T) {
 }
 
 func TestOneReportsItsContainerOnZeroOrMany(t *testing.T) {
+	t.Parallel()
+
 	page := htmltest.Parse(t, `<div id="board"><b>one</b><b>two</b></div>`)
 	for _, selector := range []string{"span", "b"} {
 		t.Run(selector, func(t *testing.T) {
+			t.Parallel()
 			fake := &failingTB{}
 			func() {
 				defer func() { _ = recover() }()
@@ -66,6 +74,8 @@ func TestOneReportsItsContainerOnZeroOrMany(t *testing.T) {
 }
 
 func TestTextCollapsesWhitespaceAndAttrDistinguishesMissing(t *testing.T) {
+	t.Parallel()
+
 	node := htmltest.Parse(t, "<p title=\"\"> one \n <em>two</em>   three </p>").One(t, "p")
 	if got := node.Text(); got != "one two three" {
 		t.Errorf("Text() = %q", got)

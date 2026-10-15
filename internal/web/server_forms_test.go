@@ -26,10 +26,17 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	body := rec.Body
 	board := htmltest.Parse(t, body).One(t, "table#board")
 	form := htmltest.Parse(t, body).One(t, "form#launch")
-	for name, want := range map[string]string{"method": "post", "action": "/launch/open", "hx-post": "/launch/open"} {
-		if got, _ := form.Attr(name); got != want {
-			t.Errorf("launch form %s = %q, want %q: %s", name, got, want, form.HTML())
-		}
+	for _, tt := range []struct{ name, want string }{
+		{name: "method", want: "post"},
+		{name: "action", want: "/launch/open"},
+		{name: "hx-post", want: "/launch/open"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got, _ := form.Attr(tt.name); got != tt.want {
+				t.Errorf("launch form %s = %q, want %q: %s", tt.name, got, tt.want, form.HTML())
+			}
+		})
 	}
 	for _, ticket := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
 		board.One(t, `input[type="checkbox"][form="launch"][name="ticket"][value="`+ticket+`"]`)
@@ -53,7 +60,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
 
@@ -80,7 +87,7 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 
 			board, err := web.RenderStatesBoard([]plan.State{state})
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("RenderStatesBoard(%s): %v", state, err)
 			}
 			var got []plan.Verb
 			for _, button := range htmltest.Parse(t, board).One(t, "table#board").Find(`button[name="verb"]`) {
@@ -128,11 +135,11 @@ func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
 
 	ctx := t.Context()
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
 		t.Fatalf("launch memberships = %v, want both tickets authorised", memberships)

@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -30,7 +29,7 @@ func TestBoardRailAndHomeEachReadReposAndDeriveOnce(t *testing.T) {
 		derives++
 		return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
 	}
-	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	for _, tc := range []struct {
 		name   string
 		render func() error

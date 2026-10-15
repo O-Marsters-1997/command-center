@@ -32,7 +32,7 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 			Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash", Session: session,
 		})
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("InsertSessionRunSkeleton(%q): %v", sessionTicket, err)
 		}
 		session = storepkg.RunSession{JoinID: sessionID}
 
@@ -40,29 +40,29 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 		line := fmt.Sprintf(`{"type":"assistant","timestamp":"2026-08-20T12:00:0%dZ",`+
 			`"message":{"content":[{"type":"text","text":"turn %d answer"}]}}`+"\n", i+1, i+1)
 		if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
-			t.Fatal(err)
+			t.Fatalf("WriteFile(%q): %v", logPath, err)
 		}
 		if i == 0 {
 			if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte("opening prompt"), 0o600); err != nil {
-				t.Fatal(err)
+				t.Fatalf("WriteFile(1.prompt): %v", err)
 			}
 		}
 		if err := st.RecordSpawn(ctx, storepkg.Spawn{
 			RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
 		}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordSpawn(%d): %v", runID, err)
 		}
 		exit := 0
 		if err := st.RecordDisposition(ctx, storepkg.Disposition{
 			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exit),
 			Cost: option.None[float64](), EndedAt: testNow,
 		}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordDisposition(%d): %v", runID, err)
 		}
 	}
 	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{sessionTicket: {}}}
 	if err := st.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return st
 }

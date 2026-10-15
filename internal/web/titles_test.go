@@ -26,7 +26,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 		},
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	page := renderBoard(t, newServer(st, testNow))

@@ -14,7 +14,6 @@ type CheckStep struct {
 	Glyph plan.GlyphWord
 }
 
-// Banner is the tracking state of one repo as the fragment GET /repos/banner renders it.
 type Banner struct {
 	Repo  string
 	State BannerState
@@ -23,13 +22,10 @@ type Banner struct {
 	Steps []CheckStep
 }
 
-// Polling reports whether the banner should poll for a state change.
 func (b Banner) Polling() bool { return b.State == BannerCloning }
 
-// CanTrack reports whether the banner offers a Track button.
 func (b Banner) CanTrack() bool { return b.State == BannerUntracked || b.State == BannerRefused }
 
-// TrackLabel is the Track button's text.
 func (b Banner) TrackLabel() string {
 	if b.State == BannerRefused {
 		return "Track again"
@@ -37,8 +33,6 @@ func (b Banner) TrackLabel() string {
 	return "Track"
 }
 
-// Banner shapes the tracking banner for scope. A pending Track reads as cloning before the loop
-// has written the row.
 func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 	pending, err := r.store.TrackPending(ctx, scope)
 	if err != nil {
@@ -92,8 +86,6 @@ func bannerWords(state BannerState, repo store.Repo) (glyph plan.GlyphWord, text
 	return plan.GlyphReady, "Not tracked."
 }
 
-// checkSteps lists the checks in display order. Validation runs squash-only, default branch,
-// clone, settings file, so the refusal kind marks the first failure and the rest not reached.
 func checkSteps(state BannerState, refusalKind plan.RefusalKind) []CheckStep {
 	labels := []struct {
 		label string

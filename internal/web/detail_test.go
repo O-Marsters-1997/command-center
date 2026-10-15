@@ -31,12 +31,12 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: logPath,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
@@ -51,7 +51,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 		}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -67,7 +67,7 @@ func writeLog(t *testing.T, n int) string {
 			i%60, i)
 	}
 	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", path, err)
 	}
 	return path
 }
@@ -153,7 +153,7 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 	}
 	board, err := web.RenderStatesPage(states)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RenderStatesPage: %v", err)
 	}
 
 	root := htmltest.Parse(t, board)

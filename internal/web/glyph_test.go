@@ -17,9 +17,9 @@ func TestRunningRowGlyphPulses(t *testing.T) {
 	ticket := store.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
-	store := runningRowStore(t, ticket, startedAt, now)
+	st := runningRowStore(t, ticket, startedAt, now)
 
-	server := newServer(store, now)
+	server := newServer(st, now)
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -52,7 +52,7 @@ func TestBoardRendersEveryGlyphWordAsAClass(t *testing.T) {
 
 	body, err := web.RenderStatesBoard(plan.AllStates())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RenderStatesBoard: %v", err)
 	}
 
 	board := htmltest.Parse(t, body).One(t, "table#board")

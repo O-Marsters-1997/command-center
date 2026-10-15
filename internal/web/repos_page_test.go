@@ -38,8 +38,15 @@ func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 }
 
 func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
+	t.Parallel()
+
 	var calls atomic.Int32
 	server := reposServer(t, &calls)
+	t.Cleanup(func() {
+		if got := calls.Load(); got != 0 {
+			t.Errorf("empty queries made %d gh calls, want 0", got)
+		}
+	})
 
 	for _, tt := range []struct{ name, path string }{
 		{name: "repos", path: "/repos"},
@@ -47,6 +54,7 @@ func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
 		{name: "empty query", path: "/repos/search?q="},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			body := renderPath(t, server, tt.path)
 			root := htmltest.Parse(t, body)
 			for _, repo := range []string{"acme/alpha", "acme/beta"} {
@@ -56,9 +64,6 @@ func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
 				t.Errorf("GET %s listed unknown repo: %s", tt.path, api[0].HTML())
 			}
 		})
-	}
-	if got := calls.Load(); got != 0 {
-		t.Errorf("empty queries made %d gh calls, want 0", got)
 	}
 }
 
@@ -143,6 +148,8 @@ func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
 }
 
 func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
+	t.Parallel()
+
 	started := make(chan struct{})
 	release := make(chan struct{})
 	server := openServer(openStore(t), fixedClock(testNow), "", web.WithPushableSource(
@@ -282,13 +289,15 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 }
 
 func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
+	t.Parallel()
+
 	st := track(t, openStore(t), alphaRepo)
 	refused := storepkg.Repo{
 		Name: "acme/beta", Remote: "https://github.com/acme/beta.git", Phase: plan.RepoRefused,
 		RefusalKind: "clone", Refusal: "default branch is master", TrackedAt: testNow,
 	}
 	if err := st.UpsertRepo(t.Context(), refused); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo(%q): %v", refused.Name, err)
 	}
 	server := openServer(st, fixedClock(testNow), "")
 
@@ -298,6 +307,7 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 		{name: "repos", path: "/repos"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rec := do(t, server, http.MethodGet, tt.path, req{})
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET %s: status = %d", tt.path, rec.Code)

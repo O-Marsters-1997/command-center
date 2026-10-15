@@ -30,7 +30,7 @@ func writeRunLog(t *testing.T, body string) string {
 
 	path := filepath.Join(t.TempDir(), "run.jsonl")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.WriteFile(%q): %v", path, err)
 	}
 	return path
 }
@@ -482,7 +482,7 @@ func TestBuildLogDetailShowsEditAndWriteCounts(t *testing.T) {
 
 	body, err := os.ReadFile(filepath.Join("..", "..", "agentlog", "testdata", "edits.jsonl"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.ReadFile(edits.jsonl): %v", err)
 	}
 	log := string(body)
 	withoutResults := stripToolUseResults(log)

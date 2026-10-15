@@ -75,10 +75,10 @@ func TestFeaturePageHeaderNamesLaunchTicketsAndWaves(t *testing.T) {
 	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
 		Ticket: "sandbox://ROOT", PromptHash: "hash-1", Group: "group-a", At: launchedAt,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent(sandbox://ROOT): %v", err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, launchedAt); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	server := newServer(store, testNow)
 

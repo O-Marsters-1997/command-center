@@ -10,16 +10,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// LaunchPicker is the /launch page: the features that have something to launch, each linking to
-// its own launch dialog.
 type LaunchPicker struct {
 	Chrome
 	Features []LaunchFeature
 	Launch   *LaunchModal // set on /launch?ticket=…
 }
 
-// LaunchFeature is one picker row. Now and OnUnlock count the feature's launchable tickets by the
-// section the dialog would put them in.
 type LaunchFeature struct {
 	Name     string
 	Path     string
@@ -27,7 +23,6 @@ type LaunchFeature struct {
 	OnUnlock int
 }
 
-// LaunchPicker lists every feature with at least one launchable ticket, in name order.
 func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker, error) {
 	chrome, err := r.Chrome(ctx, now, Params{})
 	if err != nil {

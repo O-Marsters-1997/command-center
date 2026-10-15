@@ -14,7 +14,7 @@ func renderBoardForTest(t *testing.T, board view.Board) string {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ExecuteTemplate(board): %v", err)
 	}
 	return buf.String()
 }

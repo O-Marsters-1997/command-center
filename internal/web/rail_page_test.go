@@ -29,12 +29,12 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 		Ticket: "sandbox://CC-3", Kind: "agent", PromptHash: "hash-3",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	if err := st.RecordSpawn(t.Context(), storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 222, StartedAt: testNow, LogPath: "/state/runs/3.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
@@ -45,7 +45,7 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 		obs.Worktrees = map[plan.BranchRef]string{branchRef("repo", "one"): "/wt/one"}
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return st
 }
@@ -60,10 +60,17 @@ func TestEveryRailLinkSwapsMain(t *testing.T) {
 		t.Fatal("the rail renders no links")
 	}
 	for _, link := range links {
-		for name, want := range map[string]string{"hx-select": "#main", "hx-target": "#main", "hx-push-url": "true"} {
-			if got, _ := link.Attr(name); got != want {
-				t.Errorf("rail link %s = %q, want %q: %s", name, got, want, link.HTML())
-			}
+		for _, tt := range []struct{ name, want string }{
+			{name: "hx-select", want: "#main"},
+			{name: "hx-target", want: "#main"},
+			{name: "hx-push-url", want: "true"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				if got, _ := link.Attr(tt.name); got != tt.want {
+					t.Errorf("rail link %s = %q, want %q: %s", tt.name, got, tt.want, link.HTML())
+				}
+			})
 		}
 	}
 }
@@ -107,7 +114,7 @@ func TestRailShowsALoopErrorInTheFooter(t *testing.T) {
 	st := railStore(t, true)
 	tickErr := storepkg.TickError{At: testNow.Add(time.Second), Message: "gh exploded"}
 	if err := st.RecordTickError(t.Context(), tickErr); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordTickError: %v", err)
 	}
 	body := renderPath(t, newServer(st, testNow), "/rail")
 	rail := htmltest.Parse(t, body).One(t, "#rail-body")
