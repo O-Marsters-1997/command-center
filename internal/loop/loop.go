@@ -484,6 +484,13 @@ func (l *Loop) reconcileRuns(ctx context.Context, t *tick) error {
 				continue
 			}
 			t.obs.Runs[url] = plan.RunObservation{}
+			question, wrote, err := l.readQuestionFile(plan.RunID(run.ID))
+			if err != nil {
+				return err
+			}
+			if wrote {
+				t.obs.Questions[plan.RunID(run.ID)] = question
+			}
 		}
 		if err := l.disposeRun(ctx, run, byTicket[url], t.obs); err != nil {
 			return fmt.Errorf("dispose run %d of %s: %w", run.ID, run.TicketID, err)

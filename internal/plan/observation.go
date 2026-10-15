@@ -44,7 +44,7 @@ type Observation struct {
 	SettingsErrors    map[string]string                `json:"settings_errors"`
 	SettingsSources   map[string]string                `json:"settings_sources"`
 	RepoErrors        map[string]string                `json:"repo_errors"`
-	Questions         map[RunID]string                 `json:"questions"`
+	Questions         map[RunID]string                 `json:"-"`
 }
 
 func NewObservation(at time.Time) Observation {
