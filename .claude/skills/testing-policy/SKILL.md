@@ -158,9 +158,6 @@ internal structs.
 Code without a testable surface yet. Don't write a test that reaches around the gap; add the seam
 first.
 
-- **CLI execution:** `command` builds `exec.CommandContext` directly, `tp` hardcodes its binary
-  and `tracker` calls a package-level `runGH`, so adapters can't be fed recorded output →
-  one executor seam in `command`, passed through `gh`, `tp` and `tracker`.
 - **`web/view` builders:** rail, scope filters, insights chart, log detail and params are
   unexported → export the pure builders.
 - **Port fakes:** forge and worktree fakes live in `loop`'s tests, `runner.Fake` ships in `runner`,

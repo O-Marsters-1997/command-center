@@ -11,7 +11,7 @@ import (
 // CheckRepoOnGitHub reads GitHub merge settings before cloning; a GitHub error
 // is not treated as a passing configuration check.
 func CheckRepoOnGitHub(ctx context.Context, fullName string) (kind plan.RefusalKind, reason string, err error) {
-	settings, err := gh.ReadRepoSettings(ctx, fullName)
+	settings, err := gh.CLI{}.ReadRepoSettings(ctx, fullName)
 	if err != nil {
 		return "", "", fmt.Errorf("check repo %s on github: %w", fullName, err)
 	}

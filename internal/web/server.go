@@ -103,8 +103,8 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 func NewServer(d Deps, opts ...Option) *Server {
 	s := &Server{
 		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger,
-		trackerFor:       tracker.New,
-		pushable:         pushableCache{list: gh.PushableRepos},
+		trackerFor:       tracker.Resolve(gh.CLI{}),
+		pushable:         pushableCache{list: gh.CLI{}.PushableRepos},
 		boardPollSeconds: config.DefaultBoardPollSeconds,
 	}
 	for _, opt := range opts {

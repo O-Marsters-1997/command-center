@@ -13,9 +13,32 @@ import (
 
 const (
 	maxCommandLine = 200
-	defaultTimeout = 2 * time.Minute
+	DefaultTimeout = 2 * time.Minute
 	waitDelay      = 2 * time.Second
 )
+
+type Executor interface {
+	Output(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error)
+}
+
+type Exec struct{}
+
+func (Exec) Output(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error) {
+	return OutputWithin(ctx, timeout, dir, name, args...)
+}
+
+type ExecutorFunc func(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error)
+
+func (f ExecutorFunc) Output(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error) {
+	return f(ctx, timeout, dir, name, args...)
+}
+
+func OrExec(e Executor) Executor {
+	if e == nil {
+		return Exec{}
+	}
+	return e
+}
 
 // Error carries the command, working directory and stderr of a failed process.
 type Error struct {
@@ -34,7 +57,7 @@ func (e *Error) Error() string {
 func (e *Error) Unwrap() error { return e.Err }
 
 func Output(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
-	return OutputWithin(ctx, defaultTimeout, dir, name, args...)
+	return OutputWithin(ctx, DefaultTimeout, dir, name, args...)
 }
 
 func OutputWithin(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error) {
@@ -46,7 +69,7 @@ func OutputWithin(ctx context.Context, timeout time.Duration, dir, name string, 
 }
 
 func Run(ctx context.Context, dir, name string, args ...string) error {
-	return RunWithin(ctx, defaultTimeout, dir, name, args...)
+	return RunWithin(ctx, DefaultTimeout, dir, name, args...)
 }
 
 func RunWithin(ctx context.Context, timeout time.Duration, dir, name string, args ...string) error {

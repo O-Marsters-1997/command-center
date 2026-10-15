@@ -1,40 +1,39 @@
-package gh
+package gh_test
 
 import (
-	"os"
-	"path/filepath"
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
-func TestDecodeFailsOnMalformedJSON(t *testing.T) {
+func TestDecode(t *testing.T) {
 	t.Parallel()
 
-	raw, err := os.ReadFile(filepath.Join("testdata", "malformed_repo_settings.json"))
-	if err != nil {
-		t.Fatalf("ReadFile(malformed_repo_settings.json): %v", err)
-	}
-	if _, err := Decode[RepoSettings](raw); err == nil {
-		t.Error("Decode(malformed) = nil error, want one")
+	if _, err := gh.Decode[gh.RepoSettings]([]byte("not json")); err == nil {
+		t.Error("Decode(not json) error = nil, want one")
 	}
 }
 
-func TestDecodeStreamConcatenatesPages(t *testing.T) {
+func TestDecodeStream(t *testing.T) {
 	t.Parallel()
 
-	got, err := DecodeStream[int]([]byte(`[1,2][3]`))
-	if err != nil {
-		t.Fatalf("DecodeStream() error = %v", err)
-	}
-	if want := []int{1, 2, 3}; !slices.Equal(got, want) {
-		t.Errorf("DecodeStream() = %v, want %v", got, want)
-	}
-}
+	t.Run("concatenates pages", func(t *testing.T) {
+		t.Parallel()
+		got, err := gh.DecodeStream[int]([]byte(`[1,2][3]`))
+		if err != nil {
+			t.Fatalf("DecodeStream() error = %v", err)
+		}
+		if diff := cmp.Diff([]int{1, 2, 3}, got); diff != "" {
+			t.Errorf("DecodeStream([1,2][3]) mismatch (-want +got):\n%s", diff)
+		}
+	})
 
-func TestDecodeStreamRejectsEmptyOutput(t *testing.T) {
-	t.Parallel()
-
-	if _, err := DecodeStream[int](nil); err == nil {
-		t.Error("DecodeStream(nil) = nil error, want one")
-	}
+	t.Run("empty output", func(t *testing.T) {
+		t.Parallel()
+		if _, err := gh.DecodeStream[int](nil); err == nil {
+			t.Error("DecodeStream(nil) error = nil, want one")
+		}
+	})
 }

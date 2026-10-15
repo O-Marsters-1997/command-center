@@ -9,25 +9,15 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
-const listLimit = 100
-
-type fullPageError struct{ limit int }
-
-func (e *fullPageError) Error() string {
-	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
-}
+const listLimit = gh.ListLimit
 
 type githubSource struct {
 	owner, repo string
-	run         func(ctx context.Context, args ...string) ([]byte, error)
+	cli         gh.CLI
 }
 
-func newGithubSource(owner, repo string) *githubSource {
-	return &githubSource{owner: owner, repo: repo, run: runGH}
-}
-
-func runGH(ctx context.Context, args ...string) ([]byte, error) {
-	out, err := gh.Run(ctx, "", args...)
+func (s *githubSource) run(ctx context.Context, args ...string) ([]byte, error) {
+	out, err := s.cli.Run(ctx, "", args...)
 	if err != nil {
 		return nil, fmt.Errorf("query github tracker: %w", err)
 	}
@@ -97,7 +87,7 @@ func decodeFeatures(raw []byte) ([]Feature, error) {
 		}
 	}
 	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read labels: %w", &fullPageError{limit: listLimit})
+		return nil, fmt.Errorf("read labels: %w", &gh.FullPageError{Limit: listLimit})
 	}
 	return features, nil
 }
@@ -116,7 +106,7 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 		return nil, fmt.Errorf("issue list: %w", err)
 	}
 	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
+		return nil, fmt.Errorf("read issues: %w", &gh.FullPageError{Limit: listLimit})
 	}
 	return decoded, nil
 }

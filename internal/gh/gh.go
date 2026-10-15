@@ -52,12 +52,12 @@ type Snapshot struct {
 	ByBranch map[string]PR `json:"by_branch"`
 }
 
-const listLimit = 100
+const ListLimit = 100
 
-type fullPageError struct{ limit int }
+type FullPageError struct{ Limit int }
 
-func (e *fullPageError) Error() string {
-	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
+func (e *FullPageError) Error() string {
+	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.Limit)
 }
 
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
@@ -67,9 +67,9 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 
 // List reads tracked branches' pull requests, including merged and closed PRs
 // omitted by GitHub's open-only bulk listing.
-func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
-	out, err := Run(ctx, repoPath, "pr", "list", "--state", "open",
-		"--limit", strconv.Itoa(listLimit), "--json", bulkFields)
+func (c CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
+	out, err := c.Run(ctx, repoPath, "pr", "list", "--state", "open",
+		"--limit", strconv.Itoa(ListLimit), "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("list open pull requests: %w", err)
 	}
@@ -77,8 +77,8 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("decode pr list for %s: %w", repoPath, err)
 	}
-	if len(prs) >= listLimit {
-		return Snapshot{}, fmt.Errorf("read pr list for %s: %w", repoPath, &fullPageError{limit: listLimit})
+	if len(prs) >= ListLimit {
+		return Snapshot{}, fmt.Errorf("read pr list for %s: %w", repoPath, &FullPageError{Limit: ListLimit})
 	}
 
 	byBranch := make(map[string]PR, len(tracked))
@@ -90,7 +90,7 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 		if _, ok := byBranch[branch]; ok {
 			continue
 		}
-		out, err := Run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
+		out, err := c.Run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
 			"--limit", "1", "--json", fallbackFields)
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("list pull requests for %s: %w", branch, err)
@@ -120,11 +120,9 @@ type Forge interface {
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 }
 
-type CLI struct{}
-
 // Create opens a pull request with the keep-open label to avoid GitHub's
 // configured 14-day auto-close; a non-empty body overrides --fill.
-func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) error {
+func (c CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
 	if body != "" {
 		args = append(args, "--body", body)
@@ -132,23 +130,23 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 	if draft {
 		args = append(args, "--draft")
 	}
-	_, err := Run(ctx, repoPath, args...)
+	_, err := c.Run(ctx, repoPath, args...)
 	if err != nil {
 		return fmt.Errorf("create pull request: %w", err)
 	}
 	return nil
 }
 
-func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
-	_, err := Run(ctx, repoPath, "pr", "ready", branch)
+func (c CLI) Ready(ctx context.Context, repoPath, branch string) error {
+	_, err := c.Run(ctx, repoPath, "pr", "ready", branch)
 	if err != nil {
 		return fmt.Errorf("ready pull request %s: %w", branch, err)
 	}
 	return nil
 }
 
-func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
-	_, err := Run(ctx, repoPath, "pr", "comment", branch, "--body", body)
+func (c CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
+	_, err := c.Run(ctx, repoPath, "pr", "comment", branch, "--body", body)
 	if err != nil {
 		return fmt.Errorf("comment on pull request %s: %w", branch, err)
 	}
@@ -157,24 +155,24 @@ func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
 
 // Edit re-points branch's pull request at base. It is idempotent: GitHub's own
 // delete-branch-on-merge retarget may have got there first.
-func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
-	_, err := Run(ctx, repoPath, "pr", "edit", branch, "--base", base)
+func (c CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
+	_, err := c.Run(ctx, repoPath, "pr", "edit", branch, "--base", base)
 	if err != nil {
 		return fmt.Errorf("edit pull request %s: %w", branch, err)
 	}
 	return nil
 }
 
-func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
-	_, err := Run(ctx, repoPath, "issue", "close", issueURL)
+func (c CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
+	_, err := c.Run(ctx, repoPath, "issue", "close", issueURL)
 	if err != nil {
 		return fmt.Errorf("close issue %s: %w", issueURL, err)
 	}
 	return nil
 }
 
-func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
-	out, err := Run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(listLimit))
+func (c CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
+	out, err := c.Run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(ListLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list issue titles: %w", err)
 	}
@@ -190,8 +188,8 @@ func decodeIssueTitles(raw []byte) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("issue list: %w", err)
 	}
-	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
+	if len(decoded) >= ListLimit {
+		return nil, fmt.Errorf("read issues: %w", &FullPageError{Limit: ListLimit})
 	}
 	titles := make(map[string]string, len(decoded))
 	for _, issue := range decoded {
