@@ -7,6 +7,7 @@ import (
 )
 
 func TestSpawnRejectsACommandThatBuildsAnEmptyArgv(t *testing.T) {
+	t.Parallel()
 	cfg := runner.SpawnConfig{AgentCommand: []string{"{session}"}, WorktreePath: t.TempDir()}
 
 	if _, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg); err == nil {

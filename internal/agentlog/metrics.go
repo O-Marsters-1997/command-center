@@ -10,11 +10,8 @@ import (
 
 var ErrNoParseableLines = errors.New("no parseable lines")
 
-// RunMetrics is what every dialect must produce. A field a dialect cannot supply is None or zero,
-// never a guess.
 type RunMetrics struct {
-	CostUSD option.Option[float64]
-	// Requests is one deduplicated request_id per element, in the order each first appeared.
+	CostUSD  option.Option[float64]
 	Requests []Request
 }
 
@@ -25,8 +22,7 @@ type Request struct {
 	OutputTokens        int64
 }
 
-// ParseMetrics reads a run's log in the Claude CLI's stream-json dialect into RunMetrics. An
-// empty, truncated or absent log is an error, never a zero-valued RunMetrics.
+// ParseMetrics reads Claude stream-json usage, rejecting logs with no parseable lines.
 func ParseMetrics(logPath string) (RunMetrics, error) {
 	var (
 		metrics RunMetrics

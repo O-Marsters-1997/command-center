@@ -10,8 +10,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-// TestParseTranscriptUsageOnASettledRunReturnsItsOneCumulativeEntry covers a non-interactive `-p`
-// run, which reports its whole spend as one entry off the result line rather than one per request.
 func TestParseTranscriptUsageOnASettledRunReturnsItsOneCumulativeEntry(t *testing.T) {
 	t.Parallel()
 
@@ -39,10 +37,6 @@ func TestParseTranscriptUsageOnASettledRunReturnsItsOneCumulativeEntry(t *testin
 	}
 }
 
-// TestParseTranscriptUsageOnAnInteractiveTranscriptSumsEveryRequest covers CC-313's acceptance
-// criterion: a transcript with no result line -- an interactive session never settles one -- falls
-// back to one entry per request instead of the single cumulative entry a settled run yields,
-// deduped by request_id the way a live run's streamed usage lines already dedupe.
 func TestParseTranscriptUsageOnAnInteractiveTranscriptSumsEveryRequest(t *testing.T) {
 	t.Parallel()
 

@@ -16,19 +16,17 @@ func sleepsScript(t *testing.T) string {
 	t.Helper()
 	abs, err := filepath.Abs("../../testdata/agents/sleeps.sh")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Abs(sleeps.sh): %v", err)
 	}
 	return abs
 }
 
-// TestCancelTerminatesTheLeaderAndItsChild spawns the real sleeps.sh fixture, whose whole
-// purpose (per its own comment) is to background a child sleep in the same pgid so Cancel's
-// -pgid targeting is genuinely exercised rather than incidental.
 func TestCancelTerminatesTheLeaderAndItsChild(t *testing.T) {
+	t.Parallel()
 	worktree := t.TempDir()
 	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Create(run log): %v", err)
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
@@ -81,10 +79,6 @@ func readChildPid(t *testing.T, path string) int {
 	return pid
 }
 
-// eventuallyNotRunning polls a plain pid (the child sleep is not itself a group leader — only
-// sleeps.sh, which Cancel targets via -pgid, is) until ps reports it gone or a zombie. The
-// child is reparented on the leader's death and reaped by init, not by us, so a brief zombie
-// window right after Cancel returns is expected rather than a failure.
 func eventuallyNotRunning(pid int) bool {
 	return pollUntil(2*time.Second, func() bool {
 		out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()

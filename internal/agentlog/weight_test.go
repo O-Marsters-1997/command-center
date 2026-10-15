@@ -7,9 +7,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-// TestWeightMatchesRun27sTotalCostUSD covers CC-313's acceptance criterion: priced by Weight,
-// run27's own settled usage must agree with the total_cost_usd its result line reports, to
-// within 1%, or the fit downstream would be trained on a systematically wrong dollar figure.
 func TestWeightMatchesRun27sTotalCostUSD(t *testing.T) {
 	t.Parallel()
 
