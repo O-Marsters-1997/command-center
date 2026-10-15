@@ -158,7 +158,8 @@ func TestHandleInsightsHistoricalRangeAndRepoScope(t *testing.T) {
 		t.Fatalf("GET /insights.json status = %d, want 200", resp.Code)
 	}
 	if included.Since != "2019-12-01" || included.Until != "2026-08-20" || included.Timezone == "" {
-		t.Errorf("range and timezone = (%q, %q, %q), want (2019-12-01, 2026-08-20, nonempty)", included.Since, included.Until, included.Timezone)
+		t.Errorf("range and timezone = (%q, %q, %q), want (2019-12-01, 2026-08-20, nonempty)",
+			included.Since, included.Until, included.Timezone)
 	}
 	if len(included.Points) != 1 || included.Points[0].Ticket != "sandbox://CC-1" {
 		t.Errorf("points = %+v, want the merged ticket", included.Points)

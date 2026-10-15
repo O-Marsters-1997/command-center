@@ -270,6 +270,7 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		{"imported", "project:x", "yes"}, {"not imported", "project:y", "no"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			found := false
 			for _, row := range main.Find("tr") {
 				if len(row.Find(`a[href="/f/`+tt.feature+`"]`)) == 0 {
@@ -315,6 +316,7 @@ func TestOldImportRouteIsGone(t *testing.T) {
 		{"get", http.MethodGet}, {"post", http.MethodPost},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			response := do(t, server, tt.method, "/import", req{})
 			if response.Code != http.StatusNotFound {
 				t.Errorf("%s /import = %d, want 404", tt.method, response.Code)
