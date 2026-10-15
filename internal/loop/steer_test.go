@@ -142,7 +142,7 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 	}
 }
 
-func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
+func TestTheInterruptedRunNoLongerAwaitsDisposition(t *testing.T) {
 	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "use sqlite instead")
@@ -156,12 +156,14 @@ func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
 	if len(ids) != 2 {
 		t.Fatalf("runs = %v, want 2", ids)
 	}
-	first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
+	pending, err := f.store.PendingRunsAwaitingDisposition(t.Context())
 	if err != nil {
-		t.Fatalf("RunDetails(%d): %v", ids[0], err)
+		t.Fatalf("PendingRunsAwaitingDisposition: %v", err)
 	}
-	if !first.Outcome.IsSome() || first.Outcome.Unwrap() != plan.OutcomeContinued {
-		t.Errorf("first run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)
+	for _, run := range pending {
+		if run.ID == ids[0] {
+			t.Errorf("interrupted run %d still awaits disposition", ids[0])
+		}
 	}
 }
 
