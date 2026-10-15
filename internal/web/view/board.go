@@ -163,8 +163,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		}
 		var pgid, elapsed string
 		var elapsedSeconds int
-		if e.Pgid.IsSome() {
-			pgid = strconv.Itoa(e.Pgid.Unwrap())
+		if latestRun.Pgid.IsSome() {
+			pgid = strconv.Itoa(latestRun.Pgid.Unwrap())
 		}
 		if e.Elapsed.IsSome() {
 			elapsed = e.Elapsed.Unwrap().String()

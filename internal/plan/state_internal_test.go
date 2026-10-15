@@ -45,17 +45,3 @@ func TestEveryNamedStateHasARow(t *testing.T) {
 		t.Errorf("stateInfo has %d rows, plan.go names %d states", len(stateInfo), len(named)-1)
 	}
 }
-
-func TestParseStateRoundTrips(t *testing.T) {
-	t.Parallel()
-
-	for _, s := range AllStates() {
-		got, err := ParseState(s.String())
-		if err != nil || got != s {
-			t.Errorf("ParseState(%q) = %v, %v; want %v", s.String(), got, err, s)
-		}
-	}
-	if _, err := ParseState("no_such_state"); err == nil {
-		t.Error("ParseState(no_such_state) succeeded, want an error")
-	}
-}

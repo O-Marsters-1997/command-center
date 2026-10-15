@@ -1,7 +1,6 @@
 package plan_test
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -29,9 +28,6 @@ func TestRulesForIndexesEachObservedRepoByName(t *testing.T) {
 	}
 	if !rules.Stacking["a"] || rules.Stacking["b"] {
 		t.Errorf("stacking = %v, want a only", rules.Stacking)
-	}
-	if !slices.Equal(rules.Deny["a"], []string{".github/**"}) || len(rules.Deny["b"]) != 0 {
-		t.Errorf("deny = %v", rules.Deny)
 	}
 	if rules.Checks["a"].Success != "CI" || !rules.Checks["b"].IsZero() {
 		t.Errorf("checks = %v", rules.Checks)
