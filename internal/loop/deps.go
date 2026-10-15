@@ -29,18 +29,11 @@ type worktrees interface {
 	Remove(ctx context.Context, repoPath, branch string, mode tp.RemoveMode) error
 }
 
-type agentRunner interface {
-	Spawn(ctx context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error)
-	Liveness(pgid int, wantStart, now time.Time) (bool, error)
-	Cancel(pgid int) error
-	Reap(pid int) (exitCode int, ok bool)
-}
-
 type Deps struct {
 	Logger    *slog.Logger
 	Store     *store.Store
 	Clock     Clock
-	Runner    agentRunner
+	Runner    runner.Runner
 	Observe   ObserveFunc
 	Config    config.Config
 	Workspace config.Workspace
