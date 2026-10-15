@@ -189,7 +189,7 @@ func (r *Reader) turns(row Row, runs []store.SessionRun) ([]Turn, error) {
 		turns[i].Log = row.Log
 		turns[i].Ask = run.Question
 		if i != len(runs)-1 || run.LogPath != row.LogPath {
-			log, err := buildLogDetail(r.renderLine, logSource{Path: run.LogPath, TicketURL: row.URL}, Params{Log: "all"})
+			log, err := BuildLogDetail(r.renderLine, LogSource{Path: run.LogPath, TicketURL: row.URL}, Params{Log: "all"})
 			if err != nil {
 				return nil, fmt.Errorf("build log of run %d: %w", run.ID, err)
 			}

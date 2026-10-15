@@ -158,17 +158,4 @@ internal structs.
 Code without a testable surface yet. Don't write a test that reaches around the gap; add the seam
 first.
 
-- **CLI execution:** `command` builds `exec.CommandContext` directly, `tp` hardcodes its binary
-  and `tracker` calls a package-level `runGH`, so adapters can't be fed recorded output →
-  one executor seam in `command`, passed through `gh`, `tp` and `tracker`.
-- **`web/view` builders:** rail, scope filters, insights chart, log detail and params are
-  unexported → export the pure builders.
-- **Port fakes:** forge and worktree fakes live in `loop`'s tests, `runner.Fake` ships in `runner`,
-  and `demo` has its own; the worktree fake re-implements `tp`'s refusals → one fake per port in
-  `<owner>test` with a contract suite.
-- **`app` wiring:** `app.New` builds `runner.ProcessRunner{}` and `gh.CLI{}` itself → `WithRunner`
-  and `WithForge` options.
-- **`runner` cancel:** `Cancel` escalates SIGTERM to SIGKILL on the wall clock and `Liveness`
-  shells out to `ps` → inject a clock and a process table.
-- **Question file:** the loop reads the agent's question file with `os.ReadFile` mid-decision →
-  the observer reads it into the `Observation`, so "asked" is a `plan` case.
+None open.

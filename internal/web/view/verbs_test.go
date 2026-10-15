@@ -1,15 +1,17 @@
 package view_test
 
 import (
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-func TestRowVerbButtonsPreserveLabelsKeysConfirmationsAndPending(t *testing.T) {
+func TestRow_VerbButtons(t *testing.T) {
 	t.Parallel()
+
 	row := view.Row{
 		URL: "sandbox://CC-1", Pgid: "123", Worktree: "/repos/cc-1", CancelCount: 3,
 		Verbs: []plan.Verb{
@@ -27,7 +29,7 @@ func TestRowVerbButtonsPreserveLabelsKeysConfirmationsAndPending(t *testing.T) {
 			"closes its GitHub issue, deletes its worktree from disk, and drops it from the board. " +
 			"It cannot be undone. worktree at risk: /repos/cc-1"},
 	}
-	if got := row.VerbButtons(); !slices.Equal(got, want) {
-		t.Errorf("VerbButtons() = %+v, want %+v", got, want)
+	if diff := cmp.Diff(want, row.VerbButtons()); diff != "" {
+		t.Errorf("VerbButtons() mismatch (-want +got):\n%s", diff)
 	}
 }

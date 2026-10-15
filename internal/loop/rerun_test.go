@@ -11,10 +11,11 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/runner/runnertest"
+	"github.com/O-Marsters-1997/command-center/internal/tp/tptest"
 )
 
-func TestReRunSpawnsASecondRun(t *testing.T) {
+func TestReRun(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name     string
@@ -39,7 +40,7 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			worktrees := &recordingWorktrees{}
+			worktrees := &tptest.Worktrees{}
 			f := newPushFixture(t, loop.WithWorktrees(worktrees))
 			firstRunID, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 				Ticket: f.Ticket.URL, Kind: "agent", PromptHash: "hash-1",
@@ -61,27 +62,28 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 				t.Fatalf("QueueVerbIntent: %v", err)
 			}
 			tt.prepare(t, f)
-			fake := runner.NewFake()
+			fake := &runnertest.Runner{}
 			f.reset(testAt.Add(time.Second), fake, loop.WithWorktrees(worktrees))
 			f.tick(t)
 
-			if len(fake.Spawns) != 1 {
-				t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
+			spawns := fake.Spawns()
+			if len(spawns) != 1 {
+				t.Fatalf("spawns = %d, want 1", len(spawns))
 			}
 			want := tt.wantPath(f)
 			want, err = filepath.EvalSymlinks(want)
 			if err != nil {
 				t.Fatalf("EvalSymlinks(want worktree): %v", err)
 			}
-			got, err := filepath.EvalSymlinks(fake.Spawns[0].WorktreePath)
+			got, err := filepath.EvalSymlinks(spawns[0].WorktreePath)
 			if err != nil {
 				t.Fatalf("EvalSymlinks(spawn worktree): %v", err)
 			}
 			if got != want {
 				t.Errorf("re-run worktree = %q, want %q", got, want)
 			}
-			if fake.Spawns[0].SystemPromptPath != f.ws.SystemPromptPath {
-				t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, f.ws.SystemPromptPath)
+			if spawns[0].SystemPromptPath != f.ws.SystemPromptPath {
+				t.Errorf("system prompt path = %q, want %q", spawns[0].SystemPromptPath, f.ws.SystemPromptPath)
 			}
 			latest, err := f.Store.LatestRunsByTicket(t.Context())
 			if err != nil {

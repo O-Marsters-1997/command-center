@@ -45,6 +45,7 @@ test-e2e:
 golangci_version := trim(read(".golangci-version"))
 
 lint:
+    ! grep -nE '^[[:space:]]*exec[[:space:]]+sleep([[:space:]]|$)' e2e/tests/*.txtar
     docker run --rm \
         -v "$(pwd):/app" \
         -v command-center-golangci-lint-cache:/root/.cache \

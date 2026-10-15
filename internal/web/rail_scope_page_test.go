@@ -10,7 +10,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
-func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
+func testRailProjectScope(t *testing.T) {
 	t.Parallel()
 
 	st := track(t, openStore(t), alphaRepo, soloRepo)

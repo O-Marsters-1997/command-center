@@ -17,11 +17,10 @@ type SpendCache struct {
 	mu      sync.Mutex
 	flight  singleflight.Group
 	settled map[string]int
-	parse   func(string) (agentlog.RunMetrics, error)
 }
 
 func NewSpendCache() *SpendCache {
-	return &SpendCache{settled: make(map[string]int), parse: agentlog.ParseMetrics}
+	return &SpendCache{settled: make(map[string]int)}
 }
 
 func (c *SpendCache) Spend(path string) (int, error) {
@@ -42,7 +41,7 @@ func (c *SpendCache) Spend(path string) (int, error) {
 			return tokens, nil
 		}
 		c.mu.Unlock()
-		metrics, err := c.parse(path)
+		metrics, err := agentlog.ParseMetrics(path)
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, agentlog.ErrNoParseableLines) {
 			return 0, nil
 		}
@@ -82,7 +81,7 @@ func applySpend(rows []Row, cache *SpendCache) error {
 	return nil
 }
 
-func applyTicketSpend(rows []Row, byURL map[string]store.BoardTicketSpend, factor float64) {
+func ApplyTicketSpend(rows []Row, byURL map[string]store.BoardTicketSpend, factor float64) {
 	for i := range rows {
 		ts, ok := byURL[rows[i].URL]
 		if !ok {

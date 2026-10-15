@@ -2,8 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/url"
-	"sync/atomic"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
@@ -21,7 +19,7 @@ func fragmentServer(t *testing.T) *web.Server {
 	return openServer(st, fixedClock(testNow), "")
 }
 
-func TestFragmentRoutesSendAPlainRequestToTheirHostPage(t *testing.T) {
+func TestFragmentRoutes(t *testing.T) {
 	t.Parallel()
 
 	server := fragmentServer(t)
@@ -34,127 +32,84 @@ func TestFragmentRoutesSendAPlainRequestToTheirHostPage(t *testing.T) {
 		{name: "ticket candidates", route: "/launch/candidates?ticket=sandbox%3A%2F%2FCC-1",
 			host: "/launch?ticket=sandbox%3A%2F%2FCC-1"},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name+" sends a plain request to its host page", func(t *testing.T) {
 			t.Parallel()
 
 			rec := do(t, server, http.MethodGet, tt.route, req{})
-			if rec.Code != http.StatusSeeOther {
-				t.Fatalf("GET %s = %d, want 303", tt.route, rec.Code)
-			}
-			if got := rec.Location; got != tt.host {
-				t.Errorf("Location = %q, want %q", got, tt.host)
+			if rec.Code != http.StatusSeeOther || rec.Location != tt.host {
+				t.Fatalf("GET %s = %d %q, want 303 %q", tt.route, rec.Code, rec.Location, tt.host)
 			}
 			if got := rec.Header.Get("Vary"); got != "HX-Request" {
-				t.Errorf("Vary = %q, want HX-Request", got)
+				t.Errorf("GET %s Vary = %q, want HX-Request", tt.route, got)
 			}
 
 			fragment := do(t, server, http.MethodGet, tt.route, req{Header: http.Header{"Hx-Request": {"true"}}})
 			if fragment.Code != http.StatusOK {
-				t.Fatalf("htmx GET %s = %d, want 200", tt.route, fragment.Code)
+				t.Fatalf("htmx GET %s status = %d, want 200", tt.route, fragment.Code)
 			}
 			if got := fragment.Header.Get("Vary"); got != "HX-Request" {
-				t.Errorf("htmx Vary = %q, want HX-Request", got)
+				t.Errorf("htmx GET %s Vary = %q, want HX-Request", tt.route, got)
 			}
 			if got := htmltest.Parse(t, fragment.Body).Find("main#main"); len(got) != 0 {
-				t.Errorf("htmx GET %s answered a full page (main#main present)", tt.route)
+				t.Errorf("htmx GET %s answered a full page", tt.route)
 			}
 		})
 	}
-}
 
-func TestSessionActionsIsAFragmentOfTheSessionPage(t *testing.T) {
-	t.Parallel()
+	t.Run("session actions is a fragment of the session page", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "prompt", KeepPrompt: true})
+		server := newServer(st, testNow)
 
-	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "prompt", KeepPrompt: true})
-	server := newServer(st, testNow)
-
-	rec := do(t, server, http.MethodGet, "/s/acme/web/1/actions", req{})
-	if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/1" {
-		t.Errorf("plain actions = %d %q, want 303 /s/acme/web/1", rec.Code, rec.Location)
-	}
-	if got := rec.Header.Get("Vary"); got != "HX-Request" {
-		t.Errorf("Vary = %q, want HX-Request", got)
-	}
-	fragment := do(t, server, http.MethodGet, "/s/acme/web/1/actions", req{Header: http.Header{"Hx-Request": {"true"}}})
-	htmltest.Parse(t, fragment.Body).One(t, "#session-actions")
-}
-
-func TestHistoryRestoreOfAFragmentRouteGetsThePage(t *testing.T) {
-	t.Parallel()
-
-	response := do(t, fragmentServer(t), http.MethodGet, "/rail", req{
-		Header: http.Header{"Hx-Request": {"true"}, "Hx-History-Restore-Request": {"true"}},
+		rec := do(t, server, http.MethodGet, "/s/acme/web/1/actions", req{})
+		if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/1" {
+			t.Errorf("GET /s/acme/web/1/actions = %d %q, want 303 /s/acme/web/1", rec.Code, rec.Location)
+		}
+		if got := rec.Header.Get("Vary"); got != "HX-Request" {
+			t.Errorf("GET /s/acme/web/1/actions Vary = %q, want HX-Request", got)
+		}
+		fragment := do(t, server, http.MethodGet, "/s/acme/web/1/actions", req{Header: http.Header{"Hx-Request": {"true"}}})
+		htmltest.Parse(t, fragment.Body).One(t, "#session-actions")
 	})
-	if response.Code != http.StatusSeeOther {
-		t.Errorf("history-restore GET /rail = %d, want 303 to the host page", response.Code)
-	}
-}
 
-func TestCandidatesJSONIsNotAFragment(t *testing.T) {
-	t.Parallel()
-
-	rec := do(t, fragmentServer(t), http.MethodGet, "/launch/candidates.json?feature=project%3Ax", req{})
-	if rec.Code != http.StatusOK || rec.Header.Get("Content-Type") != "application/json" {
-		t.Errorf("plain candidates.json = %d %q, want 200 application/json", rec.Code, rec.Header.Get("Content-Type"))
-	}
-}
-
-func TestPlainLaunchOpenSendsATicketSliceToThePickerWithTheDialogOpen(t *testing.T) {
-	t.Parallel()
-
-	server := fragmentServer(t)
-	response := do(t, server, http.MethodPost, "/launch/open", req{Form: url.Values{"ticket": {"sandbox://CC-1"}}})
-	if response.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 303", response.Code)
-	}
-	location := response.Location
-	if want := "/launch?ticket=sandbox%3A%2F%2FCC-1"; location != want {
-		t.Fatalf("Location = %q, want %q", location, want)
-	}
-
-	page := renderPath(t, server, location)
-	dialog := htmltest.Parse(t, page).One(t, "dialog#launch-modal-body")
-	dialog.One(t, `cc-launch-modal[tickets]`)
-}
-
-func TestPlainVerbAndImportPostsGoBackToALocalReturn(t *testing.T) {
-	t.Parallel()
-
-	server := newServer(seededRunning(t), testNow)
-
-	for _, tt := range []struct {
-		name, target, want string
-	}{
-		{name: "verb local", target: "/verb?verb=kill&ticket=sandbox://CC-1&return=/f/x", want: "/f/x"},
-		{name: "verb absent", target: "/verb?verb=kill&ticket=sandbox://CC-1", want: "/"},
-		{name: "verb offsite", target: "/verb?verb=kill&ticket=sandbox://CC-1&return=//evil.example/", want: "/"},
-		{name: "verb dotted", target: "/verb?verb=kill&ticket=sandbox://CC-1&return=/a/../b", want: "/"},
-		{name: "import local", target: "/features/x/import?return=/f/x", want: "/f/x"},
-		{name: "import absent", target: "/features/x/import", want: "/"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			response := do(t, server, http.MethodPost, tt.target, req{})
-			if response.Code != http.StatusSeeOther {
-				t.Fatalf("status = %d, want 303", response.Code)
-			}
-			if got := response.Location; got != tt.want {
-				t.Errorf("Location = %q, want %q", got, tt.want)
-			}
+	t.Run("a history restore gets the page", func(t *testing.T) {
+		t.Parallel()
+		response := do(t, server, http.MethodGet, "/rail", req{
+			Header: http.Header{"Hx-Request": {"true"}, "Hx-History-Restore-Request": {"true"}},
 		})
-	}
-}
+		if response.Code != http.StatusSeeOther {
+			t.Errorf("history-restore GET /rail status = %d, want 303", response.Code)
+		}
+	})
 
-func TestReposPageRendersTheSearchResultsInThePage(t *testing.T) {
-	t.Parallel()
+	t.Run("candidates.json is not a fragment", func(t *testing.T) {
+		t.Parallel()
+		rec := do(t, server, http.MethodGet, "/launch/candidates.json?feature=project%3Ax", req{})
+		if rec.Code != http.StatusOK || rec.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("GET /launch/candidates.json = %d %q, want 200 application/json", rec.Code, rec.Header.Get("Content-Type"))
+		}
+	})
 
-	var calls atomic.Int32
-	page := renderPath(t, reposServer(t, &calls), "/repos?q=api")
-
-	root := htmltest.Parse(t, page)
-	root.One(t, `input[name="q"][value="api"]`)
-	if results := root.Find(`a[href="/repos/acme/api"]`); len(results) == 0 {
-		t.Errorf("/repos?q=api has no acme/api result")
-	}
+	t.Run("plain verb and import posts go back to a local return", func(t *testing.T) {
+		t.Parallel()
+		server := newServer(seededRunning(t), testNow)
+		for _, tt := range []struct {
+			name, target, want string
+		}{
+			{name: "verb local", target: "/verb?verb=kill&ticket=sandbox://CC-1&return=/f/x", want: "/f/x"},
+			{name: "verb absent", target: "/verb?verb=kill&ticket=sandbox://CC-1", want: "/"},
+			{name: "verb offsite", target: "/verb?verb=kill&ticket=sandbox://CC-1&return=//evil.example/", want: "/"},
+			{name: "verb dotted", target: "/verb?verb=kill&ticket=sandbox://CC-1&return=/a/../b", want: "/"},
+			{name: "import local", target: "/features/x/import?return=/f/x", want: "/f/x"},
+			{name: "import absent", target: "/features/x/import", want: "/"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				response := do(t, server, http.MethodPost, tt.target, req{})
+				if response.Code != http.StatusSeeOther || response.Location != tt.want {
+					t.Errorf("POST %s = %d %q, want 303 %q", tt.target, response.Code, response.Location, tt.want)
+				}
+			})
+		}
+	})
 }

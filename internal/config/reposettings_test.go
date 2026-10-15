@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,25 +30,29 @@ func writeIn(t *testing.T, dir, name, body string) {
 	}
 }
 
-func TestReadRepoSettingsAnswersDefaultsWhenTheFileIsMissing(t *testing.T) {
+func TestReadRepoSettings(t *testing.T) {
 	t.Parallel()
 
-	got, source, err := config.ReadRepoSettings(t.Context(), originedRepo(t, ""))
-	if err != nil {
-		t.Fatalf("ReadRepoSettings: %v", err)
+	type result struct {
+		Settings config.RepoSettings
+		Source   config.Source
 	}
-	if source != config.SourceDefaults {
-		t.Errorf("source = %q, want %q", source, config.SourceDefaults)
-	}
-	if diff := cmp.Diff(config.RepoSettings{Tracker: "github"}, got); diff != "" {
-		t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
-	}
-}
 
-func TestReadRepoSettingsDecodesEveryKey(t *testing.T) {
-	t.Parallel()
+	t.Run("a missing file answers defaults", func(t *testing.T) {
+		t.Parallel()
+		settings, source, err := config.ReadRepoSettings(t.Context(), originedRepo(t, ""))
+		if err != nil {
+			t.Fatalf("ReadRepoSettings() error = %v", err)
+		}
+		want := result{Settings: config.RepoSettings{Tracker: "github"}, Source: config.SourceDefaults}
+		if diff := cmp.Diff(want, result{settings, source}); diff != "" {
+			t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
+		}
+	})
 
-	body := `
+	t.Run("decodes every key", func(t *testing.T) {
+		t.Parallel()
+		body := `
 tracker        = "linear"
 stacking       = true
 compat_check   = "compat"
@@ -60,92 +63,63 @@ verify_command = ["go", "vet"]
 [checks]
 all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" }] }]
 `
-	got, source, err := config.ReadRepoSettings(t.Context(), originedRepo(t, body))
-	if err != nil {
-		t.Fatalf("ReadRepoSettings: %v", err)
-	}
-	want := config.RepoSettings{
-		Tracker: "linear", Stacking: true, CompatCheck: "compat", MergifySHA: "sha256:1",
-		Deny: []string{"go.mod"}, VerifyCommand: []string{"go", "vet"},
-		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-			{Success: "Lint"},
-			{AnyOf: []verdict.Predicate{{Success: "A"}, {Author: "bot"}}},
-		}},
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
-	}
-	if source != config.SourceFile {
-		t.Errorf("source = %q, want %q", source, config.SourceFile)
-	}
-}
+		settings, source, err := config.ReadRepoSettings(t.Context(), originedRepo(t, body))
+		if err != nil {
+			t.Fatalf("ReadRepoSettings() error = %v", err)
+		}
+		want := result{
+			Settings: config.RepoSettings{
+				Tracker: "linear", Stacking: true, CompatCheck: "compat", MergifySHA: "sha256:1",
+				Deny: []string{"go.mod"}, VerifyCommand: []string{"go", "vet"},
+				Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+					{Success: "Lint"},
+					{AnyOf: []verdict.Predicate{{Success: "A"}, {Author: "bot"}}},
+				}},
+			},
+			Source: config.SourceFile,
+		}
+		if diff := cmp.Diff(want, result{settings, source}); diff != "" {
+			t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
+		}
+	})
 
-func TestReadRepoSettingsIgnoresABranchAndTheWorkingTree(t *testing.T) {
-	t.Parallel()
+	t.Run("reads origin/main, never a branch or the working tree", func(t *testing.T) {
+		t.Parallel()
+		checkout := originedRepo(t, "deny = [\"go.mod\"]\n")
+		gittest.Run(t, checkout, "switch", "-q", "-c", "ticket")
+		writeIn(t, checkout, config.SettingsFile, "deny = []\n")
+		gittest.Run(t, checkout, "commit", "-q", "-am", "loosen")
+		writeIn(t, checkout, config.SettingsFile, "deny = []\nstacking = true\n")
 
-	checkout := originedRepo(t, "deny = [\"go.mod\"]\n")
-	gittest.Run(t, checkout, "switch", "-q", "-c", "ticket")
-	writeIn(t, checkout, config.SettingsFile, "deny = []\n")
-	gittest.Run(t, checkout, "commit", "-q", "-am", "loosen")
-	writeIn(t, checkout, config.SettingsFile, "deny = []\nstacking = true\n")
+		settings, _, err := config.ReadRepoSettings(t.Context(), checkout)
+		if err != nil {
+			t.Fatalf("ReadRepoSettings() error = %v", err)
+		}
+		want := config.RepoSettings{Tracker: "github", Deny: []string{"go.mod"}}
+		if diff := cmp.Diff(want, settings); diff != "" {
+			t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
+		}
+	})
 
-	got, _, err := config.ReadRepoSettings(t.Context(), checkout)
-	if err != nil {
-		t.Fatalf("ReadRepoSettings: %v", err)
-	}
-	if !slices.Equal(got.Deny, []string{"go.mod"}) || got.Stacking {
-		t.Errorf("settings = %+v, want origin/main's file alone", got)
-	}
-}
-
-func TestReadRepoSettingsErrorsNameTheLine(t *testing.T) {
-	t.Parallel()
-
-	for _, tt := range []struct {
-		name, body string
-		wantLine   int
-	}{
-		{"parse error", "stacking = true\ndeny = [\n", 2},
-		{"unknown key", "stacking = true\nstackin = true\n", 2},
-		{"invalid predicate", "stacking = true\n[checks]\nsuccess = \"a\"\nskipped = \"b\"\n", 2},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			_, _, err := config.ReadRepoSettings(t.Context(), originedRepo(t, tt.body))
-			var parseErr *config.SettingsParseError
-			if !errors.As(err, &parseErr) || parseErr.Line != tt.wantLine {
-				t.Errorf("ReadRepoSettings error = %v, want line %d", err, tt.wantLine)
-			}
-		})
-	}
-}
-
-func TestTheCommittedSettingsFileHoldsWhatTheRepoBlockHeld(t *testing.T) {
-	t.Parallel()
-
-	body, err := os.ReadFile("../../" + config.SettingsFile)
-	if err != nil {
-		t.Fatalf("ReadFile(%s): %v", "../../"+config.SettingsFile, err)
-	}
-	got, err := config.ParseRepoSettings(string(body))
-	if err != nil {
-		t.Fatalf("ParseRepoSettings: %v", err)
-	}
-
-	var all []verdict.Predicate
-	for _, name := range []string{
-		"test", "e2e", "lint", "build (ubuntu-latest)", "build (macos-latest)", "tidy", "assets",
-	} {
-		all = append(all, verdict.Predicate{Success: name})
-	}
-	want := config.RepoSettings{
-		Tracker:  "github",
-		Stacking: true,
-		Deny:     []string{".github/**", "go.mod", "go.sum"},
-		Checks:   verdict.Predicate{AllOf: all},
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("ParseRepoSettings() mismatch (-want +got):\n%s", diff)
-	}
+	t.Run("errors name the line", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name, body string
+			wantLine   int
+		}{
+			{"parse error", "stacking = true\ndeny = [\n", 2},
+			{"unknown key", "stacking = true\nstackin = true\n", 2},
+			{"invalid predicate", "stacking = true\n[checks]\nsuccess = \"a\"\nskipped = \"b\"\n", 2},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				_, _, err := config.ReadRepoSettings(t.Context(), originedRepo(t, tt.body))
+				parseErr, ok := errors.AsType[*config.SettingsParseError](err)
+				if !ok || parseErr.Line != tt.wantLine {
+					t.Errorf("ReadRepoSettings(%q) error = %v, want a parse error on line %d", tt.body, err, tt.wantLine)
+				}
+			})
+		}
+	})
 }

@@ -18,8 +18,8 @@ type RepoSettings struct {
 	DefaultBranch    string `json:"default_branch"`
 }
 
-func ReadRepoSettings(ctx context.Context, fullName string) (RepoSettings, error) {
-	out, err := Run(ctx, "", "api", "repos/"+fullName,
+func (c CLI) ReadRepoSettings(ctx context.Context, fullName string) (RepoSettings, error) {
+	out, err := c.Run(ctx, "", "api", "repos/"+fullName,
 		"--jq", "{allow_merge_commit, allow_rebase_merge, default_branch}")
 	if err != nil {
 		return RepoSettings{}, fmt.Errorf("repo settings for %s: %w", fullName, err)
@@ -31,8 +31,8 @@ func ReadRepoSettings(ctx context.Context, fullName string) (RepoSettings, error
 	return settings, nil
 }
 
-func RepoRemote(ctx context.Context, fullName string) (string, error) {
-	out, err := Run(ctx, "", "api", "repos/"+fullName, "--jq", "{ssh_url}")
+func (c CLI) RepoRemote(ctx context.Context, fullName string) (string, error) {
+	out, err := c.Run(ctx, "", "api", "repos/"+fullName, "--jq", "{ssh_url}")
 	if err != nil {
 		return "", fmt.Errorf("remote of %s: %w", fullName, err)
 	}
@@ -46,8 +46,8 @@ func RepoRemote(ctx context.Context, fullName string) (string, error) {
 	return repo.SSHURL, nil
 }
 
-func PushableRepos(ctx context.Context) ([]RepoSummary, error) {
-	out, err := Run(ctx, "", "api", "--paginate",
+func (c CLI) PushableRepos(ctx context.Context) ([]RepoSummary, error) {
+	out, err := c.Run(ctx, "", "api", "--paginate",
 		"user/repos?affiliation=owner,collaborator,organization_member&per_page=100")
 	if err != nil {
 		return nil, fmt.Errorf("list user repos: %w", err)

@@ -63,10 +63,7 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	if f.split, err = r.gaugeSplit(ctx, now); err != nil {
 		return frame{}, fmt.Errorf("gauge split: %w", err)
 	}
-	p.Repo = normalizeRepoScope(p.Repo, f.repos)
-	f.project = normalizeProjectScope(p.Project, projects)
-	p.Project = f.project.Name
-	p.Feature = normalizeFeatureScope(p.Feature, distinctFeatures(f.tickets))
+	p, f.project = p.Scoped(f.repos, projects, f.tickets)
 	f.params = p
 	f.in.Now = now
 	f.snap = r.derive(f.in)
@@ -80,7 +77,7 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	f.chrome.RefusedRepos = refusedRepos(f.repos)
 	rows := deriveRows(f.tickets, f.in, f.snap, nil)
 	rows = scopeRailRows(rows, RailParams{
-		Project: f.project.Name, Repo: p.Repo, projectRepos: f.project.Repos,
+		Project: f.project.Name, Repo: p.Repo, ProjectRepos: f.project.Repos,
 	})
 	for _, row := range rows {
 		if row.Glyph != plan.GlyphDone {

@@ -1,9 +1,10 @@
 package verdict_test
 
 import (
-	"slices"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -80,7 +81,19 @@ func freshInput() (pushedAt, now time.Time) {
 	return pushedAt, pushedAt.Add(time.Minute)
 }
 
-func TestEvaluateSupportApp(t *testing.T) {
+func TestEvaluate(t *testing.T) {
+	t.Parallel()
+	t.Run("support app", evaluateSupportApp)
+	t.Run("services", evaluateServices)
+	t.Run("grammar", evaluateGrammar)
+	t.Run("bounded wait counts only successful ticks", evaluateBoundedWait)
+	t.Run("names the red leaves", evaluateRedLeaves)
+	t.Run("waiting on producer deploy", evaluateWaitingOnProducerDeploy)
+	t.Run("waiting on producer deploy survives the bounded wait", evaluateWaitingSurvivesBoundedWait)
+	t.Run("base moved", evaluateBaseMoved)
+}
+
+func evaluateSupportApp(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, now := freshInput()
@@ -141,13 +154,13 @@ func TestEvaluateSupportApp(t *testing.T) {
 
 			got := verdict.Evaluate(supportAppPredicate(), tt.mutate(base))
 			if got.Kind != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
+				t.Errorf("Evaluate(%s) = %v (%s), want %v", tt.name, got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
 }
 
-func TestEvaluateServices(t *testing.T) {
+func evaluateServices(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -237,13 +250,13 @@ func TestEvaluateServices(t *testing.T) {
 
 			got := verdict.Evaluate(servicesPredicate(), tt.in)
 			if got.Kind != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
+				t.Errorf("Evaluate(%s) = %v (%s), want %v", tt.name, got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
 }
 
-func TestEvaluateGrammar(t *testing.T) {
+func evaluateGrammar(t *testing.T) {
 	t.Parallel()
 
 	present := map[string]verdict.CheckState{"X": verdict.Success}
@@ -283,55 +296,85 @@ func TestEvaluateGrammar(t *testing.T) {
 
 			got := verdict.Evaluate(tt.p, tt.in)
 			if got.Kind != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
+				t.Errorf("Evaluate(%s) = %v (%s), want %v", tt.name, got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
 }
 
-func TestPredicateIsZero(t *testing.T) {
+func TestKind_String(t *testing.T) {
 	t.Parallel()
 
-	if !(verdict.Predicate{}).IsZero() {
-		t.Error("zero-value Predicate is not reported as zero")
-	}
-	if (verdict.Predicate{Success: "X"}).IsZero() {
-		t.Error("a leaf Predicate is reported as zero")
+	for k := verdict.Checking; k <= verdict.WaitingOnProducerDeploy; k++ {
+		if k.String() == "" {
+			t.Errorf("Kind(%d).String() = %q, want a wire name", int(k), "")
+		}
 	}
 }
 
-func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
+func TestPredicate_IsZero(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		p    verdict.Predicate
+		want bool
+	}{
+		{name: "zero value", p: verdict.Predicate{}, want: true},
+		{name: "a leaf", p: verdict.Predicate{Success: "X"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.p.IsZero(); got != tt.want {
+				t.Errorf("Predicate(%+v).IsZero() = %v, want %v", tt.p, got, tt.want)
+			}
+		})
+	}
+}
+
+func evaluateBoundedWait(t *testing.T) {
 	t.Parallel()
 
 	pushedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	p := verdict.Predicate{Success: "CI"}
-	in := verdict.Input{
-		PushedAt: pushedAt, Checks: map[string]verdict.CheckState{}, HeadOidMatch: true,
+	tests := []struct {
+		name string
+		now  time.Time
+		want verdict.Kind
+	}{
+		{name: "zero successful ticks is checking", now: pushedAt, want: verdict.Checking},
+		{
+			name: "the wait elapsed over successful ticks is needs you",
+			now:  pushedAt.Add(verdict.BoundedWait), want: verdict.NeedsYou,
+		},
 	}
-
-	in.Now = pushedAt
-	if got := verdict.Evaluate(p, in).Kind; got != verdict.Checking {
-		t.Fatalf("verdict = %v after zero successful ticks, want checking", got)
-	}
-
-	in.Now = pushedAt.Add(verdict.BoundedWait)
-	if got := verdict.Evaluate(p, in).Kind; got != verdict.NeedsYou {
-		t.Fatalf("verdict = %v once the wait elapses over successful ticks, want needs_you", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			in := verdict.Input{PushedAt: pushedAt, Now: tt.now, Checks: map[string]verdict.CheckState{}, HeadOidMatch: true}
+			if got := verdict.Evaluate(verdict.Predicate{Success: "CI"}, in).Kind; got != tt.want {
+				t.Errorf("Evaluate(%s) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestEvaluateNamesTheRedLeaves(t *testing.T) {
+func evaluateRedLeaves(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, now := freshInput()
 	waitedPushedAt, waitedNow := waitedInput()
 	both := verdict.Predicate{AllOf: []verdict.Predicate{{Success: "Lint"}, {Success: "Tests"}}}
 
+	type result struct {
+		Kind      verdict.Kind
+		RedLeaves []string
+	}
 	tests := []struct {
 		name string
 		p    verdict.Predicate
 		in   verdict.Input
-		want []string
+		want result
 	}{
 		{
 			name: "a failed check names itself",
@@ -340,7 +383,7 @@ func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 				Checks:       map[string]verdict.CheckState{"CI": verdict.Failure},
 				HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
 			},
-			want: []string{"CI"},
+			want: result{Kind: verdict.CIFailed, RedLeaves: []string{"CI"}},
 		},
 		{
 			name: "every failed required check is named",
@@ -349,7 +392,7 @@ func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 				Checks:       map[string]verdict.CheckState{"Lint": verdict.Failure, "Tests": verdict.Failure},
 				HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
 			},
-			want: []string{"Lint", "Tests"},
+			want: result{Kind: verdict.CIFailed, RedLeaves: []string{"Lint", "Tests"}},
 		},
 		{
 			name: "a wait that elapsed with no check ever resolving red names nothing",
@@ -358,7 +401,7 @@ func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 				Checks: map[string]verdict.CheckState{}, HeadOidMatch: true, ConfigHashOK: true,
 				PushedAt: waitedPushedAt, Now: waitedNow,
 			},
-			want: nil,
+			want: result{Kind: verdict.NeedsYou},
 		},
 	}
 
@@ -367,15 +410,8 @@ func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(tt.p, tt.in)
-			wantKind := verdict.CIFailed
-			if len(tt.want) == 0 {
-				wantKind = verdict.NeedsYou
-			}
-			if got.Kind != wantKind {
-				t.Fatalf("verdict = %v, want %v", got.Kind, wantKind)
-			}
-			if !slices.Equal(got.RedLeaves, tt.want) {
-				t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, tt.want)
+			if diff := cmp.Diff(tt.want, result{got.Kind, got.RedLeaves}); diff != "" {
+				t.Errorf("Evaluate(%s) mismatch (-want +got):\n%s", tt.name, diff)
 			}
 		})
 	}
@@ -390,7 +426,7 @@ func compatPredicate() verdict.Predicate {
 
 const compatCheckName = "GraphQL production compatibility"
 
-func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
+func evaluateWaitingOnProducerDeploy(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, now := freshInput()
@@ -454,13 +490,13 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 
 			got := verdict.Evaluate(compatPredicate(), tt.in)
 			if got.Kind != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
+				t.Errorf("Evaluate(%s) = %v (%s), want %v", tt.name, got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
 }
 
-func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
+func evaluateWaitingSurvivesBoundedWait(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, _ := waitedInput()
@@ -474,12 +510,12 @@ func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
 
 	got := verdict.Evaluate(compatPredicate(), in)
 	if got.Kind != verdict.WaitingOnProducerDeploy {
-		t.Fatalf("verdict = %v (%s) ten bounded waits after the resolved red, want waiting_on_producer_deploy",
-			got.Kind, got.Reason)
+		t.Errorf("Evaluate(ten bounded waits after the compat red) = %v (%s), want %v",
+			got.Kind, got.Reason, verdict.WaitingOnProducerDeploy)
 	}
 }
 
-func TestEvaluateBaseMoved(t *testing.T) {
+func evaluateBaseMoved(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, now := freshInput()
@@ -527,7 +563,7 @@ func TestEvaluateBaseMoved(t *testing.T) {
 
 			got := verdict.Evaluate(supportAppPredicate(), tt.in)
 			if got.Kind != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
+				t.Errorf("Evaluate(%s) = %v (%s), want %v", tt.name, got.Kind, got.Reason, tt.want)
 			}
 		})
 	}

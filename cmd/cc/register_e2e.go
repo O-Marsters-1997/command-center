@@ -8,7 +8,10 @@ import (
 )
 
 func subcmd(args []string) command {
-	return register.Lookup(args)
+	if cmd := register.Lookup(args); cmd != nil {
+		return cmd
+	}
+	return openSubcmd(args)
 }
 
 func appOptions() []app.Option {

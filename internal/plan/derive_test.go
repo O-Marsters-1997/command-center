@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -39,7 +41,16 @@ func entry(t *testing.T, snap plan.Snapshot, url plan.TicketURL) plan.Entry {
 	return e
 }
 
-func TestDeriveConflictedBase(t *testing.T) {
+func TestRules_Derive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("conflicted base", deriveConflictedBase)
+	t.Run("conflicting peer", deriveConflictingPeer)
+	t.Run("a chain does not serialise past the holding peer", deriveChainHeldByOnePeer)
+	t.Run("draft reason", deriveDraftReason)
+}
+
+func deriveConflictedBase(t *testing.T) {
 	t.Parallel()
 
 	root := ticket("1", "cc-1-first")
@@ -81,7 +92,7 @@ func TestDeriveConflictedBase(t *testing.T) {
 			rules := plan.Rules{Stacking: map[string]bool{"r": tt.stacking}}
 			snap := derive(rules, plan.Input{Tickets: tickets, Obs: tt.obs})
 			if got := entry(t, snap, tt.url).ConflictedBase; got != tt.want {
-				t.Errorf("ConflictedBase = %q, want %q", got, tt.want)
+				t.Errorf("Derive().Entry(%s).ConflictedBase = %q, want %q", tt.url, got, tt.want)
 			}
 		})
 	}
@@ -102,7 +113,7 @@ func peerConflicts(pairs ...[2]string) map[plan.BranchRef]map[plan.BranchRef]boo
 	return out
 }
 
-func TestDeriveConflictingPeer(t *testing.T) {
+func deriveConflictingPeer(t *testing.T) {
 	t.Parallel()
 
 	lower := ticket("1", "cc-1-lower")
@@ -170,19 +181,14 @@ func TestDeriveConflictingPeer(t *testing.T) {
 					got[tk.URL] = e.Run.Unwrap().ConflictingPeer
 				}
 			}
-			if len(got) != len(tt.want) {
-				t.Fatalf("held = %v, want %v", got, tt.want)
-			}
-			for url, peer := range tt.want {
-				if got[url] != peer {
-					t.Errorf("held[%s] = %q, want %q", url, got[url], peer)
-				}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Derive() ConflictingPeer by ticket mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestDeriveChainDoesNotSerialisePastTheHoldingPeer(t *testing.T) {
+func deriveChainHeldByOnePeer(t *testing.T) {
 	t.Parallel()
 
 	a, b, c := ticket("1", "cc-1-a"), ticket("2", "cc-2-b"), ticket("3", "cc-3-c")
@@ -201,16 +207,16 @@ func TestDeriveChainDoesNotSerialisePastTheHoldingPeer(t *testing.T) {
 	snap := derive(plan.Rules{}, in)
 
 	if got := entry(t, snap, b.URL).Run.Unwrap().ConflictingPeer; got != a.Branch {
-		t.Errorf("b held by %q, want %q", got, a.Branch)
+		t.Errorf("Derive().Entry(%s).ConflictingPeer = %q, want %q", b.URL, got, a.Branch)
 	}
 	for _, free := range []plan.Ticket{a, c} {
 		if got := entry(t, snap, free.URL).Run.UnwrapOr(plan.RunFact{}).ConflictingPeer; got != "" {
-			t.Errorf("%s held by %q, want unheld", free.Branch, got)
+			t.Errorf("Derive().Entry(%s).ConflictingPeer = %q, want none", free.URL, got)
 		}
 	}
 }
 
-func TestDeriveDraftReason(t *testing.T) {
+func deriveDraftReason(t *testing.T) {
 	t.Parallel()
 
 	consumer := plan.Ticket{
@@ -265,31 +271,40 @@ func TestDeriveDraftReason(t *testing.T) {
 			got := entry(t, derive(rules, in), consumer.URL)
 			wantReady := tt.draft && tt.blocker == plan.Merged && tt.checks == "SUCCESS"
 			if got.ReadyToUndraft != wantReady {
-				t.Errorf("ReadyToUndraft = %v, want %v", got.ReadyToUndraft, wantReady)
+				t.Errorf("Derive().Entry(%s).ReadyToUndraft = %t, want %t", consumer.URL, got.ReadyToUndraft, wantReady)
 			}
 			if !got.OpensAsDraft {
-				t.Error("OpensAsDraft = false, want true for a ticket with a gating blocker")
+				t.Errorf("Derive().Entry(%s).OpensAsDraft = false, want true", consumer.URL)
 			}
 			if got.DraftReason != tt.want {
-				t.Errorf("DraftReason = %q, want %q", got.DraftReason, tt.want)
+				t.Errorf("Derive().Entry(%s).DraftReason = %q, want %q", consumer.URL, got.DraftReason, tt.want)
 			}
 		})
 	}
 }
 
-func TestSnapshotOffersTheVerbsOfTheRowState(t *testing.T) {
+func TestSnapshot_Offers(t *testing.T) {
 	t.Parallel()
 
 	tk := ticket("1", "cc-1")
 	snap := derive(plan.Rules{}, plan.Input{Tickets: []plan.Ticket{tk}})
 
-	if !snap.Offers(tk.URL, plan.VerbLaunch) {
-		t.Errorf("a ready ticket must offer %s", plan.VerbLaunch)
+	tests := []struct {
+		name string
+		url  plan.TicketURL
+		verb plan.Verb
+		want bool
+	}{
+		{name: "a ready ticket offers launch", url: tk.URL, verb: plan.VerbLaunch, want: true},
+		{name: "a ready ticket does not offer kill", url: tk.URL, verb: plan.VerbKill},
+		{name: "an unknown ticket offers nothing", url: "sandbox://CC-404", verb: plan.VerbLaunch},
 	}
-	if snap.Offers(tk.URL, plan.VerbKill) {
-		t.Errorf("a ready ticket must not offer %s", plan.VerbKill)
-	}
-	if snap.Offers("sandbox://CC-404", plan.VerbLaunch) {
-		t.Error("an unknown ticket must offer nothing")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := snap.Offers(tt.url, tt.verb); got != tt.want {
+				t.Errorf("Offers(%s, %s) = %t, want %t", tt.url, tt.verb, got, tt.want)
+			}
+		})
 	}
 }

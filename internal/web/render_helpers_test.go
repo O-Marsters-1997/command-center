@@ -5,6 +5,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -32,3 +33,19 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 }
 
 func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }
+
+func attrs(n htmltest.Node, names ...string) map[string]string {
+	got := make(map[string]string, len(names))
+	for _, name := range names {
+		got[name], _ = n.Attr(name)
+	}
+	return got
+}
+
+func navAttrs(href string) map[string]string {
+	return map[string]string{
+		"hx-get": href, "hx-select": "#main", "hx-target": "#main", "hx-swap": "outerHTML", "hx-push-url": "true",
+	}
+}
+
+var navAttrNames = []string{"hx-get", "hx-select", "hx-target", "hx-swap", "hx-push-url"}

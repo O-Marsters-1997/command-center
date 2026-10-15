@@ -1,14 +1,14 @@
 package plan_test
 
 import (
-	"maps"
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func TestUnlocksInvertsBlockedBy(t *testing.T) {
+func TestUnlocks(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -58,8 +58,8 @@ func TestUnlocksInvertsBlockedBy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := plan.Unlocks(tt.tickets); !maps.EqualFunc(got, tt.want, slices.Equal) {
-				t.Errorf("Unlocks = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, plan.Unlocks(tt.tickets)); diff != "" {
+				t.Errorf("Unlocks(%v) mismatch (-want +got):\n%s", tt.tickets, diff)
 			}
 		})
 	}

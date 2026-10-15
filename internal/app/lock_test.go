@@ -8,13 +8,13 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
-func TestLockRefusesASecondInstance(t *testing.T) {
+func TestLock(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "command-centre.lock")
 	held, err := app.Lock(path)
 	if err != nil {
-		t.Fatalf("first Lock: %v", err)
+		t.Fatalf("Lock(%q) error = %v", path, err)
 	}
 	t.Cleanup(func() {
 		if err := held.Close(); err != nil {
@@ -22,11 +22,7 @@ func TestLockRefusesASecondInstance(t *testing.T) {
 		}
 	})
 
-	_, err = app.Lock(path)
-	if err == nil {
-		t.Fatal("second Lock succeeded; want a refusal")
-	}
-	if !errors.Is(err, app.ErrLocked) {
-		t.Errorf("Lock(%q) = %v, want ErrLocked", path, err)
+	if _, err := app.Lock(path); !errors.Is(err, app.ErrLocked) {
+		t.Errorf("Lock(%q) held = %v, want %v", path, err, app.ErrLocked)
 	}
 }

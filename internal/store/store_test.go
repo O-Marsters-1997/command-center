@@ -1,23 +1,30 @@
 package store_test
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"io/fs"
+	"log/slog"
 	"net/url"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -27,9 +34,9 @@ func openStore(t *testing.T) *storepkg.Store {
 	return cctest.Store(t)
 }
 
-func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
+func openStoreAt(t *testing.T, dsn string, opts ...storepkg.Option) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
+	store, err := storepkg.OpenStore(dsn, append([]storepkg.Option{storepkg.MaxOpenConns(4)}, opts...)...)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -41,16 +48,25 @@ func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	return store
 }
 
-func gooseVersion(t *testing.T, dsn string) int64 {
+func openRawDB(t *testing.T, dsn string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("sql.Open(pgx): %v", err)
 	}
 	db.SetMaxOpenConns(4)
-	defer func() { _ = db.Close() }()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close raw database: %v", err)
+		}
+	})
+	return db
+}
+
+func gooseVersion(t *testing.T, dsn string) int64 {
+	t.Helper()
 	var v int64
-	if err := db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v); err != nil {
+	if err := openRawDB(t, dsn).QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
 	return v
@@ -74,438 +90,422 @@ func latestMigration(t *testing.T) int64 {
 	return latest
 }
 
-func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
+func TestOpenStore(t *testing.T) {
 	t.Parallel()
 
-	dsn := cctest.DSN(t)
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Fatalf("cloned goose version = %d, want %d", got, want)
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("sql.Open(pgx): %v", err)
-	}
-	db.SetMaxOpenConns(4)
-	if _, err := db.ExecContext(t.Context(), "DROP TABLE goose_db_version"); err != nil {
-		t.Fatalf("DROP TABLE goose_db_version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("db.Close: %v", err)
-	}
-	store := openStoreAt(t, dsn)
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-	}); err != nil {
-		t.Fatalf("cloned database has no schema: %v", err)
-	}
-	db, err = sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("sql.Open(pgx): %v", err)
-	}
-	db.SetMaxOpenConns(4)
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close verification connection: %v", err)
+	t.Run("does not migrate a cloned database", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.DSN(t)
+		if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+			t.Fatalf("cloned goose version = %d, want %d", got, want)
+		}
+		raw := openRawDB(t, dsn)
+		if _, err := raw.ExecContext(t.Context(), "DROP TABLE goose_db_version"); err != nil {
+			t.Fatalf("DROP TABLE goose_db_version: %v", err)
+		}
+		store := openStoreAt(t, dsn)
+		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		}); err != nil {
+			t.Fatalf("UpsertTickets on the cloned schema: %v", err)
+		}
+		var exists bool
+		err := raw.QueryRowContext(t.Context(), "SELECT to_regclass('goose_db_version') IS NOT NULL").Scan(&exists)
+		if err != nil {
+			t.Fatalf("QueryRowContext(to_regclass).Scan: %v", err)
+		}
+		if exists {
+			t.Error("OpenStore(cloned) restored goose_db_version, want no migration")
 		}
 	})
-	var exists bool
-	err = db.QueryRowContext(t.Context(), "SELECT to_regclass('goose_db_version') IS NOT NULL").Scan(&exists)
-	if err != nil {
-		t.Fatalf("QueryRowContext(to_regclass).Scan: %v", err)
-	}
-	if exists {
-		t.Error("OpenStore restored goose_db_version on a cloned database, want no migration")
-	}
-}
 
-func TestOpenStoreMigratesAnUnmigratedDatabase(t *testing.T) {
-	t.Parallel()
-	dsn := cctest.UnmigratedDSN(t)
-	openStoreAt(t, dsn)
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d, want %d", got, want)
-	}
-}
+	t.Run("migrates an unmigrated database", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.UnmigratedDSN(t)
+		openStoreAt(t, dsn)
+		if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+			t.Errorf("OpenStore(unmigrated) goose version = %d, want %d", got, want)
+		}
+	})
 
-func TestOpenStoreFailsFastOnAnUnreachableDatabase(t *testing.T) {
-	t.Parallel()
-
-	start := time.Now()
-	_, err := storepkg.OpenStore("postgres://cc@127.0.0.1:1/cc?sslmode=disable")
-	if err == nil {
-		t.Fatal("OpenStore on a dead address succeeded")
-	}
-	if !errors.Is(err, syscall.ECONNREFUSED) {
-		t.Errorf("OpenStore error = %v, want the refused connection from the ping", err)
-	}
-	if elapsed := time.Since(start); elapsed > 6*time.Second {
-		t.Errorf("OpenStore took %v, want under the 5s ping timeout", elapsed)
-	}
-}
-
-func TestConcurrentOpenStoresMigrateOnce(t *testing.T) {
-	t.Parallel()
-
-	dsn := cctest.UnmigratedDSN(t)
-	const opens = 4
-	errs := make(chan error, opens)
-	for range opens {
-		go func() {
-			st, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
-			if err == nil {
-				err = st.Close()
+	t.Run("concurrent opens migrate once", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.UnmigratedDSN(t)
+		const opens = 4
+		errs := make(chan error, opens)
+		for range opens {
+			go func() {
+				st, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
+				if err == nil {
+					err = st.Close()
+				}
+				errs <- err
+			}()
+		}
+		for range opens {
+			if err := <-errs; err != nil {
+				t.Errorf("concurrent OpenStore() error = %v", err)
 			}
-			errs <- err
-		}()
-	}
-	for range opens {
-		if err := <-errs; err != nil {
-			t.Errorf("concurrent OpenStore: %v", err)
 		}
-	}
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d, want %d", got, want)
-	}
-}
-
-func TestOpenStoreAppliesStatementTimeout(t *testing.T) {
-	t.Parallel()
-
-	u, err := url.Parse(cctest.DSN(t))
-	if err != nil {
-		t.Fatalf("url.Parse(test DSN): %v", err)
-	}
-	q := u.Query()
-	q.Set("statement_timeout", "100")
-	u.RawQuery = q.Encode()
-
-	db, err := storepkg.OpenStore(u.String(), storepkg.MaxOpenConns(4))
-	if err != nil {
-		t.Fatalf("OpenStore(timeout DSN): %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-
-	if _, err := db.DB().ExecContext(t.Context(), `SELECT pg_sleep(2)`); err == nil {
-		t.Error("a 2s query under a 100ms statement_timeout succeeded")
-	}
-}
-
-func TestOpenStoreTwiceIsANoOp(t *testing.T) {
-	t.Parallel()
-
-	dsn := cctest.DSN(t)
-	first := openStoreAt(t, dsn)
-	applied := gooseVersion(t, dsn)
-	if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-	}); err != nil {
-		t.Fatalf("first.UpsertTickets: %v", err)
-	}
-	if err := first.Close(); err != nil {
-		t.Fatalf("first.Close: %v", err)
-	}
-
-	second := openStoreAt(t, dsn)
-	if got := gooseVersion(t, dsn); got != applied {
-		t.Errorf("goose version = %d after the second open, want %d unchanged", got, applied)
-	}
-	tickets, err := second.Tickets(t.Context())
-	if err != nil {
-		t.Fatalf("second.Tickets: %v", err)
-	}
-	if len(tickets) != 1 {
-		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
-	}
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d after the second open, want the latest migration %d", got, want)
-	}
-}
-
-func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-
-	first := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-	}
-	if err := store.UpsertTickets(ctx, first); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	edited := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-renamed"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-	}
-	if err := store.UpsertTickets(ctx, edited); err != nil {
-		t.Fatalf("UpsertTickets again: %v", err)
-	}
-
-	got, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatalf("Tickets: %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("tickets = %d, want 2 (upsert on url, not insert)", len(got))
-	}
-	if got[0].Branch != "cc-1-renamed" {
-		t.Errorf("branch = %q, want the edited %q", got[0].Branch, "cc-1-renamed")
-	}
-	if len(got[1].BlockedBy) != 1 || got[1].BlockedBy[0] != "sandbox://CC-1" {
-		t.Errorf("blocked_by = %v, want [sandbox://CC-1]", got[1].BlockedBy)
-	}
-}
-
-func TestUpsertTicketWithNoBlockersRoundTripsAsEmptyArray(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
-
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-	}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("sql.Open(pgx): %v", err)
-	}
-	db.SetMaxOpenConns(4)
-	defer func() { _ = db.Close() }()
-
-	var raw string
-	if err := db.QueryRow(`SELECT blocked_by::text FROM tickets WHERE url = $1`, "sandbox://CC-1").Scan(&raw); err != nil {
-		t.Fatalf("read blocked_by: %v", err)
-	}
-	if raw != "[]" {
-		t.Errorf("blocked_by = %q, want the empty array literal, not JSON null", raw)
-	}
-}
-
-func TestBlockedByRejectsInvalidJSONAtTheDatabase(t *testing.T) {
-	t.Parallel()
-
-	dsn := cctest.DSN(t)
-	openStoreAt(t, dsn)
-
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("sql.Open(pgx): %v", err)
-	}
-	db.SetMaxOpenConns(4)
-	defer func() { _ = db.Close() }()
-
-	_, err = db.Exec(
-		`INSERT INTO tickets (url, repo, branch, blocked_by) VALUES ($1, $2, $3, $4)`,
-		"sandbox://CC-1", "cc-sandbox", "cc-1", "not json",
-	)
-	if err == nil {
-		t.Fatal("insert with invalid JSON in blocked_by succeeded, want a database error")
-	}
-}
-
-func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	at := time.Now()
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent: %v", err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatalf("ApplyLaunchIntents: %v", err)
-	}
-
-	runID, err := store.InsertRunSkeleton(
-		ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton: %v", err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "runs/1.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn: %v", err)
-	}
-	push := storepkg.Push{
-		Ticket: plan.TicketURL(ticket.URL), Tip: "deadbeef", BaseSHA: "cafebabe", BaseBranch: "main", At: at,
-	}
-	if err := store.RecordPush(ctx, push); err != nil {
-		t.Fatalf("RecordPush: %v", err)
-	}
-
-	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
-		t.Fatalf("WithdrawTicket: %v", err)
-	}
-
-	tickets, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatalf("Tickets: %v", err)
-	}
-	if len(tickets) != 0 {
-		t.Errorf("tickets = %+v, want none left after WithdrawTicket", tickets)
-	}
-
-	runIDs, err := store.RunIDsForTicket(ctx, ticket.URL)
-	if err != nil {
-		t.Fatalf("RunIDsForTicket: %v", err)
-	}
-	if len(runIDs) != 1 || runIDs[0] != runID {
-		t.Errorf("run ids = %v, want the run to survive withdrawal", runIDs)
-	}
-
-	tips, err := store.LastPushedTips(ctx)
-	if err != nil {
-		t.Fatalf("LastPushedTips: %v", err)
-	}
-	if tips[plan.TicketURL(ticket.URL)] != "deadbeef" {
-		t.Errorf("last pushed tips = %+v, want the push to survive withdrawal", tips)
-	}
-
-	memberships, err := store.LaunchMemberships(ctx)
-	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
-	}
-	if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
-		t.Errorf("memberships = %+v, want the launch membership to survive withdrawal", memberships)
-	}
-}
-
-func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-	at := time.Now().UTC().Truncate(time.Microsecond)
-	for _, e := range []storepkg.Event{
-		{At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPushed},
-		{At: at, TicketURL: "sandbox://CC-2", Kind: storepkg.EventPushFailed},
-		{
-			At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshed,
-			Detail: "late write, old time",
-		},
-		{At: at, Kind: storepkg.EventTickError},
-	} {
-		if err := store.AppendEvent(ctx, e); err != nil {
-			t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
+		if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+			t.Errorf("goose version = %d, want %d", got, want)
 		}
-	}
+	})
 
-	all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0, 100)
-	if err != nil {
-		t.Fatalf("TicketEventsAfter: %v", err)
-	}
-	if len(all) != 2 || all[0].Kind != storepkg.EventPushed || all[1].Kind != storepkg.EventRefreshed {
-		t.Fatalf("TicketEventsAfter(CC-1, 0) = %+v, want first then second", all)
-	}
-	if all[1].Detail != "late write, old time" || !all[1].At.Equal(at.Add(-time.Hour)) {
-		t.Errorf("second = %+v, want its detail and time round-tripped", all[1])
-	}
-
-	newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID, 100)
-	if err != nil {
-		t.Fatalf("TicketEventsAfter: %v", err)
-	}
-	if len(newer) != 1 || newer[0].Kind != storepkg.EventRefreshed {
-		t.Errorf("TicketEventsAfter(CC-1, %d) = %+v, want only second, whatever its time", all[0].ID, newer)
-	}
-}
-
-func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	const ticketURL = "sandbox://CC-1"
-	tickets := []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-	at := time.Now().UTC().Truncate(time.Microsecond)
-	const total, pageSize = 7, 3
-	var want []storepkg.EventKind
-	kinds := []storepkg.EventKind{
-		storepkg.EventPushRefused, storepkg.EventPushFailed, storepkg.EventPushed,
-		storepkg.EventRefreshed, storepkg.EventRestacked, storepkg.EventTickError, storepkg.EventPRMerged,
-	}
-	for i := range total {
-		kind := kinds[i]
-		want = append(want, kind)
-		if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticketURL, Kind: kind}); err != nil {
-			t.Fatalf("AppendEvent(%s): %v", kind, err)
-		}
-	}
-
-	var got []storepkg.EventKind
-	var afterID int64
-	for pages := 0; ; pages++ {
-		page, err := store.TicketEventsAfter(ctx, ticketURL, afterID, pageSize)
+	t.Run("opening twice is a no-op", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.DSN(t)
+		first, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
 		if err != nil {
-			t.Fatalf("TicketEventsAfter(%s, %d, %d): %v", ticketURL, afterID, pageSize, err)
+			t.Fatalf("OpenStore(first): %v", err)
 		}
-		if len(page) > pageSize {
-			t.Fatalf("page %d has %d events, want at most %d", pages, len(page), pageSize)
+		applied := gooseVersion(t, dsn)
+		if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		}); err != nil {
+			t.Fatalf("first.UpsertTickets: %v", err)
 		}
-		for _, e := range page {
-			got = append(got, e.Kind)
-			afterID = e.ID
+		if err := first.Close(); err != nil {
+			t.Fatalf("first.Close: %v", err)
 		}
-		if len(page) < pageSize {
-			break
+
+		second := openStoreAt(t, dsn)
+		if got := gooseVersion(t, dsn); got != applied {
+			t.Errorf("goose version after the second open = %d, want %d unchanged", got, applied)
 		}
+		if got := readTickets(t, second); len(got) != 1 {
+			t.Errorf("Tickets() after the second open = %+v, want the first open's row", got)
+		}
+	})
+
+	t.Run("applies the DSN's statement timeout", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.DSN(t)
+		u, err := url.Parse(dsn)
+		if err != nil {
+			t.Fatalf("url.Parse(test DSN): %v", err)
+		}
+		q := u.Query()
+		q.Set("statement_timeout", "100")
+		u.RawQuery = q.Encode()
+		store := openStoreAt(t, u.String())
+
+		lock, err := openRawDB(t, dsn).BeginTx(context.WithoutCancel(t.Context()), nil)
+		if err != nil {
+			t.Fatalf("BeginTx: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := lock.Rollback(); err != nil {
+				t.Errorf("roll back the lock: %v", err)
+			}
+		})
+		if _, err := lock.ExecContext(t.Context(), "LOCK TABLE tickets IN ACCESS EXCLUSIVE MODE"); err != nil {
+			t.Fatalf("LOCK TABLE tickets: %v", err)
+		}
+
+		_, err = store.Tickets(t.Context())
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); !ok || pgErr.Code != "57014" {
+			t.Errorf("Tickets() behind a held lock error = %v, want query_canceled (57014)", err)
+		}
+	})
+
+	t.Run("an unreachable database is refused", func(t *testing.T) {
+		t.Parallel()
+		_, err := storepkg.OpenStore("postgres://cc@127.0.0.1:1/cc?sslmode=disable")
+		if !errors.Is(err, syscall.ECONNREFUSED) {
+			t.Errorf("OpenStore(dead address) error = %v, want ECONNREFUSED", err)
+		}
+	})
+}
+
+func TestStore_UpsertTickets(t *testing.T) {
+	t.Parallel()
+
+	t.Run("is idempotent on the ticket url", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		first := []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+			{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+		}
+		if err := store.UpsertTickets(ctx, first); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		edited := []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-renamed", BlockedBy: []string{}},
+			{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+		}
+		if err := store.UpsertTickets(ctx, edited); err != nil {
+			t.Fatalf("UpsertTickets again: %v", err)
+		}
+		if diff := cmp.Diff(edited, readTickets(t, store)); diff != "" {
+			t.Errorf("Tickets() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("no blockers is stored as an empty array", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.DSN(t)
+		store := openStoreAt(t, dsn)
+		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		}); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		var raw string
+		err := openRawDB(t, dsn).QueryRow(`SELECT blocked_by::text FROM tickets WHERE url = $1`, "sandbox://CC-1").Scan(&raw)
+		if err != nil {
+			t.Fatalf("read blocked_by: %v", err)
+		}
+		if raw != "[]" {
+			t.Errorf("tickets.blocked_by = %q, want the empty array literal, not JSON null", raw)
+		}
+	})
+}
+
+func TestStore_WithdrawTicket(t *testing.T) {
+	t.Parallel()
+
+	t.Run("hides the ticket but keeps its history", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+		if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		at := testNow
+		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+			Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
+		}); err != nil {
+			t.Fatalf("QueueLaunchIntent: %v", err)
+		}
+		if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+			t.Fatalf("ApplyLaunchIntents: %v", err)
+		}
+		runID, err := store.InsertRunSkeleton(
+			ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
+		if err != nil {
+			t.Fatalf("InsertRunSkeleton: %v", err)
+		}
+		if err := store.RecordSpawn(ctx, storepkg.Spawn{
+			RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "runs/1.jsonl",
+		}); err != nil {
+			t.Fatalf("RecordSpawn: %v", err)
+		}
+		if err := store.RecordPush(ctx, storepkg.Push{
+			Ticket: plan.TicketURL(ticket.URL), Tip: "deadbeef", BaseSHA: "cafebabe", BaseBranch: "main", At: at,
+		}); err != nil {
+			t.Fatalf("RecordPush: %v", err)
+		}
+
+		if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
+			t.Fatalf("WithdrawTicket: %v", err)
+		}
+
+		if got := readTickets(t, store); len(got) != 0 {
+			t.Errorf("Tickets() after WithdrawTicket = %+v, want none", got)
+		}
+		if diff := cmp.Diff([]int64{runID}, runIDsFor(t, store, ticket.URL)); diff != "" {
+			t.Errorf("RunIDsForTicket() after WithdrawTicket mismatch (-want +got):\n%s", diff)
+		}
+		tips, err := store.LastPushedTips(ctx)
+		if err != nil {
+			t.Fatalf("LastPushedTips: %v", err)
+		}
+		if got := tips[plan.TicketURL(ticket.URL)]; got != "deadbeef" {
+			t.Errorf("LastPushedTips()[CC-1] after WithdrawTicket = %q, want deadbeef", got)
+		}
+		memberships, err := store.LaunchMemberships(ctx)
+		if err != nil {
+			t.Fatalf("LaunchMemberships: %v", err)
+		}
+		if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
+			t.Errorf("LaunchMemberships() after WithdrawTicket = %+v, want CC-1's membership kept", memberships)
+		}
+	})
+
+	t.Run("leaves events alone", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+		if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		for _, e := range []storepkg.Event{
+			{At: testNow, TicketURL: ticket.URL, Kind: storepkg.EventPushed},
+			{At: testNow, Kind: storepkg.EventTickError},
+		} {
+			if err := store.AppendEvent(ctx, e); err != nil {
+				t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
+			}
+		}
+		if err := store.WithdrawTicket(ctx, ticket.URL, testNow.Add(time.Hour), false); err != nil {
+			t.Fatalf("WithdrawTicket: %v", err)
+		}
+		events, err := store.Events(ctx)
+		if err != nil {
+			t.Fatalf("Events: %v", err)
+		}
+		if len(events) != 2 {
+			t.Errorf("Events() after WithdrawTicket = %+v, want both events kept", events)
+		}
+	})
+}
+
+func TestInTx(t *testing.T) {
+	t.Parallel()
+	s := openStore(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	boom := errors.New("boom")
+
+	err := s.CreateProjectThenCancel(ctx, cancel, boom)
+	if !errors.Is(err, boom) || errors.Is(err, context.Canceled) {
+		t.Errorf("inTx(cancelled mid fn) error = %v, want boom alone", err)
 	}
-	if !slices.Equal(want, got) {
-		t.Errorf("paged kinds = %v, want %v", got, want)
+	if got := readProjects(t, s); len(got) != 0 {
+		t.Errorf("Projects() after a cancelled transaction = %+v, want the insert rolled back", got)
 	}
 }
 
-func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
+func TestStore_HasEvent(t *testing.T) {
+	t.Parallel()
+	dsn := cctest.DSN(t)
+	st := openStoreAt(t, dsn)
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	storetest.Tickets(t, st, ticket)
+	at := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
+	obs := plan.NewObservation(at)
+	obs.PRs[ticket.Ref()] = plan.PR{Number: 41, State: plan.Merged, MergedAt: at}
+	lp := loop.New(loop.Deps{
+		Logger: slog.New(slog.DiscardHandler), Store: st, Clock: loop.RealClock{}, Runner: runner.ProcessRunner{},
+		Observe: func(context.Context) (plan.Observation, error) { return obs, nil },
+		Config:  config.Config{}, Workspace: config.Workspace{},
+	})
+	merges := func(t *testing.T) int {
+		t.Helper()
+		n := 0
+		for _, event := range readEvents(t, st) {
+			if event.Kind == storepkg.EventPRMerged && event.TicketURL == ticket.URL {
+				n++
+			}
+		}
+		return n
+	}
+
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce: %v", err)
+	}
+	if got := merges(t); got != 1 {
+		t.Fatalf("pr_merged events after the first tick = %d, want 1", got)
+	}
+	if _, err := openRawDB(t, dsn).ExecContext(t.Context(), "DELETE FROM meta"); err != nil {
+		t.Fatalf("DELETE FROM meta: %v", err)
+	}
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce after clearing meta: %v", err)
+	}
+	if got := merges(t); got != 1 {
+		t.Errorf("pr_merged events after clearing meta = %d, want the merge fact to survive with 1", got)
+	}
+}
+
+func TestStore_TicketEventsAfter(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
+	t.Run("returns only this ticket's newer events", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		if err := store.UpsertTickets(ctx, []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+			{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
+		}); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		at := testNow
+		for _, e := range []storepkg.Event{
+			{At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPushed},
+			{At: at, TicketURL: "sandbox://CC-2", Kind: storepkg.EventPushFailed},
+			{At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshed, Detail: "late write, old time"},
+			{At: at, Kind: storepkg.EventTickError},
+		} {
+			if err := store.AppendEvent(ctx, e); err != nil {
+				t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
+			}
+		}
 
-	at := time.Now()
-	ticketEvent := storepkg.Event{At: at, TicketURL: ticket.URL, Kind: storepkg.EventPushed}
-	if err := store.AppendEvent(ctx, ticketEvent); err != nil {
-		t.Fatalf("AppendEvent(ticket): %v", err)
-	}
-	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: storepkg.EventTickError}); err != nil {
-		t.Fatalf("AppendEvent(tick error): %v", err)
-	}
+		all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0, 100)
+		if err != nil {
+			t.Fatalf("TicketEventsAfter: %v", err)
+		}
+		if len(all) != 2 {
+			t.Fatalf("TicketEventsAfter(CC-1, 0) = %+v, want two events", all)
+		}
+		want := []storepkg.Event{
+			{ID: all[0].ID, At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPushed},
+			{
+				ID: all[1].ID, At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1",
+				Kind: storepkg.EventRefreshed, Detail: "late write, old time",
+			},
+		}
+		if diff := cmp.Diff(want, all); diff != "" {
+			t.Errorf("TicketEventsAfter(CC-1, 0) mismatch (-want +got):\n%s", diff)
+		}
 
-	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
-		t.Fatalf("WithdrawTicket: %v", err)
-	}
+		newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID, 100)
+		if err != nil {
+			t.Fatalf("TicketEventsAfter: %v", err)
+		}
+		if diff := cmp.Diff(want[1:], newer); diff != "" {
+			t.Errorf("TicketEventsAfter(CC-1, %d) mismatch (-want +got):\n%s", all[0].ID, diff)
+		}
+	})
 
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	if len(events) != 2 {
-		t.Errorf("events = %+v, want both the ticket-scoped and the fleet event left", events)
-	}
+	t.Run("pages without gaps or repeats", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		const ticketURL = "sandbox://CC-1"
+		tickets := []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}
+		if err := store.UpsertTickets(ctx, tickets); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		const pageSize = 3
+		want := []storepkg.EventKind{
+			storepkg.EventPushRefused, storepkg.EventPushFailed, storepkg.EventPushed,
+			storepkg.EventRefreshed, storepkg.EventRestacked, storepkg.EventTickError, storepkg.EventPRMerged,
+		}
+		for _, kind := range want {
+			if err := store.AppendEvent(ctx, storepkg.Event{At: testNow, TicketURL: ticketURL, Kind: kind}); err != nil {
+				t.Fatalf("AppendEvent(%s): %v", kind, err)
+			}
+		}
+
+		var got []storepkg.EventKind
+		var afterID int64
+		for {
+			page, err := store.TicketEventsAfter(ctx, ticketURL, afterID, pageSize)
+			if err != nil {
+				t.Fatalf("TicketEventsAfter(%s, %d, %d): %v", ticketURL, afterID, pageSize, err)
+			}
+			if len(page) > pageSize {
+				t.Fatalf("TicketEventsAfter(%s, %d, %d) = %d events, want at most %d",
+					ticketURL, afterID, pageSize, len(page), pageSize)
+			}
+			for _, e := range page {
+				got = append(got, e.Kind)
+				afterID = e.ID
+			}
+			if len(page) < pageSize {
+				break
+			}
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("paged TicketEventsAfter kinds mismatch (-want +got):\n%s", diff)
+		}
+	})
 }

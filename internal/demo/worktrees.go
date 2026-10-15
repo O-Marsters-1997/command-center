@@ -37,4 +37,4 @@ func (Worktrees) Remove(ctx context.Context, repoPath, branch string, _ tp.Remov
 	return nil
 }
 
-var _ ccgit.Worktrees = Worktrees{}
+var _ tp.Worktrees = Worktrees{}

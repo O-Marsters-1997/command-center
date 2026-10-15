@@ -104,7 +104,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if err := applySpend(rows, r.spend); err != nil {
 		return Board{}, fmt.Errorf("apply spend: %w", err)
 	}
-	applyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
+	ApplyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
 		err = EachTicketEvent(ctx, r.store, params.Sel, 0, func(e store.Event) error {
@@ -118,9 +118,9 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if err := applyViewState(rows, params, records, r.renderLine); err != nil {
 		return Board{}, fmt.Errorf("apply view state: %w", err)
 	}
-	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
+	groups := FilterGroupsByFeature(FilterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	if f.project.Name != "" {
-		groups = filterGroupsByProject(groups, f.project.Repos)
+		groups = FilterGroupsByProject(groups, f.project.Repos)
 	}
 	chrome := f.chrome
 	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
@@ -148,7 +148,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
 		Tabs:             filterTabs(sections, params),
-		BoardPath:        params.boardPath(),
+		BoardPath:        params.BoardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
 	}, nil
 }
@@ -207,7 +207,7 @@ func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrom
 			{Label: "All tickets", Path: params.withScope(ticketsPath), Key: keyTickets, Icon: "inbox", Badge: "0"},
 			{
 				Label: "Insights", Key: keyInsights, Icon: "chart",
-				Path: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
+				Path: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.Query()),
 			},
 			{Label: "Repos", Path: params.withScope("/repos"), Key: keyRepos, Icon: "repo"},
 		},

@@ -12,72 +12,76 @@ import (
 
 func TestRepoNameForDir(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
+		dir      func(t *testing.T, root, repoPath string) string
 		remote   func(root string) string
 		wantName string
 		wantOK   bool
 	}{
-		{name: "root", remote: localRemote, wantName: "r", wantOK: true},
 		{
-			name: "no matching repo", remote: func(string) string { return "git@github.com:o/other.git" },
+			name:   "the checkout root",
+			dir:    func(_ *testing.T, _, repoPath string) string { return repoPath },
+			remote: localRemote, wantName: "r", wantOK: true,
+		},
+		{
+			name: "a subdirectory",
+			dir: func(t *testing.T, _, repoPath string) string {
+				t.Helper()
+				dir := filepath.Join(repoPath, "sub")
+				if err := os.Mkdir(dir, 0o700); err != nil {
+					t.Fatalf("Mkdir(%q): %v", dir, err)
+				}
+				return dir
+			},
+			remote: localRemote, wantName: "r", wantOK: true,
+		},
+		{
+			name: "a worktree",
+			dir: func(t *testing.T, _, repoPath string) string {
+				t.Helper()
+				dir := filepath.Join(filepath.Dir(repoPath), "worktree")
+				gittest.Run(t, repoPath, "worktree", "add", dir)
+				return dir
+			},
+			remote: localRemote, wantName: "r", wantOK: true,
+		},
+		{
+			name: "an alternate spelling of the remote",
+			dir: func(t *testing.T, _, repoPath string) string {
+				t.Helper()
+				gittest.Run(t, repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
+				return repoPath
+			},
+			remote: func(string) string { return "https://github.com/o/r" }, wantName: "r", wantOK: true,
+		},
+		{
+			name:   "no matching repo",
+			dir:    func(_ *testing.T, _, repoPath string) string { return repoPath },
+			remote: func(string) string { return "git@github.com:o/other.git" },
+		},
+		{
+			name: "a directory with no origin",
+			dir: func(t *testing.T, _, _ string) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			remote: localRemote,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			root, repoPath := repoWithOrigin(t)
+			dir := tt.dir(t, root, repoPath)
 			repos := []store.Repo{{Name: "r", Remote: tt.remote(root)}}
-			name, ok := loop.RepoNameForDir(t.Context(), repoPath, repos)
-			if ok != tt.wantOK || name != tt.wantName {
-				t.Errorf("RepoNameForDir(%q) = %q, %v, want %q, %v", repoPath, name, ok, tt.wantName, tt.wantOK)
+
+			name, ok := loop.RepoNameForDir(t.Context(), dir, repos)
+			if name != tt.wantName || ok != tt.wantOK {
+				t.Errorf("RepoNameForDir(%q) = %q, %v, want %q, %v", dir, name, ok, tt.wantName, tt.wantOK)
 			}
 		})
-	}
-}
-
-func TestRepoNameForSubdirectory(t *testing.T) {
-	t.Parallel()
-	root, repoPath := repoWithOrigin(t)
-	dir := filepath.Join(repoPath, "sub")
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatalf("Mkdir(%q): %v", dir, err)
-	}
-	name, ok := loop.RepoNameForDir(t.Context(), dir, []store.Repo{{Name: "r", Remote: localRemote(root)}})
-	if name != "r" || !ok {
-		t.Errorf("RepoNameForDir(%q) = %q, %v, want r, true", dir, name, ok)
-	}
-}
-
-func TestRepoNameForWorktree(t *testing.T) {
-	t.Parallel()
-	root, repoPath := repoWithOrigin(t)
-	dir := filepath.Join(filepath.Dir(repoPath), "worktree")
-	gittest.Run(t, repoPath, "worktree", "add", dir)
-	name, ok := loop.RepoNameForDir(t.Context(), dir, []store.Repo{{Name: "r", Remote: localRemote(root)}})
-	if name != "r" || !ok {
-		t.Errorf("RepoNameForDir(%q) = %q, %v, want r, true", dir, name, ok)
-	}
-}
-
-func TestRepoNameForAlternateRemote(t *testing.T) {
-	t.Parallel()
-	_, repoPath := repoWithOrigin(t)
-	gittest.Run(t, repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
-	repos := []store.Repo{{Name: "r", Remote: "https://github.com/o/r"}}
-	name, ok := loop.RepoNameForDir(t.Context(), repoPath, repos)
-	if name != "r" || !ok {
-		t.Errorf("RepoNameForDir(%q) = %q, %v, want r, true", repoPath, name, ok)
-	}
-}
-
-func TestRepoNameForDirectoryWithoutOrigin(t *testing.T) {
-	t.Parallel()
-	root, _ := repoWithOrigin(t)
-	dir := t.TempDir()
-	name, ok := loop.RepoNameForDir(t.Context(), dir, []store.Repo{{Name: "r", Remote: localRemote(root)}})
-	if name != "" || ok {
-		t.Errorf("RepoNameForDir(%q) = %q, %v, want empty name, false", dir, name, ok)
 	}
 }
 

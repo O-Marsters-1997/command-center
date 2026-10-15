@@ -1,8 +1,10 @@
 package plan_test
 
 import (
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -117,8 +119,9 @@ func TestLaunchPlan(t *testing.T) {
 			t.Parallel()
 
 			got := plan.LaunchPlan(tt.candidates, tt.currentlyRunning, tt.maxAgents, tt.spendPaused)
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("LaunchPlan() = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("LaunchPlan(%d running, max %d, paused %t) mismatch (-want +got):\n%s",
+					tt.currentlyRunning, tt.maxAgents, tt.spendPaused, diff)
 			}
 		})
 	}

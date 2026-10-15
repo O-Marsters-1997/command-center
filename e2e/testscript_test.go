@@ -101,26 +101,6 @@ func TestScripts(t *testing.T) {
 	})
 }
 
-func TestScriptsDoNotSleep(t *testing.T) {
-	t.Parallel()
-	sleepCommand := regexp.MustCompile(`\bexec\s+sleep(?:\s|$)`)
-	files, err := filepath.Glob("tests/*.txtar")
-	if err != nil {
-		t.Fatalf("Glob(tests/*.txtar): %v", err)
-	}
-	for _, path := range files {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("ReadFile(%s): %v", path, err)
-		}
-		for lineNo, line := range strings.Split(string(body), "\n") {
-			if sleepCommand.MatchString(strings.TrimSpace(line)) {
-				t.Errorf("%s:%d: exec sleep is forbidden; use cc-wait", path, lineNo+1)
-			}
-		}
-	}
-}
-
 func ccWait(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) < 1 || len(args) > 3 {
 		ts.Fatalf("usage: cc-wait <path> [<regexp> [<n>]] (negation unsupported)")

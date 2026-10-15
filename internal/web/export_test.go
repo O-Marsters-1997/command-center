@@ -1,11 +1,9 @@
 package web
 
 import (
-	"html/template"
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
@@ -44,10 +42,4 @@ func renderStates(name string, states []plan.State) (string, error) {
 		return "", err
 	}
 	return out.String(), nil
-}
-
-func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
-	line := view.LineOf(e)
-	line.Anchor = anchor
-	return renderLogLine(line)
 }

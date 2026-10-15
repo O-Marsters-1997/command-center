@@ -30,77 +30,87 @@ func stackStore(t *testing.T) *storepkg.Store {
 	return st
 }
 
-func TestSessionStackPanelListsBlockersAndUnlocks(t *testing.T) {
-	t.Parallel()
-	page := htmltest.Parse(t, renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2"))
-	panel := page.One(t, ".stack-panel")
-	lists := panel.Find("ul.stack-list")
-	if len(lists) != 3 {
-		t.Fatalf("stack lists = %d, want 3", len(lists))
-	}
-	lists[1].One(t, `a[href="/s/acme/web/1"]`)
-	for _, ref := range []string{"/s/acme/web/3", "/s/acme/web/4"} {
-		lists[2].One(t, `a[href="`+ref+`"]`)
-	}
-	panel.One(t, `input[name="blocked_by"][value="https://github.com/acme/web/issues/1"]`)
+func stackPanel(t *testing.T, server http.Handler, path string) htmltest.Node {
+	t.Helper()
+	rec := do(t, server, http.MethodGet, path, req{})
+	return htmltest.Parse(t, rec.Body).One(t, ".stack-panel")
 }
 
-func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.T) {
+func testSessionStackPanel(t *testing.T) {
 	t.Parallel()
-	st := stackStore(t)
-	server := newServer(st, testNow)
-	form := url.Values{
-		"ticket":     {"https://github.com/acme/web/issues/3"},
-		"branch":     {"cc-3"},
-		"return":     {"/s/acme/web/3"},
-		"blocked_by": {"https://github.com/acme/web/issues/1", ""},
-	}
-	rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
-	if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/3" {
-		t.Fatalf("status = %d, location = %q", rec.Code, rec.Location)
-	}
-	if err := st.EditTicket(t.Context(), "https://github.com/acme/web/issues/3", "cc-3",
-		[]string{"https://github.com/acme/web/issues/1"}); err != nil {
-		t.Fatalf("EditTicket(%q): %v", "https://github.com/acme/web/issues/3", err)
-	}
-	page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/3"))
-	panel := page.One(t, ".stack-panel")
-	lists := panel.Find("ul.stack-list")
-	if len(lists) != 2 {
-		t.Fatalf("stack lists = %d, want 2", len(lists))
-	}
-	lists[1].One(t, `a[href="/s/acme/web/1"]`)
-	if old := lists[1].Find(`a[href="/s/acme/web/2"]`); len(old) != 0 {
-		t.Errorf("panel still has the former blocker: %s", old[0].HTML())
-	}
-}
 
-func TestSessionPeekPanelShowsTheFeatureAndTheTicketsProps(t *testing.T) {
-	t.Parallel()
-	page := htmltest.Parse(t, renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2"))
-	panel := page.One(t, ".stack-panel")
-	for _, href := range []string{"/f/checkout/graph", "/f/checkout"} {
-		panel.One(t, `a[href="`+href+`"]`)
-	}
-	panel.One(t, `ul.stack-list li[aria-current="page"] a[href="/s/acme/web/2"]`)
-	if links := panel.Find(`a[href="/s/acme/web/4"]`); len(links) == 0 {
-		t.Error("stack has no #4 link")
-	}
-	for _, text := range []string{"checkout", "0/4 merged", "cc-2"} {
-		if !strings.Contains(panel.Text(), text) {
-			t.Errorf("peek panel has no property %q", text)
+	t.Run("lists blockers and unlocks", func(t *testing.T) {
+		t.Parallel()
+		panel := stackPanel(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
+
+		lists := panel.Find("ul.stack-list")
+		if len(lists) != 3 {
+			t.Fatalf("GET /s/acme/web/2 stack lists = %d, want 3", len(lists))
 		}
-	}
+		lists[1].One(t, `a[href="/s/acme/web/1"]`)
+		for _, ref := range []string{"/s/acme/web/3", "/s/acme/web/4"} {
+			lists[2].One(t, `a[href="`+ref+`"]`)
+		}
+		panel.One(t, `input[name="blocked_by"][value="https://github.com/acme/web/issues/1"]`)
+	})
+
+	t.Run("the peek shows the feature and the ticket's props", func(t *testing.T) {
+		t.Parallel()
+		panel := stackPanel(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
+
+		for _, href := range []string{"/f/checkout/graph", "/f/checkout", "/s/acme/web/4"} {
+			if len(panel.Find(`a[href="`+href+`"]`)) == 0 {
+				t.Errorf("GET /s/acme/web/2 peek has no link to %s", href)
+			}
+		}
+		panel.One(t, `ul.stack-list li[aria-current="page"] a[href="/s/acme/web/2"]`)
+		for _, text := range []string{"checkout", "0/4 merged", "cc-2"} {
+			if !strings.Contains(panel.Text(), text) {
+				t.Errorf("GET /s/acme/web/2 peek = %q, want it to show %q", panel.Text(), text)
+			}
+		}
+	})
 }
 
-func TestTicketEditIgnoresAnOffSiteReturn(t *testing.T) {
+func testPostTicketFromSession(t *testing.T) {
 	t.Parallel()
-	server := newServer(stackStore(t), testNow)
-	form := url.Values{
-		"ticket": {"https://github.com/acme/web/issues/3"}, "branch": {"cc-3"}, "return": {"//evil.example"},
-	}
-	rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
-	if got := rec.Location; got != "/" {
-		t.Errorf("location = %q, want /", got)
-	}
+
+	t.Run("the stack form returns to the session, which renders the applied edit", func(t *testing.T) {
+		t.Parallel()
+		st := stackStore(t)
+		server := newServer(st, testNow)
+		form := url.Values{
+			"ticket":     {"https://github.com/acme/web/issues/3"},
+			"branch":     {"cc-3"},
+			"return":     {"/s/acme/web/3"},
+			"blocked_by": {"https://github.com/acme/web/issues/1", ""},
+		}
+
+		rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+		if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/3" {
+			t.Fatalf("POST /ticket = %d %q, want 303 /s/acme/web/3", rec.Code, rec.Location)
+		}
+		if err := st.EditTicket(t.Context(), "https://github.com/acme/web/issues/3", "cc-3",
+			[]string{"https://github.com/acme/web/issues/1"}); err != nil {
+			t.Fatalf("EditTicket(#3): %v", err)
+		}
+		lists := stackPanel(t, server, "/s/acme/web/3").Find("ul.stack-list")
+		if len(lists) != 2 {
+			t.Fatalf("GET /s/acme/web/3 stack lists = %d, want 2", len(lists))
+		}
+		lists[1].One(t, `a[href="/s/acme/web/1"]`)
+		if old := lists[1].Find(`a[href="/s/acme/web/2"]`); len(old) != 0 {
+			t.Errorf("GET /s/acme/web/3 still lists the former blocker #2")
+		}
+	})
+
+	t.Run("an off-site return goes home", func(t *testing.T) {
+		t.Parallel()
+		form := url.Values{
+			"ticket": {"https://github.com/acme/web/issues/3"}, "branch": {"cc-3"}, "return": {"//evil.example"},
+		}
+		if rec := do(t, newServer(stackStore(t), testNow), http.MethodPost, "/ticket", req{Form: form}); rec.Location != "/" {
+			t.Errorf("POST /ticket return=//evil.example Location = %q, want /", rec.Location)
+		}
+	})
 }

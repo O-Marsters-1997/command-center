@@ -44,6 +44,7 @@ type Observation struct {
 	SettingsErrors    map[string]string                `json:"settings_errors"`
 	SettingsSources   map[string]string                `json:"settings_sources"`
 	RepoErrors        map[string]string                `json:"repo_errors"`
+	Questions         map[RunID]string                 `json:"-"`
 }
 
 func NewObservation(at time.Time) Observation {
@@ -54,7 +55,7 @@ func NewObservation(at time.Time) Observation {
 		Titles: map[TicketURL]string{}, MidMerge: map[BranchRef]bool{},
 		ConflictsWithBase: map[BranchRef]bool{}, ConflictsWithPeer: map[BranchRef]map[BranchRef]bool{},
 		Settings: map[string]RepoSettings{}, SettingsErrors: map[string]string{},
-		SettingsSources: map[string]string{}, RepoErrors: map[string]string{},
+		SettingsSources: map[string]string{}, RepoErrors: map[string]string{}, Questions: map[RunID]string{},
 	}
 }
 

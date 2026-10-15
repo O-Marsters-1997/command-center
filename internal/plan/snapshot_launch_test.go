@@ -1,8 +1,10 @@
 package plan_test
 
 import (
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -12,7 +14,7 @@ func authorised(t plan.Ticket) plan.LaunchMembership {
 	return plan.LaunchMembership{LaunchID: 1, Members: 1, PromptHash: plan.Hash(plan.Compose(t))}
 }
 
-func TestSnapshotLaunch(t *testing.T) {
+func TestSnapshot_LaunchAfter(t *testing.T) {
 	t.Parallel()
 
 	first := ticket("1", "cc-1-first")
@@ -95,15 +97,30 @@ func TestSnapshotLaunch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := derive(tt.rules, tt.in).LaunchAfter(0)
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("LaunchAfter(0) = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, derive(tt.rules, tt.in).LaunchAfter(0), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+
+	t.Run("counts agents started this tick", func(t *testing.T) {
+		t.Parallel()
+		in := plan.Input{
+			Tickets:     []plan.Ticket{first, second},
+			Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first), second.URL: authorised(second)},
+		}
+		snap := plan.Rules{MaxAgents: 1}.Derive(in)
+
+		if diff := cmp.Diff([]plan.TicketURL{first.URL}, snap.LaunchAfter(0)); diff != "" {
+			t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
+		}
+		if got := snap.LaunchAfter(1); len(got) != 0 {
+			t.Errorf("LaunchAfter(1) = %v, want none", got)
+		}
+	})
 }
 
-func TestEntryCarriesWhatTheLoopActsOn(t *testing.T) {
+func TestSnapshot_Entry(t *testing.T) {
 	t.Parallel()
 
 	root := ticket("1", "cc-1-first")
@@ -117,28 +134,16 @@ func TestEntryCarriesWhatTheLoopActsOn(t *testing.T) {
 
 	got := entry(t, snap, root.URL)
 	if got.PromptHash != member.PromptHash {
-		t.Errorf("PromptHash = %q, want %q", got.PromptHash, member.PromptHash)
+		t.Errorf("Entry(%s).PromptHash = %q, want %q", root.URL, got.PromptHash, member.PromptHash)
 	}
 	if got.LastPush != option.Some(row) {
-		t.Errorf("LastPush = %v, want %v", got.LastPush, row)
+		t.Errorf("Entry(%s).LastPush = %v, want %v", root.URL, got.LastPush, row)
 	}
-}
 
-func TestSnapshotLaunchAfterCountsAgentsStartedThisTick(t *testing.T) {
-	t.Parallel()
-
-	first := ticket("1", "cc-1-first")
-	second := ticket("2", "cc-2-second")
-	in := plan.Input{
-		Tickets:     []plan.Ticket{first, second},
-		Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first), second.URL: authorised(second)},
-	}
-	snap := plan.Rules{MaxAgents: 1}.Derive(in)
-
-	if got := snap.LaunchAfter(0); !slices.Equal(got, []plan.TicketURL{first.URL}) {
-		t.Errorf("LaunchAfter(0) = %v, want the first ticket", got)
-	}
-	if got := snap.LaunchAfter(1); len(got) != 0 {
-		t.Errorf("LaunchAfter(1) = %v, want none: a spawn took the only slot", got)
-	}
+	t.Run("an unknown ticket", func(t *testing.T) {
+		t.Parallel()
+		if _, ok := snap.Entry("sandbox://CC-404"); ok {
+			t.Error("Entry(sandbox://CC-404) ok = true, want false")
+		}
+	})
 }

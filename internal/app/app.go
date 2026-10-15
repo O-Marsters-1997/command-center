@@ -35,6 +35,16 @@ type options struct {
 	observe  loop.ObserveFunc
 	validate loop.ValidateFunc
 	remoteOf loop.RemoteFunc
+	forge    gh.Forge
+	runner   runner.Runner
+}
+
+func WithForge(forge gh.Forge) Option {
+	return func(o *options) { o.forge = forge }
+}
+
+func WithRunner(r runner.Runner) Option {
+	return func(o *options) { o.runner = r }
 }
 
 type Option func(*options)
@@ -58,7 +68,7 @@ func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 func New(
 	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, opts ...Option,
 ) (app *App, err error) {
-	settings := options{clock: loop.RealClock{}}
+	settings := options{clock: loop.RealClock{}, forge: gh.CLI{}, runner: runner.ProcessRunner{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -101,10 +111,10 @@ func New(
 
 	observe := settings.observe
 	if observe == nil {
-		observe = loop.NewObserver(st, gh.CLI{}, cfg)
+		observe = loop.NewObserver(st, settings.forge, cfg)
 	}
 
-	var loopOpts []loop.Option
+	loopOpts := []loop.Option{loop.WithForge(settings.forge)}
 	if settings.validate != nil {
 		loopOpts = append(loopOpts, loop.WithValidator(settings.validate))
 	}
@@ -112,7 +122,7 @@ func New(
 		loopOpts = append(loopOpts, loop.WithRemoteSource(settings.remoteOf))
 	}
 	lp := loop.New(loop.Deps{
-		Logger: logger, Store: st, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
+		Logger: logger, Store: st, Clock: settings.clock, Runner: settings.runner, Observe: observe,
 		Config: cfg, Workspace: ws,
 	}, loopOpts...)
 	webOpts = append(webOpts, web.WithSpendLimit5h(cfg.SpendLimit5h), web.WithBoardPollSeconds(cfg.BoardPollSeconds))

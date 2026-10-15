@@ -1,0 +1,9 @@
+# cc open with no daemon running prints the page's URL instead of launching a browser.
+
+cc-init-repo
+cc-config two-tasks
+
+exec cc open
+stdout '^http://127\.0\.0\.1:[0-9]+/$'
+stderr 'no tracked repo matches this directory'
+stderr 'no daemon listening on port [0-9]+'

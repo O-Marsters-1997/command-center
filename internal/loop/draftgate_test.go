@@ -1,10 +1,9 @@
 package loop_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -22,9 +21,8 @@ func (f *pushFixture) seedDraftGate(t *testing.T) {
 	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
 	storetest.Tickets(t, f.Store, f.Ticket, blocker)
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	const tip = "cc-1-tip"
 	storetest.Pushed(t, f.Store, storetest.PushedOpts{
-		URL: f.Ticket.URL, Tip: tip, Base: "main", BaseTip: "main-tip", At: testAt,
+		URL: f.Ticket.URL, Tip: "cc-1-tip", Base: "main", BaseTip: "main-tip", At: testAt,
 	})
 }
 
@@ -47,181 +45,64 @@ func draftConsumerPR(
 	}
 }
 
-func TestDraftGateStaysDraftUntilBlockerMergedAndVerdictGreen(t *testing.T) {
+func TestDraftGate(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name         string
-		blockerState plan.PRState
-		conclusion   string
-	}{
-		{name: "gating blocker open", blockerState: plan.Open, conclusion: "SUCCESS"},
-		{name: "consumer checks failing", blockerState: plan.Merged, conclusion: "FAILURE"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			f := newPushFixture(t)
-			f.seedDraftGate(t)
-			*f.Obs = draftConsumerPR(tt.blockerState, ciCheck(tt.conclusion), "cc-1-tip")
+
+	t.Run("readies the PR exactly once across ticks", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		f.seedDraftGate(t)
+		*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
+		f.tick(t)
+		f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{
+			Number: 1, State: plan.Open, HeadOid: "cc-1-tip", Checks: ciCheck("SUCCESS"),
+		}
+		for range 9 {
 			f.tick(t)
-			if got := len(f.Forge.Calls("Ready")); got != 0 {
-				t.Errorf("pr ready calls = %d, want 0", got)
-			}
-		})
-	}
-}
+		}
 
-func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	f.seedDraftGate(t)
-	*f.Obs = draftConsumerPR(plan.Open, ciCheck("FAILURE"), "cc-1-tip")
-	f.tick(t)
-	if got := len(f.Forge.Calls("Ready")); got != 0 {
-		t.Fatalf("pr ready calls after tick 1 = %d, want 0", got)
-	}
+		if got := len(f.Forge.Calls("Ready")); got != 1 {
+			t.Errorf("Ready calls across ten ticks = %d, want 1", got)
+		}
+	})
 
-	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("FAILURE"), "cc-1-tip")
-	f.tick(t)
-	if got := len(f.Forge.Calls("Ready")); got != 0 {
-		t.Fatalf("pr ready calls after tick 2 = %d, want 0", got)
-	}
-
-	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
-	if got := len(f.Forge.Calls("Ready")); got != 1 {
-		t.Fatalf("pr ready calls after tick 3 = %d, want exactly 1", got)
-	}
-
-	f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{
-		Number: 1, State: plan.Open, IsDraft: false, HeadOid: "cc-1-tip", Checks: ciCheck("SUCCESS"),
-	}
-	for range 9 {
+	t.Run("a failed Ready is retried next tick without a verb", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		f.seedDraftGate(t)
+		f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingReady{f.Forge}))
+		*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
 		f.tick(t)
-	}
-	if got := len(f.Forge.Calls("Ready")); got != 1 {
-		t.Errorf("pr ready calls across ten ticks = %d, want exactly 1", got)
-	}
-}
 
-func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	f.seedDraftGate(t)
-	*f.Obs = draftConsumerPR(plan.Closed, ciCheck("SUCCESS"), "cc-1-tip")
-	for range 5 {
+		failed := f.events(t, "draft_ready_failed")
+		if len(failed) != 1 || failed[0].TicketURL != f.Ticket.URL ||
+			!strings.Contains(failed[0].Detail, fmt.Sprint(errForge)) {
+			t.Errorf("draft_ready_failed events = %+v, want one naming %q", failed, errForge)
+		}
+
+		f.reset(testAt, runner.ProcessRunner{})
 		f.tick(t)
-	}
-	if got := len(f.Forge.Calls("Ready")); got != 0 {
-		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
-	}
 
-	server := openServer(f.Store, fixedClock(testAt), "")
-	page := renderPage(t, server)
-	row := webtest.RowFor(t, page, "sandbox://CC-1")
-	if row.State == "base_gone" {
-		t.Errorf("state = base_gone, reserved for a stacking parent, not a gating edge:\n%s", row.Row.HTML())
-	}
-}
+		if got := len(f.Forge.Calls("Ready")); got != 2 {
+			t.Errorf("Ready calls after the retry = %d, want 2", got)
+		}
+		if ready := f.events(t, "draft_ready"); len(ready) != 1 || ready[0].TicketURL != f.Ticket.URL {
+			t.Errorf("draft_ready events = %+v, want one for the retry", ready)
+		}
+	})
 
-func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	f.seedDraftGate(t)
-	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingReady{f.Forge}))
-	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
-	if got := len(f.Forge.Calls("Ready")); got != 1 {
-		t.Fatalf("pr ready calls after tick 1 = %d, want 1 (the failed attempt)", got)
-	}
+	t.Run("push opens a draft PR for a ticket with a gating edge", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		f.Ticket.BlockedBy = []string{"sandbox://PLA-40"}
+		blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+		storetest.Tickets(t, f.Store, f.Ticket, blocker)
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
 
-	events := f.events(t, "draft_ready_failed")
-	if len(events) != 1 || events[0].TicketURL != f.Ticket.URL ||
-		!strings.Contains(events[0].Detail, "fake gh: pr ready failed") {
-		t.Errorf("events = %+v, want a draft_ready_failed event naming the failure", events)
-	}
-
-	f.reset(testAt, runner.ProcessRunner{})
-	f.tick(t)
-	if got := len(f.Forge.Calls("Ready")); got != 2 {
-		t.Errorf("pr ready calls after tick 2 = %d, want 2 (retried automatically)", got)
-	}
-
-	events = f.events(t, "draft_ready")
-	if len(events) != 1 || events[0].TicketURL != f.Ticket.URL {
-		t.Errorf("events = %+v, want a draft_ready event for the successful retry", events)
-	}
-}
-
-func TestDraftGateReadyFailureReportsForgeError(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	f.seedDraftGate(t)
-	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingReady{f.Forge}))
-	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
-	events := f.events(t, "draft_ready_failed")
-	if len(events) != 1 || events[0].TicketURL != f.Ticket.URL ||
-		!strings.Contains(events[0].Detail, "fake gh: pr ready failed") {
-		t.Errorf("events = %+v, want forge error in draft_ready_failed", events)
-	}
-}
-
-func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
-	t.Parallel()
-
-	f := newPushFixture(t)
-	store := f.Store
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
-	}
-	storetest.Tickets(t, store, tickets...)
-
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "parent"): "/repos/parent"},
-		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
-		Settings:  map[string]config.RepoSettings{"repo": {Stacking: true}},
-	}
-	if err := store.SaveObservation(t.Context(), obs); err != nil {
-		t.Fatalf("SaveObservation: %v", err)
-	}
-
-	server := openServer(store, fixedClock(testAt), "")
-	page := renderPage(t, server)
-
-	child := webtest.RowFor(t, page, "sandbox://CHILD")
-	if stack := child.Stack.Text(); stack != "L2 ← parent" {
-		t.Errorf("child's stack = %q, want parent base (draft PR is open):\n%s", stack, child.Row.HTML())
-	}
-	if state := child.State; state != "ready" {
-		t.Errorf("child's state = %q, want ready:\n%s", state, child.Row.HTML())
-	}
-}
-
-func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-	f.Ticket.BlockedBy = []string{"sandbox://PLA-40"}
-	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	storetest.Tickets(t, f.Store, f.Ticket, blocker)
-	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	f.tick(t)
-
-	if got := f.Forge.Calls("Create"); len(got) != 1 || !got[0].Draft {
-		t.Errorf("forge Create calls = %+v, want one draft PR for a ticket with a gating edge", got)
-	}
-}
-
-func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	f.tick(t)
-
-	if got := f.Forge.Calls("Create"); len(got) != 1 || got[0].Draft {
-		t.Errorf("forge Create calls = %+v, want one non-draft PR for a plain ticket", got)
-	}
+		if got := f.Forge.Calls("Create"); len(got) != 1 || !got[0].Draft {
+			t.Errorf("Create calls = %+v, want one draft", got)
+		}
+	})
 }

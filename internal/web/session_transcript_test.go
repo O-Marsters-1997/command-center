@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -67,39 +68,44 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 	return st
 }
 
-func TestSessionPageReadsAsOneConversationAcrossRuns(t *testing.T) {
-	t.Parallel()
-	st := transcriptStore(t, "", "also add <b>tests</b>", "ship it")
-	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
-
-	page := htmltest.Parse(t, body)
-	if got := page.One(t, "pre.prompt-text").Text(); got != "opening prompt" {
-		t.Errorf("opening prompt = %q", got)
+func transcriptLines(t *testing.T, st *storepkg.Store) (prompt string, lines []string, you int) {
+	t.Helper()
+	page := htmltest.Parse(t, renderPath(t, newServer(st, testNow), "/s/acme/web/1"))
+	for _, line := range page.Find(".line") {
+		lines = append(lines, line.Text())
 	}
-	lines := page.Find(".line")
-	var got []string
-	for _, line := range lines {
-		got = append(got, line.Text())
-	}
-	want := []string{"turn 1 answer", "you also add <b>tests</b>", "turn 2 answer", "you ship it", "turn 3 answer"}
-	if !slices.Equal(got, want) {
-		t.Errorf("session lines = %q, want %q", got, want)
-	}
-	if you := htmltest.Parse(t, body).Find(".line-you"); len(you) != 2 {
-		t.Errorf("you lines = %d, want 2", len(you))
-	}
+	return page.One(t, "pre.prompt-text").Text(), lines, len(page.Find(".line-you"))
 }
 
-func TestSessionPageWithOneRunHasNoYouLine(t *testing.T) {
+func testSessionTranscript(t *testing.T) {
 	t.Parallel()
-	body := renderPath(t, newServer(transcriptStore(t, ""), testNow), "/s/acme/web/1")
-	page := htmltest.Parse(t, body)
-	if lines := page.Find(".line"); len(lines) == 0 {
-		t.Error("single-run session has no transcript lines")
-	} else if got := lines[0].Text(); got != "turn 1 answer" {
-		t.Errorf("single-run transcript = %q: %s", got, lines[0].HTML())
-	}
-	if you := page.Find(".line-you"); len(you) != 0 {
-		t.Errorf("single-run session has a you line: %s", you[0].HTML())
+
+	for _, tt := range []struct {
+		name      string
+		messages  []string
+		wantLines []string
+		wantYou   int
+	}{
+		{
+			name: "reads as one conversation across runs", messages: []string{"", "also add <b>tests</b>", "ship it"},
+			wantLines: []string{"turn 1 answer", "you also add <b>tests</b>", "turn 2 answer", "you ship it", "turn 3 answer"},
+			wantYou:   2,
+		},
+		{name: "one run has no you line", messages: []string{""}, wantLines: []string{"turn 1 answer"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			prompt, lines, you := transcriptLines(t, transcriptStore(t, tt.messages...))
+
+			if prompt != "opening prompt" {
+				t.Errorf("GET /s/acme/web/1 prompt = %q, want opening prompt", prompt)
+			}
+			if diff := cmp.Diff(tt.wantLines, lines); diff != "" {
+				t.Errorf("GET /s/acme/web/1 lines mismatch (-want +got):\n%s", diff)
+			}
+			if you != tt.wantYou {
+				t.Errorf("GET /s/acme/web/1 you lines = %d, want %d", you, tt.wantYou)
+			}
+		})
 	}
 }
