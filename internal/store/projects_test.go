@@ -23,7 +23,7 @@ func trackRepos(t *testing.T, store *storepkg.Store, names ...string) {
 			TrackedAt: trackedAt,
 		}
 		if err := store.UpsertRepo(t.Context(), repo); err != nil {
-			t.Fatal(err)
+			t.Fatalf("UpsertRepo(%s): %v", name, err)
 		}
 	}
 }
@@ -41,7 +41,7 @@ func TestCreateProjectReadsBackWithSortedRepos(t *testing.T) {
 
 	got, err := store.Projects(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	if diff := cmp.Diff([]storepkg.Project{{Name: "acme", Hue: 2, Repos: []string{"acme/api", "acme/web"}}},
 		got, cmpopts.EquateEmpty()); diff != "" {
@@ -49,7 +49,7 @@ func TestCreateProjectReadsBackWithSortedRepos(t *testing.T) {
 	}
 	repos, err := store.Repos(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos: %v", err)
 	}
 	loose := repos[slices.IndexFunc(repos, func(r storepkg.Repo) bool { return r.Name == "acme/loose" })]
 	if loose.Project != "" || loose.Hue != 0 {
@@ -64,7 +64,7 @@ func TestCreateProjectRefusesACaseOnlyDuplicate(t *testing.T) {
 	trackRepos(t, store, "acme/web", "acme/api")
 	acme := storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web"}, At: trackedAt}
 	if err := store.CreateProject(ctx, acme); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(acme): %v", err)
 	}
 
 	err := store.CreateProject(ctx, storepkg.NewProject{Name: "ACME", Hue: 1, Repos: []string{"acme/api"}, At: trackedAt})
@@ -74,7 +74,7 @@ func TestCreateProjectRefusesACaseOnlyDuplicate(t *testing.T) {
 	}
 	got, err := store.Projects(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	if diff := cmp.Diff([]storepkg.Project{{Name: "acme", Hue: 1, Repos: []string{"acme/web"}}},
 		got, cmpopts.EquateEmpty()); diff != "" {
@@ -89,7 +89,7 @@ func TestCreateProjectMovesARepoOutOfItsProject(t *testing.T) {
 	trackRepos(t, store, "acme/web", "acme/api")
 	old := storepkg.NewProject{Name: "old", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}
 	if err := store.CreateProject(ctx, old); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(old): %v", err)
 	}
 
 	replacement := storepkg.NewProject{Name: "new", Hue: 3, Repos: []string{"acme/web"}, At: trackedAt}
@@ -99,7 +99,7 @@ func TestCreateProjectMovesARepoOutOfItsProject(t *testing.T) {
 
 	got, err := store.Projects(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	want := []storepkg.Project{
 		{Name: "new", Hue: 3, Repos: []string{"acme/web"}},
@@ -153,10 +153,10 @@ func TestSetRepoProjectMovesAndLoosensARepo(t *testing.T) {
 	ctx := t.Context()
 	trackRepos(t, store, "acme/web")
 	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "one", Hue: 1, At: trackedAt}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(one): %v", err)
 	}
 	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "two", Hue: 2, At: trackedAt}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(two): %v", err)
 	}
 
 	if err := store.SetRepoProject(ctx, "acme/web", "TWO"); err != nil {
@@ -164,7 +164,7 @@ func TestSetRepoProjectMovesAndLoosensARepo(t *testing.T) {
 	}
 	repos, err := store.Repos(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos: %v", err)
 	}
 	if repos[0].Project != "two" || repos[0].Hue != 2 {
 		t.Errorf("repo = project %q hue %d, want two 2", repos[0].Project, repos[0].Hue)
@@ -191,7 +191,7 @@ func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
 	trackRepos(t, store, "acme/web", "acme/api")
 	acme := storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}
 	if err := store.CreateProject(ctx, acme); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(acme): %v", err)
 	}
 
 	if err := store.EditProject(ctx, "acme", "acme-co", 1); err != nil {
@@ -199,7 +199,7 @@ func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
 	}
 	got, err := store.Projects(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	want := []storepkg.Project{{Name: "acme-co", Hue: 1, Repos: []string{"acme/api", "acme/web"}}}
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
@@ -210,7 +210,7 @@ func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
 		t.Fatalf("EditProject hue: %v", err)
 	}
 	if got, err = store.Projects(ctx); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	want[0].Hue = 3
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
@@ -224,7 +224,7 @@ func TestEditProjectRefusesBadEdits(t *testing.T) {
 	ctx := t.Context()
 	for _, name := range []string{"acme", "beta"} {
 		if err := store.CreateProject(ctx, storepkg.NewProject{Name: name, Hue: 1, At: trackedAt}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("CreateProject(%s): %v", name, err)
 		}
 	}
 
@@ -239,7 +239,7 @@ func TestEditProjectRefusesBadEdits(t *testing.T) {
 	}
 	got, err := store.Projects(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	want := []storepkg.Project{{Name: "acme", Hue: 1}, {Name: "beta", Hue: 1}}
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
@@ -254,7 +254,7 @@ func TestDeleteProjectLeavesItsReposLoose(t *testing.T) {
 	trackRepos(t, store, "acme/web")
 	acme := storepkg.NewProject{Name: "acme", Hue: 2, Repos: []string{"acme/web"}, At: trackedAt}
 	if err := store.CreateProject(ctx, acme); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(acme): %v", err)
 	}
 
 	if err := store.DeleteProject(ctx, "acme"); err != nil {
@@ -263,55 +263,19 @@ func TestDeleteProjectLeavesItsReposLoose(t *testing.T) {
 
 	got, err := store.Projects(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Projects: %v", err)
 	}
 	if diff := cmp.Diff([]storepkg.Project(nil), got, cmpopts.EquateEmpty()); diff != "" {
 		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
 	}
 	repos, err := store.Repos(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos: %v", err)
 	}
 	if len(repos) != 1 || repos[0].Project != "" {
 		t.Errorf("Repos() = %+v, want acme/web tracked and loose", repos)
 	}
 	if err := store.DeleteProject(ctx, "acme"); !errors.Is(err, storepkg.ErrNotFound) {
 		t.Errorf("DeleteProject(again) = %v, want ErrNotFound", err)
-	}
-}
-
-func TestSetRepoProjectMovesAndLoosens(t *testing.T) {
-	t.Parallel()
-	store := openStore(t)
-	ctx := t.Context()
-	trackRepos(t, store, "acme/web")
-	for _, name := range []string{"acme", "beta"} {
-		if err := store.CreateProject(ctx, storepkg.NewProject{Name: name, Hue: 1, At: trackedAt}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := store.SetRepoProject(ctx, "acme/web", "acme"); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := store.SetRepoProject(ctx, "acme/web", "beta"); err != nil {
-		t.Fatalf("move: %v", err)
-	}
-	got, _ := store.Projects(ctx)
-	want := []storepkg.Project{
-		{Name: "acme", Hue: 1},
-		{Name: "beta", Hue: 1, Repos: []string{"acme/web"}},
-	}
-	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
-	}
-
-	if err := store.SetRepoProject(ctx, "acme/web", ""); err != nil {
-		t.Fatalf("loosen: %v", err)
-	}
-	got, _ = store.Projects(ctx)
-	want[1].Repos = nil
-	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
 	}
 }

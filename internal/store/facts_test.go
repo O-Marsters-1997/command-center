@@ -35,7 +35,7 @@ func TestMergeFactSurvivesAClearedMetaTable(t *testing.T) {
 	}
 	events, err := st.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events: %v", err)
 	}
 	merges := 0
 	for _, event := range events {
@@ -48,7 +48,7 @@ func TestMergeFactSurvivesAClearedMetaTable(t *testing.T) {
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
@@ -56,14 +56,14 @@ func TestMergeFactSurvivesAClearedMetaTable(t *testing.T) {
 		}
 	})
 	if _, err := db.ExecContext(t.Context(), "DELETE FROM meta"); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ExecContext(DELETE FROM meta): %v", err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce after clearing meta: %v", err)
 	}
 	events, err = st.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events after clearing meta: %v", err)
 	}
 	merges = 0
 	for _, event := range events {
@@ -81,18 +81,18 @@ func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
 	st := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	storetest.Tickets(t, st, ticket)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	for _, event := range []storepkg.Event{
 		{At: at, Kind: "restacked"},
 		{At: at, TicketURL: ticket.URL, Kind: "restacked"},
 	} {
 		if err := st.AppendEvent(t.Context(), event); err != nil {
-			t.Fatal(err)
+			t.Fatalf("AppendEvent(%s): %v", event.Kind, err)
 		}
 	}
 	restacked, err := st.RestackedSinceLastPush(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RestackedSinceLastPush: %v", err)
 	}
 	if restacked[""] || !restacked[plan.TicketURL(ticket.URL)] {
 		t.Errorf("RestackedSinceLastPush = %+v, want only %s", restacked, ticket.URL)
@@ -104,18 +104,18 @@ func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 	st := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	storetest.Tickets(t, st, ticket)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	for _, event := range []storepkg.Event{
 		{At: at, Kind: "push_refused", Detail: "no ticket"},
 		{At: at, TicketURL: ticket.URL, Kind: "push_refused", Detail: "policy hit"},
 	} {
 		if err := st.AppendEvent(t.Context(), event); err != nil {
-			t.Fatal(err)
+			t.Fatalf("AppendEvent(%s): %v", event.Kind, err)
 		}
 	}
 	facts, err := st.PushFacts(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PushFacts: %v", err)
 	}
 	if _, ok := facts[""]; ok {
 		t.Errorf("PushFacts = %+v, want no empty ticket", facts)
@@ -130,18 +130,18 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 	st := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	storetest.Tickets(t, st, ticket)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	for _, event := range []storepkg.Event{
 		{At: at, Kind: "refresh_refused", Detail: "no ticket"},
 		{At: at, TicketURL: ticket.URL, Kind: "refresh_refused", Detail: "conflict"},
 	} {
 		if err := st.AppendEvent(t.Context(), event); err != nil {
-			t.Fatal(err)
+			t.Fatalf("AppendEvent(%s): %v", event.Kind, err)
 		}
 	}
 	facts, err := st.RefreshFacts(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RefreshFacts: %v", err)
 	}
 	if _, ok := facts[""]; ok {
 		t.Errorf("RefreshFacts = %+v, want no empty ticket", facts)

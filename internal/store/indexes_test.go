@@ -14,7 +14,7 @@ func TestMigrationsLeaveEveryHotIndexValid(t *testing.T) {
 	openStoreAt(t, dsn)
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 

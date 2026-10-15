@@ -15,8 +15,7 @@ const (
 	sevenDayDuration = 7 * 24 * time.Hour
 )
 
-// LatestReadingsFull returns the newest reading for every window that has one, keyed by
-// window, with each reading's own At.
+// LatestReadingsFull omits windows with no reading and retains each reading's timestamp.
 func (s *Store) LatestReadingsFull(ctx context.Context) (map[agentlog.Window]agentlog.Reading, error) {
 	rows, err := s.q.LatestReadingsFull(ctx)
 	if err != nil {
@@ -32,9 +31,7 @@ func (s *Store) LatestReadingsFull(ctx context.Context) (map[agentlog.Window]age
 	return readings, nil
 }
 
-// RecordReadingsAndIntervals writes readings, then closes the interval each completes
-// against the window's previous stored reading, weighing transcripts under projectsDir. Weighing
-// happens at reading time because the claude CLI prunes transcripts later.
+// RecordReadingsAndIntervals weighs transcripts at reading time because the claude CLI prunes them later.
 func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agentlog.Reading, projectsDir string) error {
 	if len(readings) == 0 {
 		return nil
@@ -82,8 +79,7 @@ type intervalRow struct {
 	WeightUSD        float64   `json:"weight_usd"`
 }
 
-// FitFactors returns each window's least-squares dollars-to-utilization factor over the
-// trailing seven days. A window below spend.MinSamples is absent.
+// FitFactors omits windows below spend.MinSamples in the trailing seven days.
 func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Window]spend.Result, error) {
 	rows, err := s.q.ListIntervalsSince(ctx, now.Add(-sevenDayDuration))
 	if err != nil {
@@ -100,7 +96,7 @@ func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Win
 	return spend.Fit(samples, now), nil
 }
 
-// CCCostUSD returns cc's own runs' cost_usd within each window's trailing span as of now.
+// CCCostUSD includes only cc's own runs within each window's trailing span.
 func (s *Store) CCCostUSD(ctx context.Context, now time.Time) (map[agentlog.Window]float64, error) {
 	row, err := s.q.CCCostSince(ctx, ccdb.CCCostSinceParams{
 		FiveHourSince: notNullTime(now.Add(-fiveHourDuration)),

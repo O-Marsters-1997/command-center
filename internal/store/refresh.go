@@ -7,8 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL.
-// A refusal or verification failure gates the automatic retry; the refresh verb ignores it.
+// RefreshFacts gates automatic retries after refusal or verification failure, but not manual refreshes.
 func (s *Store) RefreshFacts(ctx context.Context) (map[plan.TicketURL]plan.RefreshFact, error) {
 	outcomes, err := s.LatestRefreshOutcomes(ctx)
 	if err != nil {
@@ -26,14 +25,13 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[plan.TicketURL]plan.Refre
 	return facts, nil
 }
 
-// RefreshOutcome is one ticket's latest refresh-domain event.
+// RefreshOutcome holds a ticket's latest refresh-domain event.
 type RefreshOutcome struct {
 	Kind   EventKind
 	Detail string
 }
 
-// LatestRefreshOutcomes returns each ticket's latest refresh-domain event since its last
-// recorded push, keyed by ticket URL.
+// LatestRefreshOutcomes excludes events before the ticket's last recorded push.
 func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
 	kinds, err := encodeJSON("refresh outcome kinds", []EventKind{
 		EventRefreshRefused, EventRefreshConflicted, EventVerificationFailed, EventRefreshed, EventRestacked,

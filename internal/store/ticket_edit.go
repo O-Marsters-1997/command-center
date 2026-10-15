@@ -15,7 +15,6 @@ type editTicketPayload struct {
 	BlockedBy []string `json:"blocked_by"`
 }
 
-// QueueEditTicketIntent records one ticket's requested branch and blocked_by.
 func (s *Store) QueueEditTicketIntent(ctx context.Context, e EditRequest) error {
 	payload, err := json.Marshal(editTicketPayload{Branch: e.Branch, BlockedBy: nonNil(e.BlockedBy)})
 	if err != nil {
@@ -39,7 +38,7 @@ type EditTicketIntent struct {
 	BlockedBy []string
 }
 
-// PendingEditTicketIntents returns every unconsumed ticket edit intent, oldest first.
+// PendingEditTicketIntents orders unconsumed edits oldest first.
 func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketIntent, error) {
 	rows, err := s.q.PendingEditTicketIntents(ctx)
 	if err != nil {
@@ -59,8 +58,7 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 	return intents, nil
 }
 
-// EditTicket writes branch and blocked_by directly. A blocked_by breaking its own
-// feature's closure is refused whole.
+// EditTicket refuses the entire edit if a blocker breaks the feature's closure.
 func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
 		feature, err := q.GetTicketFeature(ctx, ticketURL)
