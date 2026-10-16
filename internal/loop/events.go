@@ -29,7 +29,10 @@ var transitionEvents = map[plan.TransitionKind]store.EventKind{
 func (l *Loop) recordTransitions(ctx context.Context, snap plan.Snapshot) error {
 	verdictChanged := false
 	for _, tr := range snap.Transitions() {
-		kind := transitionEvents[tr.Kind]
+		kind, ok := transitionEvents[tr.Kind]
+		if !ok {
+			return fmt.Errorf("transition kind %q has no event", tr.Kind)
+		}
 		ev := store.Event{At: tr.At, TicketURL: string(tr.Ticket), Kind: kind, Detail: tr.Detail}
 		if err := l.store.AppendEvent(ctx, ev); err != nil {
 			return fmt.Errorf("record %s for %s: %w", kind, tr.Ticket, err)
