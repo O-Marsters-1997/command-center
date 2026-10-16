@@ -3,9 +3,6 @@ package plan_test
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -56,43 +53,6 @@ func TestPushRefused(t *testing.T) {
 			refused, path := plan.PushRefused(tt.paths, tt.policy)
 			if refused != tt.refused || (refused && path != tt.wantPath) {
 				t.Errorf("PushRefused(%q) = %t, %q, want %t, %q", tt.paths, refused, path, tt.refused, tt.wantPath)
-			}
-		})
-	}
-}
-
-func TestPushPlan(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		candidates []plan.PushCandidate
-		want       []plan.TicketURL
-	}{
-		{
-			name:       "never pushed and has a tip is selected",
-			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "abc"}},
-			want:       []plan.TicketURL{"sandbox://CC-1"},
-		},
-		{
-			name:       "tip unchanged since the last push is not re-selected",
-			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "abc", LastPushedTip: "abc"}},
-		},
-		{
-			name:       "tip moved past the last push is selected again",
-			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "def", LastPushedTip: "abc"}},
-			want:       []plan.TicketURL{"sandbox://CC-1"},
-		},
-		{
-			name:       "no local tip yet is never selected",
-			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1"}},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if diff := cmp.Diff(tt.want, plan.PushPlan(tt.candidates), cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("PushPlan(%+v) mismatch (-want +got):\n%s", tt.candidates, diff)
 			}
 		})
 	}

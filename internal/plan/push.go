@@ -55,22 +55,6 @@ func denyMatch(pattern, path string) bool {
 	}
 }
 
-type PushCandidate struct {
-	URL           TicketURL
-	LocalTip      SHA
-	LastPushedTip SHA
-}
-
-func PushPlan(candidates []PushCandidate) []TicketURL {
-	var selected []TicketURL
-	for _, c := range candidates {
-		if c.LocalTip != "" && c.LocalTip != c.LastPushedTip {
-			selected = append(selected, c.URL)
-		}
-	}
-	return selected
-}
-
 // PRBody composes the "Merge after #N" line for a stacked base.
 // GitHub's `gh pr create --base` creates an ordinary PR, not a stack.
 func PRBody(baseBranch string, blockerPRNumber int) string {
