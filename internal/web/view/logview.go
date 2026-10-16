@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/url"
 	"os"
@@ -15,8 +14,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
-
-type LineRenderer func(LogLine) (template.HTML, error)
 
 func KindShown(mode LogFilter, k agentlog.Kind) bool {
 	switch mode {
@@ -47,7 +44,7 @@ type phaseView struct {
 
 type logItem struct {
 	Kind      string
-	Line      template.HTML
+	Line      LogLine
 	Group     callGroup
 	Folded    bool
 	FirstFail bool
@@ -57,7 +54,7 @@ type callGroup struct {
 	Summary  string
 	FailNote string
 	Open     bool
-	Lines    []template.HTML
+	Lines    []LogLine
 }
 
 type LogDetail struct {
@@ -68,7 +65,7 @@ type LogDetail struct {
 	Phases     []phaseView
 	StreamPath string
 	Worked     workedLine
-	Final      template.HTML
+	Final      *LogLine
 }
 
 type LogSource struct {
@@ -78,24 +75,24 @@ type LogSource struct {
 	Records   []store.Event
 }
 
-func BuildLogDetail(render LineRenderer, src LogSource, params Params) (LogDetail, error) {
+func BuildLogDetail(src LogSource, params Params) LogDetail {
 	path, streaming, ticketURL, records := src.Path, src.Streaming, src.TicketURL, src.Records
 	detail := LogDetail{Path: path, Streaming: streaming}
 	records = slices.DeleteFunc(slices.Clone(records), func(e store.Event) bool { return !RecordShown(e) })
 
 	whole, resumeAt, err := wholeLines(path)
 	if err != nil {
-		return LogDetail{}, fmt.Errorf("load whole lines: %w", err)
+		return detail
 	}
 	detail.StreamPath = logStreamPath(ticketURL, resumeAt, lastRecordID(records), params.Log)
 	if whole == nil && len(records) == 0 {
-		return detail, nil
+		return detail
 	}
 
 	var run agentlog.Run
 	if whole != nil {
 		if run, err = agentlog.Parse(bytes.NewReader(whole)); err != nil {
-			return LogDetail{}, fmt.Errorf("parse agent log %s: %w", path, err)
+			return detail
 		}
 	}
 	final := takeFinalAnswer(&run)
@@ -106,15 +103,12 @@ func BuildLogDetail(render LineRenderer, src LogSource, params Params) (LogDetai
 	detail.PhaseCount = len(run.Phases)
 	detail.Worked = stats.worked()
 	mergeRecords(&run, records)
-	if detail.Phases, err = renderPhases(render, run.Phases, mode); err != nil {
-		return LogDetail{}, fmt.Errorf("render phases: %w", err)
-	}
+	detail.Phases = buildPhases(run.Phases, mode)
 	if final != "" {
-		if detail.Final, err = render(sayLine(final)); err != nil {
-			return LogDetail{}, fmt.Errorf("render final answer: %w", err)
-		}
+		line := sayLine(final)
+		detail.Final = &line
 	}
-	return detail, nil
+	return detail
 }
 
 func RecordShown(e store.Event) bool {
@@ -186,61 +180,42 @@ func takeFinalAnswer(run *agentlog.Run) string {
 	return final
 }
 
-func renderPhases(render LineRenderer, phases []agentlog.Phase, mode LogFilter) ([]phaseView, error) {
+func buildPhases(phases []agentlog.Phase, mode LogFilter) []phaseView {
 	firstFail := firstFailureIndex(phases)
 	openGroups := mode == LogTools || mode == LogFails
 	idx := 0
 	var views []phaseView
 	for _, phase := range phases {
-		b := phaseBuilder{render: render, mode: mode, openGroups: openGroups}
+		b := phaseBuilder{mode: mode, openGroups: openGroups}
 		for _, event := range phase.Events {
-			if err := b.add(event, idx == firstFail); err != nil {
-				return nil, fmt.Errorf("add event: %w", err)
-			}
+			b.add(event, idx == firstFail)
 			idx++
 		}
-		if err := b.flush(); err != nil {
-			return nil, fmt.Errorf("flush: %w", err)
-		}
+		b.flush()
 		views = append(views, phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At), Items: b.items})
 	}
-	return views, nil
+	return views
 }
 
 type phaseBuilder struct {
-	render     LineRenderer
 	mode       LogFilter
 	openGroups bool
 	items      []logItem
 	pending    []callPair
 }
 
-func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
+func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
 	switch event.Kind {
 	case agentlog.Say:
-		if err := b.flush(); err != nil {
-			return fmt.Errorf("flush: %w", err)
+		b.flush()
+		if KindShown(b.mode, event.Kind) {
+			b.items = append(b.items, logItem{Kind: "say", Line: sayLine(event.Detail)})
 		}
-		if !KindShown(b.mode, event.Kind) {
-			return nil
-		}
-		line, err := b.render(sayLine(event.Detail))
-		if err != nil {
-			return fmt.Errorf("render say line: %w", err)
-		}
-		b.items = append(b.items, logItem{Kind: "say", Line: line})
 	case agentlog.Record, agentlog.Commit:
-		if err := b.flush(); err != nil {
-			return fmt.Errorf("flush: %w", err)
+		b.flush()
+		if KindShown(b.mode, event.Kind) {
+			b.items = append(b.items, logItem{Kind: event.Kind.String(), Line: LineOf(event)})
 		}
-		if !KindShown(b.mode, event.Kind) {
-			return nil
-		}
-		line, err := b.render(LineOf(event))
-		if err != nil {
-			return fmt.Errorf("render %s line: %w", event.Kind, err)
-		}
-		b.items = append(b.items, logItem{Kind: event.Kind.String(), Line: line})
 	case agentlog.Pass, agentlog.Fail:
 		b.answer(event, anchor)
 	case agentlog.Cmd:
@@ -248,7 +223,6 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 	case agentlog.Skill, agentlog.File, agentlog.Tool:
 		b.pending = append(b.pending, callPair{call: event, called: true})
 	}
-	return nil
 }
 
 func (b *phaseBuilder) answer(result agentlog.Event, anchor bool) {
@@ -262,7 +236,7 @@ func (b *phaseBuilder) answer(result agentlog.Event, anchor bool) {
 	b.pending = append(b.pending, callPair{result: result, answered: true, anchor: anchor})
 }
 
-func (b *phaseBuilder) flush() error {
+func (b *phaseBuilder) flush() {
 	defer func() { b.pending = nil }()
 
 	var shown []callPair
@@ -278,11 +252,7 @@ func (b *phaseBuilder) flush() error {
 		group := callGroup{Summary: mixOf(shown).summary(), Open: b.openGroups}
 		failed := 0
 		for _, p := range shown {
-			line, err := b.render(p.line())
-			if err != nil {
-				return fmt.Errorf("render call line: %w", err)
-			}
-			group.Lines = append(group.Lines, line)
+			group.Lines = append(group.Lines, flattenLine(p.line()))
 			group.Open = group.Open || p.anchor
 			if p.failed() {
 				failed++
@@ -296,7 +266,6 @@ func (b *phaseBuilder) flush() error {
 	if hiddenAnchor {
 		b.items = append(b.items, logItem{Kind: "anchor", FirstFail: true})
 	}
-	return nil
 }
 
 func firstFailureIndex(phases []agentlog.Phase) int {
