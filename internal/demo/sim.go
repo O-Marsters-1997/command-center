@@ -325,9 +325,9 @@ func (s *Sim) states(ctx context.Context) (map[plan.TicketURL]plan.State, error)
 	snap := plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
 	states := make(map[plan.TicketURL]plan.State, len(s.issues))
 	for _, i := range s.issues {
-		url := plan.TicketURL(i.url)
-		if e, ok := snap.Entry(url); ok {
-			states[url] = e.State
+		ref := plan.TicketURL(i.url)
+		if e, ok := snap.Entry(ref); ok {
+			states[ref] = e.State
 		}
 	}
 	return states, nil
