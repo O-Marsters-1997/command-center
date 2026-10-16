@@ -149,8 +149,8 @@ func TestNew(t *testing.T) {
 		}
 
 		page := get(t, inst, "/tickets")
-		if got := webtest.RowFor(t, page, "sandbox://CC-2").State; got != "ready" {
-			t.Errorf("GET /tickets: CC-2 state = %q, want %q once its blocker has an open PR", got, "ready")
+		if got := webtest.RowFor(t, page, "sandbox://CC-2").State; got != "Ready to launch" {
+			t.Errorf("GET /tickets: CC-2 state = %q, want %q once its blocker has an open PR", got, "Ready to launch")
 		}
 		if rail := get(t, inst, "/rail"); !strings.Contains(rail, "0s ago") {
 			t.Errorf("GET /rail does not carry the tick's age:\n%s", rail)

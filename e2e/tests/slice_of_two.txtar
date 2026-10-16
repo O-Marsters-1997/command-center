@@ -58,4 +58,4 @@ grep -count=2 'commits.sh' $WORK/agent.log
 exec cc request GET /tickets
 stdout '>#CC-1</a>'
 stdout '>#CC-2</a>'
-! stdout '>blocked</span>'
+! stdout '>Blocked</span>'

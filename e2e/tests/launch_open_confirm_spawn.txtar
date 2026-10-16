@@ -26,6 +26,6 @@ exec cc request GET /tickets
 
 stdout '>#CC-1</a>'
 stdout '>#CC-2</a>'
-stdout '>queued</span>'
+stdout '>Queued</span>'
 stdout 'waiting for a slot'
 stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'

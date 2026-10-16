@@ -9,6 +9,8 @@ function row(url: string, over: Partial<Row> = {}): Row {
     ref: "#1",
     title: "t",
     state: "ready",
+    label: "Ready to launch",
+    detail: "",
     glyph: "ready",
     alive: false,
     blocking: null,

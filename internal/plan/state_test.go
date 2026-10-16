@@ -97,3 +97,30 @@ func TestState_Unattended(t *testing.T) {
 		})
 	}
 }
+
+func TestState_Label(t *testing.T) {
+	t.Parallel()
+
+	want := map[plan.State]string{
+		plan.Blocked: "Blocked", plan.Ready: "Ready to launch", plan.Queued: "Queued",
+		plan.Running: "Agent running", plan.Failed: "Failed", plan.CutFailed: "Cut failed",
+		plan.PushPending: "Waiting to push", plan.Checking: "Waiting on checks", plan.NeedsYou: "Needs you",
+		plan.PushFailed: "Push failed", plan.AwaitingInput: "Asked you a question",
+		plan.ReviewMe: "Ready for review", plan.PRMerged: "Merged", plan.PRClosedUnmerged: "PR closed",
+		plan.BaseGone: "Base gone", plan.Cancelled: "Cancelled", plan.BaseMoved: "Base moved",
+		plan.CIFailed: "Checks failing", plan.RefreshConflicted: "Refresh conflicted",
+		plan.ConflictsWithMain: "Conflicts with main", plan.VerificationFailed: "Verification failed",
+		plan.WaitingOnProducerDeploy: "Waiting on deploy",
+	}
+	if len(want) != len(plan.AllStates()) {
+		t.Fatalf("table covers %d states, AllStates() has %d", len(want), len(plan.AllStates()))
+	}
+	for state, label := range want {
+		t.Run(state.String(), func(t *testing.T) {
+			t.Parallel()
+			if got := state.Label(); got != label {
+				t.Errorf("%s.Label() = %q, want %q", state, got, label)
+			}
+		})
+	}
+}

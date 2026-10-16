@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 
@@ -28,6 +29,8 @@ type Row struct {
 	Title           string         `json:"title"`
 	State           string         `json:"state"`
 	Reason          string         `json:"reason"`
+	Label           string         `json:"label"`
+	Detail          string         `json:"detail"`
 	Question        string         `json:"-"`
 	Glyph           plan.GlyphWord `json:"glyph"`
 	Alive           bool           `json:"alive"`
@@ -82,6 +85,16 @@ type Check struct {
 func (r Row) Ticket() string { return ticketRef(r.URL) }
 
 func ticketRef(url string) string { return "#" + path.Base(url) }
+
+var (
+	reasonURL     = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s,;']*[^\s,;:'.]`)
+	reasonLogPath = regexp.MustCompile(`[;,:]?\s*log at \S+$`)
+)
+
+func detailOf(reason string) string {
+	reason = reasonLogPath.ReplaceAllString(reason, "")
+	return reasonURL.ReplaceAllStringFunc(reason, ticketRef)
+}
 
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
@@ -169,6 +182,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Title:          in.Obs.Titles[url],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
+			Label:          e.State.Label(),
+			Detail:         detailOf(string(e.Reason)),
 			Question:       question,
 			Glyph:          e.State.Glyph(),
 			Alive:          in.Obs.Runs[url].Alive,

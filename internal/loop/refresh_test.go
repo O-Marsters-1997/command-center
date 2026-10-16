@@ -695,8 +695,8 @@ func TestRefresh(t *testing.T) {
 		}
 		c.tick(t)
 
-		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State != "refresh_conflicted" {
-			t.Errorf("child state = %q, want refresh_conflicted", row.State)
+		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State != "Refresh conflicted" {
+			t.Errorf("child state = %q, want Refresh conflicted", row.State)
 		}
 	})
 
@@ -714,7 +714,7 @@ func TestRefresh(t *testing.T) {
 		}
 		c.tick(t)
 
-		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State == "refresh_conflicted" {
+		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State == "Refresh conflicted" {
 			t.Errorf("child state after hand resolution = %q, want it cleared", row.State)
 		}
 		pushes, err := c.store.LatestPushes(t.Context())

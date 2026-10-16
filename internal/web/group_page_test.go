@@ -97,13 +97,13 @@ func testBoardGroups(t *testing.T) {
 		if diff := cmp.Diff(want, ticketRefs(webtest.BoardRows(t, page))); diff != "" {
 			t.Fatalf("GET /board row refs mismatch (-want +got):\n%s", diff)
 		}
-		if got := webtest.RowFor(t, page, "sandbox://ROOT").State; got != "failed" {
-			t.Errorf("GET /board ROOT state = %q, want failed", got)
+		if got := webtest.RowFor(t, page, "sandbox://ROOT").State; got != "Failed" {
+			t.Errorf("GET /board ROOT state = %q, want Failed", got)
 		}
 		for _, c := range children {
 			row := webtest.RowFor(t, page, c)
-			if row.State != "queued" || !strings.Contains(row.Ticket.Text(), "sandbox://ROOT") {
-				t.Errorf("GET /board %s = %q with ticket cell %q, want queued after sandbox://ROOT",
+			if row.State != "Queued" || !strings.Contains(row.Ticket.Text(), "sandbox://ROOT") {
+				t.Errorf("GET /board %s = %q with ticket cell %q, want Queued after sandbox://ROOT",
 					c, row.State, row.Ticket.Text())
 			}
 			row.Row.One(t, `input[name="ticket"][value="`+c+`"]`)
@@ -215,8 +215,8 @@ func testBoardGroups(t *testing.T) {
 		}
 
 		row := webtest.RowFor(t, boardFor(t, store), ticket.URL)
-		if row.State != "merged" || row.PR.Text() != "#262 merged" {
-			t.Errorf("GET /board CC-1 = %q with PR cell %q, want merged with #262 merged", row.State, row.PR.Text())
+		if row.State != "Merged" || row.PR.Text() != "#262 merged" {
+			t.Errorf("GET /board CC-1 = %q with PR cell %q, want Merged with #262 merged", row.State, row.PR.Text())
 		}
 	})
 }

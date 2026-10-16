@@ -5,7 +5,7 @@
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
   <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
-  <span class="rail-state sr-only">{{.Glyph}}</span>
+  <span class="rail-state sr-only">{{.Label}}</span>
   {{- if .Started}}<span class="rail-timer" data-started="{{.Started}}"></span>{{end}}
 </a>
 {{end}}
@@ -31,9 +31,12 @@
     <h2 class="rail-heading">Needs you</h2>
     {{- range .NeedsYou}}
     <div class="rail-card" data-glyph="{{.Glyph}}">
-      {{template "railItem" .}}
-      <p class="rail-context">{{template "mark" .Project}}<span>{{.Context}}</span></p>
-      {{if .Reason}}<p class="rail-reason{{if .Reply}} rail-question{{end}}">{{.Reason}}</p>{{end}}
+      <a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
+        <span class="glyph" data-glyph="{{.Glyph}}"></span>
+        <span class="rail-title">{{.Title}}</span>
+      </a>
+      <p class="rail-context">{{template "mark" .Project}}<span>{{.Feature}}</span><span aria-hidden="true">·</span><span class="rail-ref">{{.Ref}}</span></p>
+      <p class="rail-reason{{if .Reply}} rail-question{{end}}"><b>{{.Label}}.</b>{{with .Detail}} {{.}}{{end}}</p>
       {{if .Reply}}{{template "railReply" .}}{{else if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
     {{- else}}

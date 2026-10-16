@@ -103,8 +103,8 @@ func TestVerify(t *testing.T) {
 			}
 			page := renderPage(t, openServer(p.Store, fixedClock(testAt.Add(time.Minute)), ""))
 			row := webtest.RowFor(t, page, s.ticketURL)
-			if row.State != "verification_failed" {
-				t.Errorf("row state = %q, want verification_failed:\n%s", row.State, row.Row.HTML())
+			if row.State != "Verification failed" {
+				t.Errorf("row state = %q, want Verification failed:\n%s", row.State, row.Row.HTML())
 			}
 		})
 	}
