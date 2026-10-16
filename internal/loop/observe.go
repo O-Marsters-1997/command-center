@@ -103,7 +103,7 @@ func observeRepo(
 		return plan.Observation{}, fmt.Errorf("fetch: %w", err)
 	}
 
-	settings, source, settingsErr := config.ReadRepoSettings(ctx, path)
+	settings, source, settingsErr := readRepoSettings(ctx, path)
 	if settingsErr != nil {
 		obs.SettingsErrors[name] = settingsErr.Error()
 	} else {
