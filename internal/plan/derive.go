@@ -119,6 +119,8 @@ type Snapshot struct {
 	maxAgents   int
 	spendPaused bool
 	intents     map[TicketURL][]Intent
+	sessions    map[TicketURL]string
+	removals    map[TicketURL]Removal
 	transitions []Transition
 	verdicts    map[TicketURL]string
 	repos       []RepoStatus
@@ -193,6 +195,8 @@ func (r Rules) Derive(in Input) Snapshot {
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
+		sessions:    in.Sessions,
+		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
 		repos:       in.Repos,
 		obs:         in.Obs,
 		refreshes:   in.Refreshes,
@@ -237,14 +241,16 @@ func (r Rules) Derive(in Input) Snapshot {
 			lastPush = option.Some(row)
 		}
 		snap.byURL[t.URL] = len(snap.Entries)
-		snap.Entries = append(snap.Entries, Entry{
+		entry := Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
 			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
-		})
+		}
+		snap.Entries = append(snap.Entries, entry)
+		snap.removals[t.URL] = removalFor(entry, pr)
 	}
 	snap.transitions, snap.verdicts = r.transitions(in)
 	return snap

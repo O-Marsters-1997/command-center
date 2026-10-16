@@ -15,7 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
-const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
+const heldWorktreeRefusal = plan.HeldWorktreeRefusal
 
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	return l.eachIntent(ctx, snap, plan.VerbAbort, func(intent plan.Intent) error {
@@ -63,14 +63,16 @@ func (l *Loop) applyFollowUpIntents(
 		if !ok {
 			return nil
 		}
-		if err := l.followUpOne(ctx, t, ticket, intent.Payload); err != nil {
+		if err := l.followUpOne(ctx, snap, t, ticket, intent.Payload); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil
 	})
 }
 
-func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, promptText string) error {
+func (l *Loop) followUpOne(
+	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, promptText string,
+) error {
 	url := plan.TicketURL(ticket.URL)
 	if t.obs.Runs[url].Alive {
 		return errIntentPending
@@ -89,16 +91,18 @@ func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, pr
 		kind: plan.RunKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
 	}
 
-	sessionID, err := l.resumableSession(ctx, ticket.URL)
+	session, _ := snap.Session(url)
+	sessionID, err := l.resumableSession(session)
 	if err != nil {
 		return fmt.Errorf("find resumable session: %w", err)
 	}
 	if sessionID != "" {
-		latest, err := l.store.LatestRunsByTicket(ctx)
-		if err != nil {
-			return fmt.Errorf("latest runs: %w", err)
+		entry, _ := snap.Entry(url)
+		outcome := plan.OutcomeFailed
+		if entry.Run.IsSome() {
+			outcome = entry.Run.Unwrap().Outcome.UnwrapOr(plan.OutcomeFailed)
 		}
-		spec.prompt = plan.ComposeMessage(promptText, latest[url].Outcome.UnwrapOr(plan.OutcomeFailed))
+		spec.prompt = plan.ComposeMessage(promptText, outcome)
 		spec.resumeSessionID = sessionID
 	}
 	if err := l.spawnRun(ctx, t, spec); err != nil {
@@ -110,13 +114,9 @@ func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, pr
 	return nil
 }
 
-func (l *Loop) resumableSession(ctx context.Context, ticketURL string) (string, error) {
-	sessionID, err := l.store.LatestSessionID(ctx, ticketURL)
-	if errors.Is(err, store.ErrNotFound) {
+func (l *Loop) resumableSession(sessionID string) (string, error) {
+	if sessionID == "" {
 		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("latest session of %s: %w", ticketURL, err)
 	}
 	projects, err := os.ReadDir(l.cfg.ClaudeProjectsDir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -198,34 +198,27 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapsho
 		if !ok {
 			return nil
 		}
-		lastPushed, err := l.store.LastPushedTips(ctx)
-		if err != nil {
-			return fmt.Errorf("last pushed tips: %w", err)
-		}
-		if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL]); err != nil {
+		if err := l.removeWorktreeOne(ctx, e, snap.Removal(e.Ticket.URL), obs); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		return nil
 	})
 }
 
-func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Observation, lastPushed plan.SHA) error {
+func (l *Loop) removeWorktreeOne(
+	ctx context.Context, e plan.Entry, removal plan.Removal, obs plan.Observation,
+) error {
 	ticket := e.Ticket
 	url := string(ticket.URL)
 	refuse := func(detail string) error {
 		return l.event(ctx, url, store.EventRemoveWorktreeRefused, detail)
 	}
 
-	if e.HoldsWorktree() {
-		return refuse(heldWorktreeRefusal)
+	if removal.Refusal != "" {
+		return refuse(removal.Refusal)
 	}
 
-	pr := obs.PRs[ticket.Ref()]
-	merged := pr.State == plan.Merged
-	baseGone := e.Run.IsSome() && e.Unlock.BlockerClosed
-	if !merged && !baseGone {
-		return refuse("neither merged nor base gone")
-	}
+	merged := obs.PRs[ticket.Ref()].State == plan.Merged
 
 	repoPath := l.checkout(ticket.Repo)
 	worktreePath, worktreePresent := obs.Worktrees[ticket.Ref()]
@@ -240,9 +233,9 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 			return refuse("worktree is dirty")
 		}
 
-		provenTips := []string{string(lastPushed)}
-		if merged && pr.HeadOid != "" {
-			provenTips = append(provenTips, string(pr.HeadOid))
+		provenTips := make([]string, len(removal.ProvenTips))
+		for i, tip := range removal.ProvenTips {
+			provenTips[i] = string(tip)
 		}
 		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, provenTips...)
 		if err != nil {
@@ -267,9 +260,6 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		return refuse(err.Error())
 	}
 
-	if err := l.pruneRunLogs(ctx, url); err != nil {
-		return fmt.Errorf("prune run logs of %s: %w", url, err)
-	}
 	var detail string
 	if mode == tp.RemoveForced {
 		detail = "forced: origin ref pruned, branch at a proven tip"
@@ -277,17 +267,15 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	if err := l.event(ctx, url, store.EventWorktreeRemoved, detail); err != nil {
 		return fmt.Errorf("record worktree removed: %w", err)
 	}
-	if err := l.store.WithdrawTicket(ctx, url, l.clock.Now(), merged); err != nil {
+	runs, err := l.store.WithdrawTicket(ctx, url, l.clock.Now(), merged)
+	if err != nil {
 		return fmt.Errorf("withdraw %s: %w", url, err)
 	}
+	l.pruneRunLogs(runs)
 	return nil
 }
 
-func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {
-	ids, err := l.store.RunIDsForTicket(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("list run ids: %w", err)
-	}
+func (l *Loop) pruneRunLogs(ids []plan.RunID) {
 	for _, id := range ids {
 		for _, ext := range []string{"jsonl", "prompt"} {
 			path := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.%s", id, ext))
@@ -296,5 +284,4 @@ func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {
 			}
 		}
 	}
-	return nil
 }

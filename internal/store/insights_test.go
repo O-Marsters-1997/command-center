@@ -41,7 +41,7 @@ func mergeInsightsTicket(t *testing.T, store *storepkg.Store, ticketURL string, 
 
 func withdraw(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time, merged bool) {
 	t.Helper()
-	if err := store.WithdrawTicket(t.Context(), ticketURL, at, merged); err != nil {
+	if _, err := store.WithdrawTicket(t.Context(), ticketURL, at, merged); err != nil {
 		t.Fatalf("WithdrawTicket(%s): %v", ticketURL, err)
 	}
 }
