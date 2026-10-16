@@ -1,6 +1,9 @@
 package plan
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type MergeSettings struct {
 	AllowMergeCommit bool
@@ -44,4 +47,23 @@ func NextRepoStatus(current RepoStatus, obs Observation) RepoStatus {
 		return RepoStatus{Name: current.Name, Phase: RepoReady}
 	}
 	return current
+}
+
+func NormaliseRemote(url string) string {
+	return strings.ToLower(hostPath(url))
+}
+
+func hostPath(url string) string {
+	url = strings.TrimSpace(url)
+	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
+
+	if scheme := strings.Index(url, "://"); scheme >= 0 {
+		url = url[scheme+3:]
+	} else if colon := strings.Index(url, ":"); colon >= 0 && !strings.Contains(url[:colon], "/") {
+		url = url[:colon] + "/" + url[colon+1:]
+	}
+	if at := strings.Index(url, "@"); at >= 0 {
+		url = url[at+1:]
+	}
+	return strings.TrimSuffix(url, "/")
 }
