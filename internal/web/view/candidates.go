@@ -30,6 +30,7 @@ type Candidate struct {
 
 type LaunchModal struct {
 	Feature      string
+	Project      ProjectMark
 	FeatureQuery string
 	TicketQuery  string
 	Pending      bool
@@ -45,6 +46,7 @@ type LaunchPicker struct {
 
 type LaunchFeature struct {
 	Name     string
+	Project  ProjectMark
 	Path     string
 	Now      int
 	OnUnlock int
@@ -73,7 +75,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 		if err != nil {
 			return LaunchPicker{}, fmt.Errorf("preview launch of feature %s: %w", feature, err)
 		}
-		row := LaunchFeature{Name: feature, Path: featureLaunchPath(feature)}
+		row := LaunchFeature{Name: feature, Project: in.featureMark(feature), Path: featureLaunchPath(feature)}
 		for _, c := range candidates {
 			switch c.Label {
 			case plan.Now.String():
@@ -104,6 +106,16 @@ func featureLaunchPath(feature string) string {
 type candidateInputs struct {
 	tickets []store.Ticket
 	snap    plan.Snapshot
+	marks   map[string]ProjectMark
+}
+
+func (in candidateInputs) featureMark(feature string) ProjectMark {
+	for _, t := range in.tickets {
+		if mark, ok := in.marks[t.Repo]; ok && t.Feature == feature {
+			return mark
+		}
+	}
+	return ProjectMark{}
 }
 
 func (r *Reader) loadCandidateInputs(ctx context.Context, now time.Time) (candidateInputs, error) {
@@ -115,7 +127,11 @@ func (r *Reader) loadCandidateInputs(ctx context.Context, now time.Time) (candid
 	if err != nil {
 		return candidateInputs{}, fmt.Errorf("load snapshot: %w", err)
 	}
-	return candidateInputs{tickets: tickets, snap: snap}, nil
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return candidateInputs{}, fmt.Errorf("load repos: %w", err)
+	}
+	return candidateInputs{tickets: tickets, snap: snap, marks: projectMarks(repos)}, nil
 }
 
 func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([]Candidate, error) {
@@ -192,6 +208,7 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 	if err != nil {
 		return LaunchModal{}, fmt.Errorf("load candidate inputs: %w", err)
 	}
+	view.Project = in.featureMark(feature)
 	requested, err := candidateSelection(url.Values{"feature": {feature}}, in.tickets)
 	if err != nil {
 		return LaunchModal{}, fmt.Errorf("load candidate selection: %w", err)

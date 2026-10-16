@@ -1,18 +1,23 @@
 {{define "launchDialog" -}}
 <dialog id="launch-modal-body" class="launch-dialog" aria-labelledby="launch-dialog-title"{{if or .Pending .Refused .Empty}} open{{end}}{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-sync="this:drop" hx-swap="outerHTML"{{end}}>
+<header class="launch-head">
+{{- if .Project.Name}}<span class="launch-proj">{{template "mark" .Project}}{{.Project.Name}}</span>{{end}}
 <h2 id="launch-dialog-title" class="launch-dialog-title">Launch {{if .Feature}}{{.Feature}}{{else}}tickets{{end}}</h2>
+{{- if .Feature}}<a class="btn btn-ghost btn-sm" href="/launch" {{template "nav" "/launch"}}>Change feature</a>{{end}}
+<a class="btn btn-ghost btn-sm btn-icon" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}" aria-label="Close">{{template "icon" "x"}}</a>
+</header>
 {{if .Pending -}}
-<p>importing {{.Feature}}&hellip;</p>
+<div class="launch-body"><p>importing {{.Feature}}&hellip;</p></div>
 {{- else if .Refused -}}
-<p class="banner ribbon" data-glyph="failed" role="status">import of {{.Feature}} refused: {{.Refused}}</p>
+<div class="launch-body"><p class="banner ribbon" data-glyph="failed" role="status">import of {{.Feature}} refused: {{.Refused}}</p></div>
 {{- else if .Empty -}}
-<p class="text-muted">{{.Feature}} has no tickets to launch.</p>
+<div class="launch-body"><p class="text-muted">{{.Feature}} has no tickets to launch.</p></div>
 {{- else -}}
 <cc-launch-modal{{if .Feature}} feature="{{.Feature}}"{{else}} tickets="{{.TicketQuery}}"{{end}}></cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
 {{- if or .Pending .Refused .Empty}}
-<a class="btn btn-ghost" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
+<div class="launch-foot"><a class="btn btn-ghost" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a></div>
 {{- end}}
 </dialog>
 {{- end}}

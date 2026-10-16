@@ -138,8 +138,8 @@ under a board row.
 _Avoid_: Drawer, expansion, panel
 
 **Launch modal**:
-The dialog that opens at `/f/{feature}/launch` or `/launch`, from a feature or a board selection, listing the tickets one launch
-would cover and drawing the DAG it would produce. Its toggles change nothing: only confirming
+The dialog that opens at `/f/{feature}/launch` from a feature, or at `/launch` on a feature picker,
+with no board selection, listing the tickets one launch would cover as Ready now and On unlock. Its toggles change nothing: only confirming
 writes. Unticking a ticket others depend on is refused, naming them, so the set it confirms is
 always closed under blockers.
 _Avoid_: Dialog, popup, drawer, preview (that is the label a ticket carries inside it)
@@ -206,7 +206,7 @@ _Avoid_: Header, nav
 - A **ticket** belongs to exactly one **repo**; a **feature** spans one or more **repos**
 - A **feature** contains every unmerged blocker of every **ticket** it contains
 - A **scope** admits a blocker chain whole when any of its **tickets** matches
-- A **launch modal** confirms exactly one **slice**, drawn from one **feature** or one board selection
+- A **launch modal** confirms exactly one **slice**, drawn from one **feature**
 - A **ticket** has zero or more **runs**; only the latest one renders
 - A **run** produces a log of **run phases**, and one **spend** figure
 - The **board** contains **tickets** sectioned by attention; a **detail** belongs to exactly one **ticket**

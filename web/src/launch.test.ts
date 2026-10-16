@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   cancelHref,
-  columnsFor,
   dependentsOf,
   initialTicked,
+  launchLabel,
   missingBlockersOf,
   REFUSED,
   sectionsFor,
   toggleResult,
+  whenLabel,
 } from "./launch";
 import type { Candidate } from "./launch";
 
@@ -101,40 +102,36 @@ describe("missingBlockersOf", () => {
   });
 });
 
-describe("columnsFor", () => {
-  test("a candidate with no blockers inside the set sits in column 0", () => {
-    const candidates = [candidate({ url: "a" }), candidate({ url: "b", blocked_by: ["outside"] })];
-    const cols = columnsFor(candidates);
-    expect(cols.get("a")).toBe(0);
-    expect(cols.get("b")).toBe(0);
+describe("launchLabel", () => {
+  const candidates = [
+    candidate({ url: "a" }),
+    candidate({ url: "b" }),
+    candidate({ url: "c", label: "on unlock", blocked_by: ["a"] }),
+  ];
+
+  test("counts ticked tickets by section", () => {
+    expect(launchLabel(candidates, new Set(["a", "b", "c"]))).toBe("Launch 2 now · arm 1");
   });
 
-  test("a chain lands one column further right per link", () => {
-    const candidates = [
-      candidate({ url: "a" }),
-      candidate({ url: "b", blocked_by: ["a"] }),
-      candidate({ url: "c", blocked_by: ["b"] }),
-    ];
-    const cols = columnsFor(candidates);
-    expect([cols.get("a"), cols.get("b"), cols.get("c")]).toEqual([0, 1, 2]);
+  test("a selection with nothing ready leads with Arm", () => {
+    expect(launchLabel(candidates, new Set(["c"]))).toBe("Arm 1");
   });
 
-  test("a candidate blocked by two chains takes the longer one", () => {
-    const candidates = [
-      candidate({ url: "a" }),
-      candidate({ url: "b", blocked_by: ["a"] }),
-      candidate({ url: "c", blocked_by: ["b", "a"] }),
-    ];
-    const cols = columnsFor(candidates);
-    expect(cols.get("c")).toBe(2);
+  test("an empty selection asks for one", () => {
+    expect(launchLabel(candidates, new Set())).toBe("Select tickets to launch");
+  });
+});
+
+describe("whenLabel", () => {
+  test("a ready ticket shows its repo", () => {
+    const c = candidate({ url: "a", repo: "olly/x" });
+    expect(whenLabel(c, [c])).toBe("olly/x");
   });
 
-  test("a cycle terminates with finite columns", () => {
-    const cols = columnsFor([
-      candidate({ url: "a", blocked_by: ["b"] }),
-      candidate({ url: "b", blocked_by: ["a"] }),
-    ]);
-    expect([...cols.values()].every(Number.isFinite)).toBe(true);
+  test("an on-unlock ticket names its blockers by their supplied refs", () => {
+    const blocker = candidate({ url: "linear://ACME-1", ref: "ACME-1" });
+    const c = candidate({ url: "z", label: "on unlock", blocked_by: ["linear://ACME-1", "gh://o/r/7"] });
+    expect(whenLabel(c, [blocker, c])).toBe("after ACME-1, #7");
   });
 });
 
@@ -184,8 +181,13 @@ describe("toggleResult", () => {
   });
 
   test("refusals use supplied refs rather than parsing URLs", () => {
-    const named = [candidate({ url: "opaque-a", ref: "ACME-1", title: "first" }), candidate({ url: "opaque-b", ref: "ACME-2", title: "second", blocked_by: ["opaque-a"] })];
-    expect(toggleResult(named, new Set<string>(), "opaque-b")).toEqual({ refusal: "ACME-2 is blocked by ACME-1 first -- tick it first" });
+    const named = [
+      candidate({ url: "opaque-a", ref: "ACME-1", title: "first" }),
+      candidate({ url: "opaque-b", ref: "ACME-2", title: "second", blocked_by: ["opaque-a"] }),
+    ];
+    expect(toggleResult(named, new Set<string>(), "opaque-b")).toEqual({
+      refusal: "ACME-2 is blocked by ACME-1 first -- tick it first",
+    });
   });
 
   test("an allowed tick and clear return a new set", () => {
