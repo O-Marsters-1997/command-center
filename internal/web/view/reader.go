@@ -52,18 +52,16 @@ type Board struct {
 	Launch           option.Option[LaunchModal]
 }
 
-func (b Board) Row(ticketURL string) (Row, bool) {
-	for _, g := range b.Groups {
-		if g.Root.IsSome() && g.Root.Unwrap().URL == ticketURL {
-			return g.Root.Unwrap(), true
-		}
-		for _, child := range g.Children {
-			if child.URL == ticketURL {
-				return child, true
-			}
-		}
+func (b Board) rowFor(ref SessionRef) (Row, bool) {
+	rows := rowsIn(b.Groups)
+	i := slices.IndexFunc(rows, func(r Row) bool {
+		found, err := ParseSessionRef(plan.TicketURL(r.URL))
+		return err == nil && found == ref
+	})
+	if i < 0 {
+		return Row{}, false
 	}
-	return Row{}, false
+	return rows[i], true
 }
 
 type InvalidError struct{ Err error }
@@ -115,19 +113,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, fmt.Errorf("apply spend: %w", err)
 	}
 	ApplyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
-	var records []store.Event
-	if params.Sel != "" {
-		err = EachTicketEvent(ctx, r.store, params.Sel, 0, func(e store.Event) error {
-			records = append(records, e)
-			return nil
-		})
-		if err != nil {
-			return Board{}, fmt.Errorf("load ticket events after: %w", err)
-		}
-	}
-	if err := applyViewState(rows, params, records, r.renderLine); err != nil {
-		return Board{}, fmt.Errorf("apply view state: %w", err)
-	}
+	applyViewState(rows, params)
 	groups := FilterGroupsByFeature(FilterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	if f.project.Name != "" {
 		groups = FilterGroupsByProject(groups, f.project.Repos)

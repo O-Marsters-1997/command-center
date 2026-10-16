@@ -9,7 +9,6 @@ import (
 )
 
 type Params struct {
-	Sel     string
 	Tickets []string
 	Log     LogFilter
 	Repo    string
@@ -20,15 +19,11 @@ type Params struct {
 }
 
 func ParseParams(q url.Values) Params {
-	v := Params{
+	return Params{
 		Tickets: q["ticket"], Log: ParseLogFilter(q.Get("log")),
 		Repo: q.Get("repo"), Project: q.Get("project"), Feature: q.Get("feature"),
 		Filter: normalizeFilter(q.Get("filter")), All: q.Get("all") == "1",
 	}
-	if sel := q["sel"]; len(sel) > 0 {
-		v.Sel = sel[0]
-	}
-	return v
 }
 
 func normalizeFilter(filter string) SectionKey {
@@ -89,9 +84,6 @@ func (v Params) Query() string {
 	}
 	if v.Project != "" {
 		q.Set("project", v.Project)
-	}
-	if v.Sel != "" {
-		q.Set("sel", v.Sel)
 	}
 	for _, ticket := range v.Tickets {
 		q.Add("ticket", ticket)

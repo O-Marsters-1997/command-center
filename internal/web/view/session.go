@@ -90,29 +90,15 @@ func SessionPath(ticketURL string) string {
 }
 
 func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw bool) (SessionPage, error) {
-	tickets, err := r.store.Tickets(ctx)
-	if err != nil {
-		return SessionPage{}, fmt.Errorf("load tickets: %w", err)
-	}
-	ticketURL := ""
-	for _, t := range tickets {
-		if found, err := ParseSessionRef(plan.TicketURL(t.URL)); err == nil && found == ref {
-			ticketURL = t.URL
-			break
-		}
-	}
-	if ticketURL == "" {
-		return SessionPage{}, ErrSessionNotFound
-	}
-
-	board, err := r.Board(ctx, now, Params{Sel: ticketURL, Log: "all"})
+	board, err := r.Board(ctx, now, Params{})
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load board: %w", err)
 	}
-	row, ok := board.Row(ticketURL)
+	row, ok := board.rowFor(ref)
 	if !ok {
 		return SessionPage{}, ErrSessionNotFound
 	}
+	ticketURL := row.URL
 
 	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
@@ -140,6 +126,18 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	runs, err := r.store.SessionRunsForTicket(ctx, ticketURL)
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load session runs for ticket: %w", err)
+	}
+	var records []store.Event
+	err = EachTicketEvent(ctx, r.store, ticketURL, 0, func(e store.Event) error {
+		records = append(records, e)
+		return nil
+	})
+	if err != nil {
+		return SessionPage{}, fmt.Errorf("load ticket events: %w", err)
+	}
+	current := LogSource{Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records}
+	if row.Log, err = BuildLogDetail(r.renderLine, current, Params{Log: LogAll}); err != nil {
+		return SessionPage{}, fmt.Errorf("build log for %s: %w", ticketURL, err)
 	}
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
