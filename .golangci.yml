@@ -88,6 +88,11 @@ linters:
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
             - pkg: net/http
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
+        git-no-gh:
+          files: ["**/internal/git/**", "!$test"]
+          deny:
+            - pkg: github.com/O-Marsters-1997/command-center/internal/gh
+              desc: git shells out to git only; the loop reads GitHub and hands plan the facts
         ccdb-in-store:
           files: ["$all", "!**/internal/store/**"]
           deny:

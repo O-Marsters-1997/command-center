@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -19,10 +20,11 @@ type ValidateFunc func(ctx context.Context, dataDir string, repo store.Repo, now
 type RemoteFunc func(ctx context.Context, fullName string) (string, error)
 
 func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error) {
-	kind, reason, err := git.CheckRepoOnGitHub(ctx, repo.Name)
+	settings, err := gh.CLI{}.ReadRepoSettings(ctx, repo.Name)
 	if err != nil {
 		return repo, fmt.Errorf("check %s on github: %w", repo.Name, err)
 	}
+	kind, reason := plan.RepoRefusal(plan.MergeSettings(settings))
 	if kind != plan.RefusalUnknown {
 		return refuse(repo, kind, reason), nil
 	}
