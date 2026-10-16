@@ -43,14 +43,14 @@
 </section>
 <section class="module" aria-labelledby="split-h">
 <h2 id="split-h">Spend split</h2>
-<table class="w-full max-w-md" aria-label="spend split">
+<div class="table-frame max-w-md"><table class="w-full" aria-label="spend split">
   <thead><tr><th scope="col">kind</th><th scope="col" class="text-right">% of week</th></tr></thead>
   <tbody>
     {{range .Split.Rows}}<tr><th scope="row">{{.Kind}}</th><td class="text-right">{{printf "%.2f" .Pct}}%</td></tr>
     {{end -}}
   </tbody>
   <tfoot><tr><th scope="row">total</th><td class="text-right">{{printf "%.2f" .Split.Total}}%</td></tr></tfoot>
-</table>
+</table></div>
 </section>
 <section class="module" aria-labelledby="merged-h">
 <h2 id="merged-h">Merged tickets</h2>

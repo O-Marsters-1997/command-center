@@ -2204,7 +2204,11 @@
   }
 
   .module {
-    margin-top: var(--space-6);
+    margin-top: 28px;
+  }
+
+  .module > h2 {
+    margin-bottom: 10px;
   }
 
   .module-sub {
