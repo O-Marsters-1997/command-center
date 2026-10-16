@@ -6,8 +6,8 @@
 <div class="session-main">
   <header class="session-head">
     <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.Label}}</span></span>
-    <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
-    <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" {{template "nav" (printf "/f/%s/graph" (. | pathEscape))}}>{{.}}</a>{{end}}</p>
+    <h1 class="session-ref">{{or .Row.Title .Ref}}</h1>
+    <p class="session-meta text-muted font-mono">{{.Row.Repo}} {{.Ref}}{{with .Row.Branch}} · {{.}}{{end}}</p>
     {{- with .Row.Worktree}}
     <p class="session-worktree text-muted"><code>{{.}}</code></p>
     {{- end}}
@@ -18,9 +18,12 @@
     </details>
     {{- end}}
   </header>
-  <section class="prompt-bubble" aria-label="prompt">
+  <section class="prompt" aria-label="prompt">
+    <span class="prompt-meta text-muted">Launched from the ticket{{with .Launched}}{{if .IsSome}} · {{template "age" .Unwrap}}{{end}}{{end}}</span>
+    <div class="prompt-bubble">
     {{- if .Prompt.Kept}}<pre class="prompt-text">{{.Prompt.Text}}</pre>
     {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
+    </div>
   </section>
   <nav class="pill-tabs" aria-label="log view">
     <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
@@ -66,41 +69,51 @@
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
-    {{- with .Stack.Feature}}
-    <h2 class="stack-title stack-feature">{{.}}<span class="text-muted stack-progress">{{$.Stack.Merged}}/{{$.Stack.Total}} merged</span></h2>
+    {{- if .Stack.Feature}}
+    <h2 class="stack-title stack-feature">{{template "mark" .Stack.Project}}{{.Stack.Feature}}<span class="text-muted stack-progress">{{.Stack.Merged}}/{{.Stack.Total}} merged</span></h2>
     <div class="stack-links">
-      <a class="btn" href="{{$.Stack.GraphPath}}">Graph</a>
-      <a class="btn" href="{{$.Stack.BoardPath}}">Board</a>
+      <a class="btn btn-sm" href="{{.Stack.GraphPath}}" data-key="f" {{template "nav" .Stack.GraphPath}}>Graph</a>
+      <a class="btn btn-sm" href="{{.Stack.BoardPath}}" {{template "nav" .Stack.BoardPath}}>Board</a>
     </div>
-    <ul class="stack-list">{{range $.Stack.Members}}<li{{if eq .Path $.TranscriptPath}} aria-current="page"{{end}}>{{template "stackLink" .}}{{with .Title}} <span class="text-muted">{{.}}</span>{{end}}</li>{{end}}</ul>
+    {{- range .Stack.Waves}}
+    <section class="stack-wave" aria-label="Wave {{.N}}">
+      <h3 class="stack-wave-label text-muted">Wave {{.N}}</h3>
+      <ul class="stack-list">{{range .Members}}<li class="stack-row"{{if .Current}} aria-current="page"{{end}}>{{template "stackLink" .}}</li>{{end}}</ul>
+    </section>
     {{- end}}
+    {{- else}}
     <h2 class="stack-title">Blocked by</h2>
     {{- if .Stack.Blockers}}
-    <ul class="stack-list">{{range .Stack.Blockers}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
+    <ul class="stack-list">{{range .Stack.Blockers}}<li class="stack-row">{{template "stackLink" .}}</li>{{end}}</ul>
     {{- else}}<p class="text-muted">Nothing blocks this ticket.</p>{{end}}
     <h2 class="stack-title">Merging this unlocks</h2>
     {{- if .Stack.Unlocks}}
-    <ul class="stack-list">{{range .Stack.Unlocks}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
+    <ul class="stack-list">{{range .Stack.Unlocks}}<li class="stack-row">{{template "stackLink" .}}</li>{{end}}</ul>
     {{- else}}<p class="text-muted">Nothing waits on this ticket.</p>{{end}}
-    <form method="post" action="/ticket" class="stack-form">
-      <input type="hidden" name="ticket" value="{{.Row.URL}}">
-      <input type="hidden" name="branch" value="{{.Row.Branch}}">
-      <input type="hidden" name="return" value="{{.TranscriptPath}}">
-      <fieldset class="stack-fields">
-        <legend class="stack-title">Edit blockers</legend>
-        {{- range .Row.BlockedBy}}
-        <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
-        {{- end}}
-        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
-      </fieldset>
-      <button type="submit" class="btn">save</button>
-    </form>
+    {{- end}}
     <dl class="stack-props">
       <dt>Repo</dt><dd>{{.Row.Repo}}</dd>
       <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
       <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
       <dt>Checks</dt><dd>{{if .Row.ChecksTotal}}{{.Row.ChecksPassed}}/{{.Row.ChecksTotal}} passing{{else}}—{{end}}</dd>
+      <dt>Spend</dt><dd class="mono">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
     </dl>
+    <details class="stack-edit">
+      <summary>Edit blockers</summary>
+      <form method="post" action="/ticket" class="stack-form">
+        <input type="hidden" name="ticket" value="{{.Row.URL}}">
+        <input type="hidden" name="branch" value="{{.Row.Branch}}">
+        <input type="hidden" name="return" value="{{.TranscriptPath}}">
+        <fieldset class="stack-fields">
+          <legend class="sr-only">Blockers</legend>
+          {{- range .Row.BlockedBy}}
+          <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
+          {{- end}}
+          <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+        </fieldset>
+        <button type="submit" class="btn">save</button>
+      </form>
+    </details>
   </aside>
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
@@ -143,4 +156,4 @@
   </form>
   {{- end}}
 </div>{{end}}
-{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .Label}} <span class="text-muted">{{.}}</span>{{end}}{{end}}
+{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .Title}} <span class="stack-row-title">{{.}}</span>{{end}}{{with .Metric}}<span class="stack-row-metric font-mono text-muted">{{.}}</span>{{end}}{{end}}
