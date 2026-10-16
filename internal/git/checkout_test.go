@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func TestSameRemote(t *testing.T) {
@@ -163,7 +164,7 @@ func FuzzFullName(f *testing.F) {
 		if err != nil {
 			return
 		}
-		normal := git.NormaliseRemote(remote)
+		normal := plan.NormaliseRemote(remote)
 		if !strings.HasPrefix(normal, "github.com/") ||
 			!githubFullName.MatchString(strings.TrimPrefix(normal, "github.com/")) {
 			return

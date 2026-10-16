@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
@@ -78,15 +79,11 @@ func OriginURL(ctx context.Context, repoPath string) (string, error) {
 }
 
 func SameRemote(a, b string) bool {
-	return NormaliseRemote(a) == NormaliseRemote(b)
-}
-
-func NormaliseRemote(url string) string {
-	return strings.ToLower(hostPath(url))
+	return plan.NormaliseRemote(a) == plan.NormaliseRemote(b)
 }
 
 func FullName(remote string) (string, error) {
-	host, fullName, _ := strings.Cut(hostPath(remote), "/")
+	host, fullName, _ := strings.Cut(plan.HostPath(remote), "/")
 	owner, name, ok := strings.Cut(fullName, "/")
 	if !ok || host == "" || !pathSegment(owner) || !pathSegment(name) ||
 		strings.Contains(name, "/") || strings.HasSuffix(name, ".git") {
@@ -97,19 +94,4 @@ func FullName(remote string) (string, error) {
 
 func pathSegment(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.Contains(s, `\`)
-}
-
-func hostPath(url string) string {
-	url = strings.TrimSpace(url)
-	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
-
-	if scheme := strings.Index(url, "://"); scheme >= 0 {
-		url = url[scheme+3:]
-	} else if colon := strings.Index(url, ":"); colon >= 0 && !strings.Contains(url[:colon], "/") {
-		url = url[:colon] + "/" + url[colon+1:]
-	}
-	if at := strings.Index(url, "@"); at >= 0 {
-		url = url[at+1:]
-	}
-	return strings.TrimSuffix(url, "/")
 }

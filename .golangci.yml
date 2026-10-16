@@ -88,6 +88,11 @@ linters:
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
             - pkg: net/http
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
+        tracker-no-git:
+          files: ["**/internal/tracker/**", "!$test"]
+          deny:
+            - pkg: github.com/O-Marsters-1997/command-center/internal/git
+              desc: tracker normalises remotes through plan.NormaliseRemote
         ccdb-in-store:
           files: ["$all", "!**/internal/store/**"]
           deny:

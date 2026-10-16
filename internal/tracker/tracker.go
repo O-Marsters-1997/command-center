@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 type Kind string
@@ -62,7 +62,7 @@ func ForRemote(resolve Resolver, kind Kind, remote string) (src Source, ok bool,
 	if remote == "" {
 		return nil, false, nil
 	}
-	src, err = resolve(kind, git.NormaliseRemote(remote))
+	src, err = resolve(kind, plan.NormaliseRemote(remote))
 	if err != nil {
 		return nil, false, fmt.Errorf("resolve tracker for %s: %w", remote, err)
 	}
