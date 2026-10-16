@@ -4,6 +4,7 @@
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/solid-islands/
+!.claude/skills/testing-policy/
 .agents/
 .treepad.toml
 .treepad

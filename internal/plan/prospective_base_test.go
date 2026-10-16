@@ -57,7 +57,7 @@ func TestProspectiveBase(t *testing.T) {
 
 			got := plan.ProspectiveBase(tt.ticket, byURL, tt.stacking)
 			if got != tt.want {
-				t.Errorf("ProspectiveBase = %q, want %q", got, tt.want)
+				t.Errorf("ProspectiveBase(%s, stacking %t) = %q, want %q", tt.ticket.URL, tt.stacking, got, tt.want)
 			}
 		})
 	}

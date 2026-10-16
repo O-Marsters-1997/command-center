@@ -7,7 +7,6 @@ import (
 )
 
 const AgentModel = "claude-sonnet-5-5"
-const agentCommandEnv = "CC_AGENT_COMMAND"
 
 type Env struct {
 	DataDir       string
@@ -15,6 +14,7 @@ type Env struct {
 	AgentCommand  string
 	Home          string
 	UserConfigDir string
+	TZ            string
 }
 
 func EnvFrom(lookup func(string) string) (Env, error) {
@@ -33,8 +33,9 @@ func EnvFrom(lookup func(string) string) (Env, error) {
 	return Env{
 		DataDir:       lookup("CC_DATA_DIR"),
 		DatabaseURL:   lookup("CC_DATABASE_URL"),
-		AgentCommand:  lookup(agentCommandEnv),
+		AgentCommand:  lookup("CC_AGENT_COMMAND"),
 		Home:          home,
 		UserConfigDir: configDir,
+		TZ:            lookup("TZ"),
 	}, nil
 }

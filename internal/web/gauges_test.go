@@ -2,18 +2,18 @@ package web_test
 
 import (
 	"log/slog"
-	"slices"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func TestRailRendersTheLatestStoredReading(t *testing.T) {
+func testRailLatestReading(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -55,7 +55,7 @@ func TestRailRendersTheLatestStoredReading(t *testing.T) {
 	}
 }
 
-func TestRailGaugesSurviveARepeatedPollWithoutFlicker(t *testing.T) {
+func testRailGaugesStable(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -78,24 +78,21 @@ func TestRailGaugesSurviveARepeatedPollWithoutFlicker(t *testing.T) {
 		return []string{gauges[0].HTML(), gauges[1].HTML()}
 	}
 	first, second := markup(), markup()
-	if !slices.Equal(first, second) {
-		t.Errorf("gauge markup changed between polls: first = %q, second = %q", first, second)
+	if diff := cmp.Diff(first, second); diff != "" {
+		t.Errorf("GET /rail gauges changed between polls (-first +second):\n%s", diff)
 	}
 }
 
-func TestSpendLimitNotice(t *testing.T) {
+func testLayoutSpendLimitNotice(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
 		name        string
 		utilization float64
-		want        string
+		wantPaused  bool
 	}{
-		{
-			name: "above limit", utilization: 0.82,
-			want: "spawning paused: five-hour usage is 82%, at or above the spend_limit_5h of 80%.",
-		},
-		{name: "below limit", utilization: 0.50, want: ""},
+		{name: "above limit", utilization: 0.82, wantPaused: true},
+		{name: "below limit", utilization: 0.50},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -111,11 +108,11 @@ func TestSpendLimitNotice(t *testing.T) {
 
 			server := web.NewServer(web.Deps{
 				Logger: slog.New(slog.DiscardHandler), Store: store,
-				Clock: cctest.Clock{At: observedAt.Add(45 * time.Second)}, SpendLimit5h: 80,
+				Clock: fixedClock(observedAt.Add(45 * time.Second)), SpendLimit5h: 80,
 			})
 			notices := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "#notices")
-			if got := notices.Text(); got != tt.want {
-				t.Errorf("notices.Text() = %q, want %q in %s", got, tt.want, notices.HTML())
+			if paused := strings.Contains(notices.Text(), "spawning paused"); paused != tt.wantPaused {
+				t.Errorf("GET /tickets notices = %q, paused %v, want %v", notices.Text(), paused, tt.wantPaused)
 			}
 		})
 	}

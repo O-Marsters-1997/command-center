@@ -7,7 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
 
-func TestPageTitleAndCurrentNavFollowThePage(t *testing.T) {
+func testLayoutTitleAndCurrentNav(t *testing.T) {
 	t.Parallel()
 
 	server := threeFeatureServer(t)
@@ -43,7 +43,7 @@ func TestPageTitleAndCurrentNavFollowThePage(t *testing.T) {
 	}
 }
 
-func TestSidebarSwapsOutOfBandOnNavigation(t *testing.T) {
+func testLayoutSidebarOOB(t *testing.T) {
 	t.Parallel()
 
 	page := renderPath(t, threeFeatureServer(t), "/tickets")

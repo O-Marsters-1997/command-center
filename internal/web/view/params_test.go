@@ -1,4 +1,4 @@
-package view
+package view_test
 
 import (
 	"net/url"
@@ -7,211 +7,208 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-func TestParseViewParamsReadsRawScopesAndFirstSelection(t *testing.T) {
+func TestParseParams(t *testing.T) {
 	t.Parallel()
 
-	for _, tt := range []struct {
-		name, query string
-		want        Params
+	tests := []struct {
+		name  string
+		query string
+		want  view.Params
 	}{
-		{name: "repo", query: "repo=support-app", want: Params{Repo: "support-app", Log: LogAll}},
-		{name: "feature", query: "feature=cc-220", want: Params{Feature: "cc-220", Log: LogAll}},
-		{name: "first selection and all tickets", query: "sel=a&sel=b&ticket=x&ticket=y",
-			want: Params{Sel: "a", Tickets: []string{"x", "y"}, Log: LogAll}},
-	} {
+		{name: "empty", want: view.Params{Log: view.LogAll}},
+		{
+			name:  "the first sel and every ticket",
+			query: "sel=a&sel=b&ticket=x&ticket=y",
+			want:  view.Params{Sel: "a", Tickets: []string{"x", "y"}, Log: view.LogAll},
+		},
+		{name: "a named log filter passes through", query: "log=fails", want: view.Params{Log: view.LogFails}},
+		{name: "an unrecognised log filter falls back to all", query: "log=bogus", want: view.Params{Log: view.LogAll}},
+		{name: "repo raw", query: "repo=support-app", want: view.Params{Repo: "support-app", Log: view.LogAll}},
+		{name: "feature raw", query: "feature=cc-220", want: view.Params{Feature: "cc-220", Log: view.LogAll}},
+	}
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			q, err := url.ParseQuery(tt.query)
 			if err != nil {
 				t.Fatalf("url.ParseQuery(%q): %v", tt.query, err)
 			}
-			if diff := cmp.Diff(tt.want, ParseParams(q)); diff != "" {
+			if diff := cmp.Diff(tt.want, view.ParseParams(q)); diff != "" {
 				t.Errorf("ParseParams(%q) mismatch (-want +got):\n%s", tt.query, diff)
 			}
 		})
 	}
 }
 
-func TestParseViewParamsNormalizesTheLogFilter(t *testing.T) {
+func TestParams_Query(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct {
-		name  string
-		query string
-		want  LogFilter
-	}{
-		{name: "absent defaults to all", want: LogAll},
-		{name: "a named filter passes through", query: "log=fails", want: LogFails},
-		{name: "an unrecognised value falls back to all", query: "log=bogus", want: LogAll},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			q, err := url.ParseQuery(tc.query)
-			if err != nil {
-				t.Fatalf("url.ParseQuery(%q): %v", tc.query, err)
-			}
-			if got := ParseParams(q).Log; got != tc.want {
-				t.Errorf("ParseParams(%q).Log = %q, want %q", tc.query, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestNormalizeFeatureScope(t *testing.T) {
-	t.Parallel()
-
-	fleet := []string{"board-scope", "sqlc-migration"}
-	for _, tc := range []struct {
-		name    string
-		feature string
-		want    string
-	}{
-		{name: "absent stays blank"},
-		{name: "a feature in the fleet passes through", feature: "board-scope", want: "board-scope"},
-		{name: "a feature not in the fleet falls back to blank", feature: "bogus"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := normalizeFeatureScope(tc.feature, fleet); got != tc.want {
-				t.Errorf("normalizeFeatureScope(%q) = %q, want %q", tc.feature, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestNormalizeRepoScope(t *testing.T) {
-	t.Parallel()
-
-	repos := []store.Repo{{Name: "acme/support-app"}, {Name: "acme/services"}}
-	for _, tc := range []struct {
+	tests := []struct {
 		name string
-		repo string
-		want string
-	}{
-		{name: "absent stays blank"},
-		{name: "a tracked repo passes through", repo: "acme/support-app", want: "acme/support-app"},
-		{name: "an untracked repo falls back to blank", repo: "bogus"},
-		{
-			name: "a tracked repo in another case reads as its tracked name",
-			repo: "ACME/Support-App", want: "acme/support-app",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := normalizeRepoScope(tc.repo, repos); got != tc.want {
-				t.Errorf("normalizeRepoScope(%q) = %q, want %q", tc.repo, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		v    Params
+		v    view.Params
 		want string
 	}{
 		{name: "empty"},
-		{name: "sel only", v: Params{Sel: "https://x/1"}, want: "sel=https%3A%2F%2Fx%2F1"},
-		{name: "sel and tickets", v: Params{Sel: "a", Tickets: []string{"b", "c"}}, want: "sel=a&ticket=b&ticket=c"},
+		{name: "sel only", v: view.Params{Sel: "https://x/1"}, want: "sel=https%3A%2F%2Fx%2F1"},
+		{name: "sel and tickets", v: view.Params{Sel: "a", Tickets: []string{"b", "c"}}, want: "sel=a&ticket=b&ticket=c"},
+		{name: "a non-default log filter", v: view.Params{Sel: "a", Log: view.LogFails}, want: "log=fails&sel=a"},
+		{name: "the default log filter is never written", v: view.Params{Log: view.LogAll}},
 		{
-			name: "a non-default log filter, alphabetically ahead of sel",
-			v:    Params{Sel: "a", Log: "fails"},
-			want: "log=fails&sel=a",
-		},
-		{name: "the default log filter is never written", v: Params{Log: "all"}},
-		{
-			name: "a repo scope sits between log and sel",
-			v:    Params{Sel: "a", Log: "fails", Repo: "support-app"},
+			name: "a repo scope",
+			v:    view.Params{Sel: "a", Log: view.LogFails, Repo: "support-app"},
 			want: "log=fails&repo=support-app&sel=a",
 		},
 		{
-			name: "a project scope sits between log and sel",
-			v:    Params{Sel: "a", Log: "fails", Project: "acme"},
+			name: "a project scope",
+			v:    view.Params{Sel: "a", Log: view.LogFails, Project: "acme"},
 			want: "log=fails&project=acme&sel=a",
 		},
 		{
-			name: "a feature scope sorts ahead of log and repo, neither overriding the other",
-			v:    Params{Sel: "a", Log: "fails", Repo: "support-app", Feature: "board-scope"},
+			name: "a feature scope beside a repo scope",
+			v:    view.Params{Sel: "a", Log: view.LogFails, Repo: "support-app", Feature: "board-scope"},
 			want: "feature=board-scope&log=fails&repo=support-app&sel=a",
 		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			if got := tc.v.query(); got != tc.want {
-				t.Errorf("query() = %q, want %q", got, tc.want)
+			got := tt.v.Query()
+			if got != tt.want {
+				t.Errorf("%+v.Query() = %q, want %q", tt.v, got, tt.want)
+			}
+			q, err := url.ParseQuery(got)
+			if err != nil {
+				t.Fatalf("url.ParseQuery(%q): %v", got, err)
+			}
+			if diff := cmp.Diff(tt.v.Query(), view.ParseParams(q).Query()); diff != "" {
+				t.Errorf("ParseParams(%q).Query() round trip mismatch (-want +got):\n%s", got, diff)
 			}
 		})
 	}
 }
 
-func TestViewParamsBoardPathOmitsTheQuestionMarkWhenEmpty(t *testing.T) {
+func TestParams_BoardPath(t *testing.T) {
 	t.Parallel()
 
-	if got := (Params{}).boardPath(); got != "/board" {
-		t.Errorf("boardPath() = %q, want /board", got)
+	tests := []struct {
+		v    view.Params
+		want string
+	}{
+		{v: view.Params{}, want: "/board"},
+		{v: view.Params{Sel: "a"}, want: "/board?sel=a"},
 	}
-	if got := (Params{Sel: "a"}).boardPath(); got != "/board?sel=a" {
-		t.Errorf("boardPath() = %q, want /board?sel=a", got)
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.v.BoardPath(); got != tt.want {
+				t.Errorf("%+v.BoardPath() = %q, want %q", tt.v, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestViewParamsPagePathIsThePathRouteForTheScope(t *testing.T) {
+func TestParams_PagePath(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct {
+	tests := []struct {
 		name string
-		v    Params
+		v    view.Params
 		want string
 	}{
 		{name: "unscoped", want: "/tickets"},
-		{name: "all tickets keep their filter", v: Params{All: true, Filter: "blocked"}, want: "/tickets?filter=blocked"},
-		{name: "a feature", v: Params{Feature: "project:x", Tickets: []string{"a"}}, want: "/f/project:x?ticket=a"},
-		{name: "a repo", v: Params{Repo: "acme/web"}, want: "/repos/acme/web"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+		{
+			name: "all tickets keep their filter",
+			v:    view.Params{All: true, Filter: "blocked"},
+			want: "/tickets?filter=blocked",
+		},
+		{name: "a feature", v: view.Params{Feature: "project:x", Tickets: []string{"a"}}, want: "/f/project:x?ticket=a"},
+		{name: "a repo", v: view.Params{Repo: "acme/web"}, want: "/repos/acme/web"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			if got := tc.v.pagePath(); got != tc.want {
-				t.Errorf("pagePath() = %q, want %q", got, tc.want)
+			if got := tt.v.PagePath(); got != tt.want {
+				t.Errorf("%+v.PagePath() = %q, want %q", tt.v, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestViewParamsToggleTicketAddsThenRemoves(t *testing.T) {
+func TestParams_ToggleTicket(t *testing.T) {
 	t.Parallel()
 
-	base := Params{Tickets: []string{"a", "b"}}
-	added := base.toggleTicket("c")
-	if want := []string{"a", "b", "c"}; !equalStrings(added.Tickets, want) {
-		t.Errorf("toggleTicket(c) = %v, want %v", added.Tickets, want)
+	tests := []struct {
+		ticket string
+		want   []string
+	}{
+		{ticket: "c", want: []string{"a", "b", "c"}},
+		{ticket: "a", want: []string{"b"}},
 	}
-	removed := base.toggleTicket("a")
-	if want := []string{"b"}; !equalStrings(removed.Tickets, want) {
-		t.Errorf("toggleTicket(a) = %v, want %v", removed.Tickets, want)
-	}
-	if want := []string{"a", "b"}; !equalStrings(base.Tickets, want) {
-		t.Errorf("toggleTicket mutated the receiver's own slice: Tickets = %v", base.Tickets)
+	for _, tt := range tests {
+		t.Run(tt.ticket, func(t *testing.T) {
+			t.Parallel()
+			base := view.Params{Tickets: []string{"a", "b"}}
+
+			got := base.ToggleTicket(tt.ticket)
+
+			if diff := cmp.Diff(tt.want, got.Tickets); diff != "" {
+				t.Errorf("ToggleTicket(%q) mismatch (-want +got):\n%s", tt.ticket, diff)
+			}
+			if diff := cmp.Diff([]string{"a", "b"}, base.Tickets); diff != "" {
+				t.Errorf("ToggleTicket(%q) mutated the receiver (-want +got):\n%s", tt.ticket, diff)
+			}
+		})
 	}
 }
 
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+func TestParams_Scoped(t *testing.T) {
+	t.Parallel()
+
+	repos := []store.Repo{{Name: "acme/support-app"}, {Name: "acme/services"}}
+	acme := store.Project{Name: "acme", Hue: 2}
+	projects := []store.Project{acme}
+	tickets := []store.Ticket{{Feature: "sqlc-migration"}, {Feature: "board-scope"}, {Feature: ""}}
+
+	tests := []struct {
+		name        string
+		in          view.Params
+		want        view.Params
+		wantProject store.Project
+	}{
+		{name: "absent stays blank"},
+		{
+			name: "a tracked repo passes through",
+			in:   view.Params{Repo: "acme/support-app"}, want: view.Params{Repo: "acme/support-app"},
+		},
+		{name: "an untracked repo falls back to blank", in: view.Params{Repo: "bogus"}},
+		{
+			name: "a tracked repo in another case reads as its tracked name",
+			in:   view.Params{Repo: "ACME/Support-App"}, want: view.Params{Repo: "acme/support-app"},
+		},
+		{
+			name: "a project in another case reads as its name",
+			in:   view.Params{Project: "ACME"}, want: view.Params{Project: "acme"}, wantProject: acme,
+		},
+		{name: "an unknown project falls back to blank", in: view.Params{Project: "nope"}},
+		{
+			name: "a feature in the fleet passes through",
+			in:   view.Params{Feature: "board-scope"}, want: view.Params{Feature: "board-scope"},
+		},
+		{name: "a feature not in the fleet falls back to blank", in: view.Params{Feature: "bogus"}},
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, project := tt.in.Scoped(repos, projects, tickets)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("%+v.Scoped() params mismatch (-want +got):\n%s", tt.in, diff)
+			}
+			if diff := cmp.Diff(tt.wantProject, project); diff != "" {
+				t.Errorf("%+v.Scoped() project mismatch (-want +got):\n%s", tt.in, diff)
+			}
+		})
 	}
-	return true
 }

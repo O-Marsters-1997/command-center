@@ -21,17 +21,26 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func Run(ctx context.Context, deps app.Deps, args []string) error {
+func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+	if len(args) == 0 {
+		return nil
+	}
 	rest := args[1:]
 	switch args[0] {
 	case "tick":
-		return tick(ctx, deps.Logger, deps.ConfigPath, deps.Env, rest)
+		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+			return tick(ctx, logger, configPath, env, rest)
+		}
 	case "request":
-		return request(ctx, deps.Logger, deps.ConfigPath, deps.Env, rest)
+		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+			return request(ctx, logger, configPath, env, rest)
+		}
 	case "import":
-		return importFeature(ctx, deps.ConfigPath, deps.Env, rest)
+		return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
+			return importFeature(ctx, configPath, env, rest)
+		}
 	default:
-		return errors.New("unknown e2e command")
+		return nil
 	}
 }
 
@@ -42,9 +51,9 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, env confi
 		return fmt.Errorf("parse tick flags: %w", err)
 	}
 
-	instance, err := app.New(ctx, app.Deps{
-		Logger: logger, ConfigPath: configPath, Env: env, Validate: SandboxValidate, RemoteOf: SandboxRemote,
-	})
+	instance, err := app.New(
+		ctx, logger, configPath, env, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
+	)
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}
@@ -73,9 +82,7 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 	}
 	defer func() { err = errors.Join(err, st.Close()) }()
 
-	if err := st.QueueVerbIntent(ctx, store.VerbRequest{
-		Ticket: args[0], Verb: plan.VerbImport, At: time.Now(),
-	}); err != nil {
+	if err := st.QueueVerbIntent(ctx, args[0], plan.VerbImport, time.Now()); err != nil {
 		return fmt.Errorf("queue import for %s: %w", args[0], err)
 	}
 	return nil

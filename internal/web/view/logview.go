@@ -71,14 +71,14 @@ type LogDetail struct {
 	Final      template.HTML
 }
 
-type logSource struct {
+type LogSource struct {
 	Path      string
 	Streaming bool
 	TicketURL string
 	Records   []store.Event
 }
 
-func buildLogDetail(render LineRenderer, src logSource, params Params) (LogDetail, error) {
+func BuildLogDetail(render LineRenderer, src LogSource, params Params) (LogDetail, error) {
 	path, streaming, ticketURL, records := src.Path, src.Streaming, src.TicketURL, src.Records
 	detail := LogDetail{Path: path, Streaming: streaming}
 	records = slices.DeleteFunc(slices.Clone(records), func(e store.Event) bool { return !RecordShown(e) })

@@ -65,7 +65,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		return plan.Input{}, fmt.Errorf("read verdict facts: %w", err)
 	}
 
-	gauges, err := s.LatestReadingsFull(ctx)
+	gauges, err := s.LatestReadings(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read latest readings: %w", err)
 	}

@@ -12,6 +12,24 @@ import (
 func TestStatus(t *testing.T) {
 	t.Parallel()
 
+	t.Run("before any run", statusBeforeAnyRun)
+	t.Run("push pending names the blocker holding the push", statusPushPendingNamesTheBlocker)
+	t.Run("cancelled for a member with no run", statusCancelledWithNoRun)
+	t.Run("never cancelled once it has run", statusNeverCancelledOnceRun)
+	t.Run("with a latest run", statusWithLatestRun)
+	t.Run("merged outranks a later run's own disposition", statusMergedOverALaterRun)
+	t.Run("failed without a merged PR", statusFailedWithoutAMergedPR)
+	t.Run("an undisposed run is not failed", statusUndisposedRunNotFailed)
+	t.Run("no latest run", statusNoLatestRun)
+	t.Run("base gone outranks anything once it has run", statusBaseGoneOnceRun)
+	t.Run("never base gone without a prior run", statusNeverBaseGoneWithoutARun)
+	t.Run("blocks on a conflicted base", statusBlocksOnAConflictedBase)
+	t.Run("a run outranks a conflicted base", statusRunOverAConflictedBase)
+}
+
+func statusBeforeAnyRun(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		unlock     plan.Unlock
@@ -45,18 +63,6 @@ func TestStatus(t *testing.T) {
 			want:       plan.Queued,
 			wantReason: "waiting on sandbox://CC-1's PR",
 		},
-		{
-			name: "closed blocker without a prior run stays blocked",
-			unlock: plan.Unlock{Reason: "blocked by sandbox://CC-1", BlockerClosed: true,
-				Blocking: []plan.TicketURL{"sandbox://CC-1"}},
-			want: plan.Blocked, wantReason: "blocked by sandbox://CC-1",
-		},
-		{
-			name: "closed blocker without a prior run stays queued when authorised",
-			unlock: plan.Unlock{Reason: "blocked by sandbox://CC-1", BlockerClosed: true,
-				Blocking: []plan.TicketURL{"sandbox://CC-1"}},
-			authorised: true, want: plan.Queued, wantReason: "waiting on sandbox://CC-1's PR",
-		},
 	}
 
 	for _, tt := range tests {
@@ -65,16 +71,16 @@ func TestStatus(t *testing.T) {
 
 			state, reason := plan.Status(plan.Facts{Unlock: tt.unlock, Authorised: tt.authorised})
 			if state != tt.want {
-				t.Errorf("state = %v, want %v", state, tt.want)
+				t.Errorf("Status(facts) state = %v, want %v", state, tt.want)
 			}
 			if reason != tt.wantReason {
-				t.Errorf("reason = %q, want %q", reason, tt.wantReason)
+				t.Errorf("Status(facts) reason = %q, want %q", reason, tt.wantReason)
 			}
 		})
 	}
 }
 
-func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
+func statusPushPendingNamesTheBlocker(t *testing.T) {
 	t.Parallel()
 
 	run := option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomePush)})
@@ -82,29 +88,29 @@ func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
 
 	state, reason := plan.Status(plan.Facts{Unlock: held, LatestRun: run})
 	if state != plan.PushPending || !strings.Contains(string(reason), "#259") {
-		t.Fatalf("Status = %v, %q; want push pending naming #259", state, reason)
+		t.Errorf("Status(facts) = %v, %q, want push pending naming #259", state, reason)
 	}
 
 	twoHeld := plan.Unlock{Blocking: []plan.TicketURL{"#259", "#260"}}
 	state, reason = plan.Status(plan.Facts{Unlock: twoHeld, LatestRun: run})
 	if state != plan.PushPending || !strings.Contains(string(reason), "#259, #260") {
-		t.Fatalf("Status = %v, %q; want both blockers named", state, reason)
+		t.Errorf("Status(facts) = %v, %q, want both blockers named", state, reason)
 	}
 
 	untracked := plan.Unlock{Reason: "blocked by #9, which is not a tracked ticket"}
 	state, reason = plan.Status(plan.Facts{Unlock: untracked, LatestRun: run})
 	if state != plan.PushPending || !strings.Contains(string(reason), "not a tracked ticket") {
-		t.Fatalf("Status = %v, %q; want the unlock reason", state, reason)
+		t.Errorf("Status(facts) = %v, %q, want the unlock reason", state, reason)
 	}
 
 	free := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
 	state, reason = plan.Status(plan.Facts{Unlock: free, LatestRun: run})
 	if state != plan.PushPending || reason != "agent finished with commits, waiting to push" {
-		t.Fatalf("Status = %v, %q; want today's push pending reason", state, reason)
+		t.Errorf("Status(facts) = %v, %q, want today's push pending reason", state, reason)
 	}
 }
 
-func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
+func statusCancelledWithNoRun(t *testing.T) {
 	t.Parallel()
 
 	state, reason := plan.Status(plan.Facts{
@@ -113,26 +119,37 @@ func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
 		CancelledMember: true,
 	})
 	if state != plan.Cancelled {
-		t.Errorf("state = %v, want cancelled", state)
+		t.Errorf("Status(facts) state = %v, want cancelled", state)
 	}
 	if reason == "" {
-		t.Error("reason is empty")
+		t.Error(`Status(facts) reason = "", want one`)
 	}
 }
 
-func TestStatusWithLatestRun(t *testing.T) {
+func statusNeverCancelledOnceRun(t *testing.T) {
+	t.Parallel()
+
+	state, _ := plan.Status(plan.Facts{
+		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		LatestRun:       option.Some(plan.RunFact{Alive: true}),
+		CancelledMember: true,
+	})
+	if state != plan.Running {
+		t.Errorf("Status(facts) state = %v, want running: a row that ever ran is never cancelled", state)
+	}
+}
+
+func statusWithLatestRun(t *testing.T) {
 	t.Parallel()
 
 	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
 
 	tests := []struct {
-		name            string
-		latestRun       option.Option[plan.RunFact]
-		cancelledMember bool
-		conflictedBase  string
-		wantState       plan.State
-		reasonHas       string
-		reasonHasA      string // second required substring, for the failed-with-log-path case
+		name         string
+		latestRun    option.Option[plan.RunFact]
+		wantState    plan.State
+		reasonHas    string
+		reasonHasLog string
 	}{
 		{
 			name:      "an alive run derives running regardless of unlock or authorisation",
@@ -140,28 +157,13 @@ func TestStatusWithLatestRun(t *testing.T) {
 			wantState: plan.Running,
 		},
 		{
-			name:            "a live run outranks cancellation",
-			latestRun:       option.Some(plan.RunFact{Alive: true}),
-			cancelledMember: true, wantState: plan.Running,
-		},
-		{
-			name:           "a live run outranks a conflicted base",
-			latestRun:      option.Some(plan.RunFact{Alive: true}),
-			conflictedBase: "cc-1-first", wantState: plan.Running,
-		},
-		{
-			name:      "a dead undisposed run stays ready",
-			latestRun: option.Some(plan.RunFact{Alive: false}),
-			wantState: plan.Ready, reasonHas: "no blockers",
-		},
-		{
 			name: "a dead run with no commits derives failed, naming the log path",
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomeFailed), LogPath: "/state/runs/7.jsonl",
 			}),
-			wantState:  plan.Failed,
-			reasonHas:  "no commits",
-			reasonHasA: "/state/runs/7.jsonl",
+			wantState:    plan.Failed,
+			reasonHas:    "no commits",
+			reasonHasLog: "/state/runs/7.jsonl",
 		},
 		{
 			name: "a dead run with commits derives push pending",
@@ -392,24 +394,21 @@ func TestStatusWithLatestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			state, reason := plan.Status(plan.Facts{
-				Unlock: unlocked, LatestRun: tt.latestRun,
-				CancelledMember: tt.cancelledMember, ConflictedBase: tt.conflictedBase,
-			})
+			state, reason := plan.Status(plan.Facts{Unlock: unlocked, Authorised: false, LatestRun: tt.latestRun})
 			if state != tt.wantState {
-				t.Errorf("state = %v, want %v (reason %q)", state, tt.wantState, reason)
+				t.Errorf("Status(facts) state = %v, want %v (reason %q)", state, tt.wantState, reason)
 			}
 			if tt.reasonHas != "" && !strings.Contains(string(reason), tt.reasonHas) {
-				t.Errorf("reason %q does not contain %q", reason, tt.reasonHas)
+				t.Errorf("Status(facts) reason = %q, want it to contain %q", reason, tt.reasonHas)
 			}
-			if tt.reasonHasA != "" && !strings.Contains(string(reason), tt.reasonHasA) {
-				t.Errorf("reason %q does not contain the log path %q", reason, tt.reasonHasA)
+			if tt.reasonHasLog != "" && !strings.Contains(string(reason), tt.reasonHasLog) {
+				t.Errorf("Status(facts) reason = %q, want it to contain %q", reason, tt.reasonHasLog)
 			}
 		})
 	}
 }
 
-func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
+func statusMergedOverALaterRun(t *testing.T) {
 	t.Parallel()
 
 	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
@@ -444,16 +443,53 @@ func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 
 			state, reason := plan.Status(plan.Facts{Unlock: unlocked, Authorised: false, LatestRun: tt.latestRun})
 			if state != plan.PRMerged {
-				t.Errorf("state = %v, want merged", state)
+				t.Errorf("Status(facts) state = %v, want merged", state)
 			}
 			if reason != "pull request merged" {
-				t.Errorf("reason = %q, want %q", reason, "pull request merged")
+				t.Errorf("Status(facts) reason = %q, want %q", reason, "pull request merged")
 			}
 		})
 	}
 }
 
-func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
+func statusFailedWithoutAMergedPR(t *testing.T) {
+	t.Parallel()
+
+	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	state, _ := plan.Status(plan.Facts{
+		Unlock: unlocked, Authorised: false,
+		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomeFailed)}),
+	})
+	if state != plan.Failed {
+		t.Errorf("Status(facts) state = %v, want failed", state)
+	}
+}
+
+func statusUndisposedRunNotFailed(t *testing.T) {
+	t.Parallel()
+
+	state, _ := plan.Status(plan.Facts{
+		Unlock:    plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.None[plan.Outcome]()}),
+	})
+	if state == plan.Failed {
+		t.Errorf("Status(facts) state = %v, want anything but failed for a run with no outcome", state)
+	}
+}
+
+func statusNoLatestRun(t *testing.T) {
+	t.Parallel()
+
+	state, reason := plan.Status(plan.Facts{
+		Unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		Authorised: false,
+	})
+	if state != plan.Ready || reason != "no blockers" {
+		t.Errorf("Status(facts) = %v, %q, want ready, \"no blockers\"", state, reason)
+	}
+}
+
+func statusBaseGoneOnceRun(t *testing.T) {
 	t.Parallel()
 
 	blockerClosed := plan.Unlock{
@@ -479,16 +515,34 @@ func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 
 			state, reason := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: tt.latestRun})
 			if state != plan.BaseGone {
-				t.Errorf("state = %v, want base_gone", state)
+				t.Errorf("Status(facts) state = %v, want base_gone", state)
 			}
 			if reason != blockerClosed.Reason {
-				t.Errorf("reason = %q, want the unlock reason %q", reason, blockerClosed.Reason)
+				t.Errorf("Status(facts) reason = %q, want the unlock reason %q", reason, blockerClosed.Reason)
 			}
 		})
 	}
 }
 
-func TestStatusBlocksOnAConflictedBase(t *testing.T) {
+func statusNeverBaseGoneWithoutARun(t *testing.T) {
+	t.Parallel()
+
+	blockerClosed := plan.Unlock{
+		Reason: "blocked by sandbox://CC-1", BlockerClosed: true, Blocking: []plan.TicketURL{"sandbox://CC-1"},
+	}
+
+	state, _ := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: false, LatestRun: option.None[plan.RunFact]()})
+	if state != plan.Blocked {
+		t.Errorf("Status(facts) state = %v, want blocked: no run ever happened", state)
+	}
+
+	state, _ = plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: option.None[plan.RunFact]()})
+	if state != plan.Queued {
+		t.Errorf("Status(facts) state = %v, want queued: authorised but never launched", state)
+	}
+}
+
+func statusBlocksOnAConflictedBase(t *testing.T) {
 	t.Parallel()
 
 	for _, authorised := range []bool{false, true} {
@@ -498,10 +552,24 @@ func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 			ConflictedBase: "cc-1-first",
 		})
 		if state != plan.Blocked {
-			t.Errorf("authorised = %v: state = %v, want blocked", authorised, state)
+			t.Errorf("Status(authorised %t) state = %v, want blocked", authorised, state)
 		}
 		if !strings.Contains(string(reason), "cc-1-first") {
-			t.Errorf("reason %q does not name the conflicted base", reason)
+			t.Errorf("Status(authorised %t) reason = %q, want it to name cc-1-first", authorised, reason)
 		}
+	}
+}
+
+func statusRunOverAConflictedBase(t *testing.T) {
+	t.Parallel()
+
+	state, _ := plan.Status(plan.Facts{
+		Unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first"},
+		Authorised:     true,
+		ConflictedBase: "cc-1-first",
+		LatestRun:      option.Some(plan.RunFact{Alive: true}),
+	})
+	if state != plan.Running {
+		t.Errorf("Status(facts) state = %v, want running", state)
 	}
 }

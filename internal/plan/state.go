@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 )
@@ -85,4 +86,13 @@ func Verbs(s State) []Verb {
 
 func AllStates() []State {
 	return slices.Sorted(maps.Keys(stateInfo))
+}
+
+func ParseState(s string) (State, error) {
+	for state, info := range stateInfo {
+		if info.name == s {
+			return state, nil
+		}
+	}
+	return StateUnknown, fmt.Errorf("unknown state %q", s)
 }

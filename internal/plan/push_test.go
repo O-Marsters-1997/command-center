@@ -3,6 +3,9 @@ package plan_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -10,45 +13,51 @@ func TestPushRefused(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		path    string
-		refused bool
+		name     string
+		paths    []string
+		policy   plan.Policy
+		refused  bool
+		wantPath string
 	}{
-		{name: "workflow file refuses", path: ".github/workflows/ci.yml", refused: true},
-		{name: "root mergify config refuses", path: ".mergify.yml", refused: true},
-		{name: "the repo settings file refuses", path: plan.SettingsFile, refused: true},
-		{name: "nested package.json refuses", path: "packages/foo/package.json", refused: true},
-		{name: "pnpm lockfile refuses", path: "pnpm-lock.yaml", refused: true},
-		{name: "bun lockfile refuses", path: "web/bun.lock", refused: true},
-		{name: "npmrc refuses", path: ".npmrc", refused: true},
-		{name: "local env file refuses", path: ".env.development.local", refused: true},
-		{name: "per-repo deny addition refuses", path: "scripts/gen.sh", refused: true},
-		{name: "application-only diff clears", path: "internal/app/handler.go", refused: false},
+		{
+			name: "workflow file", paths: []string{".github/workflows/ci.yml"},
+			refused: true, wantPath: ".github/workflows/ci.yml",
+		},
+		{name: "root mergify config", paths: []string{".mergify.yml"}, refused: true, wantPath: ".mergify.yml"},
+		{name: "the repo settings file", paths: []string{plan.SettingsFile}, refused: true, wantPath: plan.SettingsFile},
+		{
+			name: "the repo settings file whatever the deny list says", paths: []string{plan.SettingsFile},
+			policy: plan.Policy{Deny: []string{"nothing/**"}}, refused: true, wantPath: plan.SettingsFile,
+		},
+		{
+			name: "nested package.json", paths: []string{"packages/foo/package.json"},
+			refused: true, wantPath: "packages/foo/package.json",
+		},
+		{name: "pnpm lockfile", paths: []string{"pnpm-lock.yaml"}, refused: true, wantPath: "pnpm-lock.yaml"},
+		{name: "bun lockfile", paths: []string{"web/bun.lock"}, refused: true, wantPath: "web/bun.lock"},
+		{name: "npmrc", paths: []string{".npmrc"}, refused: true, wantPath: ".npmrc"},
+		{
+			name: "local env file", paths: []string{".env.development.local"},
+			refused: true, wantPath: ".env.development.local",
+		},
+		{
+			name: "per-repo deny addition", paths: []string{"scripts/gen.sh"},
+			policy: plan.Policy{Deny: []string{"scripts/gen.sh"}}, refused: true, wantPath: "scripts/gen.sh",
+		},
+		{
+			name: "the first hit among several paths", paths: []string{"internal/app/handler.go", ".mergify.yml", "CODEOWNERS"},
+			refused: true, wantPath: ".mergify.yml",
+		},
+		{name: "application-only diff clears", paths: []string{"internal/app/handler.go"}},
 	}
-
-	policy := plan.Policy{Deny: []string{"scripts/gen.sh"}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			refused, path := plan.PushRefused([]string{tt.path}, policy)
-			if refused != tt.refused {
-				t.Fatalf("PushRefused(%q) = %v, want %v", tt.path, refused, tt.refused)
-			}
-			if refused && path != tt.path {
-				t.Errorf("PushRefused(%q) named path %q, want %q", tt.path, path, tt.path)
+			refused, path := plan.PushRefused(tt.paths, tt.policy)
+			if refused != tt.refused || (refused && path != tt.wantPath) {
+				t.Errorf("PushRefused(%q) = %t, %q, want %t, %q", tt.paths, refused, path, tt.refused, tt.wantPath)
 			}
 		})
-	}
-}
-
-func TestPushRefusedNamesTheFirstHitAmongSeveralPaths(t *testing.T) {
-	t.Parallel()
-
-	refused, path := plan.PushRefused(
-		[]string{"internal/app/handler.go", ".mergify.yml", "CODEOWNERS"}, plan.Policy{})
-	if !refused || path != ".mergify.yml" {
-		t.Errorf("PushRefused = %v, %q, want true, \".mergify.yml\"", refused, path)
 	}
 }
 
@@ -66,38 +75,24 @@ func TestPushPlan(t *testing.T) {
 			want:       []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
-			name: "tip unchanged since the last push is not re-selected",
-			candidates: []plan.PushCandidate{
-				{URL: "sandbox://CC-1", LocalTip: "abc", LastPushedTip: "abc"},
-			},
-			want: nil,
+			name:       "tip unchanged since the last push is not re-selected",
+			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "abc", LastPushedTip: "abc"}},
 		},
 		{
-			name: "tip moved past the last push is selected again",
-			candidates: []plan.PushCandidate{
-				{URL: "sandbox://CC-1", LocalTip: "def", LastPushedTip: "abc"},
-			},
-			want: []plan.TicketURL{"sandbox://CC-1"},
+			name:       "tip moved past the last push is selected again",
+			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "def", LastPushedTip: "abc"}},
+			want:       []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
 			name:       "no local tip yet is never selected",
 			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1"}},
-			want:       nil,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			got := plan.PushPlan(tt.candidates)
-			if len(got) != len(tt.want) {
-				t.Fatalf("PushPlan = %v, want %v", got, tt.want)
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("PushPlan = %v, want %v", got, tt.want)
-				}
+			if diff := cmp.Diff(tt.want, plan.PushPlan(tt.candidates), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("PushPlan(%+v) mismatch (-want +got):\n%s", tt.candidates, diff)
 			}
 		})
 	}
@@ -106,22 +101,22 @@ func TestPushPlan(t *testing.T) {
 func TestPRBody(t *testing.T) {
 	t.Parallel()
 
-	if got := plan.PRBody("main", 42); got != "" {
-		t.Errorf("PRBody(main, 42) = %q, want empty: a root PR never carries the stacking line", got)
+	tests := []struct {
+		name   string
+		base   string
+		number int
+		want   string
+	}{
+		{name: "a root PR never carries the stacking line", base: "main", number: 42, want: ""},
+		{name: "no blocker PR number to reference", base: "feat-parent", number: 0, want: ""},
+		{name: "a stacked PR names its blocker", base: "feat-parent", number: 42, want: "Merge after #42"},
 	}
-	if got := plan.PRBody("feat-parent", 0); got != "" {
-		t.Errorf("PRBody(feat-parent, 0) = %q, want empty: no blocker PR number to reference", got)
-	}
-	if got := plan.PRBody("feat-parent", 42); got != "Merge after #42" {
-		t.Errorf("PRBody(feat-parent, 42) = %q, want %q", got, "Merge after #42")
-	}
-}
-
-func TestPushRefusedDeniesTheSettingsFileWhateverTheRepoDenyListSays(t *testing.T) {
-	t.Parallel()
-
-	refused, path := plan.PushRefused([]string{plan.SettingsFile}, plan.Policy{Deny: []string{"nothing/**"}})
-	if !refused || path != plan.SettingsFile {
-		t.Errorf("PushRefused = %v, %q, want true, %q", refused, path, plan.SettingsFile)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := plan.PRBody(tt.base, tt.number); got != tt.want {
+				t.Errorf("PRBody(%q, %d) = %q, want %q", tt.base, tt.number, got, tt.want)
+			}
+		})
 	}
 }

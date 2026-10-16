@@ -2,11 +2,26 @@ package gh
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
+
+type CLI struct {
+	Exec command.Executor
+}
+
+func (c CLI) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	out, err := command.OrExec(c.Exec).Output(ctx, command.DefaultTimeout, dir, "gh", args...)
+	if err != nil {
+		return nil, fmt.Errorf("run gh: %w", err)
+	}
+	return out, nil
+}
 
 func Decode[T any](raw []byte) (T, error) {
 	var decoded T

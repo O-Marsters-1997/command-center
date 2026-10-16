@@ -321,16 +321,16 @@ func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, er
 }
 
 func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
-	return succeeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
+	return Succeeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
 }
 
 func refExists(ctx context.Context, worktreePath, ref string) (bool, error) {
-	return succeeds(ctx, worktreePath, "rev-parse", "--verify", "-q", ref)
+	return Succeeds(ctx, worktreePath, "rev-parse", "--verify", "-q", ref)
 }
 
 // Succeeds maps Git's exit 1 to false; exit 128 for an unresolved ref remains
 // an error rather than a negative answer.
-func succeeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
+func Succeeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
 	_, ok, err := gitRun(ctx, repoPath, args...)
 	if err != nil {
 		return false, fmt.Errorf("run git query: %w", err)

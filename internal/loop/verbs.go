@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
@@ -194,11 +195,11 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapsho
 		if !ok {
 			return nil
 		}
-		lastPushed, err := l.store.LatestPushes(ctx)
+		lastPushed, err := l.store.LastPushedTips(ctx)
 		if err != nil {
-			return fmt.Errorf("latest pushes: %w", err)
+			return fmt.Errorf("last pushed tips: %w", err)
 		}
-		if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL].PushedTip); err != nil {
+		if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL]); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		return nil
@@ -226,7 +227,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	repoPath := l.checkout(ticket.Repo)
 	worktreePath, worktreePresent := obs.Worktrees[ticket.Ref()]
 
-	mode := git.RemoveMerged
+	mode := tp.RemoveMerged
 	if worktreePresent {
 		dirty, err := git.Dirty(ctx, worktreePath)
 		if err != nil {
@@ -247,7 +248,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		switch state {
 		case git.RemovableByMerged:
 		case git.RemovableByForce:
-			mode = git.RemoveForced
+			mode = tp.RemoveForced
 		case git.NotRemovable:
 			return refuse("worktree holds unpushed commits")
 		case git.RemovalUnknown:
@@ -267,7 +268,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		return fmt.Errorf("prune run logs of %s: %w", url, err)
 	}
 	var detail string
-	if mode == git.RemoveForced {
+	if mode == tp.RemoveForced {
 		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
 	if err := l.event(ctx, url, store.EventWorktreeRemoved, detail); err != nil {

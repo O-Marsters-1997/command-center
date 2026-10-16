@@ -1,6 +1,7 @@
 package spend_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/spend"
@@ -13,9 +14,12 @@ func TestPct(t *testing.T) {
 		want        int
 	}{{0, 0}, {0.004, 0}, {0.005, 1}, {0.42, 42}, {1, 100}}
 	for _, tt := range tests {
-		if got := spend.Pct(tt.utilization); got != tt.want {
-			t.Errorf("Pct(%v) = %d, want %d", tt.utilization, got, tt.want)
-		}
+		t.Run(fmt.Sprint(tt.utilization), func(t *testing.T) {
+			t.Parallel()
+			if got := spend.Pct(tt.utilization); got != tt.want {
+				t.Errorf("Pct(%v) = %d, want %d", tt.utilization, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -64,7 +68,8 @@ func TestShare(t *testing.T) {
 			t.Parallel()
 			gotPct, gotCal := spend.Share(tt.totalPct, tt.fit, tt.ccUSD)
 			if gotPct != tt.wantPct || gotCal != tt.wantCalibrating {
-				t.Errorf("Share = (%d, %v), want (%d, %v)", gotPct, gotCal, tt.wantPct, tt.wantCalibrating)
+				t.Errorf("Share(%d, %+v, %v) = (%d, %v), want (%d, %v)",
+					tt.totalPct, tt.fit, tt.ccUSD, gotPct, gotCal, tt.wantPct, tt.wantCalibrating)
 			}
 		})
 	}

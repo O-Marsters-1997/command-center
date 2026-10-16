@@ -3,11 +3,14 @@ package plan_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-func TestRulesForIndexesEachObservedRepoByName(t *testing.T) {
+func TestRulesFor(t *testing.T) {
 	t.Parallel()
 
 	obs := plan.Observation{
@@ -21,23 +24,18 @@ func TestRulesForIndexesEachObservedRepoByName(t *testing.T) {
 		SettingsErrors: map[string]string{"c": "line 2: unknown key"},
 	}
 
-	rules := plan.RulesFor(plan.Daemon{MaxAgents: 3, SpendLimit5h: 80}, obs)
+	got := plan.RulesFor(plan.Daemon{MaxAgents: 3, SpendLimit5h: 80}, obs)
 
-	if rules.MaxAgents != 3 || rules.SpendLimit5h != 80 {
-		t.Errorf("max_agents/spend_limit_5h = %d/%d, want 3/80", rules.MaxAgents, rules.SpendLimit5h)
+	want := plan.Rules{
+		Stacking:     map[string]bool{"a": true, "b": false, "c": false},
+		Deny:         map[string][]string{"a": {".github/**"}, "b": nil, "c": nil},
+		Checks:       map[string]verdict.Predicate{"a": {Success: "CI"}, "b": {}, "c": {}},
+		MergifySHA:   map[string]string{"a": "sha256:1", "b": "", "c": ""},
+		CompatCheck:  map[string]string{"a": "compat", "b": "", "c": ""},
+		MaxAgents:    3,
+		SpendLimit5h: 80,
 	}
-	if !rules.Stacking["a"] || rules.Stacking["b"] {
-		t.Errorf("stacking = %v, want a only", rules.Stacking)
-	}
-	if rules.Checks["a"].Success != "CI" || !rules.Checks["b"].IsZero() {
-		t.Errorf("checks = %v", rules.Checks)
-	}
-	if rules.MergifySHA["a"] != "sha256:1" || rules.CompatCheck["a"] != "compat" {
-		t.Errorf("mergify/compat = %v/%v", rules.MergifySHA, rules.CompatCheck)
-	}
-	for _, repo := range []string{"b", "c"} {
-		if _, ok := rules.Stacking[repo]; !ok {
-			t.Errorf("repo %s is missing from the rules, so scope checks would not see it", repo)
-		}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("RulesFor(daemon, obs) mismatch (-want +got):\n%s", diff)
 	}
 }

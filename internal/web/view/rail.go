@@ -115,7 +115,7 @@ type RailParams struct {
 	Project string
 	Repo    string
 
-	projectRepos []string
+	ProjectRepos []string
 }
 
 func RailScope(currentURL string) (project, repo string) {
@@ -148,8 +148,8 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 
 func railFromFrame(f frame, params RailParams) Rail {
 	params.Repo = f.params.Repo
-	params.Project, params.projectRepos = f.project.Name, f.project.Repos
-	rail := buildRail(f.rows, f.now, params)
+	params.Project, params.ProjectRepos = f.project.Name, f.project.Repos
+	rail := BuildRail(f.rows, f.now, params)
 	rail.Gauges = f.chrome.Gauges
 	rail.Health = RailHealth{
 		Live: f.chrome.LiveAgents, Observe: f.chrome.Observe, Stale: f.chrome.ObserveStale, Error: f.chrome.LastError,
@@ -161,14 +161,14 @@ func scopeRailRows(rows []Row, params RailParams) []Row {
 	if params.Repo == "" && params.Project == "" {
 		return rows
 	}
-	groups := filterGroupsByRepo(groupRows(rows), params.Repo)
+	groups := FilterGroupsByRepo(groupRows(rows), params.Repo)
 	if params.Project != "" {
-		groups = filterGroupsByProject(groups, params.projectRepos)
+		groups = FilterGroupsByProject(groups, params.ProjectRepos)
 	}
 	return rowsIn(groups)
 }
 
-func buildRail(rows []Row, now time.Time, params RailParams) Rail {
+func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 	rows = scopeRailRows(rows, params)
 	scope := Params{Project: params.Project}
 	item := func(r Row) RailItem {

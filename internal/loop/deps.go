@@ -7,10 +7,10 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -25,7 +25,7 @@ type forge interface {
 
 type worktrees interface {
 	New(ctx context.Context, repoPath, branch, baseRef string) error
-	Remove(ctx context.Context, repoPath, branch string, mode git.RemoveMode) error
+	Remove(ctx context.Context, repoPath, branch string, mode tp.RemoveMode) error
 }
 
 type Deps struct {
@@ -52,10 +52,10 @@ func New(d Deps, opts ...Option) *Loop {
 		logger: d.Logger, store: d.Store, observe: d.Observe, clock: d.Clock, runner: d.Runner,
 		cfg: d.Config, ws: d.Workspace,
 		forge:      gh.CLI{},
-		worktrees:  git.CLI{},
+		worktrees:  tp.CLI{},
 		validate:   ValidateRepo,
-		remoteOf:   gh.RepoRemote,
-		trackerFor: tracker.New,
+		remoteOf:   gh.CLI{}.RepoRemote,
+		trackerFor: tracker.Resolve(gh.CLI{}),
 		nudgeCh:    make(chan struct{}, 1),
 	}
 	for _, opt := range opts {
@@ -85,7 +85,8 @@ func (n Nudger) Nudge() {
 func (l *Loop) Nudger() Nudger { return Nudger{ch: l.nudgeCh} }
 
 type tick struct {
-	now     time.Time
-	obs     plan.Observation
-	spawned []plan.TicketURL
+	now       time.Time
+	obs       plan.Observation
+	spawned   []plan.TicketURL
+	cancelled map[int]bool
 }

@@ -6,25 +6,28 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
+const listLimit = gh.ListLimit
+
 type githubSource struct {
 	owner, repo string
-	run         func(ctx context.Context, args ...string) ([]byte, error)
+	cli         gh.CLI
 }
 
-func newGithubSource(owner, repo string) *githubSource {
-	return &githubSource{owner: owner, repo: repo, run: func(ctx context.Context, args ...string) ([]byte, error) {
-		return command.Output(ctx, "", "gh", args...)
-	}}
+func (s *githubSource) run(ctx context.Context, args ...string) ([]byte, error) {
+	out, err := s.cli.Run(ctx, "", args...)
+	if err != nil {
+		return nil, fmt.Errorf("query github tracker: %w", err)
+	}
+	return out, nil
 }
 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
 
 func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
-	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(gh.ListLimit))
+	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list feature labels: %w", err)
 	}
@@ -33,7 +36,7 @@ func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
 
 func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, error) {
 	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
-		"--label", feature, "--json", "number,title,body,url,labels", "--limit", strconv.Itoa(gh.ListLimit))
+		"--label", feature, "--json", "number,title,body,url,labels", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list tickets for %s: %w", feature, err)
 	}
@@ -83,8 +86,8 @@ func decodeFeatures(raw []byte) ([]Feature, error) {
 			features = append(features, Feature(label.Name))
 		}
 	}
-	if len(decoded) >= gh.ListLimit {
-		return nil, fmt.Errorf("read labels: %w", gh.ErrFullPage)
+	if len(decoded) >= listLimit {
+		return nil, fmt.Errorf("read labels: %w", &gh.FullPageError{Limit: listLimit})
 	}
 	return features, nil
 }
@@ -102,8 +105,8 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("issue list: %w", err)
 	}
-	if len(decoded) >= gh.ListLimit {
-		return nil, fmt.Errorf("read issues: %w", gh.ErrFullPage)
+	if len(decoded) >= listLimit {
+		return nil, fmt.Errorf("read issues: %w", &gh.FullPageError{Limit: listLimit})
 	}
 	return decoded, nil
 }

@@ -39,6 +39,14 @@ func normalizeFilter(filter string) SectionKey {
 	return SectionUnknown
 }
 
+func (v Params) Scoped(repos []store.Repo, projects []store.Project, tickets []store.Ticket) (Params, store.Project) {
+	project := normalizeProjectScope(v.Project, projects)
+	v.Repo = normalizeRepoScope(v.Repo, repos)
+	v.Project = project.Name
+	v.Feature = normalizeFeatureScope(v.Feature, distinctFeatures(tickets))
+	return v, project
+}
+
 func normalizeRepoScope(repo string, tracked []store.Repo) string {
 	i := slices.IndexFunc(tracked, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo) })
 	if i < 0 || repo == "" {
@@ -62,7 +70,7 @@ func normalizeFeatureScope(feature string, fleetFeatures []string) string {
 	return ""
 }
 
-func (v Params) query() string {
+func (v Params) Query() string {
 	q := url.Values{}
 	if v.All {
 		q.Set("all", "1")
@@ -92,26 +100,26 @@ func (v Params) query() string {
 }
 
 func (v Params) withScope(path string) string {
-	return withQuery(path, Params{Project: v.Project}.query())
+	return withQuery(path, Params{Project: v.Project}.Query())
 }
 
-func (v Params) boardPath() string { return withQuery("/board", v.query()) }
-func (v Params) verbPath() string  { return withQuery("/verb", v.query()) }
+func (v Params) BoardPath() string { return withQuery("/board", v.Query()) }
+func (v Params) verbPath() string  { return withQuery("/verb", v.Query()) }
 
-func (v Params) pagePath() string {
+func (v Params) PagePath() string {
 	rest := v
 	switch {
 	case v.All:
 		rest.All = false
-		return withQuery(ticketsPath, rest.query())
+		return withQuery(ticketsPath, rest.Query())
 	case v.Repo != "":
 		rest.Repo = ""
-		return withQuery(RepoPath(v.Repo), rest.query())
+		return withQuery(RepoPath(v.Repo), rest.Query())
 	case v.Feature != "":
 		rest.Feature = ""
-		return withQuery("/f/"+url.PathEscape(v.Feature), rest.query())
+		return withQuery("/f/"+url.PathEscape(v.Feature), rest.Query())
 	default:
-		return withQuery(ticketsPath, v.query())
+		return withQuery(ticketsPath, v.Query())
 	}
 }
 
@@ -122,7 +130,7 @@ func withQuery(path, query string) string {
 	return path + "?" + query
 }
 
-func (v Params) toggleTicket(ticketURL string) Params {
+func (v Params) ToggleTicket(ticketURL string) Params {
 	next := v
 	if slices.Contains(v.Tickets, ticketURL) {
 		next.Tickets = slices.DeleteFunc(slices.Clone(v.Tickets), func(t string) bool { return t == ticketURL })

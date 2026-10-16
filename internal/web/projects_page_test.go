@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
-
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -17,10 +15,29 @@ var soloRepo = storepkg.Repo{Name: "acme/solo", Remote: "git@github.com:acme/sol
 
 func projectsServer(t *testing.T) *web.Server {
 	t.Helper()
-	return openServer(track(t, openStore(t), alphaRepo, betaRepo, soloRepo), cctest.Clock{At: testNow}, "")
+	return openServer(track(t, openStore(t), alphaRepo, betaRepo, soloRepo), fixedClock(testNow), "")
 }
 
-func TestCreateProjectGroupsItsReposUnderASquare(t *testing.T) {
+func TestProjectsPage(t *testing.T) {
+	t.Parallel()
+
+	for name, run := range map[string]func(*testing.T){
+		"create groups its repos under a square":   testCreateProjectGroups,
+		"create answers htmx with the fragment":    testCreateProjectHTMX,
+		"create refuses bad input":                 testCreateProjectRefusesBadInput,
+		"a loose repo has no square":               testLooseRepo,
+		"new project form preselects the free hue": testNewProjectFormHue,
+		"edit renames and keeps repos and hue":     testEditProjectRenames,
+		"edit refusals":                            testEditProjectRefusals,
+		"delete leaves repos loose":                testDeleteProject,
+		"repo select moves and loosens a repo":     testRepoSelectMoves,
+	} {
+		t.Run(name, run)
+	}
+}
+
+func testCreateProjectGroups(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 
@@ -45,7 +62,8 @@ func TestCreateProjectGroupsItsReposUnderASquare(t *testing.T) {
 	root.One(t, `[data-scope="repo"]`)
 }
 
-func TestCreateProjectAnswersHTMXWithTheGroupsFragment(t *testing.T) {
+func testCreateProjectHTMX(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
@@ -61,7 +79,8 @@ func TestCreateProjectAnswersHTMXWithTheGroupsFragment(t *testing.T) {
 	}
 }
 
-func TestCreateProjectRefusesBadInput(t *testing.T) {
+func testCreateProjectRefusesBadInput(t *testing.T) {
+	t.Helper()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"1"}}
 	if rec := do(t, server, http.MethodPost, "/projects", req{Form: form}); rec.Code != http.StatusSeeOther {
@@ -96,7 +115,8 @@ func TestCreateProjectRefusesBadInput(t *testing.T) {
 	}
 }
 
-func TestLooseRepoRendersUnderItsOwnNameWithNoSquare(t *testing.T) {
+func testLooseRepo(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 
@@ -113,7 +133,8 @@ func TestLooseRepoRendersUnderItsOwnNameWithNoSquare(t *testing.T) {
 	}
 }
 
-func TestNewProjectFormPreselectsTheLeastUsedHue(t *testing.T) {
+func testNewProjectFormHue(t *testing.T) {
+	t.Helper()
 	server := projectsServer(t)
 	for _, tt := range []struct {
 		name string
@@ -136,7 +157,8 @@ func TestNewProjectFormPreselectsTheLeastUsedHue(t *testing.T) {
 	}
 }
 
-func TestEditProjectRenamesAndKeepsReposAndHue(t *testing.T) {
+func testEditProjectRenames(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
@@ -157,7 +179,8 @@ func TestEditProjectRenamesAndKeepsReposAndHue(t *testing.T) {
 	}
 }
 
-func TestEditProjectRefusals(t *testing.T) {
+func testEditProjectRefusals(t *testing.T) {
+	t.Helper()
 	server := projectsServer(t)
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"beta"}, "hue": {"1"}}})
@@ -193,7 +216,8 @@ func TestEditProjectRefusals(t *testing.T) {
 	}
 }
 
-func TestDeleteProjectLeavesReposLoose(t *testing.T) {
+func testDeleteProject(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}}
@@ -211,7 +235,8 @@ func TestDeleteProjectLeavesReposLoose(t *testing.T) {
 	}
 }
 
-func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
+func testRepoSelectMoves(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})

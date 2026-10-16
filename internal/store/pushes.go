@@ -43,6 +43,20 @@ func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[plan.TicketURL]
 	return restacked, nil
 }
 
+// LastPushedTips returns the latest recorded pushed tip per ticket.
+func (s *Store) LastPushedTips(ctx context.Context) (map[plan.TicketURL]plan.SHA, error) {
+	pushes, err := s.LatestPushes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tips := make(map[plan.TicketURL]plan.SHA, len(pushes))
+	for ticketID, push := range pushes {
+		tips[ticketID] = push.PushedTip
+	}
+	return tips, nil
+}
+
 // LatestPushes returns the latest recorded push per ticket URL.
 func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushRow, error) {
 	rows, err := s.q.ListLatestPushes(ctx)
@@ -75,15 +89,18 @@ func (s *Store) PushFacts(ctx context.Context) (map[plan.TicketURL]plan.PushFact
 
 	facts := map[plan.TicketURL]plan.PushFact{}
 	for _, row := range rows {
+		if !row.TicketID.Valid {
+			continue
+		}
 		kind, err := ParseEventKind(row.Kind)
 		if err != nil {
-			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID, err)
+			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
 		if kind == EventPushRefused {
-			facts[plan.TicketURL(row.TicketID)] = plan.PushFact{Refused: true, RefusedPath: row.Detail}
+			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Refused: true, RefusedPath: row.Detail}
 		}
 		if kind == EventPushFailed {
-			facts[plan.TicketURL(row.TicketID)] = plan.PushFact{Failed: true}
+			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Failed: true}
 		}
 	}
 	return facts, nil

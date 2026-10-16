@@ -46,11 +46,14 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]R
 
 	outcomes := map[plan.TicketURL]RefreshOutcome{}
 	for _, row := range rows {
+		if !row.TicketID.Valid {
+			continue
+		}
 		kind, err := ParseEventKind(row.Kind)
 		if err != nil {
-			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID, err)
+			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
-		outcomes[plan.TicketURL(row.TicketID)] = RefreshOutcome{Kind: kind, Detail: row.Detail}
+		outcomes[plan.TicketURL(row.TicketID.String)] = RefreshOutcome{Kind: kind, Detail: row.Detail}
 	}
 	return outcomes, nil
 }

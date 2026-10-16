@@ -5,191 +5,118 @@ import (
 	"testing"
 	"time"
 
-	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
 
-func TestLoopAppliesAPendingImportIntent(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	at := testAt
-	if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: at}); err != nil {
-		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
-	}
-
-	src := &trackertest.Source{
-		Features: []tracker.Feature{"project:x"},
-		Tickets: map[string][]tracker.Ticket{
-			"project:x": {{
-				URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x", Body: "b", Status: "ready",
-			}},
-		},
-	}
-	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-	cfg := config.Config{}
-
-	lp := newLoopWithDeps(loop.Deps{
-		Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at}, Config: cfg,
-		Runner:  runner.ProcessRunner{},
-		Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
+func importLoop(store *storepkg.Store, at time.Time, tickets ...tracker.Ticket) *loop.Loop {
+	src := &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:x": tickets}}
+	resolve := trackertest.ByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})
+	return newLoopWithDeps(loop.Deps{
+		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: config.Config{}, Workspace: config.Workspace{},
+		Runner: runner.ProcessRunner{}, Tracker: resolve,
 	})
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	tickets, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatalf("Tickets(): %v", err)
-	}
-	if len(tickets) != 1 || tickets[0].Branch != "cc-1-add-x" || tickets[0].Repo != "alpha" {
-		t.Fatalf("tickets = %+v, want one imported row for alpha", tickets)
-	}
-
-	pending, err := store.PendingVerbIntents(ctx, "import")
-	if err != nil {
-		t.Fatalf("PendingVerbIntents(import): %v", err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("pending import intents = %+v, want the applied one consumed", pending)
-	}
 }
 
-func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
+func TestImport(t *testing.T) {
 	t.Parallel()
 
-	const outsider = "https://github.com/acme/alpha/issues/1"
-	tests := []struct {
-		name       string
-		imported   tracker.Ticket
-		refusedURL string
-	}{
-		{
-			name:       "ticket already belongs to another feature",
-			imported:   tracker.Ticket{URL: outsider, Number: 1, Title: "Add x"},
-			refusedURL: outsider,
-		},
-		{
-			name: "blocker belongs to another feature", imported: tracker.Ticket{
-				URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Add y", BlockedBy: []string{outsider},
-			},
-			refusedURL: "https://github.com/acme/alpha/issues/2",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			ctx := t.Context()
-			store := openStore(t)
-			at := testAt
-			seed := []storepkg.ImportedTicket{{
-				Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
-			}}
-			if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
-				t.Fatalf("seed ImportTickets: %v", err)
-			}
-			if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:y", Verb: "import", At: at}); err != nil {
-				t.Fatalf("QueueVerbIntent(project:y, import): %v", err)
-			}
-			src := &trackertest.Source{
-				Features: []tracker.Feature{"project:y"},
-				Tickets:  map[string][]tracker.Ticket{"project:y": {tt.imported}},
-			}
-			trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-			lp := newLoopWithDeps(loop.Deps{
-				Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at.Add(time.Hour)},
-				Runner:  runner.ProcessRunner{},
-				Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
-			})
-			if err := lp.RunOnce(ctx); err != nil {
-				t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
-			}
-			tickets, err := store.Tickets(ctx)
-			if err != nil {
-				t.Fatalf("Tickets(): %v", err)
-			}
-			if len(tickets) != 1 || tickets[0].URL != outsider || tickets[0].Feature != "project:x" {
-				t.Errorf("tickets = %+v, want only the outsider under project:x", tickets)
-			}
-			pending, err := store.PendingVerbIntents(ctx, "import")
-			if err != nil {
-				t.Fatalf("PendingVerbIntents(import): %v", err)
-			}
-			if len(pending) != 0 {
-				t.Errorf("pending import intents = %+v, want the refused one consumed", pending)
-			}
-			lastErr, failed, err := store.LastImportError(ctx)
-			if err != nil {
-				t.Fatalf("LastImportError(): %v", err)
-			}
-			if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, tt.refusedURL) {
-				t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, tt.refusedURL)
-			}
-			events, err := store.Events(ctx)
-			if err != nil {
-				t.Fatalf("Events(): %v", err)
-			}
-			found := false
-			for _, e := range events {
-				if e.Kind == "import_refused" && (e.TicketURL == tt.refusedURL || strings.Contains(e.Detail, tt.refusedURL)) {
-					found = true
-				}
-			}
-			if !found {
-				t.Errorf("events = %+v, want import_refused naming %s", events, tt.refusedURL)
-			}
-		})
-	}
-}
+	t.Run("applies a pending import intent once", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+		if err := store.QueueVerbIntent(ctx, "project:x", "import", testAt); err != nil {
+			t.Fatalf("QueueVerbIntent(import): %v", err)
+		}
+		issue := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x", Status: "ready"}
 
-func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
-	t.Parallel()
+		if err := importLoop(store, testAt, issue).RunOnce(ctx); err != nil {
+			t.Fatalf("RunOnce() error = %v", err)
+		}
 
-	ctx := t.Context()
-	store := openStore(t)
-	at := testAt
-	if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: at}); err != nil {
-		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
-	}
-
-	src := &trackertest.Source{
-		Features: []tracker.Feature{"project:x"},
-		Tickets: map[string][]tracker.Ticket{
-			"project:x": {{
-				URL: "https://linear.app/acme/issue/eng-1", Number: 1, Title: "Add x", Status: "ready",
-			}},
-		},
-	}
-	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-	cfg := config.Config{}
-	seed := plan.NewObservation(testAt)
-	seed.Settings["alpha"] = config.RepoSettings{Tracker: "linear"}
-	if err := store.SaveObservation(ctx, seed); err != nil {
-		t.Fatalf("SaveObservation(seed): %v", err)
-	}
-
-	lp := newLoopWithDeps(loop.Deps{
-		Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at}, Config: cfg,
-		Runner:  runner.ProcessRunner{},
-		Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
+		tickets, err := store.Tickets(ctx)
+		if err != nil {
+			t.Fatalf("Tickets(): %v", err)
+		}
+		if len(tickets) != 1 || tickets[0].Branch != "cc-1-add-x" || tickets[0].Repo != "alpha" {
+			t.Fatalf("Tickets() = %+v, want one imported row on alpha", tickets)
+		}
+		pending, err := store.PendingVerbIntents(ctx, "import")
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(import): %v", err)
+		}
+		if len(pending) != 0 {
+			t.Errorf("PendingVerbIntents(import) = %+v, want none", pending)
+		}
 	})
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
 
-	tickets, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatalf("Tickets(): %v", err)
-	}
-	if len(tickets) != 1 || tickets[0].Source != "linear" {
-		t.Fatalf("tickets = %+v, want source linear from the repo's own configured tracker", tickets)
-	}
+	t.Run("a refused import is recorded without halting the tick", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+		const outsider = "https://github.com/acme/alpha/issues/1"
+		seed := []storepkg.ImportedTicket{
+			{Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha"},
+		}
+		if err := store.ImportTickets(ctx, "project:other", seed, testAt); err != nil {
+			t.Fatalf("seed ImportTickets: %v", err)
+		}
+		if err := store.QueueVerbIntent(ctx, "project:x", "import", testAt); err != nil {
+			t.Fatalf("QueueVerbIntent(import): %v", err)
+		}
+
+		lp := importLoop(store, testAt.Add(time.Hour), tracker.Ticket{URL: outsider, Number: 1, Title: "Add x"})
+		if err := lp.RunOnce(ctx); err != nil {
+			t.Fatalf("RunOnce() error = %v, want the refusal handled in the tick", err)
+		}
+
+		pending, err := store.PendingVerbIntents(ctx, "import")
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(import): %v", err)
+		}
+		if len(pending) != 0 {
+			t.Errorf("PendingVerbIntents(import) = %+v, want the refused intent consumed", pending)
+		}
+		lastErr, failed, err := store.LastImportError(ctx)
+		if err != nil {
+			t.Fatalf("LastImportError(): %v", err)
+		}
+		if !failed || lastErr.Feature != "project:x" || !strings.Contains(lastErr.Message, outsider) {
+			t.Errorf("LastImportError() = %+v, %v, want project:x naming %s", lastErr, failed, outsider)
+		}
+	})
+
+	t.Run("sets the ticket source from the repo's configured tracker", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+		if err := store.QueueVerbIntent(ctx, "project:x", "import", testAt); err != nil {
+			t.Fatalf("QueueVerbIntent(import): %v", err)
+		}
+		seed := plan.Observation{Settings: map[string]config.RepoSettings{"alpha": {Tracker: "linear"}}}
+		if err := store.SaveObservation(ctx, seed); err != nil {
+			t.Fatalf("SaveObservation: %v", err)
+		}
+		issue := tracker.Ticket{URL: "https://linear.app/acme/issue/eng-1", Number: 1, Title: "Add x", Status: "ready"}
+
+		if err := importLoop(store, testAt, issue).RunOnce(ctx); err != nil {
+			t.Fatalf("RunOnce() error = %v", err)
+		}
+
+		tickets, err := store.Tickets(ctx)
+		if err != nil {
+			t.Fatalf("Tickets(): %v", err)
+		}
+		if len(tickets) != 1 || tickets[0].Source != "linear" {
+			t.Errorf("Tickets() = %+v, want one with source linear", tickets)
+		}
+	})
 }

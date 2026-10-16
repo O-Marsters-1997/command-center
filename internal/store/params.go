@@ -67,6 +67,13 @@ type LaunchRequest struct {
 	At         time.Time
 }
 
+type VerbRequest struct {
+	Ticket  string
+	Verb    plan.Verb
+	Payload string
+	At      time.Time
+}
+
 type EditRequest struct {
 	Ticket    string
 	Branch    string

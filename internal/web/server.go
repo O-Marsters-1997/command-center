@@ -83,8 +83,8 @@ func NewServer(d Deps, opts ...Option) *Server {
 	}
 	s := &Server{
 		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger,
-		trackerFor: tracker.New,
-		pushable:   pushableCache{list: gh.PushableRepos},
+		trackerFor: tracker.Resolve(gh.CLI{}),
+		pushable:   pushableCache{list: gh.CLI{}.PushableRepos},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -395,9 +395,7 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	}
 	feature := r.FormValue("feature")
 	if feature != "" {
-		if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
-			Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
-		}); err != nil {
+		if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
 			return fmt.Errorf("queue verb intent: %w", err)
 		}
 		s.nudge()
@@ -531,11 +529,13 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 			ticketURL, entry.State, verb, entry.Reason)
 	}
 
-	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, At: s.clock.Now()}
 	if verb == plan.VerbFollowUp {
-		request.Payload = option.Some[any](prompt)
+		err = s.store.QueueVerbIntentWithPayload(ctx, store.VerbRequest{
+			Ticket: ticketURL, Verb: verb, Payload: prompt, At: s.clock.Now(),
+		})
+	} else {
+		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.clock.Now())
 	}
-	err = s.store.QueueVerbIntent(ctx, request)
 	if err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
@@ -751,9 +751,7 @@ func ticketByURL(tickets []store.Ticket, ticketURL string) (store.Ticket, bool) 
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
 	feature := r.PathValue("feature")
-	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
-		Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
-	}); err != nil {
+	if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	s.nudge()

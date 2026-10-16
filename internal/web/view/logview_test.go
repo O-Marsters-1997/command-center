@@ -1,4 +1,4 @@
-package view
+package view_test
 
 import (
 	"errors"
@@ -11,523 +11,44 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-var testRunLog = mustReadTestdata("run.jsonl")
-
-func mustReadTestdata(name string) string {
+func readTestdata(t *testing.T, name string) string {
+	t.Helper()
 	body, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
-		panic(err)
+		t.Fatalf("os.ReadFile(%q): %v", name, err)
 	}
 	return string(body)
 }
 
-func writeRunLog(t *testing.T, body string) string {
+func logDetail(t *testing.T, render view.LineRenderer, src view.LogSource, mode view.LogFilter) view.LogDetail {
 	t.Helper()
-
-	path := filepath.Join(t.TempDir(), "run.jsonl")
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatalf("os.WriteFile(%q): %v", path, err)
-	}
-	return path
-}
-
-func mustLogDetail(
-	t *testing.T, render LineRenderer, path string, streaming bool, ticketURL string, records []store.Event, params Params,
-) LogDetail {
-	t.Helper()
-
-	src := logSource{Path: path, Streaming: streaming, TicketURL: ticketURL, Records: records}
-	detail, err := buildLogDetail(render, src, params)
+	detail, err := view.BuildLogDetail(render, src, view.Params{Log: mode})
 	if err != nil {
-		t.Fatalf("buildLogDetail: %v", err)
+		t.Fatalf("BuildLogDetail(%+v): %v", src, err)
 	}
 	return detail
 }
 
-func TestBuildLogDetailRefusesALineThatFailsToRender(t *testing.T) {
-	t.Parallel()
-
-	failing := func(LogLine) (template.HTML, error) { return "", errors.New("render failed") }
-	src := logSource{Path: writeRunLog(t, testRunLog), TicketURL: "sandbox://x"}
-	_, err := buildLogDetail(failing, src, Params{Log: "all"})
-	if err == nil {
-		t.Error("buildLogDetail error = nil, want the render failure")
+func testLine(l view.LogLine) (template.HTML, error) {
+	parts := []string{"line-" + l.Kind, l.Verb, l.Arg, l.Result}
+	line := strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " ")
+	if l.Kind == "say" {
+		line = "line-say "
 	}
+	if l.Anchor {
+		line += ` id="first-fail"`
+	}
+	return template.HTML(line), nil
 }
 
-func TestBuildLogDetailCutsPhasesAtEachSkill(t *testing.T) {
-	t.Parallel()
-
-	path := writeRunLog(t, testRunLog)
-	detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: "all"})
-
-	if detail.Lines != 6 {
-		t.Fatalf("Lines = %d, want 6", detail.Lines)
-	}
-	if len(detail.Phases) != 2 {
-		t.Fatalf("Phases = %d, want 2", len(detail.Phases))
-	}
-	if detail.Phases[0].Skill != "" {
-		t.Errorf("phase 0 skill = %q, want empty (before the first Skill call)", detail.Phases[0].Skill)
-	}
-	if detail.Phases[1].Skill != "tdd" || detail.Phases[1].Note != "writing the test" {
-		t.Errorf("phase 1 = %+v, want skill tdd / writing the test", detail.Phases[1])
-	}
-	if detail.Phases[1].At != "+00:02" {
-		t.Errorf("phase 1 At = %q, want +00:02, relative to the first event and monotonic", detail.Phases[1].At)
-	}
-	if got := groupLineCounts(detail); got != [2]int{1, 1} {
-		t.Errorf("group line counts = %v; want one call, paired with its result, per phase", got)
-	}
-}
-
-func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) {
-	t.Parallel()
-
-	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	records := []store.Event{
-		{ID: 4, At: start.Add(-time.Minute), Kind: "pr_merged", Detail: "PR #11 merged"},
-		{ID: 5, At: start.Add(time.Minute), Kind: "launched", Detail: "internal audit row"},
-		{ID: 7, At: start.Add(time.Hour), Kind: "pr_merged", Detail: "PR #12 merged"},
-	}
-	path := writeRunLog(t, testRunLog)
-
-	detail := mustLogDetail(t, testLine, path, false, "sandbox://x", records, Params{Log: "all"})
-
-	first, last := detail.Phases[0], detail.Phases[len(detail.Phases)-1]
-	if got := first.Items[0]; got.Kind != "record" || got.Line != "line-record merged PR #11 merged" {
-		t.Errorf("first item = %+v, want the early record ahead of the agent's lines", got)
-	}
-	if got := last.Items[len(last.Items)-1]; got.Kind != "record" || got.Line != "line-record merged PR #12 merged" {
-		t.Errorf("last item = %+v, want the merge line after the agent's lines", got)
-	}
-	if !strings.HasSuffix(detail.StreamPath, "&records=7") {
-		t.Errorf("StreamPath = %q, want it to resume after record 7", detail.StreamPath)
-	}
-
-	for _, tt := range []struct {
-		name string
-		mode LogFilter
-	}{
-		{name: "skills", mode: LogSkills},
-		{name: "tools", mode: LogTools},
-		{name: "fails", mode: LogFails},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			hidden := mustLogDetail(t, testLine, path, false, "sandbox://x", records, Params{Log: tt.mode})
-			for _, phase := range hidden.Phases {
-				for _, item := range phase.Items {
-					if item.Kind == "record" {
-						t.Errorf("mode %q rendered a store line; they show under all only", tt.mode)
-					}
-				}
-			}
-		})
-	}
-}
-
-func TestLineOfLinksAPROpenedRecord(t *testing.T) {
-	t.Parallel()
-
-	got := LineOf(RecordOf(store.Event{Kind: "pr_opened", Detail: "PR #12 https://github.com/o/r/pull/12"}))
-
-	if got.Verb != "opened" || got.Arg != "PR #12" || got.Href != "https://github.com/o/r/pull/12" {
-		t.Errorf("LineOf(pr_opened) = %+v, want verb opened, arg PR #12 and the PR's URL as Href", got)
-	}
-}
-
-func TestLineOfSplitsAChecksLandedRecordIntoResultAndCheckName(t *testing.T) {
-	t.Parallel()
-
-	got := LineOf(RecordOf(store.Event{Kind: "checks_landed", Detail: "Unit tests (go) passed"}))
-
-	if got.Verb != "passed" || got.Arg != "Unit tests (go)" {
-		t.Errorf("LineOf(checks_landed) = %+v, want verb passed and arg Unit tests (go)", got)
-	}
-}
-
-func TestBuildLogDetailRendersStoreEventsWhenTheLogIsGone(t *testing.T) {
-	t.Parallel()
-
-	records := []store.Event{{ID: 3, At: testNow, Kind: "pr_merged", Detail: "PR #12 merged"}}
-	gone := filepath.Join(t.TempDir(), "pruned.jsonl")
-
-	detail := mustLogDetail(t, testLine, gone, false, "sandbox://x", records, Params{Log: "all"})
-
-	if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
-		t.Fatalf("Phases = %+v, want one phase holding the one store line", detail.Phases)
-	}
-	if got, want := detail.Phases[0].Items[0].Line, template.HTML("line-record merged PR #12 merged"); got != want {
-		t.Errorf("line = %q, want %q", got, want)
-	}
-	if detail.PhaseCount != 0 {
-		t.Errorf("PhaseCount = %d, want 0: no agent phase ran in what is left", detail.PhaseCount)
-	}
-}
-
-func TestBuildLogDetailFoldsTheClosingResultIntoTheWorkedLine(t *testing.T) {
-	t.Parallel()
-
-	ended := mustLogDetail(t, testLine, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
-	want := workedLine{Label: "Worked for 17m 11s", Stats: "· 129 turns"}
-	if ended.Worked != want {
-		t.Errorf("Worked = %+v, want %+v (closed: the run has ended and nothing is filtered)", ended.Worked, want)
-	}
-
-	firstLine := strings.SplitAfter(testRunLog, "\n")[0]
-	alive := mustLogDetail(t, testLine, writeRunLog(t, firstLine), true, "sandbox://x", nil, Params{Log: "all"})
-	if alive.Worked.Stats != "" {
-		t.Errorf("Worked.Stats = %q, want none for a run with no result line yet", alive.Worked.Stats)
-	}
-}
-
-func TestBuildLogDetailFiltersCallsButKeepsPhaseHeaders(t *testing.T) {
-	t.Parallel()
-
-	path := writeRunLog(t, testRunLog)
-	for _, tc := range []struct {
-		name      string
-		mode      LogFilter
-		wantLines [2]int
-	}{
-		{name: "all", mode: LogAll, wantLines: [2]int{1, 1}},
-		{name: "skills", mode: LogSkills, wantLines: [2]int{0, 0}},
-		{name: "tools", mode: LogTools, wantLines: [2]int{1, 1}},
-		{name: "fails", mode: LogFails, wantLines: [2]int{1, 0}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: tc.mode})
-			if len(detail.Phases) != 2 {
-				t.Fatalf("phases = %d, want 2", len(detail.Phases))
-			}
-			if got := groupLineCounts(detail); got != tc.wantLines {
-				t.Errorf("mode %q line counts = %v, want %v", tc.mode, got, tc.wantLines)
-			}
-		})
-	}
-}
-
-func TestBuildLogDetailAnchorsOnlyTheRunsFirstFailure(t *testing.T) {
-	t.Parallel()
-
-	detail := mustLogDetail(t, testLine, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
-
-	if got := anchorCount(detail); got != 1 {
-		t.Fatalf("%d lines carry the jump anchor, want exactly 1", got)
-	}
-	failing := detail.Phases[0].Items[0].Group
-	if !strings.Contains(string(failing.Lines[0]), `id="first-fail"`) {
-		t.Errorf("the run's first Fail does not carry the jump anchor: %s", failing.Lines[0])
-	}
-	if !failing.Open || failing.FailNote != "1 failed" {
-		t.Errorf("failing group = %+v, want it open and noting its failure", failing)
-	}
-}
-
-func TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure(t *testing.T) {
-	t.Parallel()
-
-	path := writeRunLog(t, testRunLog)
-	for _, tt := range []struct {
-		name string
-		mode LogFilter
-	}{
-		{name: "skills", mode: LogSkills},
-		{name: "tools", mode: LogTools},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: tt.mode})
-			if anchorCount(detail) != 1 {
-				t.Errorf("mode %q renders no #first-fail target, but the jump link still points at it", tt.mode)
-			}
-		})
-	}
-}
-
-var sessionLog = mustReadTestdata("session.jsonl")
-
-func TestBuildLogDetailFoldsEachRunOfCallsIntoOneSummarisedGroup(t *testing.T) {
-	t.Parallel()
-
-	detail := mustLogDetail(t, testLine, writeRunLog(t, sessionLog), false, "x", nil, Params{Log: "all"})
-
-	items := detail.Phases[0].Items
-	if len(items) != 2 || items[0].Kind != "say" || items[1].Kind != "calls" {
-		t.Fatalf("phase 0 items = %+v, want the prose then one group", items)
-	}
-	group := items[1].Group
-	if group.Summary != "Read 2 files, searched once" || group.Open {
-		t.Errorf("group = %+v, want a closed 'Read 2 files, searched once'", group)
-	}
-	want := []template.HTML{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
-	if !slices.Equal(group.Lines, want) {
-		t.Errorf("group lines = %q, want each call paired with its own result by id: %q", group.Lines, want)
-	}
-	if len(detail.Phases[1].Items) != 1 {
-		t.Errorf("phase 1 items = %+v, want only the Bash group (the skill's own result is dropped)", detail.Phases[1].Items)
-	}
-}
-
-func TestBuildLogDetailLiftsTheFinalAnswerOutOfTheFold(t *testing.T) {
-	t.Parallel()
-
-	detail := mustLogDetail(t, testLine, writeRunLog(t, sessionLog), false, "x", nil, Params{Log: "all"})
-	if detail.Final != "line-say " {
-		t.Errorf("Final = %q, want the run's closing prose", detail.Final)
-	}
-	for _, item := range detail.Phases[1].Items {
-		if item.Kind == "say" {
-			t.Errorf("the final answer also renders inside the fold: %+v", item)
-		}
-	}
-
-	live := sessionLog[:strings.LastIndex(strings.TrimSuffix(sessionLog, "\n"), "\n")+1]
-	alive := mustLogDetail(t, testLine, writeRunLog(t, live), true, "x", nil, Params{Log: "all"})
-	if alive.Final != "" {
-		t.Errorf("Final = %q on a live run, whose last words are not its answer yet", alive.Final)
-	}
-}
-
-func TestBuildLogDetailCarriesStreaming(t *testing.T) {
-	t.Parallel()
-
-	path := writeRunLog(t, testRunLog)
-	if got := mustLogDetail(t, testLine, path, true, "x", nil, Params{Log: "all"}).Streaming; !got {
-		t.Error("Streaming = false, want true for a live run")
-	}
-	if got := mustLogDetail(t, testLine, path, false, "x", nil, Params{Log: "all"}).Streaming; got {
-		t.Error("Streaming = true, want false for an ended run")
-	}
-}
-
-func TestBuildLogDetailRendersASuccessfulCommitAsItsOwnLine(t *testing.T) {
-	t.Parallel()
-
-	const log = `{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":` +
-		`[{"type":"tool_use","id":"c","name":"Bash","input":{"command":"git commit -m \"add it\""}}]}}` + "\n" +
-		`{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"content":` +
-		`[{"type":"tool_result","tool_use_id":"c","content":"ok"}]}}` + "\n"
-	path := writeRunLog(t, log)
-
-	detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: "all"})
-
-	if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
-		t.Fatalf("Phases = %+v; want one phase with one item", detail.Phases)
-	}
-	item := detail.Phases[0].Items[0]
-	if item.Kind != "commit" || item.Line != "line-commit commit add it ✓ 1s" {
-		t.Errorf("item = %+v; want a commit line carrying the message", item)
-	}
-}
-
-func TestKindShownByMode(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		mode LogFilter
-		kind agentlog.Kind
-		want bool
-	}{
-		{name: "all tool", mode: LogAll, kind: agentlog.Tool, want: true},
-		{name: "all fail", mode: LogAll, kind: agentlog.Fail, want: true},
-		{name: "skills skill", mode: LogSkills, kind: agentlog.Skill, want: true},
-		{name: "skills tool", mode: LogSkills, kind: agentlog.Tool},
-		{name: "skills fail", mode: LogSkills, kind: agentlog.Fail},
-		{name: "tools tool", mode: LogTools, kind: agentlog.Tool, want: true},
-		{name: "tools file", mode: LogTools, kind: agentlog.File, want: true},
-		{name: "tools fail", mode: LogTools, kind: agentlog.Fail},
-		{name: "fails fail", mode: LogFails, kind: agentlog.Fail, want: true},
-		{name: "fails pass", mode: LogFails, kind: agentlog.Pass},
-		{name: "all commit", mode: LogAll, kind: agentlog.Commit, want: true},
-		{name: "tools commit", mode: LogTools, kind: agentlog.Commit, want: true},
-		{name: "skills commit", mode: LogSkills, kind: agentlog.Commit},
-		{name: "fails commit", mode: LogFails, kind: agentlog.Commit},
-		{name: "all say", mode: LogAll, kind: agentlog.Say, want: true},
-		{name: "tools say", mode: LogTools, kind: agentlog.Say},
-		{name: "fails say", mode: LogFails, kind: agentlog.Say},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := KindShown(tc.mode, tc.kind); got != tc.want {
-				t.Errorf("KindShown(%q, %v) = %v, want %v", tc.mode, tc.kind, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestFormatOffset(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		d    time.Duration
-		want string
-	}{
-		{name: "zero", d: 0, want: "+00:00"},
-		{name: "minutes and seconds", d: 6*time.Minute + 52*time.Second, want: "+06:52"},
-		{name: "over a minute", d: 90 * time.Second, want: "+01:30"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := formatOffset(tc.d); got != tc.want {
-				t.Errorf("formatOffset(%v) = %q, want %q", tc.d, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestFormatShort(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		d    time.Duration
-		want string
-	}{
-		{name: "seconds", d: 41 * time.Second, want: "41s"},
-		{name: "minutes", d: 1031 * time.Second, want: "17m 11s"},
-		{name: "hours", d: 3661 * time.Second, want: "1h 01m"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := formatShort(tc.d); got != tc.want {
-				t.Errorf("formatShort(%v) = %q, want %q", tc.d, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestToolMixSummary(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		mix  toolMix
-		want string
-	}{
-		{name: "reads and a search", mix: toolMix{reading: 2, searching: 1}, want: "Read 2 files, searched once"},
-		{name: "one command", mix: toolMix{running: 1}, want: "Ran 1 command"},
-		{name: "edits and runs", mix: toolMix{editing: 1, running: 3}, want: "Edited 1 file, ran 3 commands"},
-		{name: "only other tools", mix: toolMix{other: 2}, want: "Used 2 tools"},
-		{name: "other tools after named ones", mix: toolMix{searching: 2, other: 1},
-			want: "Searched twice, used 1 other tool"},
-		{name: "nothing called", mix: toolMix{}, want: "Tool results"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := tc.mix.summary(); got != tc.want {
-				t.Errorf("summary(%v) = %q, want %q", tc.mix, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestProseBlocks(t *testing.T) {
-	t.Parallel()
-
-	got := proseBlocks("Implemented **it** with `Parse`.\nStill one paragraph.\n\n## Checks\n- `go test`\n- golden")
-	want := []ProseBlock{
-		{Items: [][]ProseSpan{{
-			{Text: "Implemented "}, {Text: "it", Strong: true}, {Text: " with "}, {Text: "Parse", Code: true},
-			{Text: ". Still one paragraph."},
-		}}},
-		{Items: [][]ProseSpan{{{Text: "Checks", Strong: true}}}},
-		{List: true, Items: [][]ProseSpan{{{Text: "go test", Code: true}}, {{Text: "golden"}}}},
-	}
-	if len(got) != len(want) {
-		t.Fatalf("proseBlocks = %+v, want %+v", got, want)
-	}
-	for i := range want {
-		if got[i].List != want[i].List || !slices.EqualFunc(got[i].Items, want[i].Items, slices.Equal) {
-			t.Errorf("block %d = %+v, want %+v", i, got[i], want[i])
-		}
-	}
-}
-
-func TestSpansLeaveAnUnmatchedDelimiterAsText(t *testing.T) {
-	t.Parallel()
-
-	got := spans("a ` b ** c")
-	styled := slices.ContainsFunc(got, func(s ProseSpan) bool { return s.Code || s.Strong })
-	if text := joinSpans(got); text != "a ` b ** c" || styled {
-		t.Errorf("spans = %+v, want plain text throughout", got)
-	}
-}
-
-func joinSpans(spans []ProseSpan) string {
-	var b strings.Builder
-	for _, s := range spans {
-		b.WriteString(s.Text)
-	}
-	return b.String()
-}
-
-func TestBuildLogDetailShowsEditAndWriteCounts(t *testing.T) {
-	t.Parallel()
-
-	body, err := os.ReadFile(filepath.Join("..", "..", "agentlog", "testdata", "edits.jsonl"))
-	if err != nil {
-		t.Fatalf("os.ReadFile(edits.jsonl): %v", err)
-	}
-	log := string(body)
-	withoutResults := stripToolUseResults(log)
-	for _, tc := range []struct {
-		name string
-		log  string
-		want []string
-	}{
-		{name: "from the structured result", log: log, want: []string{"+3 -2", "+3 -0", "+3 -1"}},
-		{name: "from the inputs when there is no result", log: withoutResults,
-			want: []string{"+1 -1", "+3 -0", "+5 -0"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			render := func(l LogLine) (template.HTML, error) {
-				return template.HTML(fmt.Sprintf("+%d -%d", l.Added, l.Removed)), nil
-			}
-			detail := mustLogDetail(t, render, writeRunLog(t, tc.log), false, "sandbox://x", nil, Params{Log: "all"})
-
-			var got []string
-			for _, item := range detail.Phases[0].Items {
-				for _, line := range item.Group.Lines {
-					got = append(got, string(line))
-				}
-			}
-			if !slices.Equal(got, tc.want) {
-				t.Errorf("counts = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func stripToolUseResults(log string) string {
-	var kept []string
-	for _, line := range strings.SplitAfter(log, "\n") {
-		if before, _, found := strings.Cut(line, `,"tool_use_result"`); found {
-			line = before + "}\n"
-		}
-		kept = append(kept, line)
-	}
-	return strings.Join(kept, "")
-}
-
-func groupLineCounts(detail LogDetail) [2]int {
+func groupLineCounts(detail view.LogDetail) [2]int {
 	var counts [2]int
 	for i, phase := range detail.Phases[:2] {
 		for _, item := range phase.Items {
@@ -537,7 +58,7 @@ func groupLineCounts(detail LogDetail) [2]int {
 	return counts
 }
 
-func anchorCount(detail LogDetail) int {
+func anchorCount(detail view.LogDetail) int {
 	n := 0
 	for _, phase := range detail.Phases {
 		for _, item := range phase.Items {
@@ -554,40 +75,410 @@ func anchorCount(detail LogDetail) int {
 	return n
 }
 
-func TestLineOfShapesEachEventKind(t *testing.T) {
+func toolCalls(tools ...string) string {
+	var b strings.Builder
+	for i, tool := range tools {
+		fmt.Fprintf(&b, `{"type":"assistant","timestamp":"2026-01-01T00:00:%02dZ","message":{"content":`+
+			`[{"type":"tool_use","id":"t%d","name":%q,"input":{"file_path":"f.go","pattern":"x","command":"ls"}}]}}`+"\n",
+			i, i, tool)
+	}
+	return b.String()
+}
+
+func stripToolUseResults(log string) string {
+	var kept []string
+	for _, line := range strings.SplitAfter(log, "\n") {
+		if before, _, found := strings.Cut(line, `,"tool_use_result"`); found {
+			line = before + "}\n"
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "")
+}
+
+var allModes = []view.LogFilter{view.LogAll, view.LogSkills, view.LogTools, view.LogFails}
+
+func TestKindShown(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
+		mode view.LogFilter
 		kind agentlog.Kind
-		want LineShape
+		want bool
 	}{
-		{name: "say", kind: agentlog.Say, want: LineSay},
-		{name: "skill", kind: agentlog.Skill, want: LineSkill},
-		{name: "record", kind: agentlog.Record, want: LineRecord},
-		{name: "commit", kind: agentlog.Commit, want: LineCall},
-		{name: "cmd", kind: agentlog.Cmd, want: LineCall},
-		{name: "fail", kind: agentlog.Fail, want: LineCall},
-		{name: "tool", kind: agentlog.Tool, want: LineCall},
+		{mode: view.LogAll, kind: agentlog.Tool, want: true},
+		{mode: view.LogAll, kind: agentlog.Fail, want: true},
+		{mode: view.LogSkills, kind: agentlog.Skill, want: true},
+		{mode: view.LogSkills, kind: agentlog.Tool},
+		{mode: view.LogSkills, kind: agentlog.Fail},
+		{mode: view.LogTools, kind: agentlog.Tool, want: true},
+		{mode: view.LogTools, kind: agentlog.File, want: true},
+		{mode: view.LogTools, kind: agentlog.Fail},
+		{mode: view.LogFails, kind: agentlog.Fail, want: true},
+		{mode: view.LogFails, kind: agentlog.Pass},
+		{mode: view.LogAll, kind: agentlog.Commit, want: true},
+		{mode: view.LogTools, kind: agentlog.Commit, want: true},
+		{mode: view.LogSkills, kind: agentlog.Commit},
+		{mode: view.LogFails, kind: agentlog.Commit},
+		{mode: view.LogAll, kind: agentlog.Say, want: true},
+		{mode: view.LogTools, kind: agentlog.Say},
+		{mode: view.LogFails, kind: agentlog.Say},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s %s", tt.mode, tt.kind), func(t *testing.T) {
 			t.Parallel()
-			if got := LineOf(agentlog.Event{Kind: tt.kind}).Shape; got != tt.want {
-				t.Errorf("LineOf(%s).Shape = %q, want %q", tt.kind, got, tt.want)
+			if got := view.KindShown(tt.mode, tt.kind); got != tt.want {
+				t.Errorf("KindShown(%q, %v) = %v, want %v", tt.mode, tt.kind, got, tt.want)
 			}
 		})
 	}
 }
 
-func testLine(l LogLine) (template.HTML, error) {
-	parts := []string{"line-" + l.Kind, l.Verb, l.Arg, l.Result}
-	line := strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " ")
-	if l.Kind == "say" {
-		line = "line-say "
+func TestEventShown(t *testing.T) {
+	t.Parallel()
+
+	passed := agentlog.Event{Kind: agentlog.Cmd, Done: true}
+	failed := agentlog.Event{Kind: agentlog.Cmd, Done: true, ExitCode: 1}
+	running := agentlog.Event{Kind: agentlog.Cmd}
+	tests := []struct {
+		name  string
+		mode  view.LogFilter
+		event agentlog.Event
+		want  bool
+	}{
+		{name: "all passed", mode: view.LogAll, event: passed, want: true},
+		{name: "tools passed", mode: view.LogTools, event: passed, want: true},
+		{name: "tools running", mode: view.LogTools, event: running, want: true},
+		{name: "skills failed", mode: view.LogSkills, event: failed},
+		{name: "fails passed", mode: view.LogFails, event: passed},
+		{name: "fails running", mode: view.LogFails, event: running},
+		{name: "fails failed", mode: view.LogFails, event: failed, want: true},
 	}
-	if l.Anchor {
-		line += ` id="first-fail"`
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := view.EventShown(tt.mode, tt.event); got != tt.want {
+				t.Errorf("EventShown(%q, %+v) = %v, want %v", tt.mode, tt.event, got, tt.want)
+			}
+		})
 	}
-	return template.HTML(line), nil
+}
+
+func TestBuildLogDetail(t *testing.T) {
+	t.Parallel()
+
+	runLog := readTestdata(t, "run.jsonl")
+	sessionLog := readTestdata(t, "session.jsonl")
+
+	t.Run("refuses a line that fails to render", func(t *testing.T) {
+		t.Parallel()
+		errRender := errors.New("render failed")
+		failing := func(view.LogLine) (template.HTML, error) { return "", errRender }
+		src := view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}
+
+		if _, err := view.BuildLogDetail(failing, src, view.Params{Log: view.LogAll}); !errors.Is(err, errRender) {
+			t.Errorf("BuildLogDetail(failing render) error = %v, want %v", err, errRender)
+		}
+	})
+
+	t.Run("cuts phases at each skill", func(t *testing.T) {
+		t.Parallel()
+		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}, view.LogAll)
+
+		type phase struct{ Skill, Note, At string }
+		var got []phase
+		for _, p := range detail.Phases {
+			got = append(got, phase{Skill: p.Skill, Note: p.Note, At: p.At})
+		}
+		want := []phase{{At: "+00:00"}, {Skill: "tdd", Note: "writing the test", At: "+00:02"}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("BuildLogDetail(run) phases mismatch (-want +got):\n%s", diff)
+		}
+		if detail.Lines != 6 {
+			t.Errorf("BuildLogDetail(run).Lines = %d, want 6", detail.Lines)
+		}
+		if got, want := groupLineCounts(detail), [2]int{1, 1}; got != want {
+			t.Errorf("BuildLogDetail(run) group line counts = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("filters calls but keeps phase headers", func(t *testing.T) {
+		t.Parallel()
+		path := writeRunLog(t, runLog)
+		tests := []struct {
+			mode      view.LogFilter
+			wantLines [2]int
+		}{
+			{mode: view.LogAll, wantLines: [2]int{1, 1}},
+			{mode: view.LogSkills, wantLines: [2]int{0, 0}},
+			{mode: view.LogTools, wantLines: [2]int{1, 1}},
+			{mode: view.LogFails, wantLines: [2]int{1, 0}},
+		}
+		for _, tt := range tests {
+			t.Run(string(tt.mode), func(t *testing.T) {
+				t.Parallel()
+				detail := logDetail(t, testLine, view.LogSource{Path: path, TicketURL: "sandbox://x"}, tt.mode)
+				if len(detail.Phases) != 2 {
+					t.Fatalf("BuildLogDetail(%s) phases = %d, want 2", tt.mode, len(detail.Phases))
+				}
+				if got := groupLineCounts(detail); got != tt.wantLines {
+					t.Errorf("BuildLogDetail(%s) group line counts = %v, want %v", tt.mode, got, tt.wantLines)
+				}
+			})
+		}
+	})
+
+	t.Run("places store events among the agent's lines by time", func(t *testing.T) {
+		t.Parallel()
+		start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		records := []store.Event{
+			{ID: 4, At: start.Add(-time.Minute), Kind: "pr_merged", Detail: "PR #11 merged"},
+			{ID: 5, At: start.Add(time.Minute), Kind: "launched", Detail: "internal audit row"},
+			{ID: 7, At: start.Add(time.Hour), Kind: "pr_merged", Detail: "PR #12 merged"},
+		}
+		src := view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x", Records: records}
+
+		detail := logDetail(t, testLine, src, view.LogAll)
+
+		first, last := detail.Phases[0].Items[0], detail.Phases[len(detail.Phases)-1].Items
+		if first.Kind != "record" || first.Line != "line-record merged PR #11 merged" {
+			t.Errorf("BuildLogDetail() first item = %+v, want the early record", first)
+		}
+		if got := last[len(last)-1]; got.Kind != "record" || got.Line != "line-record merged PR #12 merged" {
+			t.Errorf("BuildLogDetail() last item = %+v, want the late record", got)
+		}
+		if !strings.HasSuffix(detail.StreamPath, "&records=7") {
+			t.Errorf("BuildLogDetail().StreamPath = %q, want it to resume after record 7", detail.StreamPath)
+		}
+
+		for _, mode := range allModes[1:] {
+			t.Run(string(mode), func(t *testing.T) {
+				t.Parallel()
+				for _, phase := range logDetail(t, testLine, src, mode).Phases {
+					for _, item := range phase.Items {
+						if item.Kind == "record" {
+							t.Errorf("BuildLogDetail(%s) rendered record %q, want records under all only", mode, item.Line)
+						}
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("renders store events when the log is gone", func(t *testing.T) {
+		t.Parallel()
+		src := view.LogSource{
+			Path: filepath.Join(t.TempDir(), "pruned.jsonl"), TicketURL: "sandbox://x",
+			Records: []store.Event{{ID: 3, At: testNow, Kind: "pr_merged", Detail: "PR #12 merged"}},
+		}
+
+		detail := logDetail(t, testLine, src, view.LogAll)
+
+		if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
+			t.Fatalf("BuildLogDetail(pruned) phases = %+v, want one phase holding one line", detail.Phases)
+		}
+		if got, want := detail.Phases[0].Items[0].Line, template.HTML("line-record merged PR #12 merged"); got != want {
+			t.Errorf("BuildLogDetail(pruned) line = %q, want %q", got, want)
+		}
+		if detail.PhaseCount != 0 {
+			t.Errorf("BuildLogDetail(pruned).PhaseCount = %d, want 0", detail.PhaseCount)
+		}
+	})
+
+	t.Run("worked line", func(t *testing.T) {
+		t.Parallel()
+		ran := func(ms int) string {
+			result := fmt.Sprintf(`{"type":"result","subtype":"success","duration_ms":%d,"num_turns":1}`, ms)
+			return toolCalls("Read") + result + "\n"
+		}
+		tests := []struct {
+			name      string
+			log       string
+			streaming bool
+			wantLabel string
+			wantStats string
+		}{
+			{name: "a recorded run", log: runLog, wantLabel: "Worked for 17m 11s", wantStats: "· 129 turns"},
+			{name: "seconds", log: ran(41000), wantLabel: "Worked for 41s", wantStats: "· 1 turn"},
+			{name: "hours", log: ran(3661000), wantLabel: "Worked for 1h 01m", wantStats: "· 1 turn"},
+			{
+				name: "a live run has no result line yet", log: strings.SplitAfter(runLog, "\n")[0], streaming: true,
+				wantLabel: "Worked for 0s",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				src := view.LogSource{Path: writeRunLog(t, tt.log), Streaming: tt.streaming, TicketURL: "sandbox://x"}
+				worked := logDetail(t, testLine, src, view.LogAll).Worked
+				if worked.Label != tt.wantLabel || worked.Stats != tt.wantStats {
+					t.Errorf("BuildLogDetail(%s).Worked = {%q %q}, want {%q %q}",
+						tt.name, worked.Label, worked.Stats, tt.wantLabel, tt.wantStats)
+				}
+			})
+		}
+	})
+
+	t.Run("anchors only the run's first failure", func(t *testing.T) {
+		t.Parallel()
+		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}, view.LogAll)
+
+		if got := anchorCount(detail); got != 1 {
+			t.Fatalf("BuildLogDetail(run) anchors = %d, want 1", got)
+		}
+		failing := detail.Phases[0].Items[0].Group
+		if !strings.Contains(string(failing.Lines[0]), `id="first-fail"`) || !failing.Open || failing.FailNote == "" {
+			t.Errorf("BuildLogDetail(run) failing group = %+v, want it anchored, open and noting its failure", failing)
+		}
+	})
+
+	t.Run("the anchor survives a filter that hides the failure", func(t *testing.T) {
+		t.Parallel()
+		path := writeRunLog(t, runLog)
+		for _, mode := range []view.LogFilter{view.LogSkills, view.LogTools} {
+			t.Run(string(mode), func(t *testing.T) {
+				t.Parallel()
+				detail := logDetail(t, testLine, view.LogSource{Path: path, TicketURL: "sandbox://x"}, mode)
+				if got := anchorCount(detail); got != 1 {
+					t.Errorf("BuildLogDetail(%s) anchors = %d, want 1", mode, got)
+				}
+			})
+		}
+	})
+
+	t.Run("folds each run of calls into one summarised group", func(t *testing.T) {
+		t.Parallel()
+		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
+
+		items := detail.Phases[0].Items
+		if len(items) != 2 || items[0].Kind != "say" || items[1].Kind != "calls" {
+			t.Fatalf("BuildLogDetail(session) phase 0 items = %+v, want the prose then one group", items)
+		}
+		group := items[1].Group
+		if group.Open {
+			t.Errorf("BuildLogDetail(session) group.Open = true, want a closed group")
+		}
+		want := []template.HTML{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
+		if diff := cmp.Diff(want, group.Lines); diff != "" {
+			t.Errorf("BuildLogDetail(session) group lines mismatch (-want +got):\n%s", diff)
+		}
+		if len(detail.Phases[1].Items) != 1 {
+			t.Errorf("BuildLogDetail(session) phase 1 items = %+v, want only the Bash group", detail.Phases[1].Items)
+		}
+	})
+
+	t.Run("group summary", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name  string
+			tools []string
+			want  string
+		}{
+			{name: "reads and a search", tools: []string{"Read", "Read", "Grep"}, want: "Read 2 files, searched once"},
+			{name: "one command", tools: []string{"Bash"}, want: "Ran 1 command"},
+			{name: "edits and runs", tools: []string{"Edit", "Bash", "Bash", "Bash"}, want: "Edited 1 file, ran 3 commands"},
+			{name: "only other tools", tools: []string{"WebFetch", "WebFetch"}, want: "Used 2 tools"},
+			{
+				name:  "other tools after named ones",
+				tools: []string{"Glob", "Grep", "WebFetch"},
+				want:  "Searched twice, used 1 other tool",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				src := view.LogSource{Path: writeRunLog(t, toolCalls(tt.tools...)), TicketURL: "x"}
+				items := logDetail(t, testLine, src, view.LogAll).Phases[0].Items
+				if len(items) != 1 || items[0].Group.Summary != tt.want {
+					t.Errorf("BuildLogDetail(%v) items = %+v, want one group summarised %q", tt.tools, items, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("lifts the final answer out of the fold", func(t *testing.T) {
+		t.Parallel()
+		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
+		if detail.Final != "line-say " {
+			t.Errorf("BuildLogDetail(session).Final = %q, want the closing prose", detail.Final)
+		}
+		for _, item := range detail.Phases[1].Items {
+			if item.Kind == "say" {
+				t.Errorf("BuildLogDetail(session) also folded the final answer: %+v", item)
+			}
+		}
+
+		live := sessionLog[:strings.LastIndex(strings.TrimSuffix(sessionLog, "\n"), "\n")+1]
+		source := view.LogSource{Path: writeRunLog(t, live), Streaming: true, TicketURL: "x"}
+		alive := logDetail(t, testLine, source, view.LogAll)
+		if alive.Final != "" {
+			t.Errorf("BuildLogDetail(live session).Final = %q, want none", alive.Final)
+		}
+	})
+
+	t.Run("carries streaming", func(t *testing.T) {
+		t.Parallel()
+		path := writeRunLog(t, runLog)
+		for _, streaming := range []bool{true, false} {
+			src := view.LogSource{Path: path, Streaming: streaming, TicketURL: "x"}
+			if got := logDetail(t, testLine, src, view.LogAll).Streaming; got != streaming {
+				t.Errorf("BuildLogDetail(streaming %v).Streaming = %v, want %v", streaming, got, streaming)
+			}
+		}
+	})
+
+	t.Run("a successful commit is its own line", func(t *testing.T) {
+		t.Parallel()
+		const log = `{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":` +
+			`[{"type":"tool_use","id":"c","name":"Bash","input":{"command":"git commit -m \"add it\""}}]}}` + "\n" +
+			`{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"content":` +
+			`[{"type":"tool_result","tool_use_id":"c","content":"ok"}]}}` + "\n"
+
+		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, log), TicketURL: "sandbox://x"}, view.LogAll)
+
+		if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
+			t.Fatalf("BuildLogDetail(commit) phases = %+v, want one phase with one item", detail.Phases)
+		}
+		if item := detail.Phases[0].Items[0]; item.Kind != "commit" || item.Line != "line-commit commit add it ✓ 1s" {
+			t.Errorf("BuildLogDetail(commit) item = %+v, want a commit line carrying the message", item)
+		}
+	})
+
+	t.Run("edit and write counts", func(t *testing.T) {
+		t.Parallel()
+		body, err := os.ReadFile(filepath.Join("..", "..", "agentlog", "testdata", "edits.jsonl"))
+		if err != nil {
+			t.Fatalf("os.ReadFile(edits.jsonl): %v", err)
+		}
+		counts := func(l view.LogLine) (template.HTML, error) {
+			return template.HTML(fmt.Sprintf("+%d -%d", l.Added, l.Removed)), nil
+		}
+		tests := []struct {
+			name string
+			log  string
+			want []string
+		}{
+			{name: "from the structured result", log: string(body), want: []string{"+3 -2", "+3 -0", "+3 -1"}},
+			{
+				name: "from the inputs when there is no result",
+				log:  stripToolUseResults(string(body)),
+				want: []string{"+1 -1", "+3 -0", "+5 -0"},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				detail := logDetail(t, counts, view.LogSource{Path: writeRunLog(t, tt.log), TicketURL: "sandbox://x"}, view.LogAll)
+				var got []string
+				for _, item := range detail.Phases[0].Items {
+					for _, line := range item.Group.Lines {
+						got = append(got, string(line))
+					}
+				}
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("BuildLogDetail(%s) counts mismatch (-want +got):\n%s", tt.name, diff)
+				}
+			})
+		}
+	})
 }

@@ -1,9 +1,11 @@
 package plan_test
 
 import (
-	"slices"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -104,17 +106,15 @@ func TestUnlocked(t *testing.T) {
 			t.Parallel()
 
 			got := plan.Unlocked(tt.ticket, byURL, tt.prs, tt.stacking)
-			if !got.Unlocked {
-				t.Errorf("unlocked = false, want true (reason %q)", got.Reason)
-			}
-			if got.BaseBranch != tt.wantBase {
-				t.Errorf("base branch = %q, want %q", got.BaseBranch, tt.wantBase)
+			if !got.Unlocked || got.BaseBranch != tt.wantBase {
+				t.Errorf("Unlocked(%s, %v, stacking %t) = %+v, want unlocked off %q",
+					tt.ticket.URL, tt.prs, tt.stacking, got, tt.wantBase)
 			}
 			if got.Reason == "" {
-				t.Error("reason is empty; the page renders it on every row")
+				t.Errorf("Unlocked(%s, %v).Reason = \"\", want one", tt.ticket.URL, tt.prs)
 			}
 			if len(got.Blocking) != 0 {
-				t.Errorf("blocking = %v, want empty for an unlocked row", got.Blocking)
+				t.Errorf("Unlocked(%s, %v).Blocking = %v, want none", tt.ticket.URL, tt.prs, got.Blocking)
 			}
 		})
 	}
@@ -139,23 +139,23 @@ func TestUnlocked(t *testing.T) {
 			t.Parallel()
 			got := plan.Unlocked(tt.ticket, byURL, tt.prs, false)
 			if got.Unlocked || got.BaseBranch != "" {
-				t.Errorf("Unlocked() = %+v, want blocked without a base", got)
+				t.Errorf("Unlocked(%s, %v) = %+v, want blocked without a base", tt.ticket.URL, tt.prs, got)
 			}
 			if !strings.Contains(string(got.Reason), tt.reasonNames) {
-				t.Errorf("reason %q does not name %q", got.Reason, tt.reasonNames)
+				t.Errorf("Unlocked(%s, %v).Reason = %q, want it to name %q", tt.ticket.URL, tt.prs, got.Reason, tt.reasonNames)
 			}
-			blocking := slices.Clone(got.Blocking)
-			wantBlocking := slices.Clone(tt.wantBlocking)
-			slices.Sort(blocking)
-			slices.Sort(wantBlocking)
-			if !slices.Equal(blocking, wantBlocking) {
-				t.Errorf("blocking = %v, want %v", got.Blocking, tt.wantBlocking)
+			sorted := cmpopts.SortSlices(func(a, b plan.TicketURL) bool { return a < b })
+			if diff := cmp.Diff(tt.wantBlocking, got.Blocking, sorted); diff != "" {
+				t.Errorf("Unlocked(%s, %v).Blocking mismatch (-want +got):\n%s", tt.ticket.URL, tt.prs, diff)
 			}
 		})
 	}
+
+	t.Run("blocker closed flag", unlockedBlockerClosed)
+	t.Run("an unknown blocker stays blocked", unlockedUnknownBlocker)
 }
 
-func TestUnlockedBlockerClosedFlag(t *testing.T) {
+func unlockedBlockerClosed(t *testing.T) {
 	t.Parallel()
 
 	root := plan.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
@@ -182,21 +182,18 @@ func TestUnlockedBlockerClosedFlag(t *testing.T) {
 
 			got := plan.Unlocked(dependent, byURL, tt.prs, false).BlockerClosed
 			if got != tt.want {
-				t.Errorf("BlockerClosed = %v, want %v", got, tt.want)
+				t.Errorf("Unlocked(%s, %v).BlockerClosed = %t, want %t", dependent.URL, tt.prs, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestUnlockedUnknownBlockerStaysBlocked(t *testing.T) {
+func unlockedUnknownBlocker(t *testing.T) {
 	t.Parallel()
 
 	ticket := plan.Ticket{URL: "sandbox://CC-9", BlockedBy: []plan.TicketURL{"sandbox://GHOST"}}
 	got := plan.Unlocked(ticket, map[plan.TicketURL]plan.Ticket{}, map[string]plan.PRState{}, false)
-	if got.Unlocked {
-		t.Error("a blocker with no ticket row unlocked the row; fail closed")
-	}
-	if !strings.Contains(string(got.Reason), "sandbox://GHOST") {
-		t.Errorf("reason %q does not name the unknown blocker", got.Reason)
+	if got.Unlocked || !strings.Contains(string(got.Reason), "sandbox://GHOST") {
+		t.Errorf("Unlocked(%s, no tickets) = %+v, want blocked naming sandbox://GHOST", ticket.URL, got)
 	}
 }

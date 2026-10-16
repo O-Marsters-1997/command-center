@@ -11,9 +11,9 @@ import (
 )
 
 func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	lastPushed, err := l.store.LatestPushes(ctx)
+	lastPushed, err := l.store.LastPushedTips(ctx)
 	if err != nil {
-		return fmt.Errorf("latest pushes: %w", err)
+		return fmt.Errorf("last pushed tips: %w", err)
 	}
 
 	var candidates []plan.PushCandidate
@@ -26,7 +26,7 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 	}, func(e plan.Entry) error {
 		candidates = append(candidates,
 			plan.PushCandidate{
-				URL: e.Ticket.URL, LocalTip: obs.LocalTips[e.Ticket.Ref()], LastPushedTip: lastPushed[e.Ticket.URL].PushedTip,
+				URL: e.Ticket.URL, LocalTip: obs.LocalTips[e.Ticket.Ref()], LastPushedTip: lastPushed[e.Ticket.URL],
 			})
 		return nil
 	}); err != nil {
@@ -109,15 +109,15 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip plan.SHA, obs
 		return l.event(ctx, url, store.EventPushRefused, path)
 	}
 
-	pushedTips, err := l.store.LatestPushes(ctx)
+	pushedTips, err := l.store.LastPushedTips(ctx)
 	if err != nil {
-		return fmt.Errorf("latest pushes: %w", err)
+		return fmt.Errorf("last pushed tips: %w", err)
 	}
 	restacked, err := l.store.RestackedSinceLastPush(ctx)
 	if err != nil {
 		return fmt.Errorf("restacked since last push: %w", err)
 	}
-	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL].PushedTip, restacked[t.URL]); err != nil {
+	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL], restacked[t.URL]); err != nil {
 		return l.event(ctx, url, store.EventPushFailed, err.Error())
 	}
 

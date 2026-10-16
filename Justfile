@@ -27,7 +27,7 @@ migrate-up:
     {{goose}} "{{db_url}}" up
 
 migrate-create name:
-    {{goose}} create {{name}} sql
+    go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/store/migrations create {{name}} sql
 
 # There is no goose Down for 0001_init.sql, so a hard reset drops the volume and replays Up.
 migrate-reset:
@@ -45,6 +45,7 @@ test-e2e:
 golangci_version := trim(read(".golangci-version"))
 
 lint:
+    ! grep -nE '^[[:space:]]*exec[[:space:]]+sleep([[:space:]]|$)' e2e/tests/*.txtar
     docker run --rm \
         -v "$(pwd):/app" \
         -v command-center-golangci-lint-cache:/root/.cache \
@@ -53,12 +54,21 @@ lint:
         golangci/golangci-lint:{{golangci_version}} \
         golangci-lint run ./...
 
+fmt:
+    go fmt ./...
+
+tidy:
+    go mod tidy
+
 assets:
-    cd web && bun install && bun run build
+    cd web && bun install --frozen-lockfile && bun run build
 
 # Regenerate the committed internal/store/ccdb from internal/store/queries and the schema.
 sqlc:
     go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+
+clean:
+    rm -rf bin
 
 check-conflicts:
     #!/usr/bin/env bash

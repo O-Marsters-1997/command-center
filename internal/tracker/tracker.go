@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 )
 
@@ -28,16 +29,18 @@ type Source interface {
 	Tickets(ctx context.Context, feature string) ([]Ticket, error)
 }
 
-func New(kind Kind, remote string) (Source, error) {
-	switch kind {
-	case GitHub:
-		owner, repo, ok := ownerRepo(remote)
-		if !ok {
-			return nil, fmt.Errorf("tracker: cannot read owner/repo from %q", remote)
+func Resolve(cli gh.CLI) Resolver {
+	return func(kind Kind, remote string) (Source, error) {
+		switch kind {
+		case GitHub:
+			owner, repo, ok := ownerRepo(remote)
+			if !ok {
+				return nil, fmt.Errorf("tracker: cannot read owner/repo from %q", remote)
+			}
+			return &githubSource{owner: owner, repo: repo, cli: cli}, nil
+		default:
+			return nil, fmt.Errorf("tracker: no source for kind %q", kind)
 		}
-		return newGithubSource(owner, repo), nil
-	default:
-		return nil, fmt.Errorf("tracker: no source for kind %q", kind)
 	}
 }
 

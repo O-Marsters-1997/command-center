@@ -14,6 +14,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
+type command func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error
+
 func main() {
 	configPath := flag.String("config", "cc/config.toml", "path to config file")
 	flag.Parse()
@@ -28,29 +30,24 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	deps := app.Deps{Logger: logger, ConfigPath: *configPath, Env: env}
 
-	var runErr error
-	switch flag.Arg(0) {
-	case "open":
-		runErr = openCommand(ctx, deps)
-	case "demo":
-		runErr = demoCommand(ctx, deps)
-	case "tick", "request", "import":
-		runErr = e2eCommand(ctx, deps, flag.Args())
-	default:
-		runErr = run(ctx, deps)
+	cmd := subcmd(flag.Args())
+	if cmd == nil {
+		cmd = demoSubcmd(flag.Args())
 	}
-	if err := runErr; err != nil {
+	if cmd == nil {
+		cmd = run
+	}
+	if err := cmd(ctx, logger, *configPath, env); err != nil {
 		logger.Error("cc exited", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, deps app.Deps) (err error) {
-	deps.Logger.Info("loading config", "path", deps.ConfigPath)
+func run(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) (err error) {
+	logger.Info("loading config", "path", configPath)
 
-	instance, err := newApp(ctx, deps)
+	instance, err := app.New(ctx, logger, configPath, env, appOptions()...)
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}

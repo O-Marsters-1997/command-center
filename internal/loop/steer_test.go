@@ -1,52 +1,49 @@
 package loop_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/runner/runnertest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-type stubbornRunner struct{ *runner.Fake }
+type stubbornRunner struct{ *runnertest.Runner }
 
 func (stubbornRunner) Cancel(int) error { return nil }
 
 type steerFixture struct {
 	store     *storepkg.Store
-	fake      *runner.Fake
+	fake      *runnertest.Runner
 	loop      *loop.Loop
 	ticket    storepkg.Ticket
 	sessionID string
 	repoPath  string
 	runsDir   string
-	at        time.Time
 }
 
-func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steerFixture {
+func newSteerFixture(t *testing.T, wrap func(*runnertest.Runner) runner.Runner) *steerFixture {
 	t.Helper()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
-
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
-	at := testAt
 	runID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		Session: storepkg.RunSession{StartNew: true},
@@ -54,11 +51,10 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	if err != nil {
 		t.Fatalf("InsertSessionRunSkeleton(%q): %v", ticket.URL, err)
 	}
-	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: testAt, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
-
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.ClaudeProjectsDir = t.TempDir()
 	project := filepath.Join(cfg.ClaudeProjectsDir, "-some-project")
@@ -66,38 +62,37 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 		t.Fatalf("MkdirAll(%q): %v", project, err)
 	}
 	if err := os.WriteFile(filepath.Join(project, sessionID+".jsonl"), []byte("{}\n"), 0o600); err != nil {
-		t.Fatalf("WriteFile(%q): %v", sessionID+".jsonl", err)
+		t.Fatalf("WriteFile(transcript): %v", err)
 	}
-
-	obs := plan.NewObservation(at)
-	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	fake := runner.NewFake()
-	fake.Alive[999] = true
+	obs := plan.Observation{
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
+	}
+	fake := &runnertest.Runner{}
+	fake.Run(999)
 	var rn runner.Runner = fake
 	if wrap != nil {
 		rn = wrap(fake)
 	}
 	return &steerFixture{
-		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, runsDir: ws.RunsDir, at: at,
-		loop: newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, rn),
+		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, runsDir: ws.RunsDir,
+		loop: newLoop(store, observing(obs), fixedClock(testAt.Add(30*time.Second)), cfg, ws, rn),
 	}
 }
 
 func (f *steerFixture) send(t *testing.T, text string) {
 	t.Helper()
-	err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: option.Some[any](text), At: f.at,
+	err := f.store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: testAt,
 	})
 	if err != nil {
-		t.Fatalf("QueueVerbIntent(%q, follow-up): %v", f.ticket.URL, err)
+		t.Fatalf("QueueVerbIntentWithPayload(follow-up): %v", err)
 	}
 }
 
 func (f *steerFixture) tick(t *testing.T) {
 	t.Helper()
 	if err := f.loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
+		t.Fatalf("RunOnce() error = %v", err)
 	}
 }
 
@@ -110,127 +105,92 @@ func (f *steerFixture) pendingFollowUps(t *testing.T) int {
 	return len(pending)
 }
 
-func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTick(t *testing.T) {
+func TestSteer(t *testing.T) {
 	t.Parallel()
-	f := newSteerFixture(t, nil)
-	f.send(t, "use sqlite instead")
 
-	f.tick(t)
+	t.Run("a follow-up on a running ticket cancels it as continued and resumes in the same tick", func(t *testing.T) {
+		t.Parallel()
+		f := newSteerFixture(t, nil)
+		f.send(t, "use sqlite instead")
 
-	if len(f.fake.Canceled) != 1 || f.fake.Canceled[0] != 999 {
-		t.Errorf("canceled = %v, want the live run's pgid 999", f.fake.Canceled)
-	}
-	if len(f.fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1 resume", len(f.fake.Spawns))
-	}
-	spawn := f.fake.Spawns[0]
-	if !spawn.Resume || spawn.SessionID != f.sessionID {
-		t.Errorf("spawn = resume %v session %q, want a resume of %q", spawn.Resume, spawn.SessionID, f.sessionID)
-	}
-	assertPromptGolden(t, "testdata/prompt-steer-interrupt.golden.txt", spawn.Prompt, f.runsDir)
-	if got := f.pendingFollowUps(t); got != 0 {
-		t.Errorf("pending follow-ups = %d, want the intent consumed", got)
-	}
+		f.tick(t)
 
-	ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
-	if err != nil {
-		t.Fatalf("RunIDsForTicket(%q): %v", f.ticket.URL, err)
-	}
-	if len(ids) != 2 {
-		t.Fatalf("runs = %v, want the interrupted run and its resume", ids)
-	}
-	if got := gittest.Run(t, f.repoPath, "ls-remote", "origin", "refs/heads/cc-1"); got != "" {
-		t.Errorf("origin carries cc-1 (%q), want a continued run with commits not pushed", got)
-	}
-}
-
-func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
-	t.Parallel()
-	f := newSteerFixture(t, nil)
-	f.send(t, "use sqlite instead")
-
-	f.tick(t)
-
-	ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
-	if err != nil {
-		t.Fatalf("RunIDsForTicket(%q): %v", f.ticket.URL, err)
-	}
-	if len(ids) != 2 {
-		t.Fatalf("runs = %v, want 2", ids)
-	}
-	pending, err := f.store.PendingRunsAwaitingDisposition(t.Context())
-	if err != nil {
-		t.Fatalf("PendingRunsAwaitingDisposition: %v", err)
-	}
-	for _, run := range pending {
-		if run.ID == ids[0] {
-			t.Errorf("interrupted run %d still awaits disposition", ids[0])
+		if diff := cmp.Diff([]int{999}, f.fake.Canceled()); diff != "" {
+			t.Errorf("canceled mismatch (-want +got):\n%s", diff)
 		}
-	}
-	events, err := f.store.Events(t.Context())
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	var disposed []storepkg.Event
-	for _, event := range events {
-		if event.Kind == storepkg.EventRunDisposed && event.TicketURL == f.ticket.URL {
-			disposed = append(disposed, event)
+		spawns := f.fake.Spawns()
+		if len(spawns) != 1 || !spawns[0].Resume || spawns[0].SessionID != f.sessionID {
+			t.Fatalf("spawns = %+v, want one resume of session %q", spawns, f.sessionID)
 		}
-	}
-	if len(disposed) != 1 || disposed[0].Detail != plan.OutcomeContinued.String() {
-		t.Errorf("disposed events = %+v, want one continued disposition", disposed)
-	}
-}
+		assertPromptGolden(t, "testdata/prompt-steer-interrupt.golden.txt", spawns[0].Prompt, f.runsDir)
+		if got := f.pendingFollowUps(t); got != 0 {
+			t.Errorf("pending follow-ups = %d, want 0", got)
+		}
+		ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
+		if err != nil {
+			t.Fatalf("RunIDsForTicket: %v", err)
+		}
+		if len(ids) != 2 {
+			t.Fatalf("RunIDsForTicket() = %v, want the interrupted run and its resume", ids)
+		}
+		first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
+		if err != nil {
+			t.Fatalf("RunDetails(%d): %v", ids[0], err)
+		}
+		if first.Outcome != option.Some(plan.OutcomeContinued) {
+			t.Errorf("interrupted run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)
+		}
+		if got := gittest.Run(t, f.repoPath, "ls-remote", "origin", "refs/heads/cc-1"); got != "" {
+			t.Errorf("ls-remote origin cc-1 = %q, want nothing pushed", got)
+		}
+	})
 
-func TestARunThatSurvivesTheCancelKeepsTheFollowUpPending(t *testing.T) {
-	t.Parallel()
-	f := newSteerFixture(t, func(fake *runner.Fake) runner.Runner { return stubbornRunner{fake} })
-	f.send(t, "use sqlite instead")
+	t.Run("a run that survives the cancel keeps the follow-up pending", func(t *testing.T) {
+		t.Parallel()
+		f := newSteerFixture(t, func(fake *runnertest.Runner) runner.Runner { return stubbornRunner{fake} })
+		f.send(t, "use sqlite instead")
 
-	f.tick(t)
+		f.tick(t)
+		if got := len(f.fake.Spawns()); got != 0 {
+			t.Fatalf("spawns while the run is alive = %d, want 0", got)
+		}
+		if got := f.pendingFollowUps(t); got != 1 {
+			t.Fatalf("pending follow-ups = %d, want 1", got)
+		}
 
-	if len(f.fake.Spawns) != 0 {
-		t.Fatalf("spawns = %d, want none while the run is alive", len(f.fake.Spawns))
-	}
-	if got := f.pendingFollowUps(t); got != 1 {
-		t.Fatalf("pending follow-ups = %d, want the intent kept for the next tick", got)
-	}
+		f.fake.Vanish(999)
+		f.tick(t)
 
-	f.fake.Alive[999] = false
-	f.tick(t)
+		if spawns := f.fake.Spawns(); len(spawns) != 1 || !spawns[0].Resume {
+			t.Errorf("spawns = %+v, want one resume once the run is gone", spawns)
+		}
+		if got := f.pendingFollowUps(t); got != 0 {
+			t.Errorf("pending follow-ups = %d, want 0", got)
+		}
+	})
 
-	if len(f.fake.Spawns) != 1 || !f.fake.Spawns[0].Resume {
-		t.Errorf("spawns = %+v, want one resume once the run is gone", f.fake.Spawns)
-	}
-	if got := f.pendingFollowUps(t); got != 0 {
-		t.Errorf("pending follow-ups = %d, want the intent consumed", got)
-	}
-}
+	t.Run("two messages before a tick each resume in order", func(t *testing.T) {
+		t.Parallel()
+		f := newSteerFixture(t, nil)
+		f.send(t, "first message")
+		f.send(t, "second message")
 
-func TestTwoMessagesBeforeATickEachProduceTheirOwnResumeInOrder(t *testing.T) {
-	t.Parallel()
-	f := newSteerFixture(t, nil)
-	f.send(t, "first message")
-	f.send(t, "second message")
+		f.tick(t)
+		if spawns := f.fake.Spawns(); len(spawns) != 1 || !strings.Contains(spawns[0].Prompt, "first message") {
+			t.Fatalf("spawns = %+v, want only the first message resumed", spawns)
+		}
+		if got := f.pendingFollowUps(t); got != 1 {
+			t.Fatalf("pending follow-ups = %d, want 1", got)
+		}
 
-	f.tick(t)
-
-	if len(f.fake.Spawns) != 1 || !strings.Contains(f.fake.Spawns[0].Prompt, "first message") {
-		t.Fatalf("spawns = %+v, want only the first message resumed", f.fake.Spawns)
-	}
-	if got := f.pendingFollowUps(t); got != 1 {
-		t.Fatalf("pending follow-ups = %d, want the second message kept", got)
-	}
-
-	f.tick(t)
-
-	if len(f.fake.Spawns) != 2 || !strings.Contains(f.fake.Spawns[1].Prompt, "second message") {
-		t.Fatalf("spawns = %+v, want the second message resumed next", f.fake.Spawns)
-	}
-	if !f.fake.Spawns[1].Resume || f.fake.Spawns[1].SessionID != f.sessionID {
-		t.Errorf("second spawn = %+v, want a resume of the same session", f.fake.Spawns[1])
-	}
-	if got := f.pendingFollowUps(t); got != 0 {
-		t.Errorf("pending follow-ups = %d, want none", got)
-	}
+		f.tick(t)
+		spawns := f.fake.Spawns()
+		if len(spawns) != 2 || !strings.Contains(spawns[1].Prompt, "second message") ||
+			!spawns[1].Resume || spawns[1].SessionID != f.sessionID {
+			t.Fatalf("spawns = %+v, want the second message resumed in session %q", spawns, f.sessionID)
+		}
+		if got := f.pendingFollowUps(t); got != 0 {
+			t.Errorf("pending follow-ups = %d, want 0", got)
+		}
+	})
 }

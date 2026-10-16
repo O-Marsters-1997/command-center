@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
-
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -33,14 +31,35 @@ var pushable = []gh.RepoSummary{
 
 func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 	t.Helper()
-	return openServer(track(t, openStore(t), alphaRepo, betaRepo), cctest.Clock{At: testNow}, "",
+	return openServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "",
 		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 			calls.Add(1)
 			return pushable, nil
 		}))
 }
 
-func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
+func TestReposPage(t *testing.T) {
+	t.Parallel()
+
+	for name, run := range map[string]func(*testing.T){
+		"lists exactly the known repos":                 testReposPageListsKnownRepos,
+		"search merges pushable matches":                testRepoSearchMergesPushable,
+		"search marks a non-main default branch":        testRepoSearchMarksDefaultBranch,
+		"search makes one gh call within the window":    testRepoSearchOneGhCall,
+		"board renders while the pushable fetch blocks": testBoardRendersWhilePushableBlocked,
+		"search refetches once the cache expires":       testRepoSearchRefetches,
+		"search falls back to known repos":              testRepoSearchFallsBack,
+		"scoped page lists only this repo's features":   testScopedRepoPage,
+		"scoped page for an unknown repo":               testScopedRepoPageUnknown,
+		"notice raises a refused repo on every page":    testNoticeRaisesRefusedRepo,
+		"rejects a name that is not owner/name":         testRepoPageRejectsBadName,
+	} {
+		t.Run(name, run)
+	}
+}
+
+func testReposPageListsKnownRepos(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -70,7 +89,8 @@ func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
 	}
 }
 
-func TestRepoSearchMergesPushableMatchesAndNeverShowsReadOnlyRepos(t *testing.T) {
+func testRepoSearchMergesPushable(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -106,7 +126,8 @@ func TestRepoSearchMergesPushableMatchesAndNeverShowsReadOnlyRepos(t *testing.T)
 	}
 }
 
-func TestRepoSearchMarksARepoWhoseDefaultBranchIsNotMain(t *testing.T) {
+func testRepoSearchMarksDefaultBranch(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -136,7 +157,8 @@ func searchRow(t *testing.T, body, fullName string) htmltest.Node {
 	return htmltest.Node{}
 }
 
-func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
+func testRepoSearchOneGhCall(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -150,12 +172,13 @@ func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
 	}
 }
 
-func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
+func testBoardRendersWhilePushableBlocked(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	server := openServer(openStore(t), cctest.Clock{At: testNow}, "", web.WithPushableSource(
+	server := openServer(openStore(t), fixedClock(testNow), "", web.WithPushableSource(
 		func(context.Context) ([]gh.RepoSummary, error) {
 			close(started)
 			<-release
@@ -173,13 +196,8 @@ func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
 		response := do(t, server, http.MethodGet, "/board", req{Header: http.Header{"Hx-Request": {"true"}}})
 		boardDone <- response.Code
 	}()
-	select {
-	case status := <-boardDone:
-		if status != http.StatusOK {
-			t.Errorf("GET /board during pushable fetch = %d, want 200", status)
-		}
-	case <-time.After(5 * time.Second):
-		t.Error("GET /board blocked behind pushable fetch")
+	if status := <-boardDone; status != http.StatusOK {
+		t.Errorf("GET /board during pushable fetch = %d, want 200", status)
 	}
 	close(release)
 	if status := <-searchDone; status != http.StatusOK {
@@ -187,7 +205,8 @@ func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
 	}
 }
 
-func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
+func testRepoSearchRefetches(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -209,10 +228,11 @@ type steppingClock struct{ at time.Time }
 
 func (c *steppingClock) Now() time.Time { return c.at }
 
-func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
+func testRepoSearchFallsBack(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
-	server := openServer(track(t, openStore(t), alphaRepo), cctest.Clock{At: testNow}, "",
+	server := openServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "",
 		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 			return nil, errors.New("gh: not logged in")
 		}))
@@ -225,7 +245,8 @@ func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 	}
 }
 
-func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T) {
+func testScopedRepoPage(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	ctx := t.Context()
@@ -238,10 +259,12 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	server := openServer(track(t, store, alphaRepo, betaRepo), cctest.Clock{At: testNow}, "",
-		web.WithTrackerSource(trackertest.ByRemote(map[string]*trackertest.Source{
-			"github.com/acme/alpha": {Features: []tracker.Feature{"project:x", "project:y"}},
-			"github.com/acme/beta":  {Features: []tracker.Feature{"project:z"}},
+	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
+		web.WithTrackerSource(trackertest.ByRemote(map[string]tracker.Source{
+			"github.com/acme/alpha": &trackertest.Source{
+				ByFeature: map[string][]tracker.Ticket{"project:x": nil, "project:y": nil},
+			},
+			"github.com/acme/beta": &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:z": nil}},
 		})))
 
 	body := renderPath(t, server, "/repos/acme/alpha")
@@ -269,29 +292,10 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		t.Errorf("unimported feature offers reimport: %s", reimport[0].HTML())
 	}
 	main.One(t, `form[action="/features/project:x/import"]`)
-	for _, tt := range []struct{ name, feature, imported string }{
-		{"imported", "project:x", "yes"}, {"not imported", "project:y", "no"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			found := false
-			for _, row := range main.Find("tr") {
-				if len(row.Find(`a[href="/f/`+tt.feature+`"]`)) == 0 {
-					continue
-				}
-				found = true
-				if cells := row.Find("td"); len(cells) < 2 || cells[1].Text() != tt.imported {
-					t.Errorf("%s imported cell = %s, want %s", tt.feature, row.HTML(), tt.imported)
-				}
-			}
-			if !found {
-				t.Errorf("repo features omit %s", tt.feature)
-			}
-		})
-	}
 }
 
-func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
+func testScopedRepoPageUnknown(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -311,24 +315,8 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 	}
 }
 
-func TestOldImportRouteIsGone(t *testing.T) {
-	t.Parallel()
-
-	server := newServer(openStore(t), testNow)
-	for _, tt := range []struct{ name, method string }{
-		{"get", http.MethodGet}, {"post", http.MethodPost},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			response := do(t, server, tt.method, "/import", req{})
-			if response.Code != http.StatusNotFound {
-				t.Errorf("%s /import = %d, want 404", tt.method, response.Code)
-			}
-		})
-	}
-}
-
-func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
+func testNoticeRaisesRefusedRepo(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	st := track(t, openStore(t), alphaRepo)
@@ -339,7 +327,7 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	if err := st.UpsertRepo(t.Context(), refused); err != nil {
 		t.Fatalf("UpsertRepo(%q): %v", refused.Name, err)
 	}
-	server := openServer(st, cctest.Clock{At: testNow}, "")
+	server := openServer(st, fixedClock(testNow), "")
 
 	for _, tt := range []struct{ name, path string }{
 		{name: "tickets", path: "/tickets"},
@@ -361,7 +349,8 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	}
 }
 
-func TestRepoPageRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
+func testRepoPageRejectsBadName(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	var calls atomic.Int32

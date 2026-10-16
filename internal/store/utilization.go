@@ -30,3 +30,22 @@ type readingRow struct {
 	Utilization float64   `json:"utilization"`
 	ResetsAt    time.Time `json:"resets_at"`
 }
+
+// Gauge holds the latest utilization and reset time for one window.
+type Gauge struct {
+	Utilization float64
+	ResetsAt    time.Time
+}
+
+// LatestReadings omits windows with no reading.
+func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, error) {
+	readings, err := s.LatestReadingsFull(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read latest readings: %w", err)
+	}
+	gauges := make(map[agentlog.Window]Gauge, len(readings))
+	for window, r := range readings {
+		gauges[window] = Gauge{Utilization: r.Utilization, ResetsAt: r.ResetsAt}
+	}
+	return gauges, nil
+}

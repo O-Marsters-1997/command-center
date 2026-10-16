@@ -9,7 +9,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
-func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
+func testBoardTitles(t *testing.T) {
 	t.Parallel()
 
 	st := openStore(t)
@@ -28,7 +28,6 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatalf("SaveObservation: %v", err)
 	}
-
 	page := renderBoard(t, newServer(st, testNow))
 
 	for _, tc := range []struct{ name, ticketURL, ref, title string }{
@@ -39,14 +38,14 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 			t.Parallel()
 			row := webtest.RowFor(t, page, tc.ticketURL)
 			if row.Ref != tc.ref {
-				t.Errorf("ref = %q, want %q:\n%s", row.Ref, tc.ref, row.Row.HTML())
+				t.Errorf("GET /board %s ref = %q, want %q", tc.ticketURL, row.Ref, tc.ref)
 			}
 			divs := row.Ticket.Find("div")
 			if len(divs) == 0 {
-				t.Fatalf("ticket cell has no title div:\n%s", row.Row.HTML())
+				t.Fatalf("GET /board %s ticket cell has no title:\n%s", tc.ticketURL, row.Row.HTML())
 			}
 			if got := divs[len(divs)-1].Text(); got != tc.title {
-				t.Errorf("title = %q, want %q:\n%s", got, tc.title, row.Row.HTML())
+				t.Errorf("GET /board %s title = %q, want %q", tc.ticketURL, got, tc.title)
 			}
 		})
 	}

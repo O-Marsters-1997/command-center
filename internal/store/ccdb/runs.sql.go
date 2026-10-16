@@ -375,19 +375,34 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 }
 
 const queueVerbIntent = `-- name: QueueVerbIntent :exec
-INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES ($1, $2, $3, $4)
+INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3)
 `
 
 type QueueVerbIntentParams struct {
 	At       time.Time
 	TicketID string
 	Verb     string
-	Payload  json.RawMessage
 }
 
 func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) error {
-	_, err := q.db.ExecContext(ctx, queueVerbIntent,
+	_, err := q.db.ExecContext(ctx, queueVerbIntent, arg.At, arg.TicketID, arg.Verb)
+	return err
+}
+
+const queueVerbIntentWithPayload = `-- name: QueueVerbIntentWithPayload :exec
+INSERT INTO intents (at, ticket_id, verb, payload)
+VALUES ($1, $2, $3, $4)
+`
+
+type QueueVerbIntentWithPayloadParams struct {
+	At       time.Time
+	TicketID string
+	Verb     string
+	Payload  json.RawMessage
+}
+
+func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbIntentWithPayloadParams) error {
+	_, err := q.db.ExecContext(ctx, queueVerbIntentWithPayload,
 		arg.At,
 		arg.TicketID,
 		arg.Verb,
@@ -464,6 +479,26 @@ func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const runDetails = `-- name: RunDetails :one
+SELECT COALESCE(session_id::text, '')::text AS session_id,
+       COALESCE(message, '')::text AS message,
+       COALESCE(outcome, '')::text AS outcome
+FROM runs WHERE id = $1
+`
+
+type RunDetailsRow struct {
+	SessionID string
+	Message   string
+	Outcome   string
+}
+
+func (q *Queries) RunDetails(ctx context.Context, id int64) (RunDetailsRow, error) {
+	row := q.db.QueryRowContext(ctx, runDetails, id)
+	var i RunDetailsRow
+	err := row.Scan(&i.SessionID, &i.Message, &i.Outcome)
+	return i, err
 }
 
 const runIDsForTicket = `-- name: RunIDsForTicket :many

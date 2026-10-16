@@ -205,9 +205,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 		authorised: map[string]bool{}, board: map[string]string{},
 	}
 	for _, feature := range features(issues) {
-		if err := st.QueueVerbIntent(ctx, store.VerbRequest{
-			Ticket: feature, Verb: plan.VerbImport, At: clock.Now(),
-		}); err != nil {
+		if err := st.QueueVerbIntent(ctx, feature, plan.VerbImport, clock.Now()); err != nil {
 			return nil, fmt.Errorf("queue import of %s: %w", feature, err)
 		}
 	}

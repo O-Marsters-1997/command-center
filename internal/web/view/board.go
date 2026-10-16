@@ -120,14 +120,14 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 		r := &rows[i]
 		r.Checked = slices.Contains(params.Tickets, r.URL)
 		r.SessionPath = params.withScope(cmp.Or(SessionPath(r.URL), ticketsPath))
-		toggledTicket := params.toggleTicket(r.URL)
-		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
+		toggledTicket := params.ToggleTicket(r.URL)
+		r.TogglePath, r.TogglePush = toggledTicket.BoardPath(), toggledTicket.PagePath()
 		r.VerbPath = params.verbPath()
 		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
 		r.Buttons = r.VerbButtons()
 		if params.Sel == r.URL {
-			src := logSource{Path: r.LogPath, Streaming: r.Alive, TicketURL: r.URL, Records: records}
-			log, err := buildLogDetail(render, src, params)
+			src := LogSource{Path: r.LogPath, Streaming: r.Alive, TicketURL: r.URL, Records: records}
+			log, err := BuildLogDetail(render, src, params)
 			if err != nil {
 				return fmt.Errorf("build log for %s: %w", r.URL, err)
 			}
@@ -333,18 +333,18 @@ func flattenChain(root string, childrenByRoot map[string][]Row) []Row {
 	return out
 }
 
-func filterGroupsByRepo(groups []Group, repo string) []Group {
+func FilterGroupsByRepo(groups []Group, repo string) []Group {
 	return filterGroups(groups, repo, func(r Row) string { return r.Repo })
 }
 
-func filterGroupsByProject(groups []Group, repos []string) []Group {
+func FilterGroupsByProject(groups []Group, repos []string) []Group {
 	inProject := func(r Row) bool { return slices.Contains(repos, r.Repo) }
 	return slices.DeleteFunc(slices.Clone(groups), func(g Group) bool {
 		return (g.Root.IsNone() || !inProject(g.Root.Unwrap())) && !slices.ContainsFunc(g.Children, inProject)
 	})
 }
 
-func filterGroupsByFeature(groups []Group, feature string) []Group {
+func FilterGroupsByFeature(groups []Group, feature string) []Group {
 	return filterGroups(groups, feature, func(r Row) string { return r.Feature })
 }
 

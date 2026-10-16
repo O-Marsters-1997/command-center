@@ -21,7 +21,7 @@ type frame struct {
 	projects map[string]ProjectMark
 	rows     []Row
 	lastErr  option.Option[store.TickError]
-	gauges   map[agentlog.Window]agentlog.Reading
+	gauges   map[agentlog.Window]store.Gauge
 	chrome   Chrome
 
 	project     store.Project
@@ -49,16 +49,13 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	if f.lastErr, err = r.store.LastError(ctx); err != nil {
 		return frame{}, fmt.Errorf("load last error: %w", err)
 	}
-	if f.gauges, err = r.store.LatestReadingsFull(ctx); err != nil {
+	if f.gauges, err = r.store.LatestReadings(ctx); err != nil {
 		return frame{}, fmt.Errorf("load latest readings: %w", err)
 	}
 	if f.split, err = r.gaugeSplit(ctx, now); err != nil {
 		return frame{}, fmt.Errorf("gauge split: %w", err)
 	}
-	p.Repo = normalizeRepoScope(p.Repo, f.repos)
-	f.project = normalizeProjectScope(p.Project, projects)
-	p.Project = f.project.Name
-	p.Feature = normalizeFeatureScope(p.Feature, distinctFeatures(f.tickets))
+	p, f.project = p.Scoped(f.repos, projects, f.tickets)
 	f.params = p
 	f.in.Now = now
 	f.snap = plan.RulesFor(plan.Daemon{}, f.in.Obs).Derive(f.in)
@@ -69,7 +66,7 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	f.chrome.ScopeMenu = scopeChoices(ScopeList(projects, f.repos), f.project.Name, p.Repo)
 	f.chrome.RefusedRepos = refusedRepos(f.repos)
 	rows := scopeRailRows(f.rows, RailParams{
-		Project: f.project.Name, Repo: p.Repo, projectRepos: f.project.Repos,
+		Project: f.project.Name, Repo: p.Repo, ProjectRepos: f.project.Repos,
 	})
 	for _, row := range rows {
 		if row.Glyph != plan.GlyphDone {

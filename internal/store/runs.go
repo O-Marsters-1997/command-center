@@ -28,6 +28,31 @@ type RunSession struct {
 	Message  string
 }
 
+type RunDetails struct {
+	SessionID string
+	Message   string
+	Outcome   option.Option[plan.Outcome]
+}
+
+func (s *Store) RunDetails(ctx context.Context, id plan.RunID) (RunDetails, error) {
+	row, err := s.q.RunDetails(ctx, int64(id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return RunDetails{}, fmt.Errorf("run %d: %w", id, ErrNotFound)
+	}
+	if err != nil {
+		return RunDetails{}, fmt.Errorf("read run %d: %w", id, err)
+	}
+	details := RunDetails{SessionID: row.SessionID, Message: row.Message}
+	if row.Outcome != "" {
+		outcome, err := plan.ParseOutcome(row.Outcome)
+		if err != nil {
+			return RunDetails{}, fmt.Errorf("read outcome of run %d: %w", id, err)
+		}
+		details.Outcome = option.Some(outcome)
+	}
+	return details, nil
+}
+
 func (s *Store) InsertSessionRunSkeleton(
 	ctx context.Context, r RunSkeleton,
 ) (runID int64, sessionID string, err error) {
@@ -68,11 +93,19 @@ func (s *Store) RecordSpawn(ctx context.Context, sp Spawn) error {
 }
 
 func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
+	var exitCodeParam sql.NullInt64
+	if d.ExitCode.IsSome() {
+		exitCodeParam = sql.NullInt64{Int64: int64(d.ExitCode.Unwrap()), Valid: true}
+	}
+	var costParam sql.NullFloat64
+	if d.Cost.IsSome() {
+		costParam = sql.NullFloat64{Float64: d.Cost.Unwrap(), Valid: true}
+	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(d.Outcome.String()),
-		ExitCode: nullOption(d.ExitCode, func(v int) sql.NullInt64 { return sql.NullInt64{Int64: int64(v), Valid: true} }),
+		ExitCode: exitCodeParam,
 		EndedAt:  notNullTime(d.EndedAt.UTC()),
-		CostUsd:  nullOption(d.Cost, func(v float64) sql.NullFloat64 { return sql.NullFloat64{Float64: v, Valid: true} }),
+		CostUsd:  costParam,
 		ID:       int64(d.RunID),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
@@ -179,23 +212,24 @@ type VerbIntent struct {
 	Payload  string
 }
 
-type VerbRequest struct {
-	Ticket  string
-	Verb    plan.Verb
-	At      time.Time
-	Payload option.Option[any]
+func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.Verb, at time.Time) error {
+	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
+		At:       at.UTC(),
+		TicketID: ticketID,
+		Verb:     string(verb),
+	})
+	if err != nil {
+		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
+	}
+	return nil
 }
 
-func (s *Store) QueueVerbIntent(ctx context.Context, v VerbRequest) error {
-	var encoded json.RawMessage
-	if v.Payload.IsSome() {
-		var err error
-		encoded, err = json.Marshal(v.Payload.Unwrap())
-		if err != nil {
-			return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
-		}
+func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, v VerbRequest) error {
+	encoded, err := json.Marshal(v.Payload)
+	if err != nil {
+		return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
 	}
-	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
+	err = s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
 		At:       v.At.UTC(),
 		TicketID: v.Ticket,
 		Verb:     string(v.Verb),
