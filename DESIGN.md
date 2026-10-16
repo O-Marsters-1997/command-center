@@ -300,8 +300,13 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 - **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
 - **Session.** The transcript is centred at max 720px, with the composer floating at the foot.
-  A 300px feature-stack panel sits on the right. Below 1180px the panel becomes an overlay that
-  opens on demand.
+  The head is the state badge, the title and a mono `repo #n · branch` line. The prompt is a
+  right-aligned bubble under "Launched from the ticket · age", and Transcript and Raw log are
+  right-aligned pill tabs. A 300px feature-stack panel sits on the right: the feature with its
+  avatar and merged/total, Graph and Board buttons, then Wave 1, Wave 2… groups of rows (glyph,
+  title, right-aligned elapsed or share of week) with the current ticket outlined, then Repo,
+  Branch, PR, Checks and Spend (share of week, never dollars) and a closed "Edit blockers"
+  disclosure. Below 1180px the panel becomes an overlay that opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.

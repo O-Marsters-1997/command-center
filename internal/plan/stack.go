@@ -15,6 +15,14 @@ func StackDepth(branch string, baseByBranch map[string]string) int {
 }
 
 func WaveCount(blocking map[TicketURL][]TicketURL) int {
+	count := 0
+	for _, wave := range Waves(blocking) {
+		count = max(count, wave)
+	}
+	return count
+}
+
+func Waves(blocking map[TicketURL][]TicketURL) map[TicketURL]int {
 	depth := make(map[TicketURL]int, len(blocking))
 	visiting := make(map[TicketURL]bool, len(blocking))
 	var depthOf func(url TicketURL) int
@@ -36,9 +44,9 @@ func WaveCount(blocking map[TicketURL][]TicketURL) int {
 		depth[url] = d
 		return d
 	}
-	waves := 0
+	waves := make(map[TicketURL]int, len(blocking))
 	for url := range blocking {
-		waves = max(waves, depthOf(url)+1)
+		waves[url] = depthOf(url) + 1
 	}
 	return waves
 }
