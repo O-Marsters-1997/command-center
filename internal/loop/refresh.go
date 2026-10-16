@@ -21,15 +21,17 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs 
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		if r.Requested {
-			if err := l.consumeEach(ctx, ticketIntents(snap, r.Ticket), noIntentWork); err != nil {
+			if err := l.consumeAll(ctx, ticketIntents(snap, r.Ticket)); err != nil {
 				return err
 			}
 		}
 	}
-	return l.consumeEach(ctx, orphanIntents(snap), noIntentWork)
+	return l.consumeAll(ctx, orphanIntents(snap))
 }
 
-func noIntentWork(plan.Intent) error { return nil }
+func (l *Loop) consumeAll(ctx context.Context, intents []plan.Intent) error {
+	return l.consumeEach(ctx, intents, func(plan.Intent) error { return nil })
+}
 
 func ticketIntents(snap plan.Snapshot, url plan.TicketURL) []plan.Intent {
 	return slices.DeleteFunc(snap.Intents(plan.VerbRefresh), func(i plan.Intent) bool { return i.Ticket != url })
