@@ -127,9 +127,9 @@ func seededStoreAtTestNow(t *testing.T) *storepkg.Store {
 
 func pendingMutationIntentCount(t *testing.T, store *storepkg.Store) int {
 	t.Helper()
-	byTicket, err := store.PendingIntentsByTicket(t.Context())
+	byTicket, err := store.PendingIntents(t.Context())
 	if err != nil {
-		t.Fatalf("PendingIntentsByTicket: %v", err)
+		t.Fatalf("PendingIntents: %v", err)
 	}
 	count := 0
 	for _, intents := range byTicket {
