@@ -75,14 +75,11 @@ type Reader struct {
 	spendLimit5h     int
 	boardPollSeconds int
 	spend            *SpendCache
-	renderLine       LineRenderer
 }
 
-func NewReader(
-	st *store.Store, dataDir string, renderLine LineRenderer, boardPollSeconds, spendLimit5h int,
-) *Reader {
+func NewReader(st *store.Store, dataDir string, boardPollSeconds, spendLimit5h int) *Reader {
 	return &Reader{
-		store: st, dataDir: dataDir, renderLine: renderLine,
+		store: st, dataDir: dataDir,
 		boardPollSeconds: boardPollSeconds,
 		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),

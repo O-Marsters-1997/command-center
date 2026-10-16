@@ -38,6 +38,14 @@ func TestLineOf(t *testing.T) {
 		}
 	})
 
+	t.Run("flattens a multi-line argument", func(t *testing.T) {
+		t.Parallel()
+		line := view.LineOf(agentlog.Event{Kind: agentlog.Skill, Tool: "tdd", Detail: "one\ntwo"})
+		if line.Arg != "one two" {
+			t.Errorf("LineOf(skill).Arg = %q, want %q", line.Arg, "one two")
+		}
+	})
+
 	t.Run("command result", func(t *testing.T) {
 		t.Parallel()
 		type result struct {
