@@ -344,6 +344,24 @@ func TestDispose(t *testing.T) {
 		}
 	})
 
+	t.Run("keeps the run's final message after disposal", func(t *testing.T) {
+		t.Parallel()
+		f := newRunFixture(t)
+		f.spawn(t, 999, f.baseline, writeLog(t, killedRunAssistantLine+
+			`{"type":"result","result":"Opened the PR.","total_cost_usd":0.42}`+"\n"))
+		fake := &runnertest.Runner{}
+		fake.Exit(999, 0)
+		f.tick(t, f.worktreeObs(), fake)
+
+		activities, err := f.store.Activities(t.Context())
+		if err != nil {
+			t.Fatalf("Activities: %v", err)
+		}
+		if len(activities) != 1 || activities[0].LastMessage != "Opened the PR." {
+			t.Errorf("Activities() = %+v, want one ticket with last message %q", activities, "Opened the PR.")
+		}
+	})
+
 	t.Run("records the run's utilization readings", func(t *testing.T) {
 		t.Parallel()
 		f := newRunFixture(t)

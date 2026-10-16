@@ -179,6 +179,30 @@ func TestBuildRail(t *testing.T) {
 		}
 	})
 
+	t.Run("carries the age and last line, except on a reply card", func(t *testing.T) {
+		t.Parallel()
+		updated := view.Age{Age: "2m", Stamp: "2026-08-20T11:58:00Z"}
+		failed := railRow("1", "billing", plan.GlyphFailed)
+		failed.Updated, failed.Last = updated, "Tests are red."
+		asked := railRow("2", "billing", plan.GlyphAttention)
+		asked.State, asked.Detail = plan.AwaitingInput.String(), "Which database?"
+		asked.Verbs = []plan.Verb{plan.VerbFollowUp}
+		asked.Updated, asked.Last = updated, "Which database?"
+
+		cards := view.BuildRail([]view.Row{failed, asked}, testNow, view.RailParams{}).NeedsYou
+
+		got := map[string]view.RailItem{}
+		for _, c := range cards {
+			got[c.Ref] = c
+		}
+		if c := got["#1"]; c.Updated != updated || c.Last != "Tests are red." {
+			t.Errorf("BuildRail() #1 = {%v %q}, want {%v %q}", c.Updated, c.Last, updated, "Tests are red.")
+		}
+		if c := got["#2"]; c.Updated != updated || c.Last != "" {
+			t.Errorf("BuildRail() #2 = {%v %q}, want the age and no last line", c.Updated, c.Last)
+		}
+	})
+
 	t.Run("scope", func(t *testing.T) {
 		t.Parallel()
 		tests := []struct {

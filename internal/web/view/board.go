@@ -31,6 +31,8 @@ type Row struct {
 	Reason          string         `json:"reason"`
 	Label           string         `json:"label"`
 	Detail          string         `json:"detail"`
+	Updated         Age            `json:"-"`
+	Last            string         `json:"-"`
 	Question        string         `json:"-"`
 	Glyph           plan.GlyphWord `json:"glyph"`
 	Alive           bool           `json:"alive"`
