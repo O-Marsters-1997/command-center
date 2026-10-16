@@ -20,9 +20,9 @@ func TestParseParams(t *testing.T) {
 	}{
 		{name: "empty", want: view.Params{Log: view.LogAll}},
 		{
-			name:  "the first sel and every ticket",
-			query: "sel=a&sel=b&ticket=x&ticket=y",
-			want:  view.Params{Sel: "a", Tickets: []string{"x", "y"}, Log: view.LogAll},
+			name:  "a stale sel is ignored beside every ticket",
+			query: "sel=a&ticket=x&ticket=y",
+			want:  view.Params{Tickets: []string{"x", "y"}, Log: view.LogAll},
 		},
 		{name: "a named log filter passes through", query: "log=fails", want: view.Params{Log: view.LogFails}},
 		{name: "an unrecognised log filter falls back to all", query: "log=bogus", want: view.Params{Log: view.LogAll}},
@@ -52,24 +52,23 @@ func TestParams_Query(t *testing.T) {
 		want string
 	}{
 		{name: "empty"},
-		{name: "sel only", v: view.Params{Sel: "https://x/1"}, want: "sel=https%3A%2F%2Fx%2F1"},
-		{name: "sel and tickets", v: view.Params{Sel: "a", Tickets: []string{"b", "c"}}, want: "sel=a&ticket=b&ticket=c"},
-		{name: "a non-default log filter", v: view.Params{Sel: "a", Log: view.LogFails}, want: "log=fails&sel=a"},
+		{name: "tickets", v: view.Params{Tickets: []string{"b", "c"}}, want: "ticket=b&ticket=c"},
+		{name: "a non-default log filter", v: view.Params{Log: view.LogFails}, want: "log=fails"},
 		{name: "the default log filter is never written", v: view.Params{Log: view.LogAll}},
 		{
 			name: "a repo scope",
-			v:    view.Params{Sel: "a", Log: view.LogFails, Repo: "support-app"},
-			want: "log=fails&repo=support-app&sel=a",
+			v:    view.Params{Log: view.LogFails, Repo: "support-app"},
+			want: "log=fails&repo=support-app",
 		},
 		{
 			name: "a project scope",
-			v:    view.Params{Sel: "a", Log: view.LogFails, Project: "acme"},
-			want: "log=fails&project=acme&sel=a",
+			v:    view.Params{Log: view.LogFails, Project: "acme"},
+			want: "log=fails&project=acme",
 		},
 		{
 			name: "a feature scope beside a repo scope",
-			v:    view.Params{Sel: "a", Log: view.LogFails, Repo: "support-app", Feature: "board-scope"},
-			want: "feature=board-scope&log=fails&repo=support-app&sel=a",
+			v:    view.Params{Log: view.LogFails, Repo: "support-app", Feature: "board-scope"},
+			want: "feature=board-scope&log=fails&repo=support-app",
 		},
 	}
 	for _, tt := range tests {
@@ -98,7 +97,7 @@ func TestParams_BoardPath(t *testing.T) {
 		want string
 	}{
 		{v: view.Params{}, want: "/board"},
-		{v: view.Params{Sel: "a"}, want: "/board?sel=a"},
+		{v: view.Params{Feature: "a"}, want: "/board?feature=a"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {

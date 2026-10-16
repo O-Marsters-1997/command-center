@@ -115,7 +115,7 @@ type Group struct {
 	Children []Row
 }
 
-func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) error {
+func applyViewState(rows []Row, params Params) {
 	for i := range rows {
 		r := &rows[i]
 		r.Checked = slices.Contains(params.Tickets, r.URL)
@@ -125,16 +125,7 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 		r.VerbPath = params.verbPath()
 		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
 		r.Buttons = r.VerbButtons()
-		if params.Sel == r.URL {
-			src := LogSource{Path: r.LogPath, Streaming: r.Alive, TicketURL: r.URL, Records: records}
-			log, err := BuildLogDetail(render, src, params)
-			if err != nil {
-				return fmt.Errorf("build log for %s: %w", r.URL, err)
-			}
-			r.Log = log
-		}
 	}
-	return nil
 }
 
 func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, projects map[string]ProjectMark) []Row {
