@@ -120,8 +120,11 @@ type Snapshot struct {
 	intents     map[TicketURL][]Intent
 	sessions    map[TicketURL]string
 	removals    map[TicketURL]Removal
+	transitions []Transition
+	verdicts    map[TicketURL]string
 	repos       []RepoStatus
 	obs         Observation
+	refreshes   map[TicketURL]RefreshFact
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -195,6 +198,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
 		repos:       in.Repos,
 		obs:         in.Obs,
+		refreshes:   in.Refreshes,
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
@@ -247,6 +251,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		snap.Entries = append(snap.Entries, entry)
 		snap.removals[t.URL] = removalFor(entry, pr)
 	}
+	snap.transitions, snap.verdicts = r.transitions(in)
 	return snap
 }
 
