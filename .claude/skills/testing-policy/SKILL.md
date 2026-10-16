@@ -13,7 +13,7 @@ description: >
 
 This file says what command-center tests and with which of its own helpers. How a test is
 written is `go-testing`, and where the two disagree `go-testing` wins. Where `go-testing` says
-`pgtest` and `TEST_DATABASE_URL`, this repo uses `internal/cctest` and `CC_TEST_DATABASE_URL`;
+`pgtest` and `TEST_DATABASE_URL`, this repo uses `internal/store/cctest` and `CC_TEST_DATABASE_URL`;
 don't install `pgtest`.
 
 ## Core rule

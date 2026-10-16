@@ -17,7 +17,8 @@ whether a row's state offers a verb.
   and no fake.
 - `plan` owns `Observation`, the fact types a derivation reads and the value sets they carry, such
   as `RepoPhase`. The store converts its columns to them at the boundary, through `Parse…`.
-- `plan` imports only the stdlib-only leaves `spend`, `verdict` and `option`, enforced by depguard.
+- `plan` imports only the stdlib-only leaves `plan/spend`, `plan/verdict` and `plan/option`, enforced by
+  depguard.
   A fact that may be absent is an `option.Option[T]`, never a `*T`.
 - The web derives once per render from one frame of store reads. It caches no derived state between
   requests, so a page never shows a label the stored facts no longer support. External reads such as

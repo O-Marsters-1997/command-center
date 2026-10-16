@@ -22,8 +22,8 @@ Glossary: `CONTEXT.md`. Mechanism: `docs/designs/command-centre-design.md`. Deci
 One binary, `cmd/cc`, wired together in `internal/app`.
 
 - `internal/plan`: pure decisions. **Only `plan` derives**
-  ([ADR 13](docs/adr/0013-only-plan-derives.md)) and it imports only `spend`, `verdict` and
-  `option`.
+  ([ADR 13](docs/adr/0013-only-plan-derives.md)) and it imports only `plan/spend`, `plan/verdict`
+  and `plan/option`. `plan/agentlog` parses agent transcripts.
 - `internal/loop`: the tick loop. **The loop is the only writer of reconciled state**
   ([ADR 9](docs/adr/0009-the-loop-owns-reconciled-state.md)); verbs queue intents for it.
 - `internal/store`: Postgres, and the only importer of the generated `internal/store/ccdb`
@@ -34,6 +34,9 @@ One binary, `cmd/cc`, wired together in `internal/app`.
   marker `SELECT 'irreversible: <why>'::int;` inside `-- +goose StatementBegin`/`StatementEnd`.
 - `internal/web`: handlers and `html/template` pages. It derives per render through `plan` and
   caches nothing.
+- `internal/adapter`: the edges to the outside world, `command`, `gh`, `git`, `tp`, `tracker` and
+  `runner`, each with its test double beside it (`gh/ghtest`, `git/gittest` and so on).
+- `internal/config` and `internal/demo` sit beside `internal/app`, which composes the tiers.
 
 ## Frontend
 
@@ -80,7 +83,7 @@ lives in pure `.ts` under `bun test`.
 
 - Before writing or reviewing a test, load the testing-policy skill.
 - `go-idiomatic`'s Testing section is the authority on how a test is written.
-- `internal/cctest` reuses one `cc-cctest-v1` container across test binaries and worktrees, with
+- `internal/store/cctest` reuses one `cc-cctest-v1` container across test binaries and worktrees, with
   a database per test cloned from a migration-hashed template. It sweeps disconnected test databases
   older than five minutes and its container stops after five idle minutes. Set `CC_TEST_DATABASE_URL`
   to use an existing Postgres server instead of Docker; run `just test-db-down` to remove the

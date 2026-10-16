@@ -97,9 +97,9 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 | `internal/loop` | The imperative shell: the tick, push, verbs, observe. |
 | `internal/web` | The page: handlers, templates and assets. `internal/web/view` shapes the plan snapshot for them. |
 | `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
-| `internal/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
-| `internal/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
-| `internal/tp` | The two `tp` commands the app uses, `new` and `remove --merged`. |
+| `internal/plan/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
+| `internal/adapter/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
+| `internal/adapter/tp` | The two `tp` commands the app uses, `new` and `remove --merged`. |
 
 ### The tick
 
@@ -251,7 +251,7 @@ branch), holds `tracker`, `stacking`, `deny`, `checks`, `compat_check`, `mergify
 shows as the last error. The file's own path is always denied to agent pushes.
 
 `checks` is the repo's boolean predicate over its gating checks, evaluated by
-`internal/verdict` against a normalised rollup. `mergify_sha` is the
+`internal/plan/verdict` against a normalised rollup. `mergify_sha` is the
 `sha256(.mergify.yml)` that predicate was written against. When the file's hash
 stops matching, rows hold at `checking` rather than claim green. `deny` adds
 per-repo path patterns to the push policy's default refusals. A repo that
@@ -276,7 +276,7 @@ restack that itself verifies clean, clears it.
 test sleeps.
 
 Every test that touches the store gets a database of its own from
-`internal/cctest`, dropped when the test ends. It needs a Postgres: set
+`internal/store/cctest`, dropped when the test ends. It needs a Postgres: set
 `CC_TEST_DATABASE_URL` at one, or leave it unset and testcontainers starts a
 `postgres:17` once per test binary, which is why the suite needs Docker.
 

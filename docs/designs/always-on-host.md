@@ -10,7 +10,7 @@ one and prompting against it directly, which is exactly what `cloud-agents.md` Â
 "repairs are always local," whatever kind produced the branch. Cloud is worth building because of
 what it is, not because local ran out of capacity.
 
-This document covers infrastructure only. Nothing in `internal/loop` or `internal/tracker` changes.
+This document covers infrastructure only. Nothing in `internal/loop` or `internal/adapter/tracker` changes.
 The DAG, authorisation, the tick, the deny gate and both existing run kinds stay exactly as they
 are; only where the process lives moves.
 

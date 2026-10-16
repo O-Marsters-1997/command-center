@@ -45,12 +45,12 @@ linters:
     depguard:
       rules:
         agentlog-pure:
-          files: ["**/internal/agentlog/**", "!$test"]
+          files: ["**/internal/plan/agentlog/**", "!$test"]
           list-mode: strict
           allow:
             - $gostd
-            - github.com/O-Marsters-1997/command-center/internal/agentlog
-            - github.com/O-Marsters-1997/command-center/internal/option
+            - github.com/O-Marsters-1997/command-center/internal/plan/agentlog
+            - github.com/O-Marsters-1997/command-center/internal/plan/option
           deny:
             - pkg: os/exec
               desc: agentlog parses logs without shelling out
@@ -59,12 +59,12 @@ linters:
             - pkg: net/http
               desc: agentlog parses logs without HTTP
         verdict-pure:
-          files: ["**/internal/verdict/**", "!$test"]
+          files: ["**/internal/plan/verdict/**", "!$test"]
           list-mode: strict
           allow:
             - $gostd
-            - github.com/O-Marsters-1997/command-center/internal/verdict
-            - github.com/O-Marsters-1997/command-center/internal/agentlog
+            - github.com/O-Marsters-1997/command-center/internal/plan/verdict
+            - github.com/O-Marsters-1997/command-center/internal/plan/agentlog
           deny:
             - pkg: os/exec
               desc: verdict derives from facts without shelling out
@@ -73,14 +73,14 @@ linters:
             - pkg: net/http
               desc: verdict derives from facts without HTTP
         plan-pure:
-          files: ["**/internal/plan/**", "!$test"]
+          files: ["**/internal/plan/*.go", "!$test"]
           list-mode: strict
           allow:
             - $gostd
-            - github.com/O-Marsters-1997/command-center/internal/plan
-            - github.com/O-Marsters-1997/command-center/internal/spend
-            - github.com/O-Marsters-1997/command-center/internal/verdict
-            - github.com/O-Marsters-1997/command-center/internal/option
+            - github.com/O-Marsters-1997/command-center/internal/plan$
+            - github.com/O-Marsters-1997/command-center/internal/plan/spend
+            - github.com/O-Marsters-1997/command-center/internal/plan/verdict
+            - github.com/O-Marsters-1997/command-center/internal/plan/option
           deny:
             - pkg: database/sql
               desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0013)
@@ -89,30 +89,30 @@ linters:
             - pkg: net/http
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
         tracker-no-git:
-          files: ["**/internal/tracker/**", "!$test"]
+          files: ["**/internal/adapter/tracker/**", "!$test"]
           deny:
-            - pkg: github.com/O-Marsters-1997/command-center/internal/git
+            - pkg: github.com/O-Marsters-1997/command-center/internal/adapter/git
               desc: tracker normalises remotes through plan.NormaliseRemote
         config-no-git:
           files: ["**/internal/config/**", "!$test"]
           deny:
-            - pkg: github.com/O-Marsters-1997/command-center/internal/git
+            - pkg: github.com/O-Marsters-1997/command-center/internal/adapter/git
               desc: config parses bytes; the loop reads the file from git and hands it in
         git-no-gh:
-          files: ["**/internal/git/**", "!$test"]
+          files: ["**/internal/adapter/git/**", "!$test"]
           deny:
-            - pkg: github.com/O-Marsters-1997/command-center/internal/gh
+            - pkg: github.com/O-Marsters-1997/command-center/internal/adapter/gh
               desc: git shells out to git only; the loop reads GitHub and hands plan the facts
         ccdb-in-store:
-          files: ["$all", "!**/internal/store/**"]
+          files: ["$all", "!**/internal/store/*.go"]
           deny:
             - pkg: github.com/O-Marsters-1997/command-center/internal/store/ccdb
               desc: only internal/store uses the generated queries; call a Store method (ADR 0004)
         cctest-only:
-          files: ["$all", "!**/internal/cctest/**"]
+          files: ["$all", "!**/internal/store/cctest/**"]
           deny:
             - pkg: github.com/testcontainers/testcontainers-go
-              desc: only internal/cctest starts Postgres for tests
+              desc: only internal/store/cctest starts Postgres for tests
         no-testify:
           files: ["**/*_test.go"]
           deny:
@@ -137,7 +137,7 @@ linters:
       - path: ^internal/loop/clock\.go$
         linters:
           - forbidigo
-      - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/|internal/cctest/cctest\.go$)
+      - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|adapter/runner)/|internal/store/cctest/cctest\.go$)
         text: time\.Now
         linters:
           - forbidigo
