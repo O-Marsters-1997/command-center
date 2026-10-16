@@ -1,3 +1,6 @@
 package view
 
-var DetailOf = detailOf
+var (
+	DetailOf        = detailOf
+	ApplyActivities = applyActivities
+)

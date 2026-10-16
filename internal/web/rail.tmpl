@@ -37,7 +37,7 @@
         {{- with .Updated}}{{if .Age}}<time class="rail-age" datetime="{{.Stamp}}">{{.Age}}</time>{{end}}{{end}}
       </a>
       <p class="rail-context">{{template "mark" .Project}}<span>{{.Feature}}</span><span aria-hidden="true">·</span><span class="rail-ref">{{.Ref}}</span></p>
-      <p class="rail-reason{{if .Reply}} rail-question{{end}}"><b>{{.Label}}.</b> {{or .Last .Detail}}</p>
+      <p class="rail-reason{{if .Reply}} rail-question{{end}}"><b>{{.Label}}.</b>{{with or .Last .Detail}} {{.}}{{end}}</p>
       {{if .Reply}}{{template "railReply" .}}{{else if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
     {{- else}}
