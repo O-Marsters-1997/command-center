@@ -455,6 +455,13 @@ func TestSessionPage(t *testing.T) {
 		}
 	})
 
+	t.Run("the breadcrumb links to the feature with the nav attributes", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+
+		sessionMain(t, st, "/s/acme/web/1").One(t, `ol.crumbs a[href="/f/checkout"][hx-select="#main"][hx-push-url="true"]`)
+	})
+
 	t.Run("the composer is outside every polled element", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
