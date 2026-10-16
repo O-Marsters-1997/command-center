@@ -88,12 +88,12 @@ func (l *Loop) recordTickError(ctx context.Context, message string) error {
 }
 
 func (l *Loop) applyTrackIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, plan.VerbTrack, func(intent store.VerbIntent) error {
+	return l.eachPendingIntent(ctx, plan.VerbTrack, func(intent plan.Intent) error {
 		repos, err := l.store.Repos(ctx)
 		if err != nil {
 			return fmt.Errorf("list repos: %w", err)
 		}
-		repo := store.Repo{Name: intent.TicketID, TrackedAt: l.clock.Now()}
+		repo := store.Repo{Name: string(intent.Ticket), TrackedAt: l.clock.Now()}
 		if i := slices.IndexFunc(repos, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo.Name) }); i >= 0 {
 			if repos[i].Phase == plan.RepoReady {
 				return nil

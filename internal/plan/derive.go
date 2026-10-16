@@ -48,10 +48,17 @@ type PushFact struct {
 }
 
 type RefreshFact struct {
+	Tried                    bool
 	Refused                  bool
 	Reason                   string
 	VerificationFailed       bool
 	VerificationFailedDetail string
+	Conflict                 option.Option[ConflictAt]
+}
+
+type Recorded struct {
+	Opened bool
+	Merged bool
 }
 
 type VerdictFacts struct {
@@ -65,12 +72,18 @@ type Input struct {
 	Observed     bool
 	Tickets      []Ticket
 	Obs          Observation
+	Prev         Observation
+	Repos        []RepoStatus
 	Memberships  map[TicketURL]LaunchMembership
 	Runs         map[TicketURL]RunSummary
 	Pushes       map[TicketURL]PushFact
 	Refreshes    map[TicketURL]RefreshFact
+	Restacked    map[TicketURL]bool
+	Sessions     map[TicketURL]string
+	Recorded     map[TicketURL]Recorded
+	LastVerdicts map[TicketURL]string
 	Verdict      VerdictFacts
-	PendingVerbs map[TicketURL][]Verb
+	Intents      map[TicketURL][]Intent
 	Removals     map[TicketURL]string
 	FiveHour     float64
 }
@@ -104,6 +117,7 @@ type Snapshot struct {
 	running     int
 	maxAgents   int
 	spendPaused bool
+	intents     map[TicketURL][]Intent
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -172,6 +186,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		byURL:       make(map[TicketURL]int, len(in.Tickets)),
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
+		intents:     in.Intents,
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])

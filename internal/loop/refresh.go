@@ -16,8 +16,8 @@ import (
 
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	requested := map[plan.TicketURL]bool{}
-	err := l.eachIntent(ctx, plan.VerbRefresh, func(intent store.VerbIntent) error {
-		url := plan.TicketURL(intent.TicketID)
+	err := l.eachIntent(ctx, snap, plan.VerbRefresh, func(intent plan.Intent) error {
+		url := intent.Ticket
 		requested[url] = true
 		e, ok := snap.Entry(url)
 		if !ok {
