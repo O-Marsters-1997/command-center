@@ -1,10 +1,12 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -89,6 +91,17 @@ func SessionPath(ticketURL string) string {
 	return ref.Path()
 }
 
+func sessionCrumbs(row Row) []Crumb {
+	var crumbs []Crumb
+	if row.Project != "" {
+		crumbs = append(crumbs, projectCrumb(row.Mark()))
+	}
+	if row.Feature != "" {
+		crumbs = append(crumbs, Crumb{Label: row.Feature, Path: "/f/" + url.PathEscape(row.Feature)})
+	}
+	return append(crumbs, Crumb{Label: cmp.Or(row.Title, row.Ticket())})
+}
+
 func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw bool) (SessionPage, error) {
 	board, err := r.Board(ctx, now, Params{})
 	if err != nil {
@@ -115,6 +128,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	chrome := board.Chrome
 	chrome.Home = false
 	chrome.titled(row.Ticket())
+	chrome.Crumbs = sessionCrumbs(row)
 	prURL := ""
 	if row.PRNumber > 0 {
 		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)

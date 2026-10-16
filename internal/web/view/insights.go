@@ -179,6 +179,7 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	}
 	chrome.setCurrent(keyInsights)
 	chrome.titled("Insights")
+	chrome.Crumbs = []Crumb{{Label: "Insights"}}
 	resp, err := r.Insights(ctx, now, q)
 	if err != nil {
 		return InsightsPage{}, fmt.Errorf("load insights: %w", err)
