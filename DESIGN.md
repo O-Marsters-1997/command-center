@@ -452,7 +452,9 @@ ticket filters. No underline tabs.
   {feature}`, a ghost Change feature button and a close icon. The body has Ready now and On unlock
   sections of rows (checkbox, glyph dot, ref, title, then the repo or `after #x, #y` right-aligned
   in `meta`), and a `details` disclosure for tickets already in flight or refused. The footer holds
-  Cancel and the primary `Launch N now · arm M` with a `⌘↵` kbd. `/launch` with no feature opens the
+  the Composer (extra context for every agent in the launch, a model select, an effort select and
+  a static `base origin/main` chip), then Cancel and the primary `Launch N now · arm M` with a `⌘↵`
+  kbd. `/launch` with no feature opens the
   same dialog as a feature picker: one row per feature with its avatar and its ready and on-unlock
   counts.
 - **Toast:** a centred dark pill (`fg` on `surface`), 38px, 72px off the bottom, carrying an

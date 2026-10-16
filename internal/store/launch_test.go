@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 )
@@ -168,6 +169,30 @@ func TestStore_LaunchMemberships(t *testing.T) {
 		}
 		if got := memberships["sandbox://CC-2"].LaunchID; got != cc1.LaunchID {
 			t.Errorf("LaunchMemberships()[CC-2].LaunchID = %d, want CC-1's %d", got, cc1.LaunchID)
+		}
+	})
+
+	t.Run("carries the launch's context and agent choice", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		launchTickets(t, store, "sandbox://CC-1", "sandbox://CC-2")
+		choice := plan.AgentChoice{Model: "opus", Effort: option.Some(plan.EffortHigh)}
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-1", PromptHash: "hash", Group: "group-a",
+			Context: "prefer table tests", Choice: choice, At: testNow,
+		})
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-2", PromptHash: "hash", Group: "group-b", At: testNow,
+		})
+		applyLaunches(t, store, testNow.Add(time.Second))
+
+		memberships := readMemberships(t, store)
+		if got := memberships["sandbox://CC-1"]; got.Context != "prefer table tests" || got.Choice != choice {
+			t.Errorf("LaunchMemberships()[CC-1] = %+v, want context %q and choice %+v",
+				got, "prefer table tests", choice)
+		}
+		if got := memberships["sandbox://CC-2"]; got.Context != "" || got.Choice != (plan.AgentChoice{}) {
+			t.Errorf("LaunchMemberships()[CC-2] = %+v, want the default choice and no context", got)
 		}
 	})
 

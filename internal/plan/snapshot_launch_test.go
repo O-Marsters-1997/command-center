@@ -120,6 +120,62 @@ func TestSnapshot_LaunchAfter(t *testing.T) {
 	})
 }
 
+func TestSnapshot_LaunchContext(t *testing.T) {
+	t.Parallel()
+
+	first := ticket("1", "cc-1-first")
+	withContext := first
+	withContext.LaunchContext = "prefer table tests"
+	choice := plan.AgentChoice{Model: "opus", Effort: option.Some(plan.EffortHigh)}
+	rules := plan.Rules{MaxAgents: 2}
+
+	t.Run("a launch authorised with its context launches and carries its choice", func(t *testing.T) {
+		t.Parallel()
+		member := authorised(withContext)
+		member.Context, member.Choice = withContext.LaunchContext, choice
+		snap := derive(rules, plan.Input{
+			Tickets:     []plan.Ticket{first},
+			Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: member},
+		})
+
+		if diff := cmp.Diff([]plan.TicketURL{first.URL}, snap.LaunchAfter(0)); diff != "" {
+			t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
+		}
+		got := entry(t, snap, first.URL).Ticket
+		if got.LaunchContext != withContext.LaunchContext || got.Choice != choice {
+			t.Errorf("Entry(%s).Ticket = %+v, want context %q and choice %+v",
+				first.URL, got, withContext.LaunchContext, choice)
+		}
+	})
+
+	t.Run("a context edited after authorising no longer launches", func(t *testing.T) {
+		t.Parallel()
+		member := authorised(first)
+		member.Context = "something else"
+		snap := derive(rules, plan.Input{
+			Tickets:     []plan.Ticket{first},
+			Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: member},
+		})
+
+		if got := snap.LaunchAfter(0); len(got) != 0 {
+			t.Errorf("LaunchAfter(0) = %v, want none", got)
+		}
+	})
+
+	t.Run("a preview hash covers the context", func(t *testing.T) {
+		t.Parallel()
+		snap := derive(rules, plan.Input{Tickets: []plan.Ticket{first}})
+
+		rows, err := snap.Preview([]plan.TicketURL{first.URL}, withContext.LaunchContext)
+		if err != nil {
+			t.Fatalf("Preview(%v) error = %v", first.URL, err)
+		}
+		if want := plan.Hash(plan.Compose(withContext)); rows[0].PromptHash != want {
+			t.Errorf("Preview(%v, %q).PromptHash = %q, want %q", first.URL, withContext.LaunchContext, rows[0].PromptHash, want)
+		}
+	})
+}
+
 func TestSnapshot_Entry(t *testing.T) {
 	t.Parallel()
 

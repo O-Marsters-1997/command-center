@@ -18,6 +18,8 @@ type LaunchMembership struct {
 	Members    int
 	Cancelled  bool
 	PromptHash string
+	Context    string
+	Choice     AgentChoice
 }
 
 type RunSummary struct {
@@ -209,6 +211,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		}
 		run, elapsed, logPath := r.runFor(t, in, peers[t.URL])
 		membership := in.Memberships[t.URL]
+		t.LaunchContext, t.Choice = membership.Context, membership.Choice
 		authorised := membership.LaunchID != 0
 		var conflictedBase string
 		if r.conflictedBase(t, base, in) {

@@ -7,7 +7,8 @@ WHERE verb = 'launch' AND consumed_at IS NULL
 RETURNING id, ticket_id, payload;
 
 -- name: InsertLaunch :one
-INSERT INTO launches (created_at, state) VALUES (sqlc.arg(created_at), 'active') RETURNING id;
+INSERT INTO launches (created_at, state, context, model, effort)
+VALUES (sqlc.arg(created_at), 'active', sqlc.arg(context), sqlc.narg(model), sqlc.narg(effort)) RETURNING id;
 
 -- name: InsertLaunchMembers :exec
 INSERT INTO launch_members (launch_id, ticket_id, prompt_hash)
@@ -18,7 +19,7 @@ FROM jsonb_to_recordset(sqlc.arg(members)::jsonb) AS m(ticket_id text, prompt_ha
 INSERT INTO events (at, ticket_id, kind, detail) VALUES (sqlc.arg(at), NULL, 'launch', sqlc.arg(detail));
 
 -- name: ListLaunchMemberships :many
-SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
+SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash, l.context, l.model, l.effort,
        COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
 FROM launch_members lm
 JOIN launches l ON l.id = lm.launch_id

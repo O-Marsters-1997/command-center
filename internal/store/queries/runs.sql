@@ -1,9 +1,9 @@
 -- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message)
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message, model, effort)
 VALUES (
   sqlc.arg(ticket_id), sqlc.arg(kind), sqlc.arg(baseline_sha), sqlc.arg(prompt_hash),
   CASE WHEN sqlc.arg(new_session)::boolean THEN gen_random_uuid() ELSE sqlc.narg(session_id)::text::uuid END,
-  sqlc.narg(message)
+  sqlc.narg(message), sqlc.narg(model), sqlc.narg(effort)
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id;
 
 -- name: LatestSessionID :one

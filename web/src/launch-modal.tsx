@@ -66,7 +66,9 @@ function Banner(props: { children: JSX.Element }) {
   );
 }
 
-defineIsland("cc-launch-modal", { feature: "", tickets: "" }, (props, element) => {
+const split = (list: string) => (list ? list.split(",") : []);
+
+defineIsland("cc-launch-modal", { feature: "", tickets: "", models: "", model: "", efforts: "" }, (props, element) => {
   const [candidates, setCandidates] = createSignal<Candidate[]>([]);
   const [ticked, setTicked] = createSignal<Set<string>>(new Set());
   const [refusal, setRefusal] = createSignal<string | null>(null);
@@ -184,13 +186,42 @@ defineIsland("cc-launch-modal", { feature: "", tickets: "" }, (props, element) =
                 </details>
               </Show>
             </div>
-            <div class="launch-foot launch-actions">
-              <a class="btn btn-ghost" href={cancelHref(props.feature)}>
-                Cancel
-              </a>
-              <button type="submit" class="btn btn-primary" disabled={ticked().size === 0}>
-                {label()} <kbd>⌘↵</kbd>
-              </button>
+            <div class="launch-foot">
+              <div class="composer">
+                <label class="sr-only" for="launch-context">
+                  Extra context for every agent
+                </label>
+                <textarea
+                  id="launch-context"
+                  name="context"
+                  rows="2"
+                  placeholder="Extra context for every agent in this launch (optional)"
+                />
+                <div class="composer-bar">
+                  <select class="select" name="model" aria-label="Model">
+                    <For each={split(props.models)}>
+                      {(m) => (
+                        <option value={m} selected={m === props.model}>
+                          {m}
+                        </option>
+                      )}
+                    </For>
+                  </select>
+                  <select class="select" name="effort" aria-label="Effort">
+                    <option value="">default effort</option>
+                    <For each={split(props.efforts)}>{(e) => <option value={e}>{e}</option>}</For>
+                  </select>
+                  <span class="composer-chip">base origin/main</span>
+                </div>
+              </div>
+              <div class="launch-actions">
+                <a class="btn btn-ghost" href={cancelHref(props.feature)}>
+                  Cancel
+                </a>
+                <button type="submit" class="btn btn-primary" disabled={ticked().size === 0}>
+                  {label()} <kbd>⌘↵</kbd>
+                </button>
+              </div>
             </div>
           </form>
         </Match>

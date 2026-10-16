@@ -8,6 +8,8 @@ import (
 
 const AgentModel = "claude-sonnet-5-5"
 
+func AgentModels() []string { return []string{AgentModel, "opus", "sonnet", "haiku"} }
+
 type Env struct {
 	DataDir       string
 	DatabaseURL   string

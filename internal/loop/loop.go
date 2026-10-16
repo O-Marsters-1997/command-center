@@ -635,7 +635,8 @@ func (l *Loop) launchEligible(
 
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
-		if err := l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
+		err := l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Ticket, entry.Unlock.BaseBranch, entry.PromptHash)
+		if err != nil {
 			return fmt.Errorf("%s: %w", ticketURL, err)
 		}
 	}
@@ -673,7 +674,9 @@ func eachEntry(snap plan.Snapshot, keep func(plan.Entry) bool, fn func(plan.Entr
 	return nil
 }
 
-func (l *Loop) cutAndSpawn(ctx context.Context, t *tick, ticket store.Ticket, baseBranch, promptHash string) error {
+func (l *Loop) cutAndSpawn(
+	ctx context.Context, t *tick, ticket store.Ticket, launched plan.Ticket, baseBranch, promptHash string,
+) error {
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
 
@@ -703,15 +706,15 @@ func (l *Loop) cutAndSpawn(ctx context.Context, t *tick, ticket store.Ticket, ba
 
 	if err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
+		kind: plan.RunKindAgent, prompt: agentPrompt(ticket, launched), choice: launched.Choice,
 	}); err != nil {
 		return fmt.Errorf("spawn agent in %s: %w", worktreePath, err)
 	}
 	return nil
 }
 
-func agentPrompt(ticket store.Ticket) string {
-	prompt := plan.Compose(ticket.Plan())
+func agentPrompt(ticket store.Ticket, launched plan.Ticket) string {
+	prompt := plan.Compose(launched)
 	if ticket.Body != "" {
 		prompt += "\n\n## Ticket\n\n" + ticket.Body
 	}
@@ -722,6 +725,7 @@ type spawnSpec struct {
 	ticket                           store.Ticket
 	worktree, baseline, hash, prompt string
 	kind                             plan.RunKind
+	choice                           plan.AgentChoice
 	resumeSessionID, message         string
 }
 
@@ -738,8 +742,13 @@ func (spec spawnSpec) session() store.RunSession {
 
 func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
 	ticket := spec.ticket
+	choice := spec.choice
+	if choice.Model == "" {
+		choice.Model = config.AgentModel
+	}
 	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
-		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash, Session: spec.session(),
+		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash,
+		Choice: choice, Session: spec.session(),
 	})
 	if err != nil {
 		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
@@ -769,7 +778,8 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		AgentCommand: l.cfg.AgentCommand,
 		WorktreePath: spec.worktree,
 		SettingsPath: l.ws.SettingsPath,
-		Model:        config.AgentModel,
+		Model:        choice.Model,
+		Effort:       choice.Effort,
 		Prompt:       prompt,
 		PromptPath:   promptPath,
 		SessionID:    sessionID,

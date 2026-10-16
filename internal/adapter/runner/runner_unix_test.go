@@ -17,6 +17,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 func writeFile(t *testing.T, content string) string {
@@ -106,6 +108,17 @@ func TestProcessRunner_Spawn(t *testing.T) {
 			command:   []string{"{model}"},
 			configure: func(_ *testing.T, cfg *runner.SpawnConfig) { cfg.Model = "claude-haiku-5-5" },
 			want:      func(runner.SpawnConfig) string { return "claude-haiku-5-5" },
+		},
+		{
+			name:      "substitutes the effort",
+			command:   []string{"before", "--effort", "{effort}", "after"},
+			configure: func(_ *testing.T, cfg *runner.SpawnConfig) { cfg.Effort = option.Some(plan.EffortHigh) },
+			want:      func(runner.SpawnConfig) string { return "before --effort high after" },
+		},
+		{
+			name:    "drops the effort flag when no effort is chosen",
+			command: []string{"before", "--effort", "{effort}", "after"},
+			want:    func(runner.SpawnConfig) string { return "before after" },
 		},
 		{
 			name:    "substitutes the system prompt path",

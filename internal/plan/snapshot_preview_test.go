@@ -68,7 +68,7 @@ func TestSnapshot_Preview(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			rows, err := derive(tt.rules, tt.in).Preview(tt.selection)
+			rows, err := derive(tt.rules, tt.in).Preview(tt.selection, "")
 			if err != nil {
 				t.Fatalf("Preview(%v) error = %v", tt.selection, err)
 			}
@@ -88,7 +88,7 @@ func TestSnapshot_Preview(t *testing.T) {
 	t.Run("an unknown ticket", func(t *testing.T) {
 		t.Parallel()
 		snap := derive(plan.Rules{}, plan.Input{Tickets: []plan.Ticket{ticket("1", "cc-1-first")}})
-		rows, err := snap.Preview([]plan.TicketURL{"sandbox://CC-404"})
+		rows, err := snap.Preview([]plan.TicketURL{"sandbox://CC-404"}, "")
 		if !errors.Is(err, plan.ErrUnknownTicket) || rows != nil {
 			t.Errorf("Preview(sandbox://CC-404) = %v, %v, want nil, ErrUnknownTicket", rows, err)
 		}
@@ -103,7 +103,7 @@ func TestSnapshot_Preview(t *testing.T) {
 			Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {ID: 1}},
 		})
 
-		rows, err := snap.Preview([]plan.TicketURL{second.URL})
+		rows, err := snap.Preview([]plan.TicketURL{second.URL}, "")
 		if err != nil {
 			t.Fatalf("Preview(%s) error = %v", second.URL, err)
 		}
@@ -111,7 +111,7 @@ func TestSnapshot_Preview(t *testing.T) {
 			t.Errorf("Preview(%s).BaseRun = %v, want the base ticket's run %v", second.URL, rows[0].BaseRun, base.Run)
 		}
 
-		rows, err = snap.Preview([]plan.TicketURL{first.URL})
+		rows, err = snap.Preview([]plan.TicketURL{first.URL}, "")
 		if err != nil {
 			t.Fatalf("Preview(%s) error = %v", first.URL, err)
 		}

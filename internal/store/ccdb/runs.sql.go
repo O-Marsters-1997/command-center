@@ -88,11 +88,11 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 }
 
 const insertRunSkeleton = `-- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message)
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message, model, effort)
 VALUES (
   $1, $2, $3, $4,
   CASE WHEN $5::boolean THEN gen_random_uuid() ELSE $6::text::uuid END,
-  $7
+  $7, $8, $9
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id
 `
 
@@ -104,6 +104,8 @@ type InsertRunSkeletonParams struct {
 	NewSession  bool
 	SessionID   sql.NullString
 	Message     sql.NullString
+	Model       sql.NullString
+	Effort      sql.NullString
 }
 
 type InsertRunSkeletonRow struct {
@@ -120,6 +122,8 @@ func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonPa
 		arg.NewSession,
 		arg.SessionID,
 		arg.Message,
+		arg.Model,
+		arg.Effort,
 	)
 	var i InsertRunSkeletonRow
 	err := row.Scan(&i.ID, &i.SessionID)

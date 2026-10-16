@@ -4,7 +4,33 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
+
+type Effort string
+
+const (
+	EffortLow    Effort = "low"
+	EffortMedium Effort = "medium"
+	EffortHigh   Effort = "high"
+)
+
+func AllEfforts() []Effort { return []Effort{EffortLow, EffortMedium, EffortHigh} }
+
+func ParseEffort(s string) (Effort, error) {
+	for _, e := range AllEfforts() {
+		if string(e) == s {
+			return e, nil
+		}
+	}
+	return "", fmt.Errorf("unknown effort %q", s)
+}
+
+type AgentChoice struct {
+	Model  string
+	Effort option.Option[Effort]
+}
 
 func Compose(t Ticket) string {
 	prompt := "/implement " + string(t.URL)
@@ -12,6 +38,9 @@ func Compose(t Ticket) string {
 		prompt += fmt.Sprintf(
 			"\n\n## Worked example: %[1]s\n\nRead the diff:\n\n    git diff %[2]s...%[1]s",
 			t.WorkedExampleBranch, DefaultBaseBranch)
+	}
+	if t.LaunchContext != "" {
+		prompt += "\n\n## Launch context\n\n" + t.LaunchContext
 	}
 	return prompt
 }
