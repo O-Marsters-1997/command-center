@@ -712,7 +712,7 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 	query := r.URL.Query().Get("q")
 	host := "/repos?q=" + url.QueryEscape(query)
 	if strings.TrimSpace(query) == "" {
-		groups, err := s.view.RepoGroups(r.Context())
+		groups, err := s.view.RepoGroups(r.Context(), s.clock.Now())
 		if err != nil {
 			return fmt.Errorf("load repo groups: %w", err)
 		}

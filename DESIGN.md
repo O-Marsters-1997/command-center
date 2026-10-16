@@ -313,7 +313,8 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 | `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
 | `/tickets` | All tickets, filter tabs |
 | `/insights` | Limits, spend per merged ticket |
-| `/repos`, `/repos/{owner}/{name}` | Tracked repos; repo banner, checks, tickets |
+| `/repos` | Track search, then tracked repos grouped under project headings, "No project" last; a row is check glyph, mono name, status line, open-ticket count and chevron |
+| `/repos/{owner}/{name}` | State badge, mono name, project · open tickets · base, settings callout, Checks, Tickets, Unimported features, and the Project module where a repo is assigned or a project made |
 
 ## Elevation & Depth
 

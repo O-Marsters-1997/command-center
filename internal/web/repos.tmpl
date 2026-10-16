@@ -19,77 +19,25 @@
 {{define "checks" -}}<ul class="checks" aria-label="checks">{{range .}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>{{- end}}
 
 {{define "repoGroups" -}}
-{{range $g := .}}
-<section class="mb-7 max-w-3xl" data-scope="{{.Scope.Kind}}">
-  {{if .Editable -}}
-  <h2 class="flex items-center gap-2">
-    <span class="avatar" data-hue="{{.Scope.Hue}}" aria-hidden="true">{{.Scope.Initial}}</span>
+{{range .}}
+<section class="repo-group" data-scope="{{.Scope.Kind}}">
+  <h2 class="repo-group-head">
+    <span class="avatar"{{if .Scope.Initial}} data-hue="{{.Scope.Hue}}"{{end}} aria-hidden="true">{{.Scope.Initial}}</span>
     {{.Scope.Label}}
     <span class="text-muted">{{.Count}} repo{{if ne .Count 1}}s{{end}}</span>
-    <details class="text-sm font-normal">
-      <summary>edit</summary>
-      <form method="post" action="/projects/{{.Scope.Value}}" hx-post="/projects/{{.Scope.Value}}"
-        hx-disabled-elt="find button" hx-target="#repo-results" hx-swap="innerHTML" class="flex items-center gap-2">
-        <input type="text" name="name" required maxlength="40" value="{{.Scope.Value}}"
-          autocomplete="off" aria-label="project name">
-        {{range .Hues}}
-        <label class="flex items-center gap-1"><input type="radio" name="hue" value="{{.}}"{{if eq . $g.Scope.Hue}} checked{{end}}>
-          <span class="avatar" data-hue="{{.}}" aria-label="hue {{.}}">{{$g.Scope.Initial}}</span></label>
-        {{end}}
-        <button type="submit" class="btn btn-sm">Save</button>
-      </form>
-    </details>
-    <form method="post" action="/projects/{{.Scope.Value}}/delete" hx-post="/projects/{{.Scope.Value}}/delete"
-      hx-disabled-elt="find button" hx-target="#repo-results" hx-swap="innerHTML" hx-confirm="Delete project {{.Scope.Value}}? Its repos stay tracked and become loose.">
-      <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-    </form>
   </h2>
-  {{- end}}
-  <div class="repo-rows">
-    {{range $row := .Rows}}
-    <div class="repo-row">
-      <a class="font-mono font-medium" href="{{.Path}}">{{.FullName}}</a>
-      {{template "checks" .Steps}}
-      <form method="post" action="/repos/{{.FullName}}/project" hx-post="/repos/{{.FullName}}/project"
-        hx-disabled-elt="find button" hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
-        <select name="project" aria-label="project of {{.FullName}}" class="select">
-          <option value="">No project</option>
-          {{range $g.Projects}}<option value="{{.}}"{{if eq . $row.Project}} selected{{end}}>{{.}}</option>{{end}}
-        </select>
-        <noscript><button type="submit" class="btn btn-sm">Save</button></noscript>
-      </form>
-    </div>
-    {{end}}
-  </div>
+  {{range .Rows}}
+  <a class="repo-row" href="{{.Path}}" {{template "nav" .Path}}>
+    <span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Status}}</span></span>
+    <span class="repo-main"><b class="font-mono">{{.FullName}}</b><span{{if eq .Glyph "failed"}} class="repo-why"{{end}}>{{.Status}}</span></span>
+    <span class="repo-count">{{if eq .Glyph "done"}}{{if .OpenTickets}}{{.OpenTickets}} open{{else}}No open tickets{{end}}{{else if eq .Glyph "failed"}}Refused{{else}}Checking{{end}}</span>
+    {{template "icon" "chev"}}
+  </a>
+  {{end}}
 </section>
 {{else}}
 <p class="text-muted">no repos tracked.</p>
 {{end}}
-{{- end}}
-
-{{define "newProject" -}}
-<details class="mb-4 max-w-3xl">
-  <summary>New project</summary>
-  <form method="post" action="/projects" hx-post="/projects" hx-disabled-elt="find button" hx-target="#repo-results"
-    hx-swap="innerHTML" data-reset-on-success class="flex flex-col gap-2 mt-2">
-    <input type="text" name="name" required maxlength="40" placeholder="project name"
-      autocomplete="off" aria-label="project name">
-    <fieldset class="flex items-center gap-3">
-      <legend class="text-muted">hue</legend>
-      {{range .Hues}}
-      <label class="flex items-center gap-1"><input type="radio" name="hue" value="{{.}}"{{if eq . $.DefaultHue}} checked{{end}}>
-        <span class="avatar" data-hue="{{.}}" aria-label="hue {{.}}">A</span></label>
-      {{end}}
-    </fieldset>
-    <fieldset class="flex flex-col gap-1">
-      <legend class="text-muted">repos</legend>
-      {{range .Repos}}
-      <label class="flex items-center gap-2"><input type="checkbox" name="repo" value="{{.}}"> {{.}}</label>
-      {{end}}
-    </fieldset>
-    <button type="submit" class="btn btn-primary self-start">Create project</button>
-  </form>
-</details>
 {{- end}}
 
 {{define "importRefusal" -}}
@@ -111,8 +59,7 @@
     aria-label="search repos" class="block w-full"
     hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
 </form>
-<p class="text-muted text-xs mt-1 mb-3">Search runs as this box's gh identity.</p>
-{{template "newProject" .NewProject}}
+<p class="text-muted text-xs mt-1 mb-3">Search runs as this machine's <code>gh</code> identity.</p>
 <div id="repo-results">
 {{if .Search}}{{template "repoResults" .Search}}{{else}}{{template "repoGroups" .Groups}}{{end}}
 </div>

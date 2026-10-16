@@ -2,11 +2,6 @@
 <section id="repo-banner" class="banner ribbon mb-3" data-glyph="{{.Glyph}}" data-state="{{.State}}" role="status"
   {{- if .Polling}} hx-get="/repos/banner?repo={{.Repo | queryEscape}}&amp;seen={{.State}}" hx-trigger="every 2s" hx-sync="this:drop" hx-swap="outerHTML"{{end}}>
   <p>{{.Text}}</p>
-  <ul class="flex flex-wrap gap-3 mt-1">
-    {{range .Steps -}}
-    <li><span class="glyph glyph-{{.Glyph}}">{{.Label}}</span> <span class="text-muted">{{.Glyph}}</span></li>
-    {{end -}}
-  </ul>
   {{if .CanTrack -}}
   <form class="mt-1" hx-post="/repos/track" hx-disabled-elt="find button" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
     <input type="hidden" name="repo" value="{{.Repo}}">

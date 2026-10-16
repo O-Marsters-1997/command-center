@@ -6,47 +6,72 @@
 <div class="repo-head mb-4">
   {{if not .Banner.Polling}}<span class="badge" data-glyph="{{.Banner.Glyph}}"><span class="glyph glyph-{{.Banner.Glyph}}">{{.Banner.State}}</span></span>{{end}}
   <h1>{{.Title}}</h1>
-  {{with .Remote}}<p class="page-purpose mb-0">{{.}}</p>{{end}}
+  {{if .Known}}<p class="page-purpose mb-0">{{template "mark" .Project}} {{with .Project.Name}}{{.}}{{else}}No project{{end}} · {{.OpenTickets}} open ticket{{if ne .OpenTickets 1}}s{{end}} · base <code>{{.Base}}</code>{{with .Remote}} · {{.}}{{end}}</p>{{end}}
 </div>
 {{template "repoBanner" .Banner}}
+{{if or .Known .Banner.Polling}}
+<section class="module" aria-labelledby="checks-h">
+<h2 id="checks-h">Checks</h2>
+<ul class="checklist">
+  {{range .Banner.Steps}}
+  <li><span class="glyph glyph-{{.Glyph}}" aria-hidden="true"></span><span class="first-letter:uppercase">{{.Label}}</span><span class="text-muted text-xs ml-auto capitalize">{{.Glyph}}</span></li>
+  {{end}}
+</ul>
+</section>
+{{end}}
 {{if .Ready}}
 {{if .LastImportError.IsSome}}{{template "importRefusal" .LastImportError.Unwrap}}{{end}}
-<section class="module" aria-labelledby="features-h">
-<h2 id="features-h">Features</h2>
-<table class="w-full">
-  <thead><tr><th scope="col">feature</th><th scope="col">imported</th><th scope="col"><span class="sr-only">actions</span></th></tr></thead>
-  <tbody>
-  {{range .Features}}
-  <tr>
-    <td>
-      <a href="/f/{{.Feature | pathEscape}}">{{.Feature}}</a>
-      {{if .OtherRepos}}<span class="text-muted">also in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
-    </td>
-    <td>{{if .Imported}}yes{{else}}no{{end}}</td>
-    <td>
-      <div class="flex justify-end gap-2">
-        <form method="post" action="/launch/open" hx-post="/launch/open" hx-disabled-elt="find button" hx-target="#launch-modal" hx-swap="innerHTML">
-          <input type="hidden" name="feature" value="{{.Feature}}">
-          <button type="submit" class="btn btn-sm">Launch</button>
-        </form>
-        {{if .Imported}}
-        <form method="post" action="/features/{{.Feature | pathEscape}}/import">
-          <input type="hidden" name="return" value="{{$.RepoCrumbPath}}">
-          <button type="submit" class="btn btn-sm">Reimport</button>
-        </form>
-        {{end}}
-      </div>
-    </td>
-  </tr>
-  {{else}}
-  <tr><td colspan="3" class="text-muted">no project: labels found in this repo's tracker.</td></tr>
-  {{end}}
-  </tbody>
-</table>
-</section>
 <section class="module" aria-labelledby="tickets-h">
 <h2 id="tickets-h">Tickets</h2>
 {{template "boardForm" .Tickets}}
+</section>
+{{if .Unimported}}
+<section class="module" aria-labelledby="unimported-h">
+<h2 id="unimported-h">Unimported features</h2>
+<ul class="checklist">
+  {{range .Unimported}}
+  <li>
+    <a href="/f/{{.Feature | pathEscape}}">{{.Feature}}</a>
+    {{if .OtherRepos}}<span class="text-muted text-xs">also in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
+    <form class="ml-auto" method="post" action="/features/{{.Feature | pathEscape}}/import">
+      <input type="hidden" name="return" value="{{$.RepoCrumbPath}}">
+      <button type="submit" class="btn btn-sm">Import</button>
+    </form>
+  </li>
+  {{end}}
+</ul>
+</section>
+{{end}}
+{{end}}
+{{if .Known}}
+<section class="module" aria-labelledby="project-h">
+<h2 id="project-h">Project</h2>
+<p class="module-sub">A project groups repos. Assign this repo to one, or start a new project with it.</p>
+<form method="post" action="/repos/{{.Title}}/project" class="flex items-center gap-2 mb-3">
+  <input type="hidden" name="return" value="{{.RepoCrumbPath}}">
+  <select name="project" aria-label="project of {{.Title}}" class="select">
+    <option value="">No project</option>
+    {{range .Projects}}<option value="{{.Name}}"{{if eq .Name $.Project.Name}} selected{{end}}>{{.Name}}</option>{{end}}
+  </select>
+  <button type="submit" class="btn btn-sm">Assign</button>
+</form>
+<details>
+  <summary>New project</summary>
+  <form method="post" action="/projects" class="flex flex-col gap-2 mt-2">
+    <input type="hidden" name="return" value="{{.RepoCrumbPath}}">
+    {{range .NewProject.Repos}}<input type="hidden" name="repo" value="{{.}}">{{end}}
+    <input type="text" name="name" required maxlength="40" placeholder="project name"
+      autocomplete="off" aria-label="project name">
+    <fieldset class="flex items-center gap-3">
+      <legend class="text-muted">hue</legend>
+      {{range .NewProject.Hues}}
+      <label class="flex items-center gap-1"><input type="radio" name="hue" value="{{.}}"{{if eq . $.NewProject.DefaultHue}} checked{{end}}>
+        <span class="avatar" data-hue="{{.}}" aria-label="hue {{.}}">A</span></label>
+      {{end}}
+    </fieldset>
+    <button type="submit" class="btn btn-primary self-start">Create project</button>
+  </form>
+</details>
 </section>
 {{end}}
 </div>
