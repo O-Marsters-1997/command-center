@@ -136,14 +136,10 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		return SessionPage{}, fmt.Errorf("load ticket events: %w", err)
 	}
 	current := LogSource{Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records}
-	if row.Log, err = BuildLogDetail(r.renderLine, current, Params{Log: LogAll}); err != nil {
-		return SessionPage{}, fmt.Errorf("build log for %s: %w", ticketURL, err)
-	}
+	row.Log = BuildLogDetail(current, Params{Log: LogAll})
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
-		if turns, err = r.turns(row, runs); err != nil {
-			return SessionPage{}, fmt.Errorf("build turns: %w", err)
-		}
+		turns = buildTurns(row, runs)
 	}
 	promptLog := row.LogPath
 	if len(runs) > 0 {
@@ -178,27 +174,23 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	}, nil
 }
 
-func (r *Reader) turns(row Row, runs []store.SessionRun) ([]Turn, error) {
+func buildTurns(row Row, runs []store.SessionRun) []Turn {
 	if len(runs) < 2 {
-		return []Turn{{Log: row.Log, Ask: row.Question}}, nil
+		return []Turn{{Log: row.Log, Ask: row.Question}}
 	}
 	turns := make([]Turn, len(runs))
 	for i, run := range runs {
 		turns[i].Log = row.Log
 		turns[i].Ask = run.Question
 		if i != len(runs)-1 || run.LogPath != row.LogPath {
-			log, err := BuildLogDetail(r.renderLine, LogSource{Path: run.LogPath, TicketURL: row.URL}, Params{Log: "all"})
-			if err != nil {
-				return nil, fmt.Errorf("build log of run %d: %w", run.ID, err)
-			}
-			turns[i].Log = log
+			turns[i].Log = BuildLogDetail(LogSource{Path: run.LogPath, TicketURL: row.URL}, Params{Log: "all"})
 			turns[i].Log.StreamPath = ""
 		}
 		if i > 0 {
 			turns[i].You = run.Message
 		}
 	}
-	return turns, nil
+	return turns
 }
 
 func readPrompt(logPath string) (Prompt, error) {

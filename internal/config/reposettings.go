@@ -1,14 +1,12 @@
 package config
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -16,8 +14,6 @@ import (
 
 // SettingsFile is the repo-root file holding one repo's settings, read from origin/main.
 const SettingsFile = plan.SettingsFile
-
-const settingsRef = "origin/main"
 
 // SettingsParseError identifies the line of invalid repository settings.
 type SettingsParseError struct {
@@ -41,24 +37,19 @@ func DefaultRepoSettings() RepoSettings {
 	return RepoSettings{Tracker: string(tracker.GitHub)}
 }
 
-// ReadRepoSettings reads SettingsFile from checkout's origin/main, never from a branch or
-// worktree. A missing file answers defaults; a malformed file, an unknown key or an invalid
+// SettingsRef is the ref callers read SettingsFile from, never a branch or worktree.
+const SettingsRef = "origin/main"
+
+// ReadRepoSettings decodes the body of SettingsFile read from SettingsRef; found is false when
+// the file is absent, which answers defaults. A malformed body, an unknown key or an invalid
 // predicate is an error naming the line.
-func ReadRepoSettings(ctx context.Context, checkout string) (RepoSettings, Source, error) {
-	present, err := git.HasFile(ctx, checkout, settingsRef, SettingsFile)
-	if err != nil {
-		return RepoSettings{}, "", fmt.Errorf("look for %s on %s: %w", SettingsFile, settingsRef, err)
-	}
-	if !present {
+func ReadRepoSettings(body []byte, found bool) (RepoSettings, Source, error) {
+	if !found {
 		return DefaultRepoSettings(), SourceDefaults, nil
 	}
-	body, err := git.ShowFile(ctx, checkout, settingsRef, SettingsFile)
+	settings, err := ParseRepoSettings(string(body))
 	if err != nil {
-		return RepoSettings{}, "", fmt.Errorf("read %s on %s: %w", SettingsFile, settingsRef, err)
-	}
-	settings, err := ParseRepoSettings(body)
-	if err != nil {
-		return RepoSettings{}, "", fmt.Errorf("%s on %s: %w", SettingsFile, settingsRef, err)
+		return RepoSettings{}, "", err
 	}
 	return settings, SourceFile, nil
 }

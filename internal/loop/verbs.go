@@ -18,8 +18,8 @@ import (
 const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
 
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, plan.VerbAbort, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(plan.TicketURL(intent.TicketID))
+	return l.eachIntent(ctx, snap, plan.VerbAbort, func(intent plan.Intent) error {
+		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
 			return nil
 		}
@@ -55,9 +55,11 @@ func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, re
 	return worktreePath, ""
 }
 
-func (l *Loop) applyFollowUpIntents(ctx context.Context, t *tick, byURL map[plan.TicketURL]store.Ticket) error {
-	return l.eachIntent(ctx, plan.VerbFollowUp, func(intent store.VerbIntent) error {
-		ticket, ok := l.ticket(byURL, intent.TicketID)
+func (l *Loop) applyFollowUpIntents(
+	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
+) error {
+	return l.eachIntent(ctx, snap, plan.VerbFollowUp, func(intent plan.Intent) error {
+		ticket, ok := l.ticket(byURL, string(intent.Ticket))
 		if !ok {
 			return nil
 		}
@@ -133,21 +135,22 @@ func (l *Loop) resumableSession(ctx context.Context, ticketURL string) (string, 
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, plan.VerbCancel, func(intent store.VerbIntent) error {
-		members, err := l.store.CancelLaunchesFor(ctx, intent.TicketID)
+	return l.eachPendingIntent(ctx, plan.VerbCancel, func(intent plan.Intent) error {
+		ticketID := string(intent.Ticket)
+		members, err := l.store.CancelLaunchesFor(ctx, ticketID)
 		if err != nil {
 			return fmt.Errorf("cancel launches: %w", err)
 		}
 		detail := fmt.Sprintf("launch cancelled, %d member(s)", members)
-		return l.event(ctx, intent.TicketID, store.EventLaunchCancelled, detail)
+		return l.event(ctx, ticketID, store.EventLaunchCancelled, detail)
 	})
 }
 
 func (l *Loop) applyReRunIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntent(ctx, plan.VerbReRun, func(intent store.VerbIntent) error {
-		ticket, ok := l.ticket(byURL, intent.TicketID)
+	return l.eachIntent(ctx, snap, plan.VerbReRun, func(intent plan.Intent) error {
+		ticket, ok := l.ticket(byURL, string(intent.Ticket))
 		if !ok {
 			return nil
 		}
@@ -190,8 +193,8 @@ func (l *Loop) reRunOne(ctx context.Context, t *tick, ticket store.Ticket, baseB
 }
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, plan.VerbRemoveWorktree, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(plan.TicketURL(intent.TicketID))
+	return l.eachIntent(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent) error {
+		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
 			return nil
 		}

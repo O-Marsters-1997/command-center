@@ -89,7 +89,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(s)
 	}
-	s.view = view.NewReader(d.Store, d.DataDir, renderLogLine, d.BoardPollSeconds, d.SpendLimit5h)
+	s.view = view.NewReader(d.Store, d.DataDir, d.BoardPollSeconds, d.SpendLimit5h)
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", s.handle(s.handleIndex))
 	mux.Handle("GET /tickets", s.handle(s.handleTickets))

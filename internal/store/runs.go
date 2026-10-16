@@ -1,11 +1,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -243,7 +245,9 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 	var intents []VerbIntent
 	for _, row := range rows {
 		var payload string
-		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+		if verb == plan.VerbLaunch {
+			payload = string(row.Payload)
+		} else if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("decode %s intent payload for %s: %w", verb, row.TicketID, err)
 		}
 		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: payload})
@@ -251,21 +255,20 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 	return intents, nil
 }
 
-// PendingIntentsByTicket groups unconsumed intents by ticket in creation order.
-func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[plan.TicketURL][]plan.Verb, error) {
-	rows, err := s.q.PendingIntentsByTicket(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select pending intents: %w", err)
-	}
-
-	byTicket := map[plan.TicketURL][]plan.Verb{}
-	for _, row := range rows {
-		verb, err := plan.ParseVerb(row.Verb)
+func (s *Store) PendingIntents(ctx context.Context) (map[plan.TicketURL][]plan.Intent, error) {
+	byTicket := map[plan.TicketURL][]plan.Intent{}
+	for _, verb := range plan.AllVerbs() {
+		pending, err := s.PendingVerbIntents(ctx, verb)
 		if err != nil {
-			return nil, fmt.Errorf("read intents.verb for %s: %w", row.TicketID, err)
+			return nil, err
 		}
-		url := plan.TicketURL(row.TicketID)
-		byTicket[url] = append(byTicket[url], verb)
+		for _, p := range pending {
+			url := plan.TicketURL(p.TicketID)
+			byTicket[url] = append(byTicket[url], plan.Intent{ID: p.ID, Ticket: url, Verb: verb, Payload: p.Payload})
+		}
+	}
+	for _, intents := range byTicket {
+		slices.SortFunc(intents, func(a, b plan.Intent) int { return cmp.Compare(a.ID, b.ID) })
 	}
 	return byTicket, nil
 }
