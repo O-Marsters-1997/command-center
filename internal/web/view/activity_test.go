@@ -24,7 +24,10 @@ func TestApplyActivities(t *testing.T) {
 		{name: "minutes", ago: 2*time.Minute + 10*time.Second, message: "Done.", wantAge: "2m", wantLast: "Done."},
 		{name: "hours", ago: 3 * time.Hour, wantAge: "3h"},
 		{name: "days", ago: 50 * time.Hour, wantAge: "2d"},
-		{name: "first non-blank line", ago: time.Minute, message: "\n  Opened the PR.\nMore.", wantAge: "1m", wantLast: "Opened the PR."},
+		{
+			name: "first non-blank line", ago: time.Minute, message: "\n  Opened the PR.\nMore.",
+			wantAge: "1m", wantLast: "Opened the PR.",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
