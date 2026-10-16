@@ -312,7 +312,7 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 | `/f/{feature}` | Feature board, grouped by attention |
 | `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
 | `/tickets` | All tickets, filter tabs |
-| `/insights` | Limits, spend per merged ticket |
+| `/insights` | Limits with reset times, spend per merged ticket, spend split, merged tickets; each a module on a 28px rhythm, tables in the bordered frame |
 | `/repos`, `/repos/{owner}/{name}` | Tracked repos; repo banner, checks, tickets |
 
 ## Elevation & Depth
