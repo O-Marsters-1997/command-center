@@ -163,12 +163,6 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err := l.tickCheckingWaits(ctx, tickets); err != nil {
 		return nil, fmt.Errorf("tick checking waits: %w", err)
 	}
-	if err := l.recordOpenedEvents(ctx, prev, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("opened events: %w", err)
-	}
-	if err := l.recordChecksLanded(ctx, prev, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("checks landed: %w", err)
-	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
 		return nil, fmt.Errorf("apply launch intents: %w", err)
 	}
@@ -187,16 +181,13 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
 		return nil, fmt.Errorf("save observation: %w", err)
 	}
-	if err := l.recordVerdictTransitions(ctx, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("verdict transitions: %w", err)
-	}
-	if err := l.recordMergedEvents(ctx, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("merged events: %w", err)
-	}
 	return byURL, nil
 }
 
 func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket) error {
+	if err := l.recordTransitions(ctx, snap); err != nil {
+		return fmt.Errorf("transitions: %w", err)
+	}
 	if err := l.applyReRunIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("re-run: %w", err)
 	}

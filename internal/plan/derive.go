@@ -118,6 +118,8 @@ type Snapshot struct {
 	maxAgents   int
 	spendPaused bool
 	intents     map[TicketURL][]Intent
+	transitions []Transition
+	verdicts    map[TicketURL]string
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -237,6 +239,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			LaunchID: membership.LaunchID, Base: base,
 		})
 	}
+	snap.transitions, snap.verdicts = r.transitions(in)
 	return snap
 }
 
