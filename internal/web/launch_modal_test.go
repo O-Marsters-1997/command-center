@@ -29,7 +29,8 @@ func TestLaunchOpen(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("POST /launch/open status = %d, want 200", response.Code)
 		}
-		if got := htmltest.Parse(t, response.Body).One(t, "dialog[hx-get]").Text(); !strings.Contains(got, "importing project:x") {
+		dialog := htmltest.Parse(t, response.Body).One(t, "dialog[hx-get]")
+		if got := dialog.Text(); !strings.Contains(got, "importing project:x") {
 			t.Errorf("POST /launch/open pending text = %q, want importing project:x", got)
 		}
 		if !nudged.Load() {
