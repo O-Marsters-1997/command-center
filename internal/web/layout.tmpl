@@ -115,8 +115,8 @@
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
     <nav class="flex flex-col gap-0.5" aria-label="scope">
-      <a class="rail-link" href="/tickets" data-key="g 0" {{template "nav" "/tickets"}}{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
-      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} {{template "nav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{if .Avatar}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
+      <a class="rail-link" href="/tickets" data-key="g 0" data-hint="⌘0" {{template "nav" "/tickets"}}{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
+      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}" data-hint="⌘{{slice . 2}}"{{end}} {{template "nav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{if .Avatar}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
       {{end}}
     </nav>
   </details>
