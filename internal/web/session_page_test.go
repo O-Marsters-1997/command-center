@@ -169,6 +169,12 @@ func TestSessionPage(t *testing.T) {
 					t.Errorf("GET /s/acme/web/1 heading lacks %q", want)
 				}
 			}
+			if got := main.One(t, ".prompt-meta").Text(); !strings.Contains(got, "Launched from the ticket") {
+				t.Errorf("GET /s/acme/web/1 prompt caption = %q, want it to say where the prompt came from", got)
+			}
+			if got := main.One(t, "p.session-meta").Text(); !strings.Contains(got, "acme/web #1") {
+				t.Errorf("GET /s/acme/web/1 head meta = %q, want repo and ref", got)
+			}
 			if got := main.One(t, "pre.prompt-text").Text(); !strings.Contains(got, "Implement <b>#1</b>") {
 				t.Errorf("GET /s/acme/web/1 prompt = %q, want the literal text %q", got, "Implement <b>#1</b>")
 			}

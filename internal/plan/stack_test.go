@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -63,6 +64,54 @@ func TestStackDepth(t *testing.T) {
 
 			if got := plan.StackDepth(tt.branch, tt.baseByBranch); got != tt.want {
 				t.Errorf("StackDepth(%q) = %d, want %d", tt.branch, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWaves(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		blocking map[plan.TicketURL][]plan.TicketURL
+		want     map[plan.TicketURL]int
+	}{
+		{name: "no tickets", blocking: map[plan.TicketURL][]plan.TicketURL{}, want: map[plan.TicketURL]int{}},
+		{
+			name:     "independent tickets share wave one",
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": nil},
+			want:     map[plan.TicketURL]int{"a": 1, "b": 1},
+		},
+		{
+			name:     "a chain climbs one wave per link",
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": {"a"}, "c": {"b"}},
+			want:     map[plan.TicketURL]int{"a": 1, "b": 2, "c": 3},
+		},
+		{
+			name:     "a ticket sits one wave past its deepest blocker",
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": {"a"}, "c": {"a", "b"}},
+			want:     map[plan.TicketURL]int{"a": 1, "b": 2, "c": 3},
+		},
+		{
+			name:     "a blocker outside the set is ignored",
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": {"elsewhere"}},
+			want:     map[plan.TicketURL]int{"a": 1},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := plan.Waves(tt.blocking)
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("Waves(%v) = %v, want %v", tt.blocking, got, tt.want)
+			}
+			highest := 0
+			for _, wave := range got {
+				highest = max(highest, wave)
+			}
+			if count := plan.WaveCount(tt.blocking); count != highest {
+				t.Errorf("WaveCount(%v) = %d, want the highest wave %d", tt.blocking, count, highest)
 			}
 		})
 	}
