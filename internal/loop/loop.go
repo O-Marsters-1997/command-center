@@ -122,18 +122,14 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err != nil {
 		return l.failTick(ctx, err)
 	}
-	if err := l.recordRepoProblems(ctx, t.obs); err != nil {
-		return l.failTick(ctx, fmt.Errorf("record repo problems: %w", err))
-	}
-	skipped, err := l.skippedRepos(ctx, t.obs)
-	if err != nil {
-		return l.failTick(ctx, fmt.Errorf("skipped repos: %w", err))
-	}
 	snap, err := l.derive(ctx, t)
 	if err != nil {
 		return l.failTick(ctx, fmt.Errorf("derive: %w", err))
 	}
-	return l.failTick(ctx, l.act(ctx, snap.Skipping(skipped), t, byURL))
+	if err := l.recordRepoProblems(ctx, snap); err != nil {
+		return l.failTick(ctx, fmt.Errorf("record repo problems: %w", err))
+	}
+	return l.failTick(ctx, l.act(ctx, snap.Skipping(snap.SkippedRepos()), t, byURL))
 }
 
 func (l *Loop) failTick(ctx context.Context, err error) error {
@@ -269,48 +265,12 @@ func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error
 	return nil
 }
 
-func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) error {
-	repos, err := l.store.Repos(ctx)
-	if err != nil {
-		return fmt.Errorf("list repos: %w", err)
-	}
-	var parts []string
-	for repo, reason := range obs.SettingsErrors {
-		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, reason))
-	}
-	for repo, reason := range obs.RepoErrors {
-		parts = append(parts, fmt.Sprintf("observe %s: %s", repo, reason))
-	}
-	for _, repo := range repos {
-		if repo.Phase == plan.RepoRefused && repo.RefusalKind != plan.RefusalSettingsParse {
-			parts = append(parts, fmt.Sprintf("%s refused (%s): %s", repo.Name, repo.RefusalKind, repo.Refusal))
-		}
-	}
+func (l *Loop) recordRepoProblems(ctx context.Context, snap plan.Snapshot) error {
+	parts := snap.RepoProblems()
 	if len(parts) == 0 {
 		return nil
 	}
-	slices.Sort(parts)
 	return l.recordTickError(ctx, strings.Join(parts, "; "))
-}
-
-func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[string]bool, error) {
-	repos, err := l.store.Repos(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list repos: %w", err)
-	}
-	skipped := map[string]bool{}
-	for _, repo := range repos {
-		if repo.Phase != plan.RepoReady {
-			skipped[repo.Name] = true
-		}
-	}
-	for repo := range obs.SettingsErrors {
-		skipped[repo] = true
-	}
-	for repo := range obs.RepoErrors {
-		skipped[repo] = true
-	}
-	return skipped, nil
 }
 
 func (l *Loop) Run(ctx context.Context) error {
