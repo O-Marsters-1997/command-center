@@ -44,6 +44,7 @@ type RunSkeleton struct {
 	Kind        plan.RunKind
 	BaselineSHA string
 	PromptHash  string
+	Choice      plan.AgentChoice
 	Session     RunSession
 }
 
@@ -65,6 +66,8 @@ type LaunchRequest struct {
 	Ticket     string
 	PromptHash string
 	Group      string
+	Context    string
+	Choice     plan.AgentChoice
 	At         time.Time
 }
 

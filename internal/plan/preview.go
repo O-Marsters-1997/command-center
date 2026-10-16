@@ -76,7 +76,7 @@ type PreviewRow struct {
 	PromptHash string
 }
 
-func (s Snapshot) Preview(selection []TicketURL) ([]PreviewRow, error) {
+func (s Snapshot) Preview(selection []TicketURL, launchContext string) ([]PreviewRow, error) {
 	entries := make([]Entry, 0, len(selection))
 	slice := make(map[TicketURL]bool, len(selection))
 	for _, ticketURL := range selection {
@@ -91,7 +91,9 @@ func (s Snapshot) Preview(selection []TicketURL) ([]PreviewRow, error) {
 	rows := make([]PreviewRow, 0, len(entries))
 	for _, e := range entries {
 		label, reason := Preview(e.Unlock, slice, e.LaunchID, e.ConflictedBase)
-		prompt := Compose(e.Ticket)
+		launched := e.Ticket
+		launched.LaunchContext = launchContext
+		prompt := Compose(launched)
 		rows = append(rows, PreviewRow{
 			Ticket: e.Ticket, Label: label, Reason: reason,
 			Base: e.Base, BaseRun: s.baseRun(e.Base),

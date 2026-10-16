@@ -31,6 +31,7 @@ var defaultAgentCommand = []string{
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
 	"--model", "{model}",
+	"--effort", "{effort}",
 	"{session}",
 }
 

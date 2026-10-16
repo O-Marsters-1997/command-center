@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -95,7 +96,8 @@ func TestGatingBlockers(t *testing.T) {
 		consumer.URL:  consumer,
 	}
 
-	if diff := cmp.Diff([]plan.Ticket{crossRepo}, plan.GatingBlockers(consumer, byURL)); diff != "" {
+	if diff := cmp.Diff([]plan.Ticket{crossRepo}, plan.GatingBlockers(consumer, byURL),
+		cmpopts.EquateComparable(plan.AgentChoice{})); diff != "" {
 		t.Errorf("GatingBlockers(%s) mismatch (-want +got):\n%s", consumer.URL, diff)
 	}
 }

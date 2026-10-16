@@ -468,18 +468,29 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
-	rows, err := snap.Preview(plan.TicketURLs(requested))
+	choice, err := parseAgentChoice(r.FormValue("model"), r.FormValue("effort"))
 	if err != nil {
 		return withStatus(http.StatusBadRequest, err)
 	}
-	hashes := make(map[string]string, len(rows))
-	for _, row := range rows {
+	launchContext := strings.TrimSpace(r.FormValue("context"))
+	base, err := snap.Preview(plan.TicketURLs(requested), "")
+	if err != nil {
+		return withStatus(http.StatusBadRequest, err)
+	}
+	for _, row := range base {
 		ticketURL := string(row.Ticket.URL)
 		if want, ok := previewed[ticketURL]; ok && want != row.PromptHash {
 			return errorf(http.StatusConflict, "ticket %s was previewed at hash %s and now composes to %s",
 				ticketURL, want, row.PromptHash)
 		}
-		hashes[ticketURL] = row.PromptHash
+	}
+	rows, err := snap.Preview(plan.TicketURLs(requested), launchContext)
+	if err != nil {
+		return withStatus(http.StatusBadRequest, err)
+	}
+	hashes := make(map[string]string, len(rows))
+	for _, row := range rows {
+		hashes[string(row.Ticket.URL)] = row.PromptHash
 	}
 
 	group, err := randomGroup()
@@ -489,13 +500,34 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 
 	now := s.clock.Now()
 	for _, ticketURL := range requested {
-		launch := store.LaunchRequest{Ticket: ticketURL, PromptHash: hashes[ticketURL], Group: group, At: now}
+		launch := store.LaunchRequest{
+			Ticket: ticketURL, PromptHash: hashes[ticketURL], Group: group,
+			Context: launchContext, Choice: choice, At: now,
+		}
 		if err := s.store.QueueLaunchIntent(ctx, launch); err != nil {
 			return fmt.Errorf("queue launch intent: %w", err)
 		}
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 	return nil
+}
+
+func parseAgentChoice(model, effort string) (plan.AgentChoice, error) {
+	choice := plan.AgentChoice{Effort: option.None[plan.Effort]()}
+	if model != "" {
+		if !slices.Contains(config.AgentModels(), model) {
+			return plan.AgentChoice{}, fmt.Errorf("unknown model %q", model)
+		}
+		choice.Model = model
+	}
+	if effort != "" {
+		parsed, err := plan.ParseEffort(effort)
+		if err != nil {
+			return plan.AgentChoice{}, fmt.Errorf("parse effort: %w", err)
+		}
+		choice.Effort = option.Some(parsed)
+	}
+	return choice, nil
 }
 
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {

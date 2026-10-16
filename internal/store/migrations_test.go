@@ -228,6 +228,8 @@ func TestMigrations(t *testing.T) {
 			{"intents_verb_check", append(toStrings(plan.AllVerbs()), "edit_ticket")},
 			{"repos_refusal_kind_check", toStrings(plan.AllRefusalKinds())},
 			{"events_kind_check", toStrings(storepkg.AllEventKinds())},
+			{"launches_effort_check", toStrings(plan.AllEfforts())},
+			{"runs_effort_check", toStrings(plan.AllEfforts())},
 			{"utilization_readings_window_check", windows},
 			{"utilization_intervals_window_check", windows},
 		}

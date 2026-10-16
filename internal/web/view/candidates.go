@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -36,6 +38,23 @@ type LaunchModal struct {
 	Pending      bool
 	Refused      string
 	Empty        bool
+	Models       []string
+	DefaultModel string
+	Efforts      []plan.Effort
+}
+
+func newLaunchModal() LaunchModal {
+	return LaunchModal{Models: config.AgentModels(), DefaultModel: config.AgentModel, Efforts: plan.AllEfforts()}
+}
+
+func (m LaunchModal) ModelList() string { return strings.Join(m.Models, ",") }
+
+func (m LaunchModal) EffortList() string {
+	efforts := make([]string, len(m.Efforts))
+	for i, e := range m.Efforts {
+		efforts[i] = string(e)
+	}
+	return strings.Join(efforts, ",")
 }
 
 type LaunchPicker struct {
@@ -151,7 +170,7 @@ func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([
 }
 
 func previewCandidates(requested []string, in candidateInputs) ([]Candidate, error) {
-	rows, err := in.snap.Preview(plan.TicketURLs(requested))
+	rows, err := in.snap.Preview(plan.TicketURLs(requested), "")
 	if err != nil {
 		return nil, fmt.Errorf("preview: %w", err)
 	}
@@ -191,7 +210,8 @@ func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) 
 }
 
 func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string) (LaunchModal, error) {
-	view := LaunchModal{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
+	view := newLaunchModal()
+	view.Feature, view.FeatureQuery = feature, url.QueryEscape(feature)
 
 	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbImport)
 	if err != nil {
@@ -240,7 +260,9 @@ func (r *Reader) TicketModal(ctx context.Context, now time.Time, requested []str
 	if _, err := previewCandidates(requested, in); err != nil {
 		return LaunchModal{}, fmt.Errorf("preview candidates: %w", err)
 	}
-	return LaunchModal{TicketQuery: candidateQuery(requested)}, nil
+	modal := newLaunchModal()
+	modal.TicketQuery = candidateQuery(requested)
+	return modal, nil
 }
 
 func candidateQuery(requested []string) string {

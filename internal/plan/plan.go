@@ -37,6 +37,8 @@ type Ticket struct {
 	Branch              string
 	BlockedBy           []TicketURL
 	WorkedExampleBranch string
+	LaunchContext       string
+	Choice              AgentChoice
 }
 
 func (t Ticket) Ref() BranchRef { return BranchRef{Repo: t.Repo, Branch: t.Branch} }

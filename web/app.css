@@ -2363,6 +2363,10 @@
     white-space: nowrap;
   }
 
+  .launch-foot .composer {
+    margin-bottom: var(--space-3);
+  }
+
   .launch-actions {
     display: flex;
     justify-content: flex-end;

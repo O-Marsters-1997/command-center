@@ -58,7 +58,10 @@ func (s *Store) RunDetails(ctx context.Context, id plan.RunID) (RunDetails, erro
 func (s *Store) InsertSessionRunSkeleton(
 	ctx context.Context, r RunSkeleton,
 ) (runID int64, sessionID string, err error) {
+	model, effort := choiceColumns(r.Choice)
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
+		Model:       model,
+		Effort:      effort,
 		TicketID:    notNull(r.Ticket),
 		Kind:        string(r.Kind),
 		BaselineSHA: notNull(r.BaselineSHA),

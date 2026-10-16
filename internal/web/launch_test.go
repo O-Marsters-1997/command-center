@@ -139,6 +139,39 @@ func TestLaunch(t *testing.T) {
 		}
 	})
 
+	t.Run("hashes the launch context and keeps the previewed hash valid", func(t *testing.T) {
+		t.Parallel()
+		store := candidateStore(t, storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"})
+		form := url.Values{
+			"ticket":  {"sandbox://CC-1"},
+			"hash":    {"sandbox://CC-1 " + composedHash("sandbox://CC-1")},
+			"context": {"  prefer table tests  "},
+			"model":   {"opus"},
+			"effort":  {"high"},
+		}
+
+		got := do(t, openServer(store, fixedClock(testNow), ""), http.MethodPost, "/launch", req{Form: form})
+		if got.Code != http.StatusSeeOther {
+			t.Fatalf("POST /launch = %d, want 303", got.Code)
+		}
+		withContext := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1", LaunchContext: "prefer table tests"}))
+		want := map[string]string{"sandbox://CC-1": withContext}
+		if diff := cmp.Diff(want, activeLaunchHashes(t, store)); diff != "" {
+			t.Errorf("active launch hashes mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("rejects a model or effort outside the offered set", func(t *testing.T) {
+		t.Parallel()
+		for _, field := range []url.Values{{"model": {"gpt-9"}}, {"effort": {"extreme"}}} {
+			field.Set("ticket", "sandbox://CC-1")
+			server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+			if got := do(t, server, http.MethodPost, "/launch", req{Form: field}); got.Code != http.StatusBadRequest {
+				t.Errorf("POST /launch %v status = %d, want 400", field, got.Code)
+			}
+		}
+	})
+
 	t.Run("rejects a malformed hash field", func(t *testing.T) {
 		t.Parallel()
 		form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}

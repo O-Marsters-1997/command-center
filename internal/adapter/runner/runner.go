@@ -5,6 +5,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 type Runner interface {
@@ -23,6 +26,7 @@ type SpawnConfig struct {
 	SettingsPath     string
 	SystemPromptPath string
 	Model            string
+	Effort           option.Option[plan.Effort]
 	Prompt           string
 	PromptPath       string
 	SessionID        string
@@ -59,6 +63,7 @@ func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{settings}", cfg.SettingsPath)
 	arg = strings.ReplaceAll(arg, "{system_prompt}", cfg.SystemPromptPath)
 	arg = strings.ReplaceAll(arg, "{model}", cfg.Model)
+	arg = strings.ReplaceAll(arg, "{effort}", string(cfg.Effort.UnwrapOr("")))
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt}", cfg.Prompt)
 	return arg
@@ -78,6 +83,7 @@ func sessionArgs(cfg SpawnConfig) []string {
 func buildArgv(cfg SpawnConfig) []string {
 	omitWhenEmpty := map[string]string{
 		"{system_prompt}": cfg.SystemPromptPath,
+		"{effort}":        string(cfg.Effort.UnwrapOr("")),
 	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {

@@ -141,7 +141,10 @@ _Avoid_: Drawer, expansion, panel
 The dialog that opens at `/f/{feature}/launch` from a feature, or at `/launch` on a feature picker,
 with no board selection, listing the tickets one launch would cover as Ready now and On unlock. Its toggles change nothing: only confirming
 writes. Unticking a ticket others depend on is refused, naming them, so the set it confirms is
-always closed under blockers.
+always closed under blockers. It also takes the launch's context, model and effort: the context is
+appended to every composed prompt, so it is part of the prompt hash the launch authorises, and the
+model and effort are what its runs spawn with (a launch stored before the choice existed spawns on
+the configured model).
 _Avoid_: Dialog, popup, drawer, preview (that is the label a ticket carries inside it)
 
 **Grammar**:
