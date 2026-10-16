@@ -173,7 +173,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Glyph:          e.State.Glyph(),
 			Alive:          in.Obs.Runs[url].Alive,
 			Verbs:          plan.Verbs(e.State),
-			PendingVerbs:   in.PendingVerbs[url],
+			PendingVerbs:   pendingVerbs(in.Intents[url]),
 			Branch:         t.Branch,
 			BlockedBy:      t.BlockedBy,
 			Base:           e.Unlock.BaseBranch,
@@ -378,6 +378,14 @@ func distinctFeatures(tickets []store.Ticket) []string {
 		}
 	}
 	return slices.Sorted(maps.Keys(seen))
+}
+
+func pendingVerbs(intents []plan.Intent) []plan.Verb {
+	verbs := make([]plan.Verb, len(intents))
+	for i, intent := range intents {
+		verbs[i] = intent.Verb
+	}
+	return verbs
 }
 
 func readyToMergeWarning(pr plan.PR) string {

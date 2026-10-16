@@ -93,6 +93,11 @@ linters:
           deny:
             - pkg: github.com/O-Marsters-1997/command-center/internal/git
               desc: config parses bytes; the loop reads the file from git and hands it in
+        git-no-gh:
+          files: ["**/internal/git/**", "!$test"]
+          deny:
+            - pkg: github.com/O-Marsters-1997/command-center/internal/gh
+              desc: git shells out to git only; the loop reads GitHub and hands plan the facts
         ccdb-in-store:
           files: ["$all", "!**/internal/store/**"]
           deny:
