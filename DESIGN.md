@@ -312,7 +312,7 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 | `/f/{feature}` | Feature board, grouped by attention |
 | `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
 | `/tickets` | All tickets, filter tabs |
-| `/insights` | Limits with reset times, spend per merged ticket, spend split, merged tickets; each a module on a 28px rhythm, tables in the bordered frame |
+| `/insights` | Limits with reset times, spend per merged ticket, spend split, merged tickets |
 | `/repos`, `/repos/{owner}/{name}` | Tracked repos; repo banner, checks, tickets |
 
 ## Elevation & Depth
@@ -398,6 +398,8 @@ ticket filters. No underline tabs.
   Columns: glyph, mono ref, title over a muted subline, then right-aligned metrics.
 - **Tables:** 34px heads in 12px/510 `muted`, 40px cells, `border-soft` rules only, inside a 10px
   `border-soft` frame. No vertical rules and no tinted header.
+- **Modules:** a page body stacks modules (`.module`) 28px apart, each an `h2` 10px above its
+  content. Insights and the repo page use them; every table inside one sits in the frame.
 
 ### Session rail
 
