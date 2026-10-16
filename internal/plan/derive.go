@@ -118,6 +118,8 @@ type Snapshot struct {
 	maxAgents   int
 	spendPaused bool
 	intents     map[TicketURL][]Intent
+	obs         Observation
+	refreshes   map[TicketURL]RefreshFact
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -187,6 +189,8 @@ func (r Rules) Derive(in Input) Snapshot {
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
+		obs:         in.Obs,
+		refreshes:   in.Refreshes,
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])

@@ -155,20 +155,13 @@ func (l *Loop) readyOne(ctx context.Context, t plan.Ticket) error {
 
 // Mergify's queue takes main-based pull requests only, and both repos delete a merged branch.
 func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return eachEntry(snap, func(e plan.Entry) bool {
-		t := e.Ticket
-		if e.HoldsWorktree() || e.LastPush.IsNone() {
-			return false
+	for _, r := range snap.Retargets() {
+		e, _ := snap.Entry(r.Ticket)
+		if err := l.retargetOne(ctx, snap, obs, e.Ticket, r.Row); err != nil {
+			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
-		row := e.LastPush.Unwrap()
-		if row.BaseBranch == "" || row.BaseBranch == plan.DefaultBaseBranch {
-			return false
-		}
-		return obs.PRs[t.Ref()].State == plan.Open &&
-			obs.PRs[plan.BranchRef{Repo: t.Repo, Branch: row.BaseBranch}].State == plan.Merged
-	}, func(e plan.Entry) error {
-		return l.retargetOne(ctx, snap, obs, e.Ticket, e.LastPush.Unwrap())
-	})
+	}
+	return nil
 }
 
 func (l *Loop) retargetOne(
