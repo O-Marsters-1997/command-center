@@ -145,7 +145,8 @@ func TestBuildRail(t *testing.T) {
 		card := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).NeedsYou[0]
 
 		if card.Feature != "olly/job-scraper" || card.Ref != "#5" || card.Project != (view.ProjectMark{}) {
-			t.Errorf("BuildRail(loose) card = {%q %q %v}, want {olly/job-scraper #5 no mark}", card.Feature, card.Ref, card.Project)
+			t.Errorf("BuildRail(loose) card = {%q %q %v}, want {olly/job-scraper #5 no mark}",
+				card.Feature, card.Ref, card.Project)
 		}
 	})
 

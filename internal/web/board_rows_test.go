@@ -169,7 +169,11 @@ func testBoardRows(t *testing.T) {
 			wantState string
 		}{
 			{name: "a required check that passed", checks: verdict.Predicate{Success: "CI"}, wantState: "Ready for review"},
-			{name: "a required check never reported", checks: verdict.Predicate{Success: "Lint"}, wantState: "Waiting on checks"},
+			{
+				name:      "a required check never reported",
+				checks:    verdict.Predicate{Success: "Lint"},
+				wantState: "Waiting on checks",
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

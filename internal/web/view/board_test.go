@@ -121,9 +121,17 @@ func TestDetailOf(t *testing.T) {
 		name, reason, want string
 	}{
 		{"one blocker", "blocked by sandbox://PLA-40, not yet merged", "blocked by #PLA-40, not yet merged"},
-		{"an issue url", "waiting on https://github.com/o/r/issues/12: its pull request was closed", "waiting on #12: its pull request was closed"},
+		{
+			"an issue url",
+			"waiting on https://github.com/o/r/issues/12: its pull request was closed",
+			"waiting on #12: its pull request was closed",
+		},
 		{"several blockers", "waiting on 2 blockers: sandbox://A-1, sandbox://A-2", "waiting on 2 blockers: #A-1, #A-2"},
-		{"a log path", "no commits after this run's baseline; log at /home/o/.cc/runs/7.log", "no commits after this run's baseline"},
+		{
+			"a log path",
+			"no commits after this run's baseline; log at /home/o/.cc/runs/7.log",
+			"no commits after this run's baseline",
+		},
 		{"plain prose", "Which database?", "Which database?"},
 	}
 	for _, tt := range tests {

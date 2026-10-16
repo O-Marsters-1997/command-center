@@ -24,7 +24,7 @@ exists $WORK/repo-cc-1-x/ready
 # A fresh instance, with nothing in memory from the one that spawned it, finds the run alive.
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout -count=1 '>running</span>'
+stdout -count=1 '>Agent running</span>'
 stdout 'agent running'
 
 # And it is the same process: the pgid the kill button's confirmation carries is the one sleeps.sh
@@ -44,6 +44,6 @@ stdout -count=1 'run_launched'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 exec cc request GET /tickets
-! stdout '>running</span>'
-stdout -count=1 '>failed</span>'
+! stdout '>Agent running</span>'
+stdout -count=1 '>Failed</span>'
 grep -count=1 'sleeps.sh' $WORK/agent.log
