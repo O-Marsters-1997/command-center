@@ -115,3 +115,32 @@ func TestSnapshot_Session(t *testing.T) {
 		t.Errorf("Session(%s) = %q, true, want none", second.URL, got)
 	}
 }
+
+func TestSnapshot_RepoGates(t *testing.T) {
+	t.Parallel()
+	snap := derive(plan.Rules{}, plan.Input{
+		Repos: []plan.RepoStatus{
+			{Name: "ready", Phase: plan.RepoReady},
+			{Name: "cloning", Phase: plan.RepoCloning},
+			{Name: "merge", Phase: plan.RepoRefused, RefusalKind: plan.RefusalMergeSettings, Refusal: "no merge commits"},
+			{Name: "parse", Phase: plan.RepoRefused, RefusalKind: plan.RefusalSettingsParse, Refusal: "bad toml"},
+		},
+		Obs: plan.Observation{
+			SettingsErrors: map[string]string{"parse": "bad toml"},
+			RepoErrors:     map[string]string{"errored": "fetch failed"},
+		},
+	})
+
+	wantSkipped := map[string]bool{"cloning": true, "merge": true, "parse": true, "errored": true}
+	if diff := cmp.Diff(wantSkipped, snap.SkippedRepos()); diff != "" {
+		t.Errorf("SkippedRepos() mismatch (-want +got):\n%s", diff)
+	}
+	wantProblems := []string{
+		"merge refused (" + string(plan.RefusalMergeSettings) + "): no merge commits",
+		"observe errored: fetch failed",
+		"settings for parse: bad toml",
+	}
+	if diff := cmp.Diff(wantProblems, snap.RepoProblems()); diff != "" {
+		t.Errorf("RepoProblems() mismatch (-want +got):\n%s", diff)
+	}
+}
