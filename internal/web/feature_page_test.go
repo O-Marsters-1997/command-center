@@ -10,7 +10,6 @@ import (
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
-	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 func TestFeaturePage(t *testing.T) {
@@ -20,18 +19,30 @@ func TestFeaturePage(t *testing.T) {
 		t.Parallel()
 		page := renderPath(t, threeFeatureServer(t), "/f/board-scope")
 
-		board := htmltest.Parse(t, page).One(t, "table#board")
-		if lone := board.Find(`input[name="ticket"][value="sandbox://LONE"]`); len(lone) != 0 {
-			t.Errorf("GET /f/board-scope includes another feature's ticket: %s", lone[0].HTML())
+		board := htmltest.Parse(t, page).One(t, "div#board")
+		var keys []string
+		for _, section := range board.Find("section[data-section]") {
+			key, _ := section.Attr("data-section")
+			keys = append(keys, key)
 		}
-		if got := sectionKeys(t, page); got != "ready,blocked" {
+		if got := strings.Join(keys, ","); got != "ready,blocked" {
 			t.Errorf("GET /f/board-scope sections = %q, want ready,blocked", got)
 		}
-		if cell := webtest.RowFor(t, page, "sandbox://CHILD").Ticket.Text(); !strings.Contains(cell, "after #ROOT") {
-			t.Errorf("GET /f/board-scope CHILD ticket cell = %q, want after #ROOT", cell)
+		if got := len(board.Find("a[data-ref]")); got != 2 {
+			t.Errorf("GET /f/board-scope rows = %d, want 2", got)
 		}
-		if cell := webtest.RowFor(t, page, "sandbox://ROOT").Ticket.Text(); !strings.Contains(cell, "unlocks #CHILD") {
-			t.Errorf("GET /f/board-scope ROOT ticket cell = %q, want unlocks #CHILD", cell)
+		for _, control := range []string{"input", "button", "form"} {
+			if found := board.Find(control); len(found) != 0 {
+				t.Errorf("GET /f/board-scope board has a %s: %s", control, found[0].HTML())
+			}
+		}
+	})
+
+	t.Run("the top bar offers Launch with the count of tickets to launch", func(t *testing.T) {
+		t.Parallel()
+		main := htmltest.Parse(t, renderPath(t, threeFeatureServer(t), "/f/board-scope")).One(t, "main#main")
+		if got := main.One(t, `a[href="/f/board-scope/launch"]`).Text(); !strings.Contains(got, "Launch · 2") {
+			t.Errorf("GET /f/board-scope launch button = %q, want Launch · 2", got)
 		}
 	})
 

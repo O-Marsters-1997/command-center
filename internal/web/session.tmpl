@@ -95,7 +95,7 @@
       <dt>Repo</dt><dd>{{.Row.Repo}}</dd>
       <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
       <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
-      <dt>Checks</dt><dd>{{if .Row.Checks}}{{.Row.ChecksPassed}}/{{len .Row.Checks}} passing{{else}}—{{end}}</dd>
+      <dt>Checks</dt><dd>{{if .Row.ChecksTotal}}{{.Row.ChecksPassed}}/{{.Row.ChecksTotal}} passing{{else}}—{{end}}</dd>
       <dt>Spend</dt><dd class="mono">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
     </dl>
     <details class="stack-edit">

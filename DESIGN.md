@@ -310,6 +310,13 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.
+- **Feature page.** The top bar carries Graph/Board pill tabs and a secondary `Launch · N`. The
+  head is the name, `project · launched age · N tickets in M waves · V switches view`, and a
+  segment bar with its legend. The graph has one column per wave, headed `Wave n` with a
+  subtitle (`4 in progress`, `unlocks as wave 1 merges`). A node card is glyph, mono ref, title
+  and one subline (`PR #n · a/b checks`, `after #x, #y`, or the detail), with the state label
+  top-right only for Needs you. The board is the grouped list: glyph, ref, title over detail,
+  repo, checks, PR, and elapsed or spend, with no verbs, checkboxes, stack or state columns.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
 

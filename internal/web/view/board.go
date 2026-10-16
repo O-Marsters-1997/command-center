@@ -56,6 +56,8 @@ type Row struct {
 	LogPath         string         `json:"-"`
 	CancelCount     int            `json:"-"`
 	SpendTokens     int            `json:"-"`
+	ChecksPassed    int            `json:"checks_passed"`
+	ChecksTotal     int            `json:"checks_total"`
 	Checks          []Check        `json:"-"`
 	RedChecks       []Check        `json:"-"`
 	Draft           bool           `json:"-"`
@@ -105,16 +107,6 @@ func (r Row) Stack() string {
 		return fmt.Sprintf("L%d", r.MergeOrder)
 	}
 	return fmt.Sprintf("L%d ← %s", r.MergeOrder, r.Base)
-}
-
-func (r Row) ChecksPassed() int {
-	passed := 0
-	for _, c := range r.Checks {
-		if c.Conclusion == "SUCCESS" {
-			passed++
-		}
-	}
-	return passed
 }
 
 // DetailID supplies the selector and id required by htmx's hx-target and hx-preserve.
@@ -209,6 +201,14 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		})
 	}
 
+	for i := range rows {
+		for _, c := range rows[i].Checks {
+			if c.Conclusion == "SUCCESS" {
+				rows[i].ChecksPassed++
+			}
+		}
+		rows[i].ChecksTotal = len(rows[i].Checks)
+	}
 	longestElapsed := 0
 	for _, r := range rows {
 		longestElapsed = max(longestElapsed, r.ElapsedSeconds)
