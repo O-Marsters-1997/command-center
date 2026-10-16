@@ -212,24 +212,16 @@ type VerbIntent struct {
 	Payload  string
 }
 
-func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.Verb, at time.Time) error {
+func (s *Store) QueueVerbIntent(ctx context.Context, v VerbRequest) error {
+	var encoded []byte
+	if v.Payload != "" {
+		var err error
+		encoded, err = json.Marshal(v.Payload)
+		if err != nil {
+			return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
+		}
+	}
 	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
-		At:       at.UTC(),
-		TicketID: ticketID,
-		Verb:     string(verb),
-	})
-	if err != nil {
-		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
-	}
-	return nil
-}
-
-func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, v VerbRequest) error {
-	encoded, err := json.Marshal(v.Payload)
-	if err != nil {
-		return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
-	}
-	err = s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
 		At:       v.At.UTC(),
 		TicketID: v.Ticket,
 		Verb:     string(v.Verb),

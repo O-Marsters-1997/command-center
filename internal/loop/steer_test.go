@@ -81,11 +81,11 @@ func newSteerFixture(t *testing.T, wrap func(*runnertest.Runner) runner.Runner) 
 
 func (f *steerFixture) send(t *testing.T, text string) {
 	t.Helper()
-	err := f.store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+	err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: testAt,
 	})
 	if err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload(follow-up): %v", err)
+		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 	}
 }
 

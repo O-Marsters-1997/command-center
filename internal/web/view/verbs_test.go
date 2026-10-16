@@ -1,6 +1,8 @@
 package view_test
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -8,6 +10,26 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
+
+func TestKeymap_SessionVerbKeysMatchButtons(t *testing.T) {
+	t.Parallel()
+
+	row := view.Row{Verbs: []plan.Verb{plan.VerbReRun, plan.VerbRemoveWorktree}}
+	var session []string
+	for _, group := range view.Keymap {
+		if group.Title != "In a session" {
+			continue
+		}
+		for _, keyRow := range group.Rows {
+			session = append(session, keyRow.Keys)
+		}
+	}
+	for _, button := range row.VerbButtons() {
+		if want := strings.ToUpper(button.Key); button.Key == "" || !slices.Contains(session, want) {
+			t.Errorf("session keymap rows = %q, want one for %s key %q", session, button.Verb, want)
+		}
+	}
+}
 
 func TestRow_VerbButtons(t *testing.T) {
 	t.Parallel()

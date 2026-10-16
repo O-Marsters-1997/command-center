@@ -395,7 +395,9 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	}
 	feature := r.FormValue("feature")
 	if feature != "" {
-		if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
+		if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+			Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
+		}); err != nil {
 			return fmt.Errorf("queue verb intent: %w", err)
 		}
 		s.nudge()
@@ -529,14 +531,11 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 			ticketURL, entry.State, verb, entry.Reason)
 	}
 
+	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, At: s.clock.Now()}
 	if verb == plan.VerbFollowUp {
-		err = s.store.QueueVerbIntentWithPayload(ctx, store.VerbRequest{
-			Ticket: ticketURL, Verb: verb, Payload: prompt, At: s.clock.Now(),
-		})
-	} else {
-		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.clock.Now())
+		request.Payload = prompt
 	}
-	if err != nil {
+	if err := s.store.QueueVerbIntent(ctx, request); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	if r.FormValue("from") == "rail" && hx.IsRequest(r) {
@@ -751,7 +750,9 @@ func ticketByURL(tickets []store.Ticket, ticketURL string) (store.Ticket, bool) 
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
 	feature := r.PathValue("feature")
-	if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
+	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+		Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
+	}); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	s.nudge()

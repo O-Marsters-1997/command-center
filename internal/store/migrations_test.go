@@ -288,7 +288,7 @@ func TestMigrations(t *testing.T) {
 				return err
 			}},
 			{"intent verb", "intents_verb_check", func(ctx context.Context, s *storepkg.Store, _ *sql.DB) error {
-				return s.QueueVerbIntent(ctx, "sandbox://CC-1", plan.Verb("bogus"), testNow)
+				return s.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "sandbox://CC-1", Verb: plan.Verb("bogus"), At: testNow})
 			}},
 			{"refusal kind", "repos_refusal_kind_check", func(ctx context.Context, s *storepkg.Store, _ *sql.DB) error {
 				return s.UpsertRepo(ctx, storepkg.Repo{
