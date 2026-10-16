@@ -10,9 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -25,14 +23,11 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
-	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 )
 
 const maxAgents = 4
 
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-
-var glyphRE = regexp.MustCompile(`<span class="glyph[^"]*">([^<]*)</span>`)
 
 type issue struct {
 	Ticket
@@ -133,7 +128,6 @@ type Sim struct {
 	issues   []issue
 
 	authorised map[string]bool
-	board      map[string]string
 	landed     int
 }
 
@@ -202,7 +196,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
 		loop: lp, server: server, issues: issues,
-		authorised: map[string]bool{}, board: map[string]string{},
+		authorised: map[string]bool{},
 	}
 	for _, feature := range features(issues) {
 		if err := st.QueueVerbIntent(ctx, feature, plan.VerbImport, clock.Now()); err != nil {
@@ -256,11 +250,10 @@ func (s *Sim) Tick(ctx context.Context) error {
 	if err := s.loop.RunOnce(ctx); err != nil {
 		return fmt.Errorf("run loop once: %w", err)
 	}
-	states, err := s.states()
+	states, err := s.states(ctx)
 	if err != nil {
-		return fmt.Errorf("read board states: %w", err)
+		return fmt.Errorf("read ticket states: %w", err)
 	}
-	s.board = states
 	if err := s.resolveConflicts(ctx, states); err != nil {
 		return fmt.Errorf("resolve conflicts: %w", err)
 	}
@@ -323,33 +316,26 @@ func (s *Sim) run(ctx context.Context, speed float64) error {
 
 func (s *Sim) Close() error { return errors.Join(s.store.Close(), s.sandbox.Close()) }
 
-func (s *Sim) states() (map[string]string, error) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/board", nil)
-	req.Header.Set(hx.HeaderRequest, "true")
-	s.server.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		return nil, fmt.Errorf("GET /board: %s", rec.Body)
+func (s *Sim) states(ctx context.Context) (map[plan.TicketURL]plan.State, error) {
+	in, err := s.store.PlanInput(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load plan input: %w", err)
 	}
-	rows := strings.Split(rec.Body.String(), "<tr")
-	states := make(map[string]string, len(s.issues))
+	in.Now = s.clock.Now()
+	snap := plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
+	states := make(map[plan.TicketURL]plan.State, len(s.issues))
 	for _, i := range s.issues {
-		ref := fmt.Sprintf(`href="/s/%s/%s"`, i.Repo, path.Base(i.url))
-		for _, row := range rows {
-			if !strings.Contains(row, ref) {
-				continue
-			}
-			if glyph := glyphRE.FindStringSubmatch(row); glyph != nil {
-				states[i.ID] = glyph[1]
-			}
+		ref := plan.TicketURL(i.url)
+		if e, ok := snap.Entry(ref); ok {
+			states[ref] = e.State
 		}
 	}
 	return states, nil
 }
 
-func (s *Sim) resolveConflicts(ctx context.Context, states map[string]string) error {
+func (s *Sim) resolveConflicts(ctx context.Context, states map[plan.TicketURL]plan.State) error {
 	for _, i := range s.issues {
-		if states[i.ID] != "refresh_conflicted" {
+		if states[plan.TicketURL(i.url)] != plan.RefreshConflicted {
 			continue
 		}
 		checkout := config.CheckoutPath(s.sandbox.root, i.Repo)
@@ -374,10 +360,10 @@ func (s *Sim) resolveConflicts(ctx context.Context, states map[string]string) er
 	return nil
 }
 
-func (s *Sim) launchReady(states map[string]string) error {
+func (s *Sim) launchReady(states map[plan.TicketURL]plan.State) error {
 	form := url.Values{}
 	for _, i := range s.issues {
-		if s.authorised[i.ID] || states[i.ID] != "ready" {
+		if s.authorised[i.ID] || states[plan.TicketURL(i.url)] != plan.Ready {
 			continue
 		}
 		s.authorised[i.ID] = true
