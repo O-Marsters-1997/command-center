@@ -53,7 +53,8 @@ export function bindingFor(e: KeyInfo, apple: boolean): string | null {
   if (apple ? e.ctrlKey : e.metaKey) return null;
   const mod = apple ? e.metaKey : e.ctrlKey;
   if (!mod) return name;
-  return name === "k" ? "mod+k" : null;
+  if (name === "k") return "mod+k";
+  return /^[0-9]$/.test(name) ? `g ${name}` : null;
 }
 
 function createChord(timers: Timers) {
