@@ -422,7 +422,8 @@ func TestBuildLogDetail(t *testing.T) {
 		if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
 			t.Fatalf("BuildLogDetail(commit) phases = %+v, want one phase with one item", detail.Phases)
 		}
-		if item := detail.Phases[0].Items[0]; item.Kind != "commit" || lineText(item.Line) != "line-commit commit add it ✓ 1s" {
+		item := detail.Phases[0].Items[0]
+		if item.Kind != "commit" || lineText(item.Line) != "line-commit commit add it ✓ 1s" {
 			t.Errorf("BuildLogDetail(commit) item = %+v, want a commit line carrying the message", item)
 		}
 	})
