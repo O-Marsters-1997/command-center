@@ -83,7 +83,7 @@ func SameRemote(a, b string) bool {
 }
 
 func FullName(remote string) (string, error) {
-	host, fullName, _ := strings.Cut(plan.HostPath(remote), "/")
+	host, fullName, _ := strings.Cut(hostPath(remote), "/")
 	owner, name, ok := strings.Cut(fullName, "/")
 	if !ok || host == "" || !pathSegment(owner) || !pathSegment(name) ||
 		strings.Contains(name, "/") || strings.HasSuffix(name, ".git") {
@@ -94,4 +94,19 @@ func FullName(remote string) (string, error) {
 
 func pathSegment(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.Contains(s, `\`)
+}
+
+func hostPath(url string) string {
+	url = strings.TrimSpace(url)
+	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
+
+	if scheme := strings.Index(url, "://"); scheme >= 0 {
+		url = url[scheme+3:]
+	} else if colon := strings.Index(url, ":"); colon >= 0 && !strings.Contains(url[:colon], "/") {
+		url = url[:colon] + "/" + url[colon+1:]
+	}
+	if at := strings.Index(url, "@"); at >= 0 {
+		url = url[at+1:]
+	}
+	return strings.TrimSuffix(url, "/")
 }

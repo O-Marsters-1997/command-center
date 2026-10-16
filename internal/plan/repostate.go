@@ -26,10 +26,10 @@ func NextRepoStatus(current RepoStatus, obs Observation) RepoStatus {
 }
 
 func NormaliseRemote(url string) string {
-	return strings.ToLower(HostPath(url))
+	return strings.ToLower(hostPath(url))
 }
 
-func HostPath(url string) string {
+func hostPath(url string) string {
 	url = strings.TrimSpace(url)
 	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
 
