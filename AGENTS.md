@@ -35,7 +35,7 @@ One binary, `cmd/cc`, wired together in `internal/app`.
 - `internal/web`: handlers and `html/template` pages. It derives per render through `plan` and
   caches nothing.
 - `internal/adapter`: the edges to the outside world, `command`, `gh`, `git`, `tp`, `tracker` and
-  `runner`, each with its test double beside it (`gh/ghtest`, `git/gittest` and so on).
+  `runner`, with each test double beside its adapter (`gh/ghtest`, `git/gittest` and so on).
 - `internal/config` and `internal/demo` sit beside `internal/app`, which composes the tiers.
 
 ## Frontend

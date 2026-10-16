@@ -70,7 +70,9 @@ func TestSpendCache_Spend(t *testing.T) {
 		},
 		{
 			name: "every deduplicated request of a recorded log",
-			path: func(*testing.T) string { return filepath.Join("..", "..", "agentlog", "testdata", "run27.jsonl") },
+			path: func(*testing.T) string {
+				return filepath.Join("..", "..", "plan", "agentlog", "testdata", "run27.jsonl")
+			},
 			want: 611097,
 		},
 	}
