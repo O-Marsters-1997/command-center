@@ -99,10 +99,10 @@ func TestAbort(t *testing.T) {
 		wantConflicts int
 		wantState     string
 	}{
-		{name: "abort alone", verbs: []plan.Verb{plan.VerbAbort}, wantState: "base_moved", wantConflicts: 1},
+		{name: "abort alone", verbs: []plan.Verb{plan.VerbAbort}, wantState: "Base moved", wantConflicts: 1},
 		{
 			name: "abort then refresh", verbs: []plan.Verb{plan.VerbAbort, plan.VerbRefresh},
-			wantMidMerge: true, wantConflicts: 2, wantState: "refresh_conflicted",
+			wantMidMerge: true, wantConflicts: 2, wantState: "Refresh conflicted",
 		},
 	}
 	for _, tt := range tests {

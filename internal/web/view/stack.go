@@ -11,7 +11,7 @@ type StackLink struct {
 	Ref   string
 	Title string
 	Glyph plan.GlyphWord
-	State string
+	Label string
 	Path  string
 }
 
@@ -36,7 +36,7 @@ func buildStack(board Board, row Row) Stack {
 		known := byURL[ticketURL]
 		return StackLink{
 			Ref: ticketRef(ticketURL), Title: known.Title, Path: SessionPath(ticketURL),
-			Glyph: known.Glyph, State: known.State,
+			Glyph: known.Glyph, Label: known.Label,
 		}
 	}
 	var s Stack

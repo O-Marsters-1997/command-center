@@ -12,6 +12,8 @@ export interface Row {
   ref: string;
   title: string;
   state: State;
+  label: string;
+  detail: string;
   glyph: Glyph;
   alive: boolean;
   blocking: string[] | null;

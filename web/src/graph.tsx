@@ -44,7 +44,7 @@ function nodeFoot(node: GraphNode): string {
     case "running":
     case "pending":
     case "checking":
-      return node.reason || (node.pr_number ? `PR #${node.pr_number}` : node.state);
+      return node.reason || (node.pr_number ? `PR #${node.pr_number}` : node.label);
     default:
       return assertNever(node.glyph);
   }
@@ -171,7 +171,7 @@ defineIsland("cc-graph", { src: "" }, (props, element) => {
         onKeyDown={(e) => onNodeKeyDown(e, node)}
       >
         <span class="flex items-center gap-[7px]">
-          <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.state}</span>
+          <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.label}</span>
           <span class="text-xs text-meta">{node.ref}</span>
           <span class="ml-auto text-2xs text-muted">{nodeTag(node)}</span>
         </span>

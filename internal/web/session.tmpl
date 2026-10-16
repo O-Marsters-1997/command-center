@@ -6,7 +6,7 @@
 <article class="session" data-session="{{.Row.URL}}">
 <div class="session-main">
   <header class="session-head">
-    <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.State}}</span></span>
+    <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.Label}}</span></span>
     <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
     <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" {{template "nav" (printf "/f/%s/graph" (. | pathEscape))}}>{{.}}</a>{{end}}</p>
     {{- with .Row.Worktree}}
@@ -144,4 +144,4 @@
   </form>
   {{- end}}
 </div>{{end}}
-{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .State}} <span class="text-muted">{{.}}</span>{{end}}{{end}}
+{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .Label}} <span class="text-muted">{{.}}</span>{{end}}{{end}}

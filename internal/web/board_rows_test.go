@@ -88,8 +88,8 @@ func testBoardRows(t *testing.T) {
 		}
 
 		page := trackedPage(t, store)
-		if got := webtest.RowFor(t, page, "sandbox://PARENT").State; got != "ci_failed" {
-			t.Fatalf("GET /tickets PARENT state = %q, want ci_failed", got)
+		if got := webtest.RowFor(t, page, "sandbox://PARENT").State; got != "Checks failing" {
+			t.Fatalf("GET /tickets PARENT state = %q, want Checks failing", got)
 		}
 		webtest.RowFor(t, page, "sandbox://CHILD").Row.One(t, `[title="base verdict: ci_failed"]`)
 	})
@@ -113,8 +113,8 @@ func testBoardRows(t *testing.T) {
 		})
 
 		row := webtest.RowFor(t, trackedPage(t, store), ticket.URL)
-		if row.State != "ci_failed" {
-			t.Fatalf("GET /tickets CI state = %q, want ci_failed", row.State)
+		if row.State != "Checks failing" {
+			t.Fatalf("GET /tickets CI state = %q, want Checks failing", row.State)
 		}
 		var got []map[string]string
 		for _, link := range row.Ticket.Find("a[href]") {
@@ -155,8 +155,8 @@ func testBoardRows(t *testing.T) {
 		})
 
 		row := webtest.RowFor(t, trackedPage(t, store), ticket.URL)
-		if row.State != "waiting_on_producer_deploy" {
-			t.Fatalf("GET /tickets CC-1 state = %q, want waiting_on_producer_deploy", row.State)
+		if row.State != "Waiting on deploy" {
+			t.Fatalf("GET /tickets CC-1 state = %q, want Waiting on deploy", row.State)
 		}
 		row.Row.One(t, `button[name="verb"][value="re-run"]`)
 	})
@@ -168,8 +168,8 @@ func testBoardRows(t *testing.T) {
 			checks    verdict.Predicate
 			wantState string
 		}{
-			{name: "a required check that passed", checks: verdict.Predicate{Success: "CI"}, wantState: "review_me"},
-			{name: "a required check never reported", checks: verdict.Predicate{Success: "Lint"}, wantState: "checking"},
+			{name: "a required check that passed", checks: verdict.Predicate{Success: "CI"}, wantState: "Ready for review"},
+			{name: "a required check never reported", checks: verdict.Predicate{Success: "Lint"}, wantState: "Waiting on checks"},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -197,8 +197,8 @@ func testBoardRows(t *testing.T) {
 		now := testNow.Add(90 * time.Second)
 
 		row := webtest.RowFor(t, renderPage(t, newServer(runningRowStore(t, ticket, testNow, now), now)), ticket.URL)
-		if row.State != "running" || row.Elapsed.Text() != "1m30s" {
-			t.Errorf("GET /tickets CC-1 = %q elapsed %q, want running elapsed 1m30s", row.State, row.Elapsed.Text())
+		if row.State != "Agent running" || row.Elapsed.Text() != "1m30s" {
+			t.Errorf("GET /tickets CC-1 = %q elapsed %q, want Agent running elapsed 1m30s", row.State, row.Elapsed.Text())
 		}
 		row.Row.One(t, `button[name="verb"][value="kill"]`)
 	})
@@ -220,15 +220,15 @@ func testBoardRows(t *testing.T) {
 		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: ticket.URL, Verb: "kill", At: now}); err != nil {
 			t.Fatalf("QueueVerbIntent(kill): %v", err)
 		}
-		if got := state(); got != "running · kill queued" {
-			t.Errorf("GET /tickets after queuing kill = %q, want running · kill queued", got)
+		if got := state(); got != "Agent running · kill queued" {
+			t.Errorf("GET /tickets after queuing kill = %q, want Agent running · kill queued", got)
 		}
 		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
 			Ticket: ticket.URL, Verb: "follow-up", At: now.Add(time.Second),
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 		}
-		if got := state(); got != "running · kill queued · follow-up queued" {
+		if got := state(); got != "Agent running · kill queued · follow-up queued" {
 			t.Errorf("GET /tickets after queuing follow-up = %q, want both queued", got)
 		}
 		pending, err := store.PendingVerbIntents(ctx, "kill")
@@ -238,8 +238,8 @@ func testBoardRows(t *testing.T) {
 		if err := store.ConsumeVerbIntent(ctx, pending[0].ID, now.Add(2*time.Second)); err != nil {
 			t.Fatalf("ConsumeVerbIntent(%d): %v", pending[0].ID, err)
 		}
-		if got := state(); got != "running · follow-up queued" {
-			t.Errorf("GET /tickets after consuming kill = %q, want running · follow-up queued", got)
+		if got := state(); got != "Agent running · follow-up queued" {
+			t.Errorf("GET /tickets after consuming kill = %q, want Agent running · follow-up queued", got)
 		}
 	})
 
@@ -253,14 +253,14 @@ func testBoardRows(t *testing.T) {
 		}
 		server := newServer(store, testNow)
 
-		if got := webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1").State; got != "ready · launch queued" {
-			t.Errorf("GET /tickets before the tick CC-1 = %q, want ready · launch queued", got)
+		if got := webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1").State; got != "Ready to launch · launch queued" {
+			t.Errorf("GET /tickets before the tick CC-1 = %q, want Ready to launch · launch queued", got)
 		}
 		if err := store.ApplyLaunchIntents(t.Context(), testNow.Add(15*time.Second)); err != nil {
 			t.Fatalf("ApplyLaunchIntents: %v", err)
 		}
-		if got := webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1").State; got != "queued" {
-			t.Errorf("GET /tickets after the tick CC-1 = %q, want queued", got)
+		if got := webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1").State; got != "Queued" {
+			t.Errorf("GET /tickets after the tick CC-1 = %q, want Queued", got)
 		}
 	})
 }

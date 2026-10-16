@@ -31,7 +31,7 @@ func TestTicketsPage(t *testing.T) {
 		for _, ticketURL := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
 			got[ticketURL] = webtest.RowFor(t, page, ticketURL).State
 		}
-		want := map[string]string{"sandbox://ROOT": "ready", "sandbox://CHILD": "blocked", "sandbox://LONE": "ready"}
+		want := map[string]string{"sandbox://ROOT": "Ready to launch", "sandbox://CHILD": "Blocked", "sandbox://LONE": "Ready to launch"}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("GET /tickets row states mismatch (-want +got):\n%s", diff)
 		}

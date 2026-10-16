@@ -108,10 +108,10 @@
     <a class="sidebar-brand" href="/" data-key="g h" {{template "nav" "/"}}><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</b></a>
     {{with .Chrome.Launch}}<a class="btn btn-ghost btn-sm btn-icon" href="{{.Path}}" data-key="{{.Key}}" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>{{end}}
   </div>
-  <nav class="sidebar-nav" id="sidebar-nav">
-    {{range .Nav}}{{template "navItem" .}}
-    {{end}}
-  </nav>
+  <form class="rail-search-wrap" role="search">
+    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
+    {{template "icon" "search"}}<kbd aria-hidden="true">⌘K</kbd>
+  </form>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
     <nav class="flex flex-col gap-0.5" aria-label="scope">
@@ -120,10 +120,10 @@
       {{end}}
     </nav>
   </details>
-  <form class="rail-search-wrap" role="search">
-    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
-    {{template "icon" "search"}}<kbd aria-hidden="true">⌘K</kbd>
-  </form>
+  <nav class="sidebar-nav" id="sidebar-nav">
+    {{range .Nav}}{{template "navItem" .}}
+    {{end}}
+  </nav>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <div class="sidebar-foot">
     <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" data-show-modal="key-sheet">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>

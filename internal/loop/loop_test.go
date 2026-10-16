@@ -489,8 +489,8 @@ func TestLoop_RunOnce(t *testing.T) {
 			t.Errorf("spawns = %d, want only the implement run", got)
 		}
 		row := webtest.RowFor(t, renderPage(t, openServer(store, fixedClock(at), "")), issue.URL)
-		if row.State != "review_me" {
-			t.Errorf("row state = %q, want review_me", row.State)
+		if row.State != "Ready for review" {
+			t.Errorf("row state = %q, want Ready for review", row.State)
 		}
 	})
 }

@@ -401,10 +401,14 @@ ticket filters. No underline tabs.
 
 ### Session rail
 
-- **Card** (Needs you only): a 10px panel holding the glyph and title, then repo · feature in
-  `muted`, then two clamped lines of the last activity, then one inline `btn-sm` verb (Reply for
-  an agent's question). The selected card takes an `accent-line` border and an `accent-soft`
-  halo.
+- **Order:** head, search with `⌘K`, project scope row, nav with counts, then Needs you, In
+  flight and a collapsed Settled, with the 5h/Week meters and Shortcuts in the footer.
+- **Card** (Needs you only): a 10px panel holding the glyph and title, then avatar · feature ·
+  mono ref in `muted`, then "Label. Detail" clamped to two lines with the label in medium weight
+  (tinted `accent` or `s-failed` by glyph), then one inline `btn-sm` verb (Reply for an agent's
+  question). The label is the state's sentence-case word and the detail is the reason with ticket
+  URLs shortened to refs; the raw state name and log paths never render. The selected card takes
+  an `accent-line` border and an `accent-soft` halo.
 - **Feature group:** a 28px head with a chevron, the scope avatar, the name, and merged/total in
   `meta`. Its 30px rows carry the glyph, the title and a mono metric (timer or ref).
 - **Settled:** collapsed behind its head, and it reopens on new activity.

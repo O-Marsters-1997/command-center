@@ -1128,6 +1128,18 @@
     white-space: normal;
   }
 
+  .rail-reason b {
+    font-weight: var(--font-weight-medium);
+  }
+
+  .rail-card[data-glyph="failed"] .rail-reason b {
+    color: color-mix(in oklab, var(--color-s-failed), var(--color-ink) 12%);
+  }
+
+  .rail-card[data-glyph="attention"] .rail-reason b {
+    color: var(--color-accent);
+  }
+
   .rail-verb {
     margin: var(--space-1) var(--space-2) 0;
   }

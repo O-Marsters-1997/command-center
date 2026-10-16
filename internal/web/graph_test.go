@@ -15,7 +15,7 @@ import (
 
 type jsonRow struct {
 	URL      string   `json:"url"`
-	State    string   `json:"state"`
+	Label    string   `json:"label"`
 	Glyph    string   `json:"glyph"`
 	Blocking []string `json:"blocking"`
 }
@@ -74,16 +74,16 @@ func TestGraphJSON(t *testing.T) {
 			t.Fatalf("group.Root = %+v, want sandbox://CC-1", group.Root)
 		}
 		rootRow := webtest.RowFor(t, board, "sandbox://CC-1")
-		if got := rootRow.Row.One(t, ".glyph").Text(); got != group.Root.State {
-			t.Errorf("graph root state = %q, want board %q:\n%s", group.Root.State, got, rootRow.Row.HTML())
+		if got := rootRow.Row.One(t, ".glyph").Text(); got != group.Root.Label {
+			t.Errorf("graph root label = %q, want board %q:\n%s", group.Root.Label, got, rootRow.Row.HTML())
 		}
 		if len(group.Children) != 1 || group.Children[0].URL != "sandbox://CC-2" {
 			t.Fatalf("group.Children = %+v, want one row for sandbox://CC-2", group.Children)
 		}
 		child := group.Children[0]
 		childRow := webtest.RowFor(t, board, "sandbox://CC-2")
-		if got := childRow.Row.One(t, ".glyph").Text(); got != child.State {
-			t.Errorf("graph child state = %q, want board %q:\n%s", child.State, got, childRow.Row.HTML())
+		if got := childRow.Row.One(t, ".glyph").Text(); got != child.Label {
+			t.Errorf("graph child label = %q, want board %q:\n%s", child.Label, got, childRow.Row.HTML())
 		}
 		if len(child.Blocking) != 1 || child.Blocking[0] != "sandbox://CC-1" {
 			t.Errorf("child.Blocking = %v, want [sandbox://CC-1]", child.Blocking)
@@ -120,7 +120,7 @@ func TestGraphJSON(t *testing.T) {
 			t.Fatalf("graph rows = %d, want 4", len(rows))
 		}
 		wantKeys := []string{
-			"after", "alive", "blocking", "elapsed", "glyph", "pr_number", "reason", "ref",
+			"after", "alive", "blocking", "detail", "elapsed", "glyph", "label", "pr_number", "reason", "ref",
 			"session_path", "state", "title", "url",
 		}
 		for _, row := range rows {

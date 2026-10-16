@@ -125,8 +125,8 @@ func TestBuildRail(t *testing.T) {
 		rail := view.BuildRail([]view.Row{acme, loose, second, other}, testNow, view.RailParams{})
 
 		card := rail.NeedsYou[0]
-		if got, want := card.Context, "acme · Billing #1"; got != want {
-			t.Errorf("BuildRail() card.Context = %q, want %q", got, want)
+		if got, want := card.Feature+" "+card.Ref, "Billing #1"; got != want {
+			t.Errorf("BuildRail() card feature and ref = %q, want %q", got, want)
 		}
 		if got, want := card.Project, (view.ProjectMark{Name: "acme", Hue: 1}); got != want {
 			t.Errorf("BuildRail() card.Project = %v, want %v", got, want)
@@ -144,8 +144,8 @@ func TestBuildRail(t *testing.T) {
 
 		card := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).NeedsYou[0]
 
-		if card.Context != "olly/job-scraper #5" || card.Project != (view.ProjectMark{}) {
-			t.Errorf("BuildRail(loose) card = {%q %v}, want {olly/job-scraper #5 no mark}", card.Context, card.Project)
+		if card.Feature != "olly/job-scraper" || card.Ref != "#5" || card.Project != (view.ProjectMark{}) {
+			t.Errorf("BuildRail(loose) card = {%q %q %v}, want {olly/job-scraper #5 no mark}", card.Feature, card.Ref, card.Project)
 		}
 	})
 
@@ -165,14 +165,14 @@ func TestBuildRail(t *testing.T) {
 				t.Parallel()
 				row := railRow("3", "billing", plan.GlyphAttention)
 				row.State = plan.AwaitingInput.String()
-				row.Reason = "Which database?"
+				row.Detail = "Which database?"
 				row.Verbs = tt.verbs
 
 				card := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).NeedsYou[0]
 
-				if card.Reply != tt.wantReply || card.Verb != tt.wantVerb || card.Reason != row.Reason {
-					t.Errorf("BuildRail(%v) card = {Reply: %v, Verb: %q, Reason: %q}, want {%v %q %q}",
-						tt.verbs, card.Reply, card.Verb, card.Reason, tt.wantReply, tt.wantVerb, row.Reason)
+				if card.Reply != tt.wantReply || card.Verb != tt.wantVerb || card.Detail != row.Detail {
+					t.Errorf("BuildRail(%v) card = {Reply: %v, Verb: %q, Detail: %q}, want {%v %q %q}",
+						tt.verbs, card.Reply, card.Verb, card.Detail, tt.wantReply, tt.wantVerb, row.Detail)
 				}
 			})
 		}
