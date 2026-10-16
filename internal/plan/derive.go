@@ -122,6 +122,7 @@ type Snapshot struct {
 	verdicts    map[TicketURL]string
 	repos       []RepoStatus
 	obs         Observation
+	refreshes   map[TicketURL]RefreshFact
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -193,6 +194,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		intents:     in.Intents,
 		repos:       in.Repos,
 		obs:         in.Obs,
+		refreshes:   in.Refreshes,
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
