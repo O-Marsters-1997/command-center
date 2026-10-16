@@ -120,12 +120,12 @@ table test.
      — this is what detects MERGED and CLOSED. Tracked branches are the app's own task
      branches, so the fan-out is bounded by the working set (~10), not the team's PR volume.
 
-   `internal/gh` normalises the result before anything else sees it: the rollup is a
+   `internal/adapter/gh` normalises the result before anything else sees it: the rollup is a
    **multiset of a union type** (live data shows one check name appearing five times at one
    head SHA with mixed CANCELLED/SUCCESS, and `StatusContext` entries with no `name`), so it
    is reduced to **latest completed run per name** (by `startedAt`), with `CheckRun` and
    `StatusContext` collapsed into one `CheckState`. That reduction is the package's first
-   table test. Nothing outside `internal/gh` touches gh's JSON shape.
+   table test. Nothing outside `internal/adapter/gh` touches gh's JSON shape.
 3. **Liveness** per `running` task: `ps -o stat=,etime= -p <pgid>` plus a process-start-time
    identity check; see invariant 6 (§9) for why not `kill(-pgid, 0)`. Alive → running,
    whatever the log says. No timing rule. Read-only here; the consequences are decided in the
@@ -496,7 +496,7 @@ The run logs are **not** under the workspace directory because the worktrees are
 siblings: from any worktree, `../.claude/` is a same-uid writable path to every composed
 prompt and every other agent's tree.
 
-`internal/plan` and `internal/verdict` import no `os/exec`, no `database/sql`, no
+`internal/plan` and `internal/plan/verdict` import no `os/exec`, no `database/sql`, no
 `net/http` — guarded the way treepad guards `batch/`: an `api_test.go` that fails the build
 on a forbidden import. In Go a package is the unit of dependency; a pure *file* in an impure
 package stays pure only by convention.

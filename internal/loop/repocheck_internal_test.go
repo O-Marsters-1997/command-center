@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gittest"
 )
 
 func TestReadRepoSettings(t *testing.T) {

@@ -5,10 +5,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker/trackertest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
 
 func TestImportFeatures(t *testing.T) {

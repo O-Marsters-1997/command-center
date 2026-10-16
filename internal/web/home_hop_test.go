@@ -3,9 +3,9 @@ package web_test
 import (
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 func TestHomePage(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -430,7 +430,7 @@ func TestBuildLogDetail(t *testing.T) {
 
 	t.Run("edit and write counts", func(t *testing.T) {
 		t.Parallel()
-		body, err := os.ReadFile(filepath.Join("..", "..", "agentlog", "testdata", "edits.jsonl"))
+		body, err := os.ReadFile(filepath.Join("..", "..", "plan", "agentlog", "testdata", "edits.jsonl"))
 		if err != nil {
 			t.Fatalf("os.ReadFile(edits.jsonl): %v", err)
 		}

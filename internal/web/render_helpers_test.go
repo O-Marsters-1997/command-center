@@ -5,8 +5,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 func renderPage(t *testing.T, server *web.Server) string {

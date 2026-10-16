@@ -3,8 +3,8 @@ package store
 import (
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 // Ticket is a tracked issue; tracker fields refresh on import while branch and blockers are seeded once.

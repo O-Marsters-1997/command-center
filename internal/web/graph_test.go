@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
