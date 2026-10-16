@@ -1,6 +1,7 @@
 package view
 
 import (
+	"slices"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
@@ -22,9 +23,8 @@ type Chrome struct {
 	PageTitle      string
 	Home           bool
 	Keymap         []KeyGroup
+	Crumbs         []Crumb
 	RepoScope      string
-	RepoCrumb      string
-	RepoCrumbPath  string
 	FeatureScope   string
 	ProjectScope   string
 	ProjectHue     int
@@ -42,6 +42,25 @@ const (
 
 	appTitle = "Command Centre"
 )
+
+type Crumb struct {
+	Label   string
+	Path    string
+	Project option.Option[ProjectMark]
+	Mono    bool
+}
+
+func projectCrumb(m ProjectMark) Crumb {
+	return Crumb{Label: m.Name, Path: withQuery(ticketsPath, Params{Project: m.Name}.Query()), Project: option.Some(m)}
+}
+
+func featureCrumbs(rows []Row, feature string) []Crumb {
+	var crumbs []Crumb
+	if i := slices.IndexFunc(rows, func(r Row) bool { return r.Project != "" }); i >= 0 {
+		crumbs = append(crumbs, projectCrumb(rows[i].Mark()))
+	}
+	return append(crumbs, Crumb{Label: feature})
+}
 
 type NavItem struct {
 	Label   string

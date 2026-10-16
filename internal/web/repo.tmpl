@@ -31,7 +31,7 @@
         </form>
         {{if .Imported}}
         <form method="post" action="/features/{{.Feature | pathEscape}}/import">
-          <input type="hidden" name="return" value="{{$.RepoCrumbPath}}">
+          <input type="hidden" name="return" value="{{$.Path}}">
           <button type="submit" class="btn btn-sm">Reimport</button>
         </form>
         {{end}}
