@@ -1119,6 +1119,7 @@
     white-space: nowrap;
   }
 
+  .rail-age,
   .rail-timer {
     flex: none;
     order: 3;

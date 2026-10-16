@@ -220,6 +220,7 @@ type logLine struct {
 	} `json:"message"`
 	ToolUseResult json.RawMessage `json:"tool_use_result"`
 	Subtype       string          `json:"subtype"`
+	ResultText    string          `json:"result"`
 	DurationMS    int64           `json:"duration_ms"`
 	NumTurns      int             `json:"num_turns"`
 	CostUSD       *float64        `json:"total_cost_usd"`

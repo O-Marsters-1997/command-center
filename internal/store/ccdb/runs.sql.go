@@ -398,16 +398,17 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 
 const recordDisposition = `-- name: RecordDisposition :execrows
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
-    cost_usd = $4
-WHERE id = $5 AND outcome IS NULL
+    cost_usd = $4, last_message = $5
+WHERE id = $6 AND outcome IS NULL
 `
 
 type RecordDispositionParams struct {
-	Outcome  sql.NullString
-	ExitCode sql.NullInt64
-	EndedAt  sql.NullTime
-	CostUsd  sql.NullFloat64
-	ID       int64
+	Outcome     sql.NullString
+	ExitCode    sql.NullInt64
+	EndedAt     sql.NullTime
+	CostUsd     sql.NullFloat64
+	LastMessage sql.NullString
+	ID          int64
 }
 
 func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionParams) (int64, error) {
@@ -416,6 +417,7 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.ExitCode,
 		arg.EndedAt,
 		arg.CostUsd,
+		arg.LastMessage,
 		arg.ID,
 	)
 	if err != nil {
@@ -503,6 +505,46 @@ func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID sql.NullString) 
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ticketActivities = `-- name: TicketActivities :many
+SELECT e.ticket_id::text AS ticket_url, MAX(e.at)::timestamptz AS at,
+  COALESCE((
+    SELECT r.last_message FROM runs r
+    WHERE r.ticket_id = e.ticket_id AND r.last_message IS NOT NULL ORDER BY r.id DESC LIMIT 1
+  ), '')::text AS last_message
+FROM events e
+WHERE e.ticket_id IS NOT NULL
+GROUP BY e.ticket_id
+`
+
+type TicketActivitiesRow struct {
+	TicketUrl   string
+	At          time.Time
+	LastMessage string
+}
+
+func (q *Queries) TicketActivities(ctx context.Context) ([]TicketActivitiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, ticketActivities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TicketActivitiesRow
+	for rows.Next() {
+		var i TicketActivitiesRow
+		if err := rows.Scan(&i.TicketUrl, &i.At, &i.LastMessage); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -8,11 +8,12 @@ import (
 )
 
 type Disposition struct {
-	RunID    plan.RunID
-	Outcome  plan.Outcome
-	ExitCode option.Option[int]
-	Cost     option.Option[float64]
-	EndedAt  time.Time
+	RunID       plan.RunID
+	Outcome     plan.Outcome
+	ExitCode    option.Option[int]
+	Cost        option.Option[float64]
+	LastMessage option.Option[string]
+	EndedAt     time.Time
 }
 
 type Push struct {

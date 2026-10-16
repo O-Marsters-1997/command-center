@@ -89,6 +89,7 @@ type Run struct {
 	SessionID     sql.NullString
 	Message       sql.NullString
 	Question      sql.NullString
+	LastMessage   sql.NullString
 }
 
 type Ticket struct {
