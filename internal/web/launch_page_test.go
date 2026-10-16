@@ -18,7 +18,7 @@ func TestFeatureLaunchPage(t *testing.T) {
 		t.Parallel()
 		root := htmltest.Parse(t, renderPath(t, threeFeatureServer(t), "/f/board-scope/launch"))
 
-		root.One(t, `table#board tbody[data-section="ready"]`)
+		root.One(t, `div#board section[data-section="ready"]`)
 		root.One(t, `dialog#launch-modal-body`).One(t, `cc-launch-modal[feature="board-scope"]`)
 	})
 
@@ -26,7 +26,7 @@ func TestFeatureLaunchPage(t *testing.T) {
 		t.Parallel()
 		root := htmltest.Parse(t, renderPath(t, threeFeatureServer(t), "/f/board-scope"))
 
-		root.One(t, `table#board`)
+		root.One(t, `div#board`)
 		if dialogs := root.Find(`dialog#launch-modal-body`); len(dialogs) != 0 {
 			t.Errorf("GET /f/board-scope rendered the launch dialog: %s", dialogs[0].HTML())
 		}

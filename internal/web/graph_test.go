@@ -120,8 +120,8 @@ func TestGraphJSON(t *testing.T) {
 			t.Fatalf("graph rows = %d, want 4", len(rows))
 		}
 		wantKeys := []string{
-			"after", "alive", "blocking", "detail", "elapsed", "glyph", "label", "pr_number", "reason", "ref",
-			"session_path", "state", "title", "url",
+			"after", "alive", "blocking", "checks_passed", "checks_total", "detail", "elapsed", "glyph", "label",
+			"pr_number", "reason", "ref", "session_path", "state", "title", "url",
 		}
 		for _, row := range rows {
 			keys := make([]string, 0, len(row))

@@ -21,6 +21,8 @@ export interface Row {
   reason: string;
   elapsed: string;
   pr_number: number;
+  checks_passed: number;
+  checks_total: number;
   session_path: string;
 }
 

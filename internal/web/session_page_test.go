@@ -405,7 +405,7 @@ func TestSessionPage(t *testing.T) {
 		root.One(t, `a[data-key="o"][target="_blank"]`)
 	})
 
-	t.Run("board, feature and session keep the same verb controls", func(t *testing.T) {
+	t.Run("board and session keep the same verb controls", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 		if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
@@ -417,7 +417,6 @@ func TestSessionPage(t *testing.T) {
 		confirms := map[string]string{}
 		for _, tc := range []struct{ path, verbPath string }{
 			{path: "/tickets", verbPath: "/verb?all=1"},
-			{path: "/f/checkout", verbPath: "/verb?feature=checkout"},
 		} {
 			board := htmltest.Parse(t, renderPath(t, srv, tc.path)).One(t, "table#board")
 			board.One(t, `[data-section="in-progress"]`)

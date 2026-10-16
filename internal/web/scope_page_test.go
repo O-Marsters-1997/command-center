@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/url"
-	"slices"
 	"strings"
 	"testing"
 
@@ -51,12 +50,14 @@ func boardRefs(t *testing.T, server *web.Server, path string) []string {
 	return ticketRefs(webtest.BoardRows(t, renderPath(t, server, path)))
 }
 
-func spanTexts(n htmltest.Node) []string {
-	var texts []string
-	for _, span := range n.Find("span") {
-		texts = append(texts, span.Text())
+func featureRefs(t *testing.T, server *web.Server, path string) []string {
+	t.Helper()
+	var refs []string
+	for _, row := range htmltest.Parse(t, renderPath(t, server, path)).One(t, "div#board").Find("a[data-ref]") {
+		ref, _ := row.Attr("data-ref")
+		refs = append(refs, ref)
 	}
-	return texts
+	return refs
 }
 
 func testBoardScope(t *testing.T) {
@@ -65,53 +66,24 @@ func testBoardScope(t *testing.T) {
 	for _, tt := range []struct {
 		name, groupPath, otherPath string
 		server                     func(*testing.T) *web.Server
+		refs                       func(*testing.T, *web.Server, string) []string
 	}{
-		{"repo", "/board?repo=repo", "/board?repo=other", threeRepoServer},
-		{"feature", "/f/board-scope", "/f/sqlc-migration", threeFeatureServer},
+		{"repo", "/board?repo=repo", "/board?repo=other", threeRepoServer, boardRefs},
+		{"feature", "/f/board-scope", "/f/sqlc-migration", threeFeatureServer, featureRefs},
 	} {
 		t.Run(tt.name+" admits a group whole and drops an unrelated one", func(t *testing.T) {
 			t.Parallel()
 			server := tt.server(t)
 
 			want := []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")}
-			if diff := cmp.Diff(want, boardRefs(t, server, tt.groupPath)); diff != "" {
+			if diff := cmp.Diff(want, tt.refs(t, server, tt.groupPath)); diff != "" {
 				t.Errorf("GET %s refs mismatch (-want +got):\n%s", tt.groupPath, diff)
 			}
-			if diff := cmp.Diff([]string{ticketRef("sandbox://LONE")}, boardRefs(t, server, tt.otherPath)); diff != "" {
+			if diff := cmp.Diff([]string{ticketRef("sandbox://LONE")}, tt.refs(t, server, tt.otherPath)); diff != "" {
 				t.Errorf("GET %s refs mismatch (-want +got):\n%s", tt.otherPath, diff)
 			}
 		})
 	}
-
-	t.Run("an out-of-scope group member names its own repo or feature", func(t *testing.T) {
-		t.Parallel()
-		for _, tt := range []struct {
-			name, path, foreign, own string
-			child                    storepkg.Ticket
-			root                     storepkg.Ticket
-		}{
-			{
-				name: "feature", path: "/f/board-scope", foreign: "sqlc-migration", own: "board-scope",
-				root: storepkg.Ticket{URL: "sandbox://ROOT", Feature: "board-scope", Branch: "root"},
-				child: storepkg.Ticket{
-					URL: "sandbox://CHILD", Feature: "sqlc-migration", Branch: "child", BlockedBy: []string{"sandbox://ROOT"},
-				},
-			},
-		} {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-				store := observedTickets(t, tt.root, tt.child)
-				page := renderPath(t, openServer(track(t, store, named("repo", "services")...), fixedClock(testNow), ""), tt.path)
-
-				if got := spanTexts(webtest.RowFor(t, page, tt.child.URL).Row); !slices.Contains(got, tt.foreign) {
-					t.Errorf("GET %s CHILD spans = %q, want it to name %s", tt.path, got, tt.foreign)
-				}
-				if got := spanTexts(webtest.RowFor(t, page, tt.root.URL).Row); slices.Contains(got, tt.own) {
-					t.Errorf("GET %s ROOT spans = %q, want the in-scope %s left unnamed", tt.path, got, tt.own)
-				}
-			})
-		}
-	})
 
 	t.Run("a repo scope accepts an owner/name with its slash", func(t *testing.T) {
 		t.Parallel()
@@ -147,7 +119,7 @@ func testBoardScope(t *testing.T) {
 		)
 		server := openServer(track(t, store, named("repo", "other")...), fixedClock(testNow), "")
 
-		refs := boardRefs(t, server, "/board?feature=board-scope&repo=repo")
+		refs := featureRefs(t, server, "/board?feature=board-scope&repo=repo")
 		if diff := cmp.Diff([]string{ticketRef("sandbox://MATCH")}, refs); diff != "" {
 			t.Errorf("GET /board?feature=board-scope&repo=repo refs mismatch (-want +got):\n%s", diff)
 		}

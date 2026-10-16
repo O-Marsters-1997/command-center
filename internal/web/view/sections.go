@@ -2,6 +2,13 @@ package view
 
 import "github.com/O-Marsters-1997/command-center/internal/plan"
 
+type RowContext string
+
+const (
+	ContextFeature RowContext = "feature"
+	ContextRepo    RowContext = "repo"
+)
+
 type Section struct {
 	Key   SectionKey
 	Glyph plan.GlyphWord
