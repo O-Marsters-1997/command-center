@@ -421,7 +421,9 @@ func TestKill(t *testing.T) {
 	t.Parallel()
 	f := newRunFixture(t)
 	f.spawn(t, 4242, f.baseline, "/state/runs/1.jsonl")
-	if err := f.store.QueueVerbIntent(t.Context(), f.ticket.URL, "kill", testAt.Add(time.Second)); err != nil {
+	if err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.ticket.URL, Verb: "kill", At: testAt.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(kill): %v", err)
 	}
 	fake := &runnertest.Runner{}

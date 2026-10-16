@@ -195,7 +195,9 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 	t.Parallel()
 	queueKill := func(t *testing.T, store *storepkg.Store) storepkg.VerbIntent {
 		t.Helper()
-		if err := store.QueueVerbIntent(t.Context(), "sandbox://CC-1", plan.VerbKill, testNow); err != nil {
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: "sandbox://CC-1", Verb: plan.VerbKill, At: testNow,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
 		}
 		pending, err := store.PendingVerbIntents(t.Context(), plan.VerbKill)
@@ -238,22 +240,44 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 	})
 }
 
-func TestStore_QueueVerbIntentWithPayload(t *testing.T) {
+func TestStore_QueueVerbIntent(t *testing.T) {
 	t.Parallel()
-	store := openStore(t)
-	prompt := "line one\nline \"two\""
-	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: "https://x/1", Verb: plan.VerbFollowUp, Payload: prompt, At: testNow,
-	}); err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload: %v", err)
-	}
-	got, err := store.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
-	if err != nil {
-		t.Fatalf("PendingVerbIntents(follow_up): %v", err)
-	}
-	if len(got) != 1 || got[0].Payload != prompt {
-		t.Errorf("PendingVerbIntents(follow_up) = %+v, want one with payload %q", got, prompt)
-	}
+	t.Run("a payload round-trips", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		prompt := "line one\nline \"two\""
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: "https://x/1", Verb: plan.VerbFollowUp, Payload: prompt, At: testNow,
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent: %v", err)
+		}
+		got, err := store.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(follow_up): %v", err)
+		}
+		if len(got) != 1 || got[0].Payload != prompt {
+			t.Errorf("PendingVerbIntents(follow_up) = %+v, want one with payload %q", got, prompt)
+		}
+	})
+
+	t.Run("an empty payload is stored as NULL", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.DSN(t)
+		store := openStoreAt(t, dsn)
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: "https://x/1", Verb: plan.VerbKill, At: testNow,
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent: %v", err)
+		}
+		var isNull bool
+		row := openRawDB(t, dsn).QueryRow(`SELECT payload IS NULL FROM intents WHERE ticket_id = $1`, "https://x/1")
+		if err := row.Scan(&isNull); err != nil {
+			t.Fatalf("read intent payload: %v", err)
+		}
+		if !isNull {
+			t.Error("intents.payload is not NULL for an intent queued without a payload")
+		}
+	})
 }
 
 func TestStore_ActiveLaunchHashes(t *testing.T) {
@@ -291,7 +315,9 @@ func TestStore_PendingIntentsByTicket(t *testing.T) {
 		{"sandbox://CC-1", plan.VerbFollowUp},
 		{"sandbox://CC-2", plan.VerbReRun},
 	} {
-		if err := store.QueueVerbIntent(ctx, q.ticket, q.verb, testNow.Add(time.Duration(i)*time.Second)); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+			Ticket: q.ticket, Verb: q.verb, At: testNow.Add(time.Duration(i) * time.Second),
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(%s, %s): %v", q.ticket, q.verb, err)
 		}
 	}

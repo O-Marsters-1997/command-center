@@ -1,5 +1,7 @@
 package view
 
+import "github.com/O-Marsters-1997/command-center/internal/plan"
+
 type KeyRow struct {
 	Keys string
 	Does string
@@ -23,8 +25,8 @@ var Keymap = []KeyGroup{
 	}},
 	{"In a session", []KeyRow{
 		{"F", "Open the feature graph"},
-		{"E", "Settle a merged session (removes its worktree)"},
-		{"R", "Re-run"},
+		verbKeyRow(plan.VerbRemoveWorktree, "Settle a merged session (removes its worktree)"),
+		verbKeyRow(plan.VerbReRun, "Re-run"),
 		{"O", "Open the PR"},
 		{"Enter", "Focus the composer"},
 	}},

@@ -375,34 +375,19 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 }
 
 const queueVerbIntent = `-- name: QueueVerbIntent :exec
-INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3)
+INSERT INTO intents (at, ticket_id, verb, payload)
+VALUES ($1, $2, $3, $4)
 `
 
 type QueueVerbIntentParams struct {
 	At       time.Time
 	TicketID string
 	Verb     string
-}
-
-func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) error {
-	_, err := q.db.ExecContext(ctx, queueVerbIntent, arg.At, arg.TicketID, arg.Verb)
-	return err
-}
-
-const queueVerbIntentWithPayload = `-- name: QueueVerbIntentWithPayload :exec
-INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES ($1, $2, $3, $4)
-`
-
-type QueueVerbIntentWithPayloadParams struct {
-	At       time.Time
-	TicketID string
-	Verb     string
 	Payload  json.RawMessage
 }
 
-func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbIntentWithPayloadParams) error {
-	_, err := q.db.ExecContext(ctx, queueVerbIntentWithPayload,
+func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) error {
+	_, err := q.db.ExecContext(ctx, queueVerbIntent,
 		arg.At,
 		arg.TicketID,
 		arg.Verb,
