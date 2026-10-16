@@ -50,20 +50,32 @@ func (l *Loop) event(ctx context.Context, ticketURL string, kind store.EventKind
 
 var errIntentPending = errors.New("intent stays pending")
 
-func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.VerbIntent) error) error {
-	intents, err := l.store.PendingVerbIntents(ctx, verb)
+func (l *Loop) eachIntent(ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent) error) error {
+	return l.consumeEach(ctx, snap.Intents(verb), fn)
+}
+
+func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(plan.Intent) error) error {
+	pending, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return fmt.Errorf("list pending %s intents: %w", verb, err)
 	}
+	intents := make([]plan.Intent, len(pending))
+	for i, p := range pending {
+		intents[i] = plan.Intent{ID: p.ID, Ticket: plan.TicketURL(p.TicketID), Verb: verb, Payload: p.Payload}
+	}
+	return l.consumeEach(ctx, intents, fn)
+}
+
+func (l *Loop) consumeEach(ctx context.Context, intents []plan.Intent, fn func(plan.Intent) error) error {
 	for _, intent := range intents {
 		switch err := fn(intent); {
 		case errors.Is(err, errIntentPending):
 			continue
 		case err != nil:
-			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.TicketID, err)
+			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
-			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.TicketID, err)
+			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
 	}
 	return nil
@@ -117,7 +129,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err != nil {
 		return l.failTick(ctx, fmt.Errorf("skipped repos: %w", err))
 	}
-	snap, err := l.derive(ctx, t.obs)
+	snap, err := l.derive(ctx, t)
 	if err != nil {
 		return l.failTick(ctx, fmt.Errorf("derive: %w", err))
 	}
@@ -144,6 +156,7 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err != nil {
 		return nil, fmt.Errorf("last observation: %w", err)
 	}
+	t.prev = prev
 	if err := l.recordRepoStates(ctx, t.obs); err != nil {
 		return nil, fmt.Errorf("record repo states: %w", err)
 	}
@@ -187,7 +200,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyReRunIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("re-run: %w", err)
 	}
-	if err := l.applyFollowUpIntents(ctx, t, byURL); err != nil {
+	if err := l.applyFollowUpIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("follow-up: %w", err)
 	}
 	if err := l.applyAbortIntents(ctx, snap, t.obs); err != nil {
@@ -225,14 +238,15 @@ func (t *tick) markSpawnedAlive() {
 	}
 }
 
-func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot, error) {
+func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 	in, err := l.store.PlanInput(ctx)
 	if err != nil {
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = l.clock.Now()
-	in.Obs = obs
-	return l.rules(obs).Derive(in), nil
+	in.Obs = t.obs
+	in.Prev = t.prev
+	return l.rules(t.obs).Derive(in), nil
 }
 
 func (l *Loop) rules(obs plan.Observation) plan.Rules {
@@ -323,8 +337,8 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, plan.VerbImport, func(intent store.VerbIntent) error {
-		return l.importFeature(ctx, intent.TicketID)
+	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) error {
+		return l.importFeature(ctx, string(intent.Ticket))
 	})
 }
 
@@ -409,13 +423,13 @@ func (l *Loop) cancelRun(t *tick, ticketURL string, pgid int) error {
 }
 
 func (l *Loop) applyKillIntents(ctx context.Context, t *tick) error {
-	return l.eachIntent(ctx, plan.VerbKill, func(intent store.VerbIntent) error {
+	return l.eachPendingIntent(ctx, plan.VerbKill, func(intent plan.Intent) error {
 		latest, err := l.store.LatestRunsByTicket(ctx)
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
-		if run, ok := latest[plan.TicketURL(intent.TicketID)]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
-			return l.cancelRun(t, intent.TicketID, run.Pgid.Unwrap())
+		if run, ok := latest[intent.Ticket]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
+			return l.cancelRun(t, string(intent.Ticket), run.Pgid.Unwrap())
 		}
 		return nil
 	})

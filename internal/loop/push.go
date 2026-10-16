@@ -61,8 +61,8 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 }
 
 func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, plan.VerbRetryPush, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(plan.TicketURL(intent.TicketID))
+	return l.eachIntent(ctx, snap, plan.VerbRetryPush, func(intent plan.Intent) error {
+		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
 			return nil
 		}
