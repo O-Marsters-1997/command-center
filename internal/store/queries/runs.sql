@@ -38,11 +38,8 @@ WHERE ticket_id IS NOT NULL
 ORDER BY ticket_id, id DESC;
 
 -- name: QueueVerbIntent :exec
-INSERT INTO intents (at, ticket_id, verb) VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb));
-
--- name: QueueVerbIntentWithPayload :exec
 INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.arg(payload));
+VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload));
 
 -- name: PendingVerbIntents :many
 SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents

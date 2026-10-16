@@ -334,10 +334,10 @@ func TestSessionPage(t *testing.T) {
 	t.Run("a running session shows a queued message until the loop consumes it", func(t *testing.T) {
 		t.Parallel()
 		running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
-		if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		if err := running.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
 		}); err != nil {
-			t.Fatalf("QueueVerbIntentWithPayload(follow-up): %v", err)
+			t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 		}
 
 		main := sessionMain(t, running, "/s/acme/web/1")
@@ -408,10 +408,10 @@ func TestSessionPage(t *testing.T) {
 	t.Run("board, feature and session keep the same verb controls", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
-		if err := st.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: sessionTicket, Verb: plan.VerbKill, At: testNow,
 		}); err != nil {
-			t.Fatalf("QueueVerbIntentWithPayload(kill): %v", err)
+			t.Fatalf("QueueVerbIntent(kill): %v", err)
 		}
 		srv := newServer(st, testNow)
 		confirms := map[string]string{}

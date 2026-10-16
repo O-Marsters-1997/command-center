@@ -14,6 +14,10 @@ attention, not by dependency.
   `checking`, `attention`, `done`, `failed`. The mapping is one table in `plan`, with `attention`
   covering `ReviewMe`, `NeedsYou` and `AwaitingInput`, and `failed` covering every state a human
   must repair.
+- `plan` returns words, glyphs and verbs, and `internal/web/view` owns how they are presented. One
+  table keyed by `plan.Verb` holds each verb's label, key binding and confirm text; the row's
+  buttons and the help sheet's session-verb keys both read it, so a binding is written once. `plan`
+  has no verb table.
 - The template composes `glyph glyph-{word}` and `[data-glyph]`. Go returns a word, never a utility
   string. Segbars and meters colour by glyph too.
 - The rail groups by glyph: `failed` and `attention` are Needs you, `done` is Settled, everything else

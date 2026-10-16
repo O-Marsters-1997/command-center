@@ -217,13 +217,13 @@ func testBoardRows(t *testing.T) {
 			return row.State
 		}
 
-		if err := store.QueueVerbIntent(ctx, ticket.URL, "kill", now); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: ticket.URL, Verb: "kill", At: now}); err != nil {
 			t.Fatalf("QueueVerbIntent(kill): %v", err)
 		}
 		if got := state(); got != "running · kill queued" {
 			t.Errorf("GET /tickets after queuing kill = %q, want running · kill queued", got)
 		}
-		if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: ticket.URL, Verb: "follow-up", At: now.Add(time.Second)}); err != nil {
 			t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 		}
 		if got := state(); got != "running · kill queued · follow-up queued" {

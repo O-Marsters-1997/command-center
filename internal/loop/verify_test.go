@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
@@ -221,7 +222,7 @@ func TestVerify(t *testing.T) {
 			t.Fatalf("refresh facts = %+v, want %s verification failed", facts, f.child.URL)
 		}
 
-		if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRetryPush, at.Add(time.Hour)); err != nil {
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbRetryPush, At: at.Add(time.Hour)}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
 		}
 		p.tick(t)
