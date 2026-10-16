@@ -81,6 +81,12 @@ type RepoPage struct {
 	Tickets         Board
 }
 
+func (p RepoPage) Path() string { return RepoPath(p.Title) }
+
+func repoCrumbs(fullName string) []Crumb {
+	return []Crumb{{Label: "Repos", Path: "/repos"}, {Label: fullName, Mono: true}}
+}
+
 func RepoPath(fullName string) string {
 	return "/repos/" + fullName
 }
@@ -140,6 +146,7 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	chrome := f.chrome
 	chrome.setCurrent(keyRepos)
 	chrome.titled("Repos")
+	chrome.Crumbs = []Crumb{{Label: "Repos"}}
 	importErr, err := r.importError(ctx, now)
 	if err != nil {
 		return ReposPage{}, fmt.Errorf("import error: %w", err)
@@ -235,7 +242,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageReques
 	}
 	chrome.setCurrent(keyRepos)
 	chrome.titled(scope)
-	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, RepoPath(scope)
+	chrome.Crumbs = repoCrumbs(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
 	if page.Banner, err = r.Banner(ctx, scope); err != nil {
 		return RepoPage{}, fmt.Errorf("load banner: %w", err)
@@ -271,7 +278,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageReques
 	}
 
 	page.Title = repo.Name
-	page.RepoCrumb, page.RepoCrumbPath = page.Title, RepoPath(page.Title)
+	page.Crumbs = repoCrumbs(page.Title)
 	page.Remote = repo.Remote
 	page.Known = true
 	page.Ready = repo.Phase == plan.RepoReady

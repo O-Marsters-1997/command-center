@@ -187,8 +187,8 @@ selected session from the current URL (ADR 15). Below 760px it is the home scree
 _Avoid_: Collapsed nav, mini sidebar, icon bar, session list
 
 **Breadcrumb**:
-The static row reading workspace, then repos, then the scoped repo and feature, each of those two
-present only when that axis applies. Sits beside the sidebar outside every `hx-swap` target.
+The top bar's path to the current page: project, feature and title on a session, project and
+feature on a feature, `Repos` and the repo on a repo, one crumb elsewhere. Sits beside the sidebar outside every `hx-swap` target.
 _Avoid_: Header, nav
 
 ## Relationships

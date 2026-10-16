@@ -279,7 +279,11 @@ func testScopedRepoPage(t *testing.T) {
 	if got := main.One(t, "h1").Text(); got != "acme/alpha" {
 		t.Errorf("repo heading = %q", got)
 	}
-	main.One(t, `a[href="/repos/acme/alpha"]`)
+	crumbs := main.One(t, "ol.crumbs")
+	crumbs.One(t, `a[href="/repos"][hx-select="#main"]`)
+	if got := crumbs.Text(); !strings.Contains(got, "acme/alpha") {
+		t.Errorf("repo breadcrumb = %q, want it to name acme/alpha", got)
+	}
 	wants := []string{
 		"git@github.com:acme/alpha.git", "1 open ticket", "base origin/main", "project:y", "also in acme/beta",
 	}

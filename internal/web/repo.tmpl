@@ -34,7 +34,7 @@
     <a href="/f/{{.Feature | pathEscape}}">{{.Feature}}</a>
     {{if .OtherRepos}}<span class="text-muted text-xs">also in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
     <form class="ml-auto" method="post" action="/features/{{.Feature | pathEscape}}/import">
-      <input type="hidden" name="return" value="{{$.RepoCrumbPath}}">
+      <input type="hidden" name="return" value="{{$.Path}}">
       <button type="submit" class="btn btn-sm">Import</button>
     </form>
   </li>
@@ -48,7 +48,7 @@
 <h2 id="project-h">Project</h2>
 <p class="module-sub">A project groups repos. Assign this repo to one, or start a new project with it.</p>
 <form method="post" action="/repos/{{.Title}}/project" class="flex items-center gap-2 mb-3">
-  <input type="hidden" name="return" value="{{.RepoCrumbPath}}">
+  <input type="hidden" name="return" value="{{.Path}}">
   <select name="project" aria-label="project of {{.Title}}" class="select">
     <option value="">No project</option>
     {{range .Projects}}<option value="{{.Name}}"{{if eq .Name $.Project.Name}} selected{{end}}>{{.Name}}</option>{{end}}
@@ -58,7 +58,7 @@
 <details>
   <summary>New project</summary>
   <form method="post" action="/projects" class="flex flex-col gap-2 mt-2">
-    <input type="hidden" name="return" value="{{.RepoCrumbPath}}">
+    <input type="hidden" name="return" value="{{.Path}}">
     {{range .NewProject.Repos}}<input type="hidden" name="repo" value="{{.}}">{{end}}
     <input type="text" name="name" required maxlength="40" placeholder="project name"
       autocomplete="off" aria-label="project name">
