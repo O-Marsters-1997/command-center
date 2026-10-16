@@ -77,12 +77,13 @@
 </html>
 {{- end}}
 
+{{define "crumbLabel" -}}
+{{if .Project.IsSome}}{{with .Project.Unwrap}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{end}}{{if .Mono}}<span class="font-mono">{{.Label}}</span>{{else}}{{.Label}}{{end}}
+{{- end}}
+
 {{define "scopeCrumbs" -}}
-<li>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</li>
-<li><a href="/repos">repos</a></li>
-{{with .ProjectScope}}<li><span class="avatar" data-hue="{{$.ProjectHue}}" aria-hidden="true">{{$.ProjectInitial}}</span> {{.}}</li>{{end}}
-{{with .RepoCrumb}}<li><a href="{{$.RepoCrumbPath}}">{{.}}</a></li>{{end}}
-{{with .FeatureScope}}<li>{{.}}</li>{{end}}
+{{range .Crumbs}}<li>{{if .Path}}<a href="{{.Path}}" {{template "nav" .Path}}>{{template "crumbLabel" .}}</a>{{else}}{{template "crumbLabel" .}}{{end}}</li>
+{{end -}}
 {{- end}}
 
 {{define "keySheet" -}}

@@ -294,6 +294,9 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   (Float shadow, 16px corners) of All projects and each project with its avatar and a `⌘0`–`⌘9`
   hint; search matches replace the three sections in the same rail.
 - **Top bar.** 44px: breadcrumbs on the left and at most one secondary action on the right.
+  Crumbs read `project / feature / title` on a session, `project / feature` on a feature,
+  `Repos / owner/name` (mono) on a repo, and a single crumb elsewhere. A project crumb carries
+  its avatar; every crumb but the last is a link.
 - **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
 - **Session.** The transcript is centred at max 720px, with the composer floating at the foot.

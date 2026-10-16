@@ -118,6 +118,10 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	chrome := f.chrome
 	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
 	scoped := rowsIn(groups)
+	chrome.Crumbs = []Crumb{{Label: "All tickets"}}
+	if params.Feature != "" {
+		chrome.Crumbs = featureCrumbs(scoped, params.Feature)
+	}
 	sections := Sectioned(scoped)
 	blocking := make(map[plan.TicketURL][]plan.TicketURL, len(scoped))
 	for _, row := range scoped {
@@ -185,7 +189,6 @@ func (r *Reader) buildChrome(f frame) Chrome {
 		PageTitle:    appTitle,
 		Keymap:       Keymap,
 		RepoScope:    params.Repo,
-		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
 		Launch:       NavItem{Path: params.withScope("/launch"), Key: keyLaunch},
 		Nav: []NavItem{
@@ -207,9 +210,6 @@ func (r *Reader) buildChrome(f frame) Chrome {
 	}
 	if lastErr.IsSome() && (!observed || lastErr.Unwrap().At.After(obs.ObservedAt)) {
 		c.LastError = option.Some(TickError{Age: relative(now, lastErr.Unwrap().At), Message: lastErr.Unwrap().Message})
-	}
-	if params.Repo != "" {
-		c.RepoCrumbPath = RepoPath(params.Repo)
 	}
 	return c
 }

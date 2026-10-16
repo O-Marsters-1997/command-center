@@ -66,6 +66,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 		}
 	}
 	chrome.titled("Launch")
+	chrome.Crumbs = []Crumb{{Label: "Launch a feature"}}
 	page := LaunchPicker{Chrome: chrome}
 	for feature, urls := range byFeature {
 		candidates, err := previewCandidates(urls, in)
