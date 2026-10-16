@@ -436,6 +436,13 @@ ticket filters. No underline tabs.
 
 - **Dialog:** a scrim at 18% ink, a 620px panel with 16px corners and Overlay, at 12vh. Head,
   scrolling body and footer are split by `border-soft`. On a phone it is a bottom sheet.
+- **Launch dialog:** the 620px dialog. The head holds the project avatar and name, `Launch
+  {feature}`, a ghost Change feature button and a close icon. The body has Ready now and On unlock
+  sections of rows (checkbox, glyph dot, ref, title, then the repo or `after #x, #y` right-aligned
+  in `meta`), and a `details` disclosure for tickets already in flight or refused. The footer holds
+  Cancel and the primary `Launch N now · arm M` with a `⌘↵` kbd. `/launch` with no feature opens the
+  same dialog as a feature picker: one row per feature with its avatar and its ready and on-unlock
+  counts.
 - **Toast:** a centred dark pill (`fg` on `surface`), 38px, 72px off the bottom, carrying an
   Undo button. Every triage verb gets one. Undo is target UI with no data yet.
 - **Shortcut sheet:** a 480px dialog with grouped `dl` rows of `kbd` keys.

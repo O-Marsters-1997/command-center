@@ -29,7 +29,7 @@ func TestLaunchOpen(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("POST /launch/open status = %d, want 200", response.Code)
 		}
-		if got := htmltest.Parse(t, response.Body).One(t, "[hx-get]").Text(); !strings.Contains(got, "importing project:x") {
+		if got := htmltest.Parse(t, response.Body).One(t, "dialog[hx-get]").Text(); !strings.Contains(got, "importing project:x") {
 			t.Errorf("POST /launch/open pending text = %q, want importing project:x", got)
 		}
 		if !nudged.Load() {
@@ -226,7 +226,7 @@ func TestCandidates(t *testing.T) {
 				req{Header: http.Header{"Hx-Request": {"true"}}})
 			root := htmltest.Parse(t, response.Body)
 			got := outcome{Status: response.Code, Buttons: len(root.Find("button")),
-				Cancels: len(root.Find(`a[href="/f/project:x"]`))}
+				Cancels: len(root.Find(`.launch-foot a[href="/f/project:x"]`))}
 			for _, node := range root.Find("dialog#launch-modal-body") {
 				_, open := node.Attr("open")
 				got.DialogsOpen = append(got.DialogsOpen, open)
@@ -235,7 +235,7 @@ func TestCandidates(t *testing.T) {
 			for _, node := range root.Find("h2#launch-dialog-title") {
 				got.Titles = append(got.Titles, node.Text())
 			}
-			for _, node := range root.Find("[hx-get]") {
+			for _, node := range root.Find("dialog[hx-get]") {
 				value, _ := node.Attr("hx-get")
 				got.Polling = append(got.Polling, value)
 			}
