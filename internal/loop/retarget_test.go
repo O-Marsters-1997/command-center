@@ -135,7 +135,7 @@ func TestRetarget(t *testing.T) {
 			}
 			if hasEvent(events, "pushed", "") {
 				t.Errorf("events = %+v, want no pushed event: the same pushed tip against a new base "+
-					"must leave plan.PushPlan selecting nothing", events)
+					"must leave Snapshot.Pushable selecting nothing", events)
 			}
 		})
 	}

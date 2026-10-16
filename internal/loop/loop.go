@@ -207,7 +207,11 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyRemoveWorktreeIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
-	if err := l.pushPushable(ctx, snap, t.obs); err != nil {
+	snap, err := l.derive(ctx, t)
+	if err != nil {
+		return fmt.Errorf("derive for push: %w", err)
+	}
+	if err := l.pushPushable(ctx, snap.Skipping(snap.SkippedRepos()), t.obs); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 	if err := l.applyDraftGate(ctx, snap); err != nil {

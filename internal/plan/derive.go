@@ -104,6 +104,7 @@ type Entry struct {
 	OpensAsDraft   bool
 	PromptHash     string
 	LastPush       option.Option[PushRow]
+	Restacked      bool
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -246,7 +247,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
-			LaunchID: membership.LaunchID, Base: base,
+			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
 		}
 		snap.Entries = append(snap.Entries, entry)
 		snap.removals[t.URL] = removalFor(entry, pr)
