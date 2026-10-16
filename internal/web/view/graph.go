@@ -1,6 +1,6 @@
 package view
 
-import "github.com/O-Marsters-1997/command-center/internal/option"
+import "github.com/O-Marsters-1997/command-center/internal/plan/option"
 
 type GraphGroup struct {
 	Root     option.Option[Row] `json:"root"`

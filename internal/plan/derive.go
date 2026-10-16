@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
-	"github.com/O-Marsters-1997/command-center/internal/spend"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
 type LaunchMembership struct {

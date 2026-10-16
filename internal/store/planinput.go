@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 )
 
 // VerdictFacts measures checking time in successful ticks rather than wall time.

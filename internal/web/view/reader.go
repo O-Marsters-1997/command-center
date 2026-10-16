@@ -9,10 +9,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 

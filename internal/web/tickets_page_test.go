@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 

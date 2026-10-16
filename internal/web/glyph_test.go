@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 func testBoardGlyphs(t *testing.T) {

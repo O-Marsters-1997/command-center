@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 type forge interface {

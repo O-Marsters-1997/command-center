@@ -9,9 +9,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/html"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 func boardBody(t *testing.T, server *web.Server) string {

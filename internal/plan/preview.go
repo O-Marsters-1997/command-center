@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 // ErrUnknownTicket indicates a ticket absent from the snapshot.

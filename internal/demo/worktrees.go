@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
+	ccgit "github.com/O-Marsters-1997/command-center/internal/adapter/git"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 )
 
 type Worktrees struct{}

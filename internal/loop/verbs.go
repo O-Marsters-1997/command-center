@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 const heldWorktreeRefusal = plan.HeldWorktreeRefusal

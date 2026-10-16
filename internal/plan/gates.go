@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 type Intent struct {
