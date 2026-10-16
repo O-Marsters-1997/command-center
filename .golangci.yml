@@ -88,6 +88,11 @@ linters:
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
             - pkg: net/http
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
+        config-no-git:
+          files: ["**/internal/config/**", "!$test"]
+          deny:
+            - pkg: github.com/O-Marsters-1997/command-center/internal/git
+              desc: config parses bytes; the loop reads the file from git and hands it in
         git-no-gh:
           files: ["**/internal/git/**", "!$test"]
           deny:

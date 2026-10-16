@@ -33,7 +33,7 @@ func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time
 	if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, checkout); err != nil {
 		return refuse(repo, plan.RefusalClone, err.Error()), nil
 	}
-	_, source, err := config.ReadRepoSettings(ctx, checkout)
+	_, source, err := readRepoSettings(ctx, checkout)
 	if err != nil {
 		return refuse(repo, plan.RefusalSettingsParse, err.Error()), nil
 	}
@@ -41,6 +41,26 @@ func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time
 	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, plan.RefusalUnknown, ""
 	repo.SettingsSource, repo.SettingsReadAt = string(source), now
 	return repo, nil
+}
+
+func readRepoSettings(ctx context.Context, checkout string) (config.RepoSettings, config.Source, error) {
+	found, err := git.HasFile(ctx, checkout, config.SettingsRef, config.SettingsFile)
+	if err != nil {
+		return config.RepoSettings{}, "", fmt.Errorf("look for %s on %s: %w", config.SettingsFile, config.SettingsRef, err)
+	}
+	var body []byte
+	if found {
+		text, err := git.ShowFile(ctx, checkout, config.SettingsRef, config.SettingsFile)
+		if err != nil {
+			return config.RepoSettings{}, "", fmt.Errorf("read %s on %s: %w", config.SettingsFile, config.SettingsRef, err)
+		}
+		body = []byte(text)
+	}
+	settings, source, err := config.ReadRepoSettings(body, found)
+	if err != nil {
+		return config.RepoSettings{}, "", fmt.Errorf("%s on %s: %w", config.SettingsFile, config.SettingsRef, err)
+	}
+	return settings, source, nil
 }
 
 func refuse(repo store.Repo, kind plan.RefusalKind, reason string) store.Repo {
