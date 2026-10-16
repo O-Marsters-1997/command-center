@@ -28,7 +28,11 @@ var verbTable = map[plan.Verb]verbPresentation{
 	},
 	plan.VerbKill: {
 		confirm: func(r Row) string {
-			return confirmation(plan.VerbKill, r, "signals the process group of its live agent run, stopping it where it is", "pgid", r.Pgid)
+			return confirmation(
+				plan.VerbKill, r,
+				"signals the process group of its live agent run, stopping it where it is",
+				"pgid", r.Pgid,
+			)
 		},
 	},
 	plan.VerbReRun: {key: "r"},

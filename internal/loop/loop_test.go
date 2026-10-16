@@ -283,7 +283,9 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		dispositionAsPushed(t, store, tickets[0].URL, testAt)
 		authoriseTicket(t, store, tickets[1].URL, composeHash(tickets[1].URL), testAt)
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: tickets[0].URL, Verb: "re-run", At: testAt}); err != nil {
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: tickets[0].URL, Verb: "re-run", At: testAt,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(re-run): %v", err)
 		}
 
@@ -448,7 +450,9 @@ func TestLoop_RunOnce(t *testing.T) {
 			Store: store, Observe: loop.NewObserver(store, forge, cfg), Clock: fixedClock(at), Config: cfg, Workspace: ws,
 			Runner: fake, Tracker: resolve,
 		}, loop.WithForge(forge), loop.WithWorktrees(worktrees))
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: "project:x", Verb: plan.VerbImport, At: at}); err != nil {
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: "project:x", Verb: plan.VerbImport, At: at,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(import): %v", err)
 		}
 		authoriseTicket(t, store, issue.URL, composeHash(issue.URL), at)

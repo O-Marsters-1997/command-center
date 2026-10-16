@@ -146,7 +146,9 @@ func TestPush(t *testing.T) {
 		}
 
 		f.reset(testAt, runner.ProcessRunner{})
-		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: f.Ticket.URL, Verb: "retry-push", At: testAt.Add(time.Second)}); err != nil {
+		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: f.Ticket.URL, Verb: "retry-push", At: testAt.Add(time.Second),
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(retry-push): %v", err)
 		}
 		f.tick(t)

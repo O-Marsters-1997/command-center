@@ -195,7 +195,9 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 	t.Parallel()
 	queueKill := func(t *testing.T, store *storepkg.Store) storepkg.VerbIntent {
 		t.Helper()
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: "sandbox://CC-1", Verb: plan.VerbKill, At: testNow}); err != nil {
+		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: "sandbox://CC-1", Verb: plan.VerbKill, At: testNow,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
 		}
 		pending, err := store.PendingVerbIntents(t.Context(), plan.VerbKill)
@@ -268,7 +270,8 @@ func TestStore_QueueVerbIntent(t *testing.T) {
 			t.Fatalf("QueueVerbIntent: %v", err)
 		}
 		var isNull bool
-		if err := openRawDB(t, dsn).QueryRow(`SELECT payload IS NULL FROM intents WHERE ticket_id = $1`, "https://x/1").Scan(&isNull); err != nil {
+		row := openRawDB(t, dsn).QueryRow(`SELECT payload IS NULL FROM intents WHERE ticket_id = $1`, "https://x/1")
+		if err := row.Scan(&isNull); err != nil {
 			t.Fatalf("read intent payload: %v", err)
 		}
 		if !isNull {
@@ -312,7 +315,9 @@ func TestStore_PendingIntentsByTicket(t *testing.T) {
 		{"sandbox://CC-1", plan.VerbFollowUp},
 		{"sandbox://CC-2", plan.VerbReRun},
 	} {
-		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: q.ticket, Verb: q.verb, At: testNow.Add(time.Duration(i) * time.Second)}); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+			Ticket: q.ticket, Verb: q.verb, At: testNow.Add(time.Duration(i) * time.Second),
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(%s, %s): %v", q.ticket, q.verb, err)
 		}
 	}

@@ -36,7 +36,9 @@ func TestCancel(t *testing.T) {
 	if sibling == running {
 		sibling = f.Tickets[1].URL
 	}
-	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: sibling, Verb: "cancel", At: testAt.Add(time.Second)}); err != nil {
+	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: sibling, Verb: "cancel", At: testAt.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(cancel): %v", err)
 	}
 

@@ -31,7 +31,9 @@ func TestImport(t *testing.T) {
 		ctx := t.Context()
 		store := openStore(t)
 		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: testAt}); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+			Ticket: "project:x", Verb: "import", At: testAt,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(import): %v", err)
 		}
 		issue := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x", Status: "ready"}
@@ -68,7 +70,9 @@ func TestImport(t *testing.T) {
 		if err := store.ImportTickets(ctx, "project:other", seed, testAt); err != nil {
 			t.Fatalf("seed ImportTickets: %v", err)
 		}
-		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: testAt}); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+			Ticket: "project:x", Verb: "import", At: testAt,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(import): %v", err)
 		}
 
@@ -98,7 +102,9 @@ func TestImport(t *testing.T) {
 		ctx := t.Context()
 		store := openStore(t)
 		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: testAt}); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+			Ticket: "project:x", Verb: "import", At: testAt,
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(import): %v", err)
 		}
 		seed := plan.Observation{Settings: map[string]config.RepoSettings{"alpha": {Tracker: "linear"}}}

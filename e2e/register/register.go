@@ -82,7 +82,9 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 	}
 	defer func() { err = errors.Join(err, st.Close()) }()
 
-	if err := st.QueueVerbIntent(ctx, store.VerbRequest{Ticket: args[0], Verb: plan.VerbImport, At: time.Now()}); err != nil {
+	if err := st.QueueVerbIntent(ctx, store.VerbRequest{
+		Ticket: args[0], Verb: plan.VerbImport, At: time.Now(),
+	}); err != nil {
 		return fmt.Errorf("queue import for %s: %w", args[0], err)
 	}
 	return nil

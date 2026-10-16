@@ -395,7 +395,9 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	}
 	feature := r.FormValue("feature")
 	if feature != "" {
-		if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now()}); err != nil {
+		if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+			Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
+		}); err != nil {
 			return fmt.Errorf("queue verb intent: %w", err)
 		}
 		s.nudge()
@@ -748,7 +750,9 @@ func ticketByURL(tickets []store.Ticket, ticketURL string) (store.Ticket, bool) 
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
 	feature := r.PathValue("feature")
-	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now()}); err != nil {
+	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+		Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
+	}); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	s.nudge()

@@ -223,7 +223,9 @@ func testBoardRows(t *testing.T) {
 		if got := state(); got != "running · kill queued" {
 			t.Errorf("GET /tickets after queuing kill = %q, want running · kill queued", got)
 		}
-		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: ticket.URL, Verb: "follow-up", At: now.Add(time.Second)}); err != nil {
+		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+			Ticket: ticket.URL, Verb: "follow-up", At: now.Add(time.Second),
+		}); err != nil {
 			t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 		}
 		if got := state(); got != "running · kill queued · follow-up queued" {
