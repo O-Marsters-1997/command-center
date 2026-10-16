@@ -18,6 +18,8 @@ function row(url: string, over: Partial<Row> = {}): Row {
     reason: "",
     elapsed: "",
     pr_number: 0,
+    checks_passed: 0,
+    checks_total: 0,
     session_path: "/s/o/r/1",
     ...over,
   };

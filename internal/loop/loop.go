@@ -474,8 +474,10 @@ func (l *Loop) disposeRun(
 	if m, ok := parseLog(l.logger, run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
 		cost = m.CostUSD
 	}
+	lastMessage, _ := parseLog(l.logger, run.LogPath, "last message", agentlog.ParseLastMessage)
 	disposition := store.Disposition{
-		RunID: plan.RunID(run.ID), Outcome: outcome, ExitCode: exitCode, Cost: cost, EndedAt: l.clock.Now(),
+		RunID: plan.RunID(run.ID), Outcome: outcome, ExitCode: exitCode, Cost: cost,
+		LastMessage: lastMessage, EndedAt: l.clock.Now(),
 	}
 	if err := l.store.RecordDisposition(ctx, disposition); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)

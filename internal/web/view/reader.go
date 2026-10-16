@@ -44,12 +44,17 @@ type Board struct {
 	Groups           []Group
 	Sections         []Section
 	Tabs             []FilterTab
+	Context          RowContext
 	BoardPath        string
 	BoardPollSeconds int
 	Launched         option.Option[Age]
 	TicketCount      int
 	WaveCount        int
 	Launch           option.Option[LaunchModal]
+}
+
+func (b Board) LaunchCount() int {
+	return len(slices.DeleteFunc(rowsIn(b.Groups), func(r Row) bool { return !r.Launchable }))
 }
 
 func (b Board) rowFor(ref SessionRef) (Row, bool) {
@@ -137,7 +142,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 			return Board{}, fmt.Errorf("load feature first launch: %w", err)
 		}
 	}
+	context := ContextFeature
+	if params.Feature != "" {
+		context = ContextRepo
+	}
 	return Board{
+		Context:          context,
 		Launched:         launched,
 		TicketCount:      len(scoped),
 		WaveCount:        plan.WaveCount(blocking),

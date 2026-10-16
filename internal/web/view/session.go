@@ -16,6 +16,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -42,6 +43,7 @@ type SessionPage struct {
 
 	PendingMessages []string
 	Model           string
+	Launched        option.Option[Age]
 }
 
 func (s SessionPage) Empty() bool {
@@ -167,7 +169,18 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load raw log: %w", err)
 	}
+	launched := option.None[Age]()
+	if row.Feature != "" {
+		at, err := r.store.FeatureFirstLaunch(ctx, row.Feature)
+		switch {
+		case err == nil:
+			launched = option.Some(relative(now, at))
+		case !errors.Is(err, store.ErrNotFound):
+			return SessionPage{}, fmt.Errorf("load feature first launch: %w", err)
+		}
+	}
 	return SessionPage{
+		Launched:       launched,
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		Actions:        actions,

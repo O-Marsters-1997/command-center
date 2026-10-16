@@ -68,6 +68,8 @@ type RailItem struct {
 	Path     string
 	Selected bool
 	Started  string
+	Updated  Age
+	Last     string
 }
 
 type RailFeature struct {
@@ -177,9 +179,13 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
 			Project: r.Mark(), Label: r.Label,
 			Detail: r.Detail, Path: scope.withScope(cmp.Or(SessionPath(r.URL), ticketsPath)),
+			Updated: r.Updated, Last: r.Last,
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Detail != ""
+		if it.Reply {
+			it.Last = ""
+		}
 		for _, verb := range r.Verbs {
 			if !it.Reply && verb != plan.VerbFollowUp && verb != plan.VerbLaunch {
 				it.Verb = verb

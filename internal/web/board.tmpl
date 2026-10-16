@@ -13,7 +13,44 @@
 </header>
 {{- end}}
 
+{{define "featureLaunch" -}}
+<a class="btn" href="/f/{{.FeatureScope | pathEscape}}/launch" data-key="c" {{template "nav" (printf "/f/%s/launch" (.FeatureScope | pathEscape))}}>Launch{{if .LaunchCount}} · {{.LaunchCount}}{{end}}</a>
+{{- end}}
+
 {{define "board" -}}
+{{if eq .Context "repo"}}{{template "groupedList" .}}{{else}}{{template "boardTable" .}}{{end}}
+{{- end}}
+
+{{define "groupedList" -}}
+<div id="board" hx-get="{{.BoardPath}}" hx-trigger="every {{.BoardPollSeconds}}s" hx-sync="this:drop" hx-swap="outerHTML">
+  {{- range $section := .Sections}}
+  <section data-section="{{$section.Key}}" aria-labelledby="section-{{$section.Key}}">
+    <h2 id="section-{{$section.Key}}" class="flex h-[34px] items-center gap-2 border-b border-border-soft px-2 text-sm font-medium text-fg-2">{{$section.Title}} <span class="section-count">{{len $section.Rows}}</span></h2>
+    {{- range $section.Rows}}
+    <a class="grid min-h-[46px] grid-cols-[auto_4rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border-soft px-2 py-1 text-inherit no-underline hover:bg-surface-2 md:grid-cols-[auto_4rem_minmax(0,1fr)_9rem_3.5rem_3.5rem_7rem]" href="{{.SessionPath}}" data-ref="{{.Ticket}}" {{template "nav" .SessionPath}}>
+      <span class="glyph{{if .Alive}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" title="{{.Label}}"></span>
+      <span class="font-mono text-xs text-meta">{{.Ticket}}</span>
+      <span class="grid min-w-0">
+        <b class="truncate text-sm font-medium">{{if .Title}}{{.Title}}{{else}}untitled{{end}}</b>
+        <span class="truncate text-xs text-muted">{{.Detail}}</span>
+      </span>
+      <span class="truncate text-xs text-fg-2">{{.Repo}}</span>
+      <span class="font-mono text-xs">{{if .ChecksTotal}}{{.ChecksPassed}}/{{.ChecksTotal}}{{else}}—{{end}}</span>
+      <span class="font-mono text-xs">{{if .PRNumber}}#{{.PRNumber}}{{else}}—{{end}}</span>
+      <span class="font-mono text-xs text-fg-2">
+        {{- if .Elapsed}}{{.Elapsed}}
+        {{- else if gt .SpendPctWeek 0.0}}{{printf "%.2f" .SpendPctWeek}}% week
+        {{- else if .SpendTokens}}{{.SpendTokens}} tok
+        {{- else}}—{{end -}}
+      </span>
+    </a>
+    {{- end}}
+  </section>
+  {{- end}}
+</div>
+{{- end}}
+
+{{define "boardTable" -}}
 <table id="board" hx-get="{{.BoardPath}}" hx-trigger="every {{.BoardPollSeconds}}s" hx-sync="this:drop" hx-swap="outerHTML">
   <tr>
     <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>

@@ -169,6 +169,12 @@ func TestSessionPage(t *testing.T) {
 					t.Errorf("GET /s/acme/web/1 heading lacks %q", want)
 				}
 			}
+			if got := main.One(t, ".prompt-meta").Text(); !strings.Contains(got, "Launched from the ticket") {
+				t.Errorf("GET /s/acme/web/1 prompt caption = %q, want it to say where the prompt came from", got)
+			}
+			if got := main.One(t, "p.session-meta").Text(); !strings.Contains(got, "acme/web #1") {
+				t.Errorf("GET /s/acme/web/1 head meta = %q, want repo and ref", got)
+			}
 			if got := main.One(t, "pre.prompt-text").Text(); !strings.Contains(got, "Implement <b>#1</b>") {
 				t.Errorf("GET /s/acme/web/1 prompt = %q, want the literal text %q", got, "Implement <b>#1</b>")
 			}
@@ -405,7 +411,7 @@ func TestSessionPage(t *testing.T) {
 		root.One(t, `a[data-key="o"][target="_blank"]`)
 	})
 
-	t.Run("board, feature and session keep the same verb controls", func(t *testing.T) {
+	t.Run("board and session keep the same verb controls", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 		if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
@@ -417,7 +423,6 @@ func TestSessionPage(t *testing.T) {
 		confirms := map[string]string{}
 		for _, tc := range []struct{ path, verbPath string }{
 			{path: "/tickets", verbPath: "/verb?all=1"},
-			{path: "/f/checkout", verbPath: "/verb?feature=checkout"},
 		} {
 			board := htmltest.Parse(t, renderPath(t, srv, tc.path)).One(t, "table#board")
 			board.One(t, `[data-section="in-progress"]`)

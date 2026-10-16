@@ -300,11 +300,23 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 - **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
 - **Session.** The transcript is centred at max 720px, with the composer floating at the foot.
-  A 300px feature-stack panel sits on the right. Below 1180px the panel becomes an overlay that
-  opens on demand.
+  The head is the state badge, the title and a mono `repo #n · branch` line. The prompt is a
+  right-aligned bubble under "Launched from the ticket · age", and Transcript and Raw log are
+  right-aligned pill tabs. A 300px feature-stack panel sits on the right: the feature with its
+  avatar and merged/total, Graph and Board buttons, then Wave 1, Wave 2… groups of rows (glyph,
+  title, right-aligned elapsed or share of week) with the current ticket outlined, then Repo,
+  Branch, PR, Checks and Spend (share of week, never dollars) and a closed "Edit blockers"
+  disclosure. Below 1180px the panel becomes an overlay that opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.
+- **Feature page.** The top bar carries Graph/Board pill tabs and a secondary `Launch · N`. The
+  head is the name, `project · launched age · N tickets in M waves · V switches view`, and a
+  segment bar with its legend. The graph has one column per wave, headed `Wave n` with a
+  subtitle (`4 in progress`, `unlocks as wave 1 merges`). A node card is glyph, mono ref, title
+  and one subline (`PR #n · a/b checks`, `after #x, #y`, or the detail), with the state label
+  top-right only for Needs you. The board is the grouped list: glyph, ref, title over detail,
+  repo, checks, PR, and elapsed or spend, with no verbs, checkboxes, stack or state columns.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
 
@@ -411,8 +423,10 @@ ticket filters. No underline tabs.
 
 - **Order:** head, search with `⌘K`, project scope row, nav with counts, then Needs you, In
   flight and a collapsed Settled, with the 5h/Week meters and Shortcuts in the footer.
-- **Card** (Needs you only): a 10px panel holding the glyph and title, then avatar · feature ·
-  mono ref in `muted`, then "Label. Detail" clamped to two lines with the label in medium weight
+- **Card** (Needs you only): a 10px panel holding the glyph and title with the age since the
+  ticket's latest event ("2m") in mono `meta` at the top right, then avatar · feature · mono ref in
+  `muted`, then "Label. Last line" (the run's final agent message from `runs.last_message`, else
+  the reason) clamped to two lines with the label in medium weight
   (tinted `accent` or `s-failed` by glyph), then one inline `btn-sm` verb (Reply for an agent's
   question). The label is the state's sentence-case word and the detail is the reason with ticket
   URLs shortened to refs; the raw state name and log paths never render. The selected card takes

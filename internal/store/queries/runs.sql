@@ -16,8 +16,18 @@ WHERE id = sqlc.arg(id);
 
 -- name: RecordDisposition :execrows
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
-    cost_usd = sqlc.arg(cost_usd)
+    cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message)
 WHERE id = sqlc.arg(id) AND outcome IS NULL;
+
+-- name: TicketActivities :many
+SELECT e.ticket_id::text AS ticket_url, MAX(e.at)::timestamptz AS at,
+  COALESCE((
+    SELECT r.last_message FROM runs r
+    WHERE r.ticket_id = e.ticket_id AND r.last_message IS NOT NULL ORDER BY r.id DESC LIMIT 1
+  ), '')::text AS last_message
+FROM events e
+WHERE e.ticket_id IS NOT NULL
+GROUP BY e.ticket_id;
 
 -- name: RecordQuestion :execrows
 UPDATE runs SET question = sqlc.arg(question) WHERE id = sqlc.arg(id);

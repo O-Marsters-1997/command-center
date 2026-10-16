@@ -92,6 +92,7 @@ type Run struct {
 	SessionID     sql.NullString
 	Message       sql.NullString
 	Question      sql.NullString
+	LastMessage   sql.NullString
 	Model         sql.NullString
 	Effort        sql.NullString
 }
