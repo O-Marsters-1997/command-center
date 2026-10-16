@@ -118,6 +118,8 @@ type Snapshot struct {
 	maxAgents   int
 	spendPaused bool
 	intents     map[TicketURL][]Intent
+	sessions    map[TicketURL]string
+	removals    map[TicketURL]Removal
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -187,6 +189,8 @@ func (r Rules) Derive(in Input) Snapshot {
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
+		sessions:    in.Sessions,
+		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
@@ -228,14 +232,16 @@ func (r Rules) Derive(in Input) Snapshot {
 			lastPush = option.Some(row)
 		}
 		snap.byURL[t.URL] = len(snap.Entries)
-		snap.Entries = append(snap.Entries, Entry{
+		entry := Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
 			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			LaunchID: membership.LaunchID, Base: base,
-		})
+		}
+		snap.Entries = append(snap.Entries, entry)
+		snap.removals[t.URL] = removalFor(entry, pr)
 	}
 	return snap
 }

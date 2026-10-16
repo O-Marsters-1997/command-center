@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -34,5 +35,83 @@ func TestSnapshot_Intents(t *testing.T) {
 	}
 	if got := snap.Intents(plan.VerbAbort); len(got) != 0 {
 		t.Errorf("Intents(abort) = %v, want none", got)
+	}
+}
+
+func TestSnapshot_Removal(t *testing.T) {
+	t.Parallel()
+	blocker := ticket("1", "cc-1-blocker")
+	child := ticket("2", "cc-2-child", blocker.URL)
+	pushed := plan.PushRow{PushedTip: "pushed"}
+	ran := map[plan.TicketURL]plan.RunSummary{child.URL: {Outcome: option.Some(plan.OutcomePush)}}
+
+	tests := []struct {
+		name string
+		in   plan.Input
+		want plan.Removal
+	}{
+		{
+			name: "merged pull request proves its head and the last push",
+			in: plan.Input{
+				Obs: plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+					key(child.Branch): {State: plan.Merged, HeadOid: "head"},
+				}},
+				Verdict: plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{child.URL: pushed}},
+			},
+			want: plan.Removal{ProvenTips: []plan.SHA{"pushed", "head"}},
+		},
+		{
+			name: "closed blocker with a run is removable on the last push alone",
+			in: plan.Input{
+				Obs: plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+					key(blocker.Branch): {State: plan.Closed},
+				}},
+				Runs:    ran,
+				Verdict: plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{child.URL: pushed}},
+			},
+			want: plan.Removal{ProvenTips: []plan.SHA{"pushed"}},
+		},
+		{
+			name: "neither merged nor base gone",
+			in:   plan.Input{Obs: plan.Observation{PRs: openPRs(blocker, child)}, Runs: ran},
+			want: plan.Removal{Refusal: "neither merged nor base gone"},
+		},
+		{
+			name: "agent awaiting an answer holds its worktree even when merged",
+			in: plan.Input{
+				Obs: plan.Observation{PRs: map[plan.BranchRef]plan.PR{key(child.Branch): {State: plan.Merged}}},
+				Runs: map[plan.TicketURL]plan.RunSummary{
+					child.URL: {Outcome: option.Some(plan.OutcomeAsked)},
+				},
+			},
+			want: plan.Removal{Refusal: plan.HeldWorktreeRefusal},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tt.in.Tickets = []plan.Ticket{blocker, child}
+			got := derive(plan.Rules{}, tt.in).Removal(child.URL)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Removal(%s) mismatch (-want +got):\n%s", child.URL, diff)
+			}
+		})
+	}
+}
+
+func TestSnapshot_Session(t *testing.T) {
+	t.Parallel()
+	first := ticket("1", "cc-1-first")
+	second := ticket("2", "cc-2-second")
+	snap := derive(plan.Rules{}, plan.Input{
+		Tickets:  []plan.Ticket{first, second},
+		Sessions: map[plan.TicketURL]string{first.URL: "abc"},
+	})
+
+	if got, ok := snap.Session(first.URL); !ok || got != "abc" {
+		t.Errorf("Session(%s) = %q, %t, want abc, true", first.URL, got, ok)
+	}
+	if got, ok := snap.Session(second.URL); ok {
+		t.Errorf("Session(%s) = %q, true, want none", second.URL, got)
 	}
 }

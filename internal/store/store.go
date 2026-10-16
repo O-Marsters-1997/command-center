@@ -412,17 +412,30 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 }
 
 // WithdrawTicket retains historical references and prunes merged blockers from other tickets.
-func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) error {
-	return s.inTx(ctx, func(q *ccdb.Queries) error {
+func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) ([]plan.RunID, error) {
+	var runs []plan.RunID
+	err := s.inTx(ctx, func(q *ccdb.Queries) error {
 		n, err := q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url})
 		if err := matchedRow(n, err, "withdraw ticket "+url); err != nil {
 			return err
+		}
+		ids, err := q.RunIDsForTicket(ctx, notNull(url))
+		if err != nil {
+			return fmt.Errorf("select run ids for %s: %w", url, err)
+		}
+		runs = make([]plan.RunID, len(ids))
+		for i, id := range ids {
+			runs[i] = plan.RunID(id)
 		}
 		if merged {
 			return repairBlockedBy(ctx, q, map[string]bool{url: true})
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return runs, nil
 }
 
 func matchedRow(n int64, err error, what string) error {
