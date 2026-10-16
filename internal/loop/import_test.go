@@ -17,8 +17,10 @@ import (
 func importLoop(store *storepkg.Store, at time.Time, tickets ...tracker.Ticket) *loop.Loop {
 	src := &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:x": tickets}}
 	resolve := trackertest.ByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})
-	return newLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(resolve))
+	return newLoopWithDeps(loop.Deps{
+		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: config.Config{}, Workspace: config.Workspace{},
+		Runner: runner.ProcessRunner{}, Tracker: resolve,
+	})
 }
 
 func TestImport(t *testing.T) {

@@ -35,7 +35,7 @@ func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int
 	ticket := storepkg.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
 	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)

@@ -67,10 +67,3 @@ func (o *Option[T]) UnmarshalJSON(data []byte) error {
 	*o = Some(v)
 	return nil
 }
-
-func (o Option[T]) String() string {
-	if !o.ok {
-		return "None"
-	}
-	return fmt.Sprintf("Some(%v)", o.value)
-}

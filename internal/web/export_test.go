@@ -25,11 +25,10 @@ func renderStates(name string, states []plan.State) (string, error) {
 	var rows []view.Row
 	for _, state := range states {
 		r := view.Row{
-			URL:        "sandbox://" + state.String(),
-			State:      state.String(),
-			Glyph:      state.Glyph(),
-			Unattended: state.Unattended(),
-			Verbs:      plan.Verbs(state),
+			URL:   "sandbox://" + state.String(),
+			State: state.String(),
+			Glyph: state.Glyph(),
+			Verbs: plan.Verbs(state),
 		}
 		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
 		r.Buttons = r.VerbButtons()

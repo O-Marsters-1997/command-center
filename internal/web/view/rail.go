@@ -16,6 +16,27 @@ import (
 )
 
 const RailOpenSeparator = "|"
+const ticketsPath = "/tickets"
+
+type Home struct {
+	Chrome
+	Target string
+}
+
+func (r *Reader) Home(ctx context.Context, now time.Time) (Home, error) {
+	f, err := r.loadFrame(ctx, now, Params{})
+	if err != nil {
+		return Home{}, fmt.Errorf("load frame: %w", err)
+	}
+	chrome := f.chrome
+	rail := railFromFrame(f, RailParams{})
+	chrome.Home = true
+	home := Home{Chrome: chrome, Target: ticketsPath}
+	if len(rail.NeedsYou) > 0 {
+		home.Target = rail.NeedsYou[0].Path
+	}
+	return home, nil
+}
 
 const railSettledKey = "settled"
 
@@ -128,8 +149,7 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 func railFromFrame(f frame, params RailParams) Rail {
 	params.Repo = f.params.Repo
 	params.Project, params.ProjectRepos = f.project.Name, f.project.Repos
-	rows := deriveRows(f.tickets, f.in, f.snap, f.projects)
-	rail := BuildRail(rows, f.now, params)
+	rail := BuildRail(f.rows, f.now, params)
 	rail.Gauges = f.chrome.Gauges
 	rail.Health = RailHealth{
 		Live: f.chrome.LiveAgents, Observe: f.chrome.Observe, Stale: f.chrome.ObserveStale, Error: f.chrome.LastError,

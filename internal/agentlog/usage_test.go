@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 )
 
 func TestParseTranscriptUsage(t *testing.T) {
@@ -26,7 +27,7 @@ func TestParseTranscriptUsage(t *testing.T) {
 				At:    time.Date(2026, 8, 25, 11, 22, 17, 492_000_000, time.UTC),
 				Model: "claude-sonnet-5",
 				Input: 82, Output: 35983, CacheRead: 9858576, CacheCreate: 62232,
-				CostUSD: &cost,
+				CostUSD: option.Some(cost),
 			}},
 		},
 		{
@@ -46,7 +47,8 @@ func TestParseTranscriptUsage(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseTranscriptUsage(%s) error = %v", tt.fixture, err)
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
+			equalOption := cmp.Comparer(func(a, b option.Option[float64]) bool { return a == b })
+			if diff := cmp.Diff(tt.want, got, equalOption); diff != "" {
 				t.Errorf("ParseTranscriptUsage(%s) mismatch (-want +got):\n%s", tt.fixture, diff)
 			}
 		})

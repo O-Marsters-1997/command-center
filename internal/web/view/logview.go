@@ -39,36 +39,36 @@ func EventShown(mode LogFilter, e agentlog.Event) bool {
 }
 
 type phaseView struct {
-	Skill string    `json:"skill"`
-	Note  string    `json:"note"`
-	At    string    `json:"at"`
-	Items []logItem `json:"items"`
+	Skill string
+	Note  string
+	At    string
+	Items []logItem
 }
 
 type logItem struct {
-	Kind      string        `json:"kind"`
-	Line      template.HTML `json:"line,omitempty"`
-	Group     callGroup     `json:"group"`
-	Folded    bool          `json:"-"`
-	FirstFail bool          `json:"-"`
+	Kind      string
+	Line      template.HTML
+	Group     callGroup
+	Folded    bool
+	FirstFail bool
 }
 
 type callGroup struct {
-	Summary  string          `json:"summary"`
-	FailNote string          `json:"fail_note"`
-	Open     bool            `json:"open"`
-	Lines    []template.HTML `json:"lines"`
+	Summary  string
+	FailNote string
+	Open     bool
+	Lines    []template.HTML
 }
 
 type LogDetail struct {
-	Path       string        `json:"path"`
-	Streaming  bool          `json:"streaming"`
-	Lines      int           `json:"lines"`
-	PhaseCount int           `json:"phase_count"`
-	Phases     []phaseView   `json:"phases"`
-	StreamPath string        `json:"stream_path"`
-	Worked     workedLine    `json:"worked"`
-	Final      template.HTML `json:"final"`
+	Path       string
+	Streaming  bool
+	Lines      int
+	PhaseCount int
+	Phases     []phaseView
+	StreamPath string
+	Worked     workedLine
+	Final      template.HTML
 }
 
 type LogSource struct {

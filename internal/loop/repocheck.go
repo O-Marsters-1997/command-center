@@ -115,3 +115,16 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 		return nil
 	})
 }
+
+func RepoNameForDir(ctx context.Context, dir string, repos []store.Repo) (name string, ok bool) {
+	origin, err := git.OriginURL(ctx, dir)
+	if err != nil {
+		return "", false
+	}
+	for _, r := range repos {
+		if git.SameRemote(origin, r.Remote) {
+			return r.Name, true
+		}
+	}
+	return "", false
+}

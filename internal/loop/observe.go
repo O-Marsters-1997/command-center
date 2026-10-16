@@ -280,7 +280,7 @@ func observableRepos(ctx context.Context, st *store.Store, dataDir string) ([]st
 	}), nil
 }
 
-func ReadyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
+func readyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
 	repos, err := st.Repos(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list repos: %w", err)

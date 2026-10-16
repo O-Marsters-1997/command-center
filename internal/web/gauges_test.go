@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -105,7 +106,10 @@ func testLayoutSpendLimitNotice(t *testing.T) {
 				t.Fatalf("RecordReadings: %v", err)
 			}
 
-			server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
+			server := web.NewServer(web.Deps{
+				Logger: slog.New(slog.DiscardHandler), Store: store,
+				Clock: fixedClock(observedAt.Add(45 * time.Second)), SpendLimit5h: 80,
+			})
 			notices := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "#notices")
 			if paused := strings.Contains(notices.Text(), "spawning paused"); paused != tt.wantPaused {
 				t.Errorf("GET /tickets notices = %q, paused %v, want %v", notices.Text(), paused, tt.wantPaused)

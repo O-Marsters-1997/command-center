@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -46,24 +44,20 @@ var templates = template.Must(template.New("").
 	ParseFS(templateFiles, "*.tmpl"))
 
 type Server struct {
-	logger           *slog.Logger
-	store            *store.Store
-	clock            Clock
-	view             *view.Reader
-	trackerFor       tracker.Resolver
-	mux              http.Handler
-	nudger           Nudger
-	pushable         pushableCache
-	loc              *time.Location
-	spendLimit5h     int
-	boardPollSeconds int
+	logger     *slog.Logger
+	store      *store.Store
+	clock      Clock
+	view       *view.Reader
+	trackerFor tracker.Resolver
+	mux        http.Handler
+	nudger     Nudger
+	pushable   pushableCache
 }
 
 const pushableTTL = time.Minute
 
 type pushableCache struct {
 	mu      sync.Mutex
-	flight  singleflight.Group
 	list    func(context.Context) ([]gh.RepoSummary, error)
 	repos   []gh.RepoSummary
 	fetched time.Time
@@ -71,46 +65,31 @@ type pushableCache struct {
 
 func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummary, error) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if !c.fetched.IsZero() && now.Sub(c.fetched) < pushableTTL {
-		repos := c.repos
-		c.mu.Unlock()
-		return repos, nil
+		return c.repos, nil
 	}
-	c.mu.Unlock()
-	value, err, _ := c.flight.Do("pushable", func() (any, error) {
-		c.mu.Lock()
-		if !c.fetched.IsZero() && now.Sub(c.fetched) < pushableTTL {
-			repos := c.repos
-			c.mu.Unlock()
-			return repos, nil
-		}
-		c.mu.Unlock()
-		repos, err := c.list(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("list pushable repos: %w", err)
-		}
-		c.mu.Lock()
-		c.repos, c.fetched = repos, now
-		c.mu.Unlock()
-		return repos, nil
-	})
+	repos, err := c.list(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetch pushable repos: %w", err)
+		return nil, fmt.Errorf("fetch pushable repos: list pushable repos: %w", err)
 	}
-	return value.([]gh.RepoSummary), nil
+	c.repos, c.fetched = repos, now
+	return repos, nil
 }
 
 func NewServer(d Deps, opts ...Option) *Server {
+	if d.BoardPollSeconds == 0 {
+		d.BoardPollSeconds = config.DefaultBoardPollSeconds
+	}
 	s := &Server{
 		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger,
-		trackerFor:       tracker.Resolve(gh.CLI{}),
-		pushable:         pushableCache{list: gh.CLI{}.PushableRepos},
-		boardPollSeconds: config.DefaultBoardPollSeconds,
+		trackerFor: tracker.Resolve(gh.CLI{}),
+		pushable:   pushableCache{list: gh.CLI{}.PushableRepos},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
-	s.view = view.NewReader(d.Store, d.DataDir, renderLogLine, s.boardPollSeconds, s.spendLimit5h)
+	s.view = view.NewReader(d.Store, d.DataDir, renderLogLine, d.BoardPollSeconds, d.SpendLimit5h)
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", s.handle(s.handleIndex))
 	mux.Handle("GET /tickets", s.handle(s.handleTickets))
@@ -118,7 +97,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /f/{feature}/graph", s.handle(s.handleFeatureGraph))
 	mux.Handle("GET /f/{feature}/launch", s.handle(s.handleFeatureLaunch))
 	mux.Handle("GET /launch", s.handle(s.handleLaunchPicker))
-	mux.Handle("GET /board", s.handle(s.handleBoard))
+	mux.Handle("GET /board", s.handle(s.renderBoard))
 	mux.Handle("GET /rail", s.handle(s.handleRail))
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
@@ -156,10 +135,7 @@ func (s *Server) nudge() {
 }
 
 func (s *Server) now() time.Time {
-	if s.loc != nil {
-		return s.clock.Now().In(s.loc)
-	}
-	return s.clock.Now()
+	return s.clock.Now().In(time.Local)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
@@ -244,7 +220,7 @@ func statusOf(err error) int {
 	if se, ok := errors.AsType[statusError](err); ok {
 		return se.status
 	}
-	if view.IsInvalid(err) {
+	if _, ok := errors.AsType[view.InvalidError](err); ok {
 		return http.StatusBadRequest
 	}
 	for _, m := range statusMap {
@@ -326,7 +302,7 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 		return fmt.Errorf("load launch picker: %w", err)
 	}
 	if requested := r.URL.Query()["ticket"]; len(requested) > 0 {
-		modal, err := s.view.TicketModal(r.Context(), s.clock.Now(), requested)
+		modal, err := s.launchModal(r.Context(), s.clock.Now(), "", requested)
 		if err != nil {
 			return withStatus(http.StatusBadRequest, err)
 		}
@@ -335,14 +311,10 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 	return renderHTML(w, "launch_picker.tmpl", page)
 }
 
-func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
-	return s.renderBoard(w, r)
-}
-
 const railOpenCookie = "rail-open"
 
 func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
-	currentURL := hx.CurrentURL(r)
+	currentURL := r.Header.Get(hx.HeaderCurrentURL)
 	params := view.RailParams{
 		Sel:   view.RailSelection(currentURL),
 		Query: strings.TrimSpace(r.FormValue("q")),
@@ -421,52 +393,47 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	if err := r.ParseForm(); err != nil {
 		return withStatus(http.StatusBadRequest, err)
 	}
-	ctx := r.Context()
-
-	if feature := r.FormValue("feature"); feature != "" {
-		if err := s.store.QueueVerbIntent(ctx, feature, plan.VerbImport, s.clock.Now()); err != nil {
+	feature := r.FormValue("feature")
+	if feature != "" {
+		if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
 			return fmt.Errorf("queue verb intent: %w", err)
 		}
 		s.nudge()
-
-		modal, err := s.view.FeatureModal(ctx, s.clock.Now(), feature)
-		if err != nil {
-			return fmt.Errorf("load feature modal: %w", err)
-		}
-		return renderFragment(w, r, modal.Path(), "launchDialog", modal)
 	}
-
-	requested := r.Form["ticket"]
-	if len(requested) == 0 {
-		return errorf(http.StatusBadRequest, "either feature or at least one ticket is required")
-	}
-	modal, err := s.view.TicketModal(ctx, s.clock.Now(), requested)
+	modal, err := s.launchModal(r.Context(), s.clock.Now(), feature, r.Form["ticket"])
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return err
 	}
 	return renderFragment(w, r, modal.Path(), "launchDialog", modal)
 }
 
 func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	now := s.clock.Now()
 	q := r.URL.Query()
-	if feature := q.Get("feature"); feature != "" {
-		modal, err := s.view.FeatureModal(ctx, now, feature)
-		if err != nil {
-			return fmt.Errorf("load feature modal: %w", err)
-		}
-		return renderFragment(w, r, modal.Path(), "launchDialog", modal)
-	}
-	requested := q["ticket"]
-	if len(requested) == 0 {
-		return errorf(http.StatusBadRequest, "either ?feature= or at least one ?ticket= is required")
-	}
-	modal, err := s.view.TicketModal(ctx, now, requested)
+	modal, err := s.launchModal(r.Context(), s.clock.Now(), q.Get("feature"), q["ticket"])
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return err
 	}
 	return renderFragment(w, r, modal.Path(), "launchDialog", modal)
+}
+
+func (s *Server) launchModal(
+	ctx context.Context, now time.Time, feature string, tickets []string,
+) (view.LaunchModal, error) {
+	if feature != "" {
+		modal, err := s.view.FeatureModal(ctx, now, feature)
+		if err != nil {
+			return view.LaunchModal{}, fmt.Errorf("load feature modal: %w", err)
+		}
+		return modal, nil
+	}
+	if len(tickets) == 0 {
+		return view.LaunchModal{}, errorf(http.StatusBadRequest, "either feature or at least one ticket is required")
+	}
+	modal, err := s.view.TicketModal(ctx, now, tickets)
+	if err != nil {
+		return view.LaunchModal{}, withStatus(http.StatusBadRequest, err)
+	}
+	return modal, nil
 }
 
 func (s *Server) handleCandidatesJSON(w http.ResponseWriter, r *http.Request) error {
@@ -583,7 +550,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) redirectOrSwap(w http.ResponseWriter, r *http.Request) error {
 	if !hx.IsRequest(r) {
-		seeOther(w, r, returnPath(r.FormValue("return"), "/"))
+		seeOther(w, r, returnPath(r.FormValue("return"), "/", "/"))
 		return nil
 	}
 	return s.renderBoard(w, r)
@@ -635,17 +602,8 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	if err := s.store.QueueEditTicketIntent(ctx, edit); err != nil {
 		return fmt.Errorf("queue edit ticket intent: %w", err)
 	}
-	http.Redirect(w, r, afterTicketEdit(r.FormValue("return")), http.StatusSeeOther)
+	http.Redirect(w, r, returnPath(r.FormValue("return"), "/s/", "/"), http.StatusSeeOther)
 	return nil
-}
-
-func afterTicketEdit(back string) string {
-	u, err := url.Parse(back)
-	if err != nil || u.Scheme != "" || u.Host != "" ||
-		!strings.HasPrefix(u.Path, "/s/") || strings.Contains(u.Path, "..") {
-		return "/"
-	}
-	return u.EscapedPath()
 }
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
@@ -667,7 +625,7 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	scope := r.PathValue("owner") + "/" + r.PathValue("name")
-	if !repoName.MatchString(scope) || hasDotSegment(scope) {
+	if !validRepo(scope) {
 		return errorf(http.StatusNotFound, "repo %q is not owner/name", scope)
 	}
 	repo, known, err := s.view.KnownRepo(ctx, scope)
@@ -699,14 +657,16 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 	}
 	repo := r.URL.Query().Get("repo")
 	host := "/repos"
-	if repoName.MatchString(repo) && !hasDotSegment(repo) {
+	if validRepo(repo) {
 		host = view.RepoPath(repo)
 	}
 	if hx.IsRequest(r) {
 		rawSeen := r.URL.Query().Get("seen")
 		if rawSeen != "" {
-			seen, err := view.ParseBannerState(rawSeen)
-			if err != nil || seen != banner.State {
+			seen := view.BannerState(rawSeen)
+			if !slices.Contains([]view.BannerState{
+				view.BannerUntracked, view.BannerCloning, view.BannerReady, view.BannerRefused,
+			}, seen) || seen != banner.State {
 				w.Header().Set(hx.HeaderRefresh, "true")
 			}
 		}
@@ -720,13 +680,15 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 
 var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
-func hasDotSegment(repo string) bool {
-	return slices.ContainsFunc(strings.Split(repo, "/"), func(seg string) bool { return seg == "." || seg == ".." })
+func validRepo(name string) bool {
+	return repoName.MatchString(name) && !slices.ContainsFunc(strings.Split(name, "/"), func(seg string) bool {
+		return seg == "." || seg == ".."
+	})
 }
 
 func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 	repo := strings.TrimSpace(r.FormValue("repo"))
-	if !repoName.MatchString(repo) || hasDotSegment(repo) {
+	if !validRepo(repo) {
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
 	queued, err := s.store.QueueTrackIntent(r.Context(), repo, s.clock.Now())
@@ -802,4 +764,20 @@ func randomGroup() (string, error) {
 		return "", fmt.Errorf("generate launch group: %w", err)
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) error {
+	data, err := s.view.InsightsPage(r.Context(), s.now(), r.URL.Query())
+	if err != nil {
+		return fmt.Errorf("load insights page: %w", err)
+	}
+	return renderHTML(w, "insights.tmpl", data)
+}
+
+func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) error {
+	resp, err := s.view.Insights(r.Context(), s.now(), r.URL.Query())
+	if err != nil {
+		return fmt.Errorf("load insights: %w", err)
+	}
+	return writeJSON(w, resp)
 }

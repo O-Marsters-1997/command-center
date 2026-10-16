@@ -23,7 +23,7 @@ export interface KeyTarget extends Focused {
   click(): void;
 }
 
-export interface Timers {
+interface Timers {
   set(fn: () => void, ms: number): () => void;
 }
 
@@ -42,7 +42,7 @@ export function isApplePlatform(source: PlatformSource): boolean {
   return applePlatform.test(source.userAgentData?.platform ?? source.platform ?? "");
 }
 
-export function isField(el: Focused | null): boolean {
+function isField(el: Focused | null): boolean {
   return el !== null && (el.matches(fieldSelector) || el.isContentEditable === true);
 }
 
@@ -56,7 +56,7 @@ export function bindingFor(e: KeyInfo, apple: boolean): string | null {
   return name === "k" ? "mod+k" : null;
 }
 
-export function createChord(timers: Timers) {
+function createChord(timers: Timers) {
   let cancel: (() => void) | null = null;
 
   function clear(): void {

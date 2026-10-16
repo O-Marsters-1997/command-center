@@ -28,21 +28,17 @@ type worktrees interface {
 	Remove(ctx context.Context, repoPath, branch string, mode tp.RemoveMode) error
 }
 
-type agentRunner interface {
-	Spawn(ctx context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error)
-	Liveness(pgid int, wantStart, now time.Time) (bool, error)
-	Cancel(pgid int) error
-	Reap(pid int) (exitCode int, ok bool)
-}
-
 type Deps struct {
 	Logger    *slog.Logger
 	Store     *store.Store
 	Clock     Clock
-	Runner    agentRunner
+	Runner    runner.Runner
 	Observe   ObserveFunc
 	Config    config.Config
 	Workspace config.Workspace
+	Validate  ValidateFunc
+	RemoteOf  RemoteFunc
+	Tracker   tracker.Resolver
 }
 
 type Option func(*Loop)
@@ -50,12 +46,6 @@ type Option func(*Loop)
 func WithForge(f forge) Option { return func(l *Loop) { l.forge = f } }
 
 func WithWorktrees(w worktrees) Option { return func(l *Loop) { l.worktrees = w } }
-
-func WithValidator(v ValidateFunc) Option { return func(l *Loop) { l.validate = v } }
-
-func WithRemoteSource(r RemoteFunc) Option { return func(l *Loop) { l.remoteOf = r } }
-
-func WithTrackerSource(r tracker.Resolver) Option { return func(l *Loop) { l.trackerFor = r } }
 
 func New(d Deps, opts ...Option) *Loop {
 	l := &Loop{
@@ -70,6 +60,15 @@ func New(d Deps, opts ...Option) *Loop {
 	}
 	for _, opt := range opts {
 		opt(l)
+	}
+	if d.Validate != nil {
+		l.validate = d.Validate
+	}
+	if d.RemoteOf != nil {
+		l.remoteOf = d.RemoteOf
+	}
+	if d.Tracker != nil {
+		l.trackerFor = d.Tracker
 	}
 	return l
 }

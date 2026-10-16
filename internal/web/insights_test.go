@@ -28,7 +28,7 @@ func disposeInsightsRun(
 	t.Helper()
 	ctx := t.Context()
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticketURL, Kind: kind, BaselineSHA: "deadbeef", PromptHash: "hash-" + ticketURL,
+		Ticket: ticketURL, Kind: kind, PromptHash: "hash-" + ticketURL,
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton: %v", err)
@@ -119,16 +119,18 @@ func TestInsightsJSON(t *testing.T) {
 		}
 	})
 
-	t.Run("names the location the server was given", func(t *testing.T) {
+	t.Run("names the local location", func(t *testing.T) {
 		t.Parallel()
-		paris, err := time.LoadLocation("Europe/Paris")
-		if err != nil {
-			t.Fatalf("LoadLocation(Europe/Paris): %v", err)
-		}
-		_, body := fetchInsights(t, newServer(openStore(t), testNow, web.WithLocation(paris)), "")
+		_, body := fetchInsights(t, newServer(openStore(t), testNow), "")
 
-		if body.Timezone != "Europe/Paris" {
-			t.Errorf("GET /insights.json timezone = %q, want Europe/Paris", body.Timezone)
+		loc, err := time.LoadLocation(body.Timezone)
+		if err != nil {
+			t.Fatalf("LoadLocation(%q): %v", body.Timezone, err)
+		}
+		_, gotOffset := testNow.In(loc).Zone()
+		_, wantOffset := testNow.In(time.Local).Zone()
+		if gotOffset != wantOffset {
+			t.Errorf("GET /insights.json timezone %q offset = %d, want local offset %d", body.Timezone, gotOffset, wantOffset)
 		}
 	})
 

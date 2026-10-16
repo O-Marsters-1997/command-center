@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
@@ -13,8 +14,9 @@ func TestSumWeight(t *testing.T) {
 
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	exact := 123.45
-	settled := agentlog.RequestUsage{At: at, Model: "claude-sonnet-5", Input: 1, CostUSD: &exact}
-	outside := agentlog.RequestUsage{At: at.Add(time.Hour), Model: "claude-sonnet-5", Input: 1, CostUSD: &exact}
+	cost := option.Some(exact)
+	settled := agentlog.RequestUsage{At: at, Model: "claude-sonnet-5", Input: 1, CostUSD: cost}
+	outside := agentlog.RequestUsage{At: at.Add(time.Hour), Model: "claude-sonnet-5", Input: 1, CostUSD: cost}
 
 	tests := []struct {
 		name     string

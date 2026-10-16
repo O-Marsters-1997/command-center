@@ -32,11 +32,11 @@ func ParseParams(q url.Values) Params {
 }
 
 func normalizeFilter(filter string) SectionKey {
-	key, err := ParseSectionKey(filter)
-	if err != nil {
-		return SectionUnknown
+	key := SectionKey(filter)
+	if slices.Contains(allSectionKeys, key) {
+		return key
 	}
-	return key
+	return SectionUnknown
 }
 
 func (v Params) Scoped(repos []store.Repo, projects []store.Project, tickets []store.Ticket) (Params, store.Project) {

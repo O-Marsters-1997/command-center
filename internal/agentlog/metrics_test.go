@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -25,11 +26,11 @@ func TestParseMetrics(t *testing.T) {
 			fixture: "run27.jsonl",
 			want: agentlog.RunMetrics{
 				CostUSD: option.Some(cost),
-				Requests: []agentlog.Request{
-					{InputTokens: 2, CacheCreationTokens: 28560, CacheReadTokens: 24902, OutputTokens: 6},
-					{InputTokens: 2, CacheCreationTokens: 138, CacheReadTokens: 125101, OutputTokens: 8},
-					{InputTokens: 2, CacheCreationTokens: 241, CacheReadTokens: 176056, OutputTokens: 3},
-					{InputTokens: 2, CacheCreationTokens: 2562, CacheReadTokens: 253508, OutputTokens: 4},
+				Requests: []agentlog.RequestUsage{
+					{Input: 2, CacheCreate: 28560, CacheRead: 24902, Output: 6},
+					{Input: 2, CacheCreate: 138, CacheRead: 125101, Output: 8},
+					{Input: 2, CacheCreate: 241, CacheRead: 176056, Output: 3},
+					{Input: 2, CacheCreate: 2562, CacheRead: 253508, Output: 4},
 				},
 			},
 		},
@@ -37,17 +38,17 @@ func TestParseMetrics(t *testing.T) {
 			name:    "a run with no result line keeps its requests and has no cost",
 			fixture: "alive.jsonl",
 			want: agentlog.RunMetrics{
-				Requests: []agentlog.Request{
-					{InputTokens: 10, CacheCreationTokens: 20, CacheReadTokens: 30, OutputTokens: 5},
-					{InputTokens: 1, CacheCreationTokens: 2, CacheReadTokens: 3, OutputTokens: 4},
-					{OutputTokens: 7},
+				Requests: []agentlog.RequestUsage{
+					{Input: 10, CacheCreate: 20, CacheRead: 30, Output: 5},
+					{Input: 1, CacheCreate: 2, CacheRead: 3, Output: 4},
+					{Output: 7},
 				},
 			},
 		},
 		{
 			name:    "a dialect that emits no cost has no CostUSD, not zero",
 			fixture: "no_cost.jsonl",
-			want:    agentlog.RunMetrics{Requests: []agentlog.Request{{OutputTokens: 3}}},
+			want:    agentlog.RunMetrics{Requests: []agentlog.RequestUsage{{Output: 3}}},
 		},
 	}
 	for _, tt := range tests {
@@ -58,7 +59,8 @@ func TestParseMetrics(t *testing.T) {
 				t.Fatalf("ParseMetrics(%s) error = %v", tt.fixture, err)
 			}
 			equalOption := cmp.Comparer(func(a, b option.Option[float64]) bool { return a == b })
-			if diff := cmp.Diff(tt.want, got, equalOption); diff != "" {
+			tokensOnly := cmpopts.IgnoreFields(agentlog.RequestUsage{}, "At", "Model")
+			if diff := cmp.Diff(tt.want, got, equalOption, tokensOnly); diff != "" {
 				t.Errorf("ParseMetrics(%s) mismatch (-want +got):\n%s", tt.fixture, diff)
 			}
 		})

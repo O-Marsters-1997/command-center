@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -17,6 +17,27 @@ import (
 )
 
 const observeStaleAfter = 20 * time.Second
+const eventPageSize = 500
+
+func EachTicketEvent(
+	ctx context.Context, st *store.Store, ticketURL string, afterID int64, fn func(store.Event) error,
+) error {
+	for {
+		page, err := st.TicketEventsAfter(ctx, ticketURL, afterID, eventPageSize)
+		if err != nil {
+			return fmt.Errorf("read ticket events for %s: %w", ticketURL, err)
+		}
+		for _, e := range page {
+			if err := fn(e); err != nil {
+				return err
+			}
+			afterID = e.ID
+		}
+		if len(page) < eventPageSize {
+			return nil
+		}
+	}
+}
 
 type Board struct {
 	Chrome
@@ -50,15 +71,8 @@ type InvalidError struct{ Err error }
 func (e InvalidError) Error() string { return e.Err.Error() }
 func (e InvalidError) Unwrap() error { return e.Err }
 
-func IsInvalid(err error) bool {
-	var invalid InvalidError
-	return errors.As(err, &invalid)
-}
-
 type Reader struct {
 	store            *store.Store
-	frameStore       frameStore
-	derive           func(plan.Input) plan.Snapshot
 	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
@@ -71,10 +85,6 @@ func NewReader(
 ) *Reader {
 	return &Reader{
 		store: st, dataDir: dataDir, renderLine: renderLine,
-		frameStore: st,
-		derive: func(in plan.Input) plan.Snapshot {
-			return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
-		},
 		boardPollSeconds: boardPollSeconds,
 		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),
@@ -100,7 +110,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if err != nil {
 		return Board{}, fmt.Errorf("load board ticket spend: %w", err)
 	}
-	rows := deriveRows(f.tickets, f.in, f.snap, f.projects)
+	rows := slices.Clone(f.rows)
 	if err := applySpend(rows, r.spend); err != nil {
 		return Board{}, fmt.Errorf("apply spend: %w", err)
 	}
@@ -180,20 +190,12 @@ func refusedRepos(repos []store.Repo) []RefusedRepo {
 	return refused
 }
 
-type chromeInput struct {
-	tickets  []store.Ticket
-	obs      plan.Observation
-	observed bool
-	lastErr  option.Option[store.TickError]
-	gauges   map[agentlog.Window]store.Gauge
-	split    map[agentlog.Window]windowSplit
-}
-
-func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrome {
-	tickets, obs, observed, lastErr, gauges, split := in.tickets, in.obs, in.observed, in.lastErr, in.gauges, in.split
+func (r *Reader) buildChrome(f frame) Chrome {
+	params, now := f.params, f.now
+	obs, observed, lastErr, gauges, split := f.in.Obs, f.in.Observed, f.lastErr, f.gauges, f.split
 	c := Chrome{
 		Workspace:    workspaceName(r.dataDir),
-		LiveAgents:   liveAgents(tickets, obs),
+		LiveAgents:   liveAgents(f.tickets, obs),
 		Observe:      Age{Age: "never"},
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split),
@@ -225,9 +227,6 @@ func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrom
 	}
 	if params.Repo != "" {
 		c.RepoCrumbPath = RepoPath(params.Repo)
-	}
-	if params.Feature != "" {
-		c.FeatureQuery = url.QueryEscape(params.Feature)
 	}
 	return c
 }

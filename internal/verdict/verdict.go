@@ -17,6 +17,18 @@ const (
 	Skipped
 )
 
+func (s CheckState) String() string {
+	switch s {
+	case Success:
+		return "passed"
+	case Skipped:
+		return "skipped"
+	case Pending, Failure:
+		return "failed"
+	}
+	return "failed"
+}
+
 type Kind int
 
 const (

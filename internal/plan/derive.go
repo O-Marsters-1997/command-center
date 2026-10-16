@@ -81,7 +81,6 @@ type Entry struct {
 	State          State
 	Reason         Reason
 	Run            option.Option[RunFact]
-	Pgid           option.Option[int]
 	Elapsed        option.Option[time.Duration]
 	LogPath        string
 	ConflictedBase string
@@ -109,10 +108,6 @@ type Snapshot struct {
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
-}
-
-func (s Snapshot) HasSlotAfter(spawned int) bool {
-	return !s.spendPaused && s.maxAgents-s.running-spawned > 0
 }
 
 func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
@@ -184,10 +179,13 @@ func (r Rules) Derive(in Input) Snapshot {
 		if base == "" {
 			base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
 		}
-		run, pgid, elapsed, logPath := r.runFor(t, in, peers[t.URL])
+		run, elapsed, logPath := r.runFor(t, in, peers[t.URL])
 		membership := in.Memberships[t.URL]
 		authorised := membership.LaunchID != 0
-		conflictedBase := r.ConflictedBase(t, byURL, unlock, in.Obs)
+		var conflictedBase string
+		if r.conflictedBase(t, base, in) {
+			conflictedBase = base
+		}
 		state, reason := Status(Facts{
 			Unlock:          unlock,
 			Authorised:      authorised,
@@ -203,7 +201,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			HasRun:            run.IsSome(),
 			ConflictedBase:    conflictedBase,
 		})
-		if pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
+		if in.Runs[t.URL].Pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
 			snap.running++
 		}
 
@@ -217,7 +215,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		snap.byURL[t.URL] = len(snap.Entries)
 		snap.Entries = append(snap.Entries, Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
-			Pgid: pgid, Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
+			Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
 			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
@@ -227,19 +225,12 @@ func (r Rules) Derive(in Input) Snapshot {
 	return snap
 }
 
-func (r Rules) ConflictedBase(t Ticket, byURL map[TicketURL]Ticket, unlock Unlock, obs Observation) string {
-	base := unlock.BaseBranch
-	if base == "" {
-		base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
-	}
+func (r Rules) conflictedBase(t Ticket, base string, in Input) bool {
 	if base == DefaultBaseBranch {
-		return ""
+		return false
 	}
 	baseRef := BranchRef{Repo: t.Repo, Branch: base}
-	if obs.ConflictsWithBase[baseRef] || obs.MidMerge[baseRef] {
-		return base
-	}
-	return ""
+	return in.Obs.ConflictsWithBase[baseRef] || in.Obs.MidMerge[baseRef]
 }
 
 func (r Rules) conflictingPeerHold(
@@ -307,10 +298,10 @@ func draftReason(
 
 func (r Rules) runFor(
 	t Ticket, in Input, peer string,
-) (run option.Option[RunFact], pgid option.Option[int], elapsed option.Option[time.Duration], logPath string) {
+) (run option.Option[RunFact], elapsed option.Option[time.Duration], logPath string) {
 	summary, ok := in.Runs[t.URL]
 	if !ok {
-		return option.None[RunFact](), option.None[int](), option.None[time.Duration](), ""
+		return option.None[RunFact](), option.None[time.Duration](), ""
 	}
 
 	key := t.Ref()
@@ -348,7 +339,7 @@ func (r Rules) runFor(
 	if started := summary.ProcStartedAt; fact.Alive && started.IsSome() {
 		elapsed = option.Some(in.Now.Sub(started.Unwrap()).Round(time.Second))
 	}
-	return option.Some(fact), summary.Pgid, elapsed, summary.LogPath
+	return option.Some(fact), elapsed, summary.LogPath
 }
 
 func (r Rules) ApplyVerdict(t Ticket, obs Observation, vf VerdictFacts) option.Option[verdict.Result] {

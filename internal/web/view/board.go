@@ -19,65 +19,64 @@ const defaultBaseBranch = "main"
 
 type Row struct {
 	URL        string `json:"url"`
-	Repo       string `json:"repo"`
-	Feature    string `json:"feature"`
-	Project    string `json:"project"`
-	ProjectHue int    `json:"project_hue"`
+	Ref        string `json:"ref"`
+	Repo       string `json:"-"`
+	Feature    string `json:"-"`
+	Project    string `json:"-"`
+	ProjectHue int    `json:"-"`
 	// GitHub's issue list caps reads at 100 rows, leaving titles beyond the limit empty.
 	Title           string         `json:"title"`
 	State           string         `json:"state"`
 	Reason          string         `json:"reason"`
-	Question        string         `json:"question"`
+	Question        string         `json:"-"`
 	Glyph           plan.GlyphWord `json:"glyph"`
-	Unattended      bool           `json:"unattended"`
 	Alive           bool           `json:"alive"`
-	Verbs           []plan.Verb    `json:"verbs"`
-	Branch          string         `json:"branch"`
-	BlockedBy       []string       `json:"blocked_by"`
-	PendingVerbs    []plan.Verb    `json:"pending_verbs"`
-	Base            string         `json:"base"`
-	BaseVerdict     string         `json:"base_verdict"`
-	StackDepth      int            `json:"stack_depth"`
-	MergeOrder      int            `json:"merge_order"`
-	Warning         string         `json:"warning"`
+	Verbs           []plan.Verb    `json:"-"`
+	Branch          string         `json:"-"`
+	BlockedBy       []string       `json:"-"`
+	PendingVerbs    []plan.Verb    `json:"-"`
+	Base            string         `json:"-"`
+	BaseVerdict     string         `json:"-"`
+	StackDepth      int            `json:"-"`
+	MergeOrder      int            `json:"-"`
+	Warning         string         `json:"-"`
 	Blocking        []string       `json:"blocking"`
 	After           []string       `json:"after"`
-	Unlocks         []string       `json:"unlocks"`
-	Worktree        string         `json:"worktree"`
+	Unlocks         []string       `json:"-"`
+	Worktree        string         `json:"-"`
 	PRNumber        int            `json:"pr_number"`
-	PRState         string         `json:"pr_state"`
-	Pgid            string         `json:"pgid"`
+	PRState         string         `json:"-"`
+	Pgid            string         `json:"-"`
 	Elapsed         string         `json:"elapsed"`
-	ElapsedSeconds  int            `json:"elapsed_seconds"`
-	ElapsedPercent  int            `json:"elapsed_percent"`
-	LogPath         string         `json:"log_path"`
-	CancelCount     int            `json:"cancel_count"`
-	SpendTokens     int            `json:"spend_tokens"`
-	BaselineSHA     string         `json:"baseline_sha"`
-	Checks          []Check        `json:"checks"`
-	RedChecks       []Check        `json:"red_checks"`
-	Draft           bool           `json:"draft"`
-	DraftReason     string         `json:"draft_reason"`
-	AgentPctWeek    float64        `json:"agent_pct_week"`
-	FollowUpPctWeek float64        `json:"follow_up_pct_week"`
-	SpendPctWeek    float64        `json:"spend_pct_week"`
-	TicketOpen      bool           `json:"ticket_open"`
+	ElapsedSeconds  int            `json:"-"`
+	ElapsedPercent  int            `json:"-"`
+	LogPath         string         `json:"-"`
+	CancelCount     int            `json:"-"`
+	SpendTokens     int            `json:"-"`
+	Checks          []Check        `json:"-"`
+	RedChecks       []Check        `json:"-"`
+	Draft           bool           `json:"-"`
+	DraftReason     string         `json:"-"`
+	AgentPctWeek    float64        `json:"-"`
+	FollowUpPctWeek float64        `json:"-"`
+	SpendPctWeek    float64        `json:"-"`
+	TicketOpen      bool           `json:"-"`
 
-	Checked     bool         `json:"checked"`
+	Checked     bool         `json:"-"`
 	Launchable  bool         `json:"-"`
 	Buttons     []VerbButton `json:"-"`
 	SessionPath string       `json:"session_path"`
-	TogglePath  string       `json:"toggle_path"`
-	TogglePush  string       `json:"toggle_push"`
-	VerbPath    string       `json:"verb_path"`
-	Log         LogDetail    `json:"log"`
+	TogglePath  string       `json:"-"`
+	TogglePush  string       `json:"-"`
+	VerbPath    string       `json:"-"`
+	Log         LogDetail    `json:"-"`
 }
 
 type Check struct {
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
-	DetailsURL string `json:"details_url"`
+	Name       string
+	Status     string
+	Conclusion string
+	DetailsURL string
 }
 
 func (r Row) Ticket() string { return ticketRef(r.URL) }
@@ -112,8 +111,8 @@ func (r Row) DetailID() string {
 }
 
 type Group struct {
-	Root     option.Option[Row] `json:"root"`
-	Children []Row              `json:"children"`
+	Root     option.Option[Row]
+	Children []Row
 }
 
 func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) error {
@@ -163,8 +162,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		}
 		var pgid, elapsed string
 		var elapsedSeconds int
-		if e.Pgid.IsSome() {
-			pgid = strconv.Itoa(e.Pgid.Unwrap())
+		if latestRun.Pgid.IsSome() {
+			pgid = strconv.Itoa(latestRun.Pgid.Unwrap())
 		}
 		if e.Elapsed.IsSome() {
 			elapsed = e.Elapsed.Unwrap().String()
@@ -181,7 +180,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Reason:         string(e.Reason),
 			Question:       question,
 			Glyph:          e.State.Glyph(),
-			Unattended:     e.State.Unattended(),
 			Alive:          in.Obs.Runs[url].Alive,
 			Verbs:          plan.Verbs(e.State),
 			PendingVerbs:   in.PendingVerbs[url],
@@ -197,7 +195,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			LogPath:        e.LogPath,
 			CancelCount:    membership.Members,
 			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[url])),
-			BaselineSHA:    string(latestRun.BaselineSHA),
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
 			Blocking:       urlStrings(e.Unlock.Blocking),

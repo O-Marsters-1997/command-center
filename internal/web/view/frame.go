@@ -19,6 +19,7 @@ type frame struct {
 	snap     plan.Snapshot
 	repos    []store.Repo
 	projects map[string]ProjectMark
+	rows     []Row
 	lastErr  option.Option[store.TickError]
 	gauges   map[agentlog.Window]store.Gauge
 	chrome   Chrome
@@ -28,36 +29,27 @@ type frame struct {
 	split       map[agentlog.Window]windowSplit
 }
 
-type frameStore interface {
-	Tickets(context.Context) ([]store.Ticket, error)
-	PlanInput(context.Context) (plan.Input, error)
-	Repos(context.Context) ([]store.Repo, error)
-	Projects(context.Context) ([]store.Project, error)
-	LastError(context.Context) (option.Option[store.TickError], error)
-	LatestReadings(context.Context) (map[agentlog.Window]store.Gauge, error)
-}
-
 func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame, error) {
 	f := frame{now: now}
 	var err error
-	if f.tickets, err = r.frameStore.Tickets(ctx); err != nil {
+	if f.tickets, err = r.store.Tickets(ctx); err != nil {
 		return frame{}, fmt.Errorf("load tickets: %w", err)
 	}
-	if f.in, err = r.frameStore.PlanInput(ctx); err != nil {
+	if f.in, err = r.store.PlanInput(ctx); err != nil {
 		return frame{}, fmt.Errorf("load plan input: %w", err)
 	}
-	if f.repos, err = r.frameStore.Repos(ctx); err != nil {
+	if f.repos, err = r.store.Repos(ctx); err != nil {
 		return frame{}, fmt.Errorf("load repos: %w", err)
 	}
-	projects, err := r.frameStore.Projects(ctx)
+	projects, err := r.store.Projects(ctx)
 	if err != nil {
 		return frame{}, fmt.Errorf("load projects: %w", err)
 	}
 	f.projectList = projects
-	if f.lastErr, err = r.frameStore.LastError(ctx); err != nil {
+	if f.lastErr, err = r.store.LastError(ctx); err != nil {
 		return frame{}, fmt.Errorf("load last error: %w", err)
 	}
-	if f.gauges, err = r.frameStore.LatestReadings(ctx); err != nil {
+	if f.gauges, err = r.store.LatestReadings(ctx); err != nil {
 		return frame{}, fmt.Errorf("load latest readings: %w", err)
 	}
 	if f.split, err = r.gaugeSplit(ctx, now); err != nil {
@@ -66,17 +58,14 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	p, f.project = p.Scoped(f.repos, projects, f.tickets)
 	f.params = p
 	f.in.Now = now
-	f.snap = r.derive(f.in)
+	f.snap = plan.RulesFor(plan.Daemon{}, f.in.Obs).Derive(f.in)
 	f.projects = projectMarks(f.repos)
-	f.chrome = r.buildChrome(chromeInput{
-		tickets: f.tickets, obs: f.in.Obs, observed: f.in.Observed,
-		lastErr: f.lastErr, gauges: f.gauges, split: f.split,
-	}, now, p)
+	f.rows = deriveRows(f.tickets, f.in, f.snap, f.projects)
+	f.chrome = r.buildChrome(f)
 	f.chrome.scopeToProject(f.project)
 	f.chrome.ScopeMenu = scopeChoices(ScopeList(projects, f.repos), f.project.Name, p.Repo)
 	f.chrome.RefusedRepos = refusedRepos(f.repos)
-	rows := deriveRows(f.tickets, f.in, f.snap, nil)
-	rows = scopeRailRows(rows, RailParams{
+	rows := scopeRailRows(f.rows, RailParams{
 		Project: f.project.Name, Repo: p.Repo, ProjectRepos: f.project.Repos,
 	})
 	for _, row := range rows {

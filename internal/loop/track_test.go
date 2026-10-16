@@ -54,8 +54,10 @@ func validatingLoop(t *testing.T, st *storepkg.Store, validate loop.ValidateFunc
 		}
 		return "git@github.com:" + name + ".git", nil
 	}
-	opts = append([]loop.Option{loop.WithRemoteSource(remoteOf), loop.WithValidator(validate)}, opts...)
-	return newLoop(st, noOpObserve, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, opts...)
+	return newLoopWithDeps(loop.Deps{
+		Store: st, Observe: noOpObserve, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Runner: runner.ProcessRunner{}, Validate: validate, RemoteOf: remoteOf,
+	}, opts...)
 }
 
 func readyValidator(validations *[]string) loop.ValidateFunc {

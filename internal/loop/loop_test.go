@@ -444,8 +444,10 @@ func TestLoop_RunOnce(t *testing.T) {
 		forge := &ghtest.Forge{}
 		worktrees := &tptest.Worktrees{}
 		fake := &runnertest.Runner{}
-		lp := newLoop(store, loop.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, fake,
-			loop.WithForge(forge), loop.WithWorktrees(worktrees), loop.WithTrackerSource(resolve))
+		lp := newLoopWithDeps(loop.Deps{
+			Store: store, Observe: loop.NewObserver(store, forge, cfg), Clock: fixedClock(at), Config: cfg, Workspace: ws,
+			Runner: fake, Tracker: resolve,
+		}, loop.WithForge(forge), loop.WithWorktrees(worktrees))
 		if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
 			t.Fatalf("QueueVerbIntent(import): %v", err)
 		}

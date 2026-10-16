@@ -14,8 +14,8 @@ export interface Candidate {
   blocked_by: string[] | null;
 }
 
-export const NOW = "now";
-export const ON_UNLOCK = "on unlock";
+const NOW = "now";
+const ON_UNLOCK = "on unlock";
 export const REFUSED = "refused";
 
 export function initialTicked(candidates: Candidate[]): Set<string> {
@@ -36,7 +36,7 @@ export function missingBlockersOf(candidates: Candidate[], ticked: Set<string>, 
   });
 }
 
-export type ToggleResult = { ticked: Set<string> } | { refusal: string };
+type ToggleResult = { ticked: Set<string> } | { refusal: string };
 
 function names(candidates: Candidate[]): string {
   return candidates.map((c) => `${c.ref} ${c.title}`).join(", ");
@@ -64,7 +64,7 @@ export function columnsFor(candidates: Candidate[]): Map<string, number> {
   return waveDepths(candidates.map((c) => ({ url: c.url, blocking: c.blocked_by })));
 }
 
-export interface Sections {
+interface Sections {
   now: Candidate[];
   onUnlock: Candidate[];
   refused: Candidate[];

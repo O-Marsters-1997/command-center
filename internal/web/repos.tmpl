@@ -6,7 +6,7 @@
   {{range .Rows}}
   <div class="track-hit">
     <a class="font-mono" href="{{.Path}}">{{.FullName}}</a>
-    {{if .Tracked}}<ul class="checks">{{range .Steps}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>
+    {{if .Tracked}}{{template "checks" .Steps}}
     {{else}}<span class="text-muted text-xs">not tracked{{with .RefusedBranch}} <span class="glyph glyph-failed text-s-failed">will be refused: default branch is <code>{{.}}</code></span>{{end}}</span>
     <a href="{{.Path}}">track &rarr;</a>{{end}}
   </div>
@@ -16,6 +16,8 @@
 </div>
 {{- end}}
 
+{{define "checks" -}}<ul class="checks" aria-label="checks">{{range .}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>{{- end}}
+
 {{define "repoGroups" -}}
 {{range $g := .}}
 <section class="mb-7 max-w-3xl" data-scope="{{.Scope.Kind}}">
@@ -24,7 +26,7 @@
     <span class="avatar" data-hue="{{.Scope.Hue}}" aria-hidden="true">{{.Scope.Initial}}</span>
     {{.Scope.Label}}
     <span class="text-muted">{{.Count}} repo{{if ne .Count 1}}s{{end}}</span>
-    <details class="text-base font-normal">
+    <details class="text-sm font-normal">
       <summary>edit</summary>
       <form method="post" action="/projects/{{.Scope.Value}}" hx-post="/projects/{{.Scope.Value}}"
         hx-disabled-elt="find button" hx-target="#repo-results" hx-swap="innerHTML" class="flex items-center gap-2">
@@ -47,7 +49,7 @@
     {{range $row := .Rows}}
     <div class="repo-row">
       <a class="font-mono font-medium" href="{{.Path}}">{{.FullName}}</a>
-      <ul class="checks" aria-label="checks">{{range .Steps}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>
+      {{template "checks" .Steps}}
       <form method="post" action="/repos/{{.FullName}}/project" hx-post="/repos/{{.FullName}}/project"
         hx-disabled-elt="find button" hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
         <select name="project" aria-label="project of {{.FullName}}" class="select">

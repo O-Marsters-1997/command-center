@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -73,16 +74,19 @@ func TestBoard(t *testing.T) {
 		t.Parallel()
 		store := seededStore(t, testNow)
 		for _, tt := range []struct {
-			name string
-			opts []web.Option
-			want string
+			name    string
+			seconds int
+			want    string
 		}{
 			{name: "default", want: "every 5s"},
-			{name: "configured", opts: []web.Option{web.WithBoardPollSeconds(1)}, want: "every 1s"},
+			{name: "configured", seconds: 1, want: "every 1s"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				board := htmltest.Parse(t, boardBody(t, newServer(store, testNow, tt.opts...))).One(t, "table#board")
+				srv := web.NewServer(web.Deps{
+					Logger: slog.New(slog.DiscardHandler), Store: store, Clock: fixedClock(testNow), BoardPollSeconds: tt.seconds,
+				})
+				board := htmltest.Parse(t, boardBody(t, srv)).One(t, "table#board")
 				if got, _ := board.Attr("hx-trigger"); got != tt.want {
 					t.Errorf("GET /board hx-trigger = %q, want %q", got, tt.want)
 				}

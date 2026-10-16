@@ -3,7 +3,8 @@ package web
 import (
 	"context"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -13,8 +14,7 @@ import (
 func importFeatures(
 	ctx context.Context, repos []store.Repo, settings map[string]config.RepoSettings, resolve tracker.Resolver,
 ) ([]string, error) {
-	var names []string
-	seen := map[string]bool{}
+	seen := map[string]struct{}{}
 	for _, r := range repos {
 		kind := config.DefaultRepoSettings().Tracker
 		if s, ok := settings[r.Name]; ok {
@@ -33,12 +33,8 @@ func importFeatures(
 			return nil, fmt.Errorf("list features for %s: %w", r.Name, err)
 		}
 		for _, f := range features {
-			if !seen[string(f)] {
-				seen[string(f)] = true
-				names = append(names, string(f))
-			}
+			seen[string(f)] = struct{}{}
 		}
 	}
-	sort.Strings(names)
-	return names, nil
+	return slices.Sorted(maps.Keys(seen)), nil
 }
