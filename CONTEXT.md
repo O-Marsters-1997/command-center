@@ -121,7 +121,7 @@ where a repo's working copy sits), configured repo (repos are no longer configur
 
 **Project**:
 A named set of repos. A repo belongs to at most one project. The third scope
-axis. Made only by grouping repos on the Repos page and never inferred. Not the tracker's `project:`
+axis. Made only by grouping repos from a repo's page and never inferred. Not the tracker's `project:`
 label prefix, which marks a feature (ADR 6).
 _Avoid_: Workspace, folder, feature (that is the tracker's grouping of tickets)
 

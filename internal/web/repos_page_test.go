@@ -52,6 +52,7 @@ func TestReposPage(t *testing.T) {
 		"scoped page lists only this repo's features":   testScopedRepoPage,
 		"scoped page for an unknown repo":               testScopedRepoPageUnknown,
 		"notice raises a refused repo on every page":    testNoticeRaisesRefusedRepo,
+		"rows show check glyph, status and open count":  testReposPageRowStates,
 		"rejects a name that is not owner/name":         testRepoPageRejectsBadName,
 	} {
 		t.Run(name, run)
@@ -258,6 +259,12 @@ func testScopedRepoPage(t *testing.T) {
 	if err := store.ImportTickets(ctx, "project:x", seed, testNow); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
+	betaY := []storepkg.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: "https://github.com/acme/beta/issues/3", Number: 3, Title: "c"}, Repo: "acme/beta"},
+	}
+	if err := store.ImportTickets(ctx, "project:y", betaY, testNow); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
 
 	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
 		web.WithTrackerSource(trackertest.ByRemote(map[string]tracker.Source{
@@ -277,11 +284,15 @@ func testScopedRepoPage(t *testing.T) {
 	if got := crumbs.Text(); !strings.Contains(got, "acme/alpha") {
 		t.Errorf("repo breadcrumb = %q, want it to name acme/alpha", got)
 	}
-	for _, want := range []string{"git@github.com:acme/alpha.git", "project:x", "project:y", "also in acme/beta"} {
+	wants := []string{
+		"git@github.com:acme/alpha.git", "1 open ticket", "base origin/main", "project:y", "also in acme/beta",
+	}
+	for _, want := range wants {
 		if got := main.Text(); !strings.Contains(got, want) {
 			t.Errorf("repo content lacks %q: %q", want, got)
 		}
 	}
+	main.One(t, `#checks-h`)
 	board := main.One(t, "table#board")
 	if got, _ := board.Attr("hx-get"); got != "/board?repo=acme%2Falpha" {
 		t.Errorf("repo board hx-get = %q, want /board?repo=acme%%2Falpha", got)
@@ -292,10 +303,10 @@ func testScopedRepoPage(t *testing.T) {
 	if strings.Contains(main.Text(), "project:z") {
 		t.Error("repo page contains beta-only feature")
 	}
-	if reimport := main.Find(`form[action="/features/project:y/import"]`); len(reimport) != 0 {
-		t.Errorf("unimported feature offers reimport: %s", reimport[0].HTML())
+	if imported := main.Find(`form[action="/features/project:x/import"]`); len(imported) != 0 {
+		t.Errorf("imported feature offers import: %s", imported[0].HTML())
 	}
-	main.One(t, `form[action="/features/project:x/import"]`)
+	main.One(t, `form[action="/features/project:y/import"]`)
 }
 
 func testScopedRepoPageUnknown(t *testing.T) {
@@ -350,6 +361,35 @@ func testNoticeRaisesRefusedRepo(t *testing.T) {
 				t.Errorf("GET %s refusal link = %q: %s", tt.path, got, link.HTML())
 			}
 		})
+	}
+}
+
+func testReposPageRowStates(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+
+	st := track(t, openStore(t), alphaRepo)
+	refused := storepkg.Repo{
+		Name: "acme/beta", Remote: "https://github.com/acme/beta.git", Phase: plan.RepoRefused,
+		RefusalKind: plan.RefusalMergeSettings, Refusal: "merge commits allowed", TrackedAt: testNow,
+	}
+	if err := st.UpsertRepo(t.Context(), refused); err != nil {
+		t.Fatalf("UpsertRepo(%q): %v", refused.Name, err)
+	}
+	server := openServer(st, fixedClock(testNow), "")
+
+	root := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, `[data-scope="repo"]`)
+	alpha := root.One(t, `a[href="/repos/acme/alpha"]`)
+	alpha.One(t, ".glyph-done")
+	for _, want := range []string{"Checks passed", "No open tickets"} {
+		if got := alpha.Text(); !strings.Contains(got, want) {
+			t.Errorf("ready row = %q, want %q", got, want)
+		}
+	}
+	beta := root.One(t, `a[href="/repos/acme/beta"]`)
+	beta.One(t, ".glyph-failed")
+	if got := beta.Text(); !strings.Contains(got, "Failed: squash-only merges") {
+		t.Errorf("refused row = %q, want Failed: squash-only merges", got)
 	}
 }
 

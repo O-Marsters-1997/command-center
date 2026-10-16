@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker/trackertest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
@@ -15,7 +17,11 @@ var soloRepo = storepkg.Repo{Name: "acme/solo", Remote: "git@github.com:acme/sol
 
 func projectsServer(t *testing.T) *web.Server {
 	t.Helper()
-	return openServer(track(t, openStore(t), alphaRepo, betaRepo, soloRepo), fixedClock(testNow), "")
+	empty := &trackertest.Source{}
+	return openServer(track(t, openStore(t), alphaRepo, betaRepo, soloRepo), fixedClock(testNow), "",
+		web.WithTrackerSource(trackertest.ByRemote(map[string]tracker.Source{
+			"github.com/acme/alpha": empty, "github.com/acme/beta": empty, "github.com/acme/solo": empty,
+		})))
 }
 
 func TestProjectsPage(t *testing.T) {
@@ -66,16 +72,14 @@ func testCreateProjectHTMX(t *testing.T) {
 	t.Helper()
 	t.Parallel()
 	server := projectsServer(t)
-	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
+	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}, "return": {"/repos/acme/alpha"}}
 	rec := do(t, server, http.MethodPost, "/projects", req{Form: form, Header: http.Header{"Hx-Request": {"true"}}})
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("htmx POST /projects = %d, want 200", rec.Code)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("htmx POST /projects = %d, want 204", rec.Code)
 	}
-	fragment := htmltest.Parse(t, rec.Body)
-	fragment.One(t, `[data-scope="project"] h2 [data-hue="2"][aria-hidden="true"]`)
-	if full := fragment.Find("main#main"); len(full) != 0 {
-		t.Error("htmx POST /projects returned page (main#main present)")
+	if got := rec.Header.Get("HX-Location"); got != "/repos/acme/alpha" {
+		t.Errorf("HX-Location = %q, want /repos/acme/alpha", got)
 	}
 }
 
@@ -123,13 +127,19 @@ func testLooseRepo(t *testing.T) {
 	body := renderPath(t, server, "/repos")
 
 	root := htmltest.Parse(t, body).One(t, "main#main")
-	loose := root.One(t, `form[action="/repos/acme/solo/project"]`)
-	root.One(t, `a[href="/repos/acme/solo"]`)
+	loose := root.One(t, `[data-scope="repo"]`)
+	loose.One(t, `a[href="/repos/acme/solo"]`)
+	if got := loose.One(t, "h2").Text(); !strings.Contains(got, "No project") {
+		t.Errorf("loose group heading = %q", got)
+	}
 	if projects := root.Find(`[data-scope="project"]`); len(projects) != 0 {
 		t.Errorf("loose repo grouped under project: %s", projects[0].HTML())
 	}
 	if avatars := loose.Find("[data-hue]"); len(avatars) != 0 {
 		t.Errorf("loose repo has a project square: %s", avatars[0].HTML())
+	}
+	if forms := root.Find("form[action^='/projects'], form[action$='/project']"); len(forms) != 0 {
+		t.Errorf("repos page manages projects: %s", forms[0].HTML())
 	}
 }
 
@@ -150,7 +160,7 @@ func testNewProjectFormHue(t *testing.T) {
 		})
 	}
 
-	page := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, `form[action="/projects"]`)
+	page := htmltest.Parse(t, renderPath(t, server, "/repos/acme/solo")).One(t, `form[action="/projects"]`)
 	page.One(t, `input[name="hue"][value="3"][checked]`)
 	if first := page.Find(`input[name="hue"][value="1"][checked]`); len(first) != 0 {
 		t.Errorf("hue 1 still preselected: %s", first[0].HTML())
@@ -241,13 +251,17 @@ func testRepoSelectMoves(t *testing.T) {
 	server := projectsServer(t)
 	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
 
-	move := url.Values{"project": {"acme"}}
+	move := url.Values{"project": {"acme"}, "return": {"/repos/acme/solo"}}
 	moveRec := do(t, server, http.MethodPost, "/repos/acme/solo/project", req{Form: move})
 	if moveRec.Code != http.StatusSeeOther {
 		t.Fatalf("move = %d, want 303", moveRec.Code)
 	}
-	root := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
-	root.One(t, `[data-scope="project"]`)
+	if got := moveRec.Header.Get("Location"); got != "/repos/acme/solo" {
+		t.Errorf("move Location = %q, want /repos/acme/solo", got)
+	}
+	group := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, `main#main [data-scope="project"]`)
+	group.One(t, `a[href="/repos/acme/solo"]`)
+	root := htmltest.Parse(t, renderPath(t, server, "/repos/acme/solo")).One(t, "main#main")
 	root.One(t, `form[action="/repos/acme/solo/project"] option[value="acme"][selected]`)
 
 	loosen := url.Values{"project": {""}}
@@ -255,7 +269,7 @@ func testRepoSelectMoves(t *testing.T) {
 	if loosenRec.Code != http.StatusSeeOther {
 		t.Fatalf("loosen = %d, want 303", loosenRec.Code)
 	}
-	root = htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
+	root = htmltest.Parse(t, renderPath(t, server, "/repos/acme/solo")).One(t, "main#main")
 	selection := root.One(t, `form[action="/repos/acme/solo/project"]`)
 	selection.One(t, `option[value="acme"]`)
 	if selected := selection.Find(`option[value="acme"][selected]`); len(selected) != 0 {
