@@ -39,19 +39,33 @@ func stackPanel(t *testing.T, server http.Handler, path string) htmltest.Node {
 func testSessionStackPanel(t *testing.T) {
 	t.Parallel()
 
-	t.Run("lists blockers and unlocks", func(t *testing.T) {
+	t.Run("groups the feature's tickets into waves", func(t *testing.T) {
 		t.Parallel()
 		panel := stackPanel(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
 
-		lists := panel.Find("ul.stack-list")
-		if len(lists) != 3 {
-			t.Fatalf("GET /s/acme/web/2 stack lists = %d, want 3", len(lists))
+		waves := panel.Find("section.stack-wave")
+		if len(waves) != 3 {
+			t.Fatalf("GET /s/acme/web/2 stack waves = %d, want 3", len(waves))
 		}
-		lists[1].One(t, `a[href="/s/acme/web/1"]`)
+		waves[0].One(t, `a[href="/s/acme/web/1"]`)
+		waves[1].One(t, `a[href="/s/acme/web/2"]`)
 		for _, ref := range []string{"/s/acme/web/3", "/s/acme/web/4"} {
-			lists[2].One(t, `a[href="`+ref+`"]`)
+			waves[2].One(t, `a[href="`+ref+`"]`)
 		}
-		panel.One(t, `input[name="blocked_by"][value="https://github.com/acme/web/issues/1"]`)
+		if got := waves[2].One(t, "h3").Text(); got != "Wave 3" {
+			t.Errorf("GET /s/acme/web/2 third wave heading = %q, want Wave 3", got)
+		}
+	})
+
+	t.Run("the blockers editor sits in a closed disclosure", func(t *testing.T) {
+		t.Parallel()
+		panel := stackPanel(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
+
+		edit := panel.One(t, "details.stack-edit")
+		if len(edit.Find("[open]")) != 0 {
+			t.Errorf("GET /s/acme/web/2 Edit blockers disclosure is open, want closed")
+		}
+		edit.One(t, `form[action="/ticket"] input[name="blocked_by"][value="https://github.com/acme/web/issues/1"]`)
 	})
 
 	t.Run("the peek shows the feature and the ticket's props", func(t *testing.T) {
@@ -64,6 +78,9 @@ func testSessionStackPanel(t *testing.T) {
 			}
 		}
 		panel.One(t, `ul.stack-list li[aria-current="page"] a[href="/s/acme/web/2"]`)
+		if got := len(panel.Find(`li[aria-current="page"]`)); got != 1 {
+			t.Errorf("GET /s/acme/web/2 outlined rows = %d, want 1", got)
+		}
 		for _, text := range []string{"checkout", "0/4 merged", "cc-2"} {
 			if !strings.Contains(panel.Text(), text) {
 				t.Errorf("GET /s/acme/web/2 peek = %q, want it to show %q", panel.Text(), text)
@@ -94,13 +111,13 @@ func testPostTicketFromSession(t *testing.T) {
 			[]string{"https://github.com/acme/web/issues/1"}); err != nil {
 			t.Fatalf("EditTicket(#3): %v", err)
 		}
-		lists := stackPanel(t, server, "/s/acme/web/3").Find("ul.stack-list")
-		if len(lists) != 2 {
-			t.Fatalf("GET /s/acme/web/3 stack lists = %d, want 2", len(lists))
+		waves := stackPanel(t, server, "/s/acme/web/3").Find("section.stack-wave")
+		if len(waves) != 3 {
+			t.Fatalf("GET /s/acme/web/3 stack waves = %d, want 3", len(waves))
 		}
-		lists[1].One(t, `a[href="/s/acme/web/1"]`)
-		if old := lists[1].Find(`a[href="/s/acme/web/2"]`); len(old) != 0 {
-			t.Errorf("GET /s/acme/web/3 still lists the former blocker #2")
+		waves[1].One(t, `a[href="/s/acme/web/3"]`)
+		if moved := waves[2].Find(`a[href="/s/acme/web/3"]`); len(moved) != 0 {
+			t.Errorf("GET /s/acme/web/3 still lists #3 in wave 3 after its blocker changed")
 		}
 	})
 
