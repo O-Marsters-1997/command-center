@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 )
 
 type LineShape string
@@ -52,6 +52,16 @@ type DiffRow struct {
 }
 
 func LineOf(e agentlog.Event) LogLine {
+	return flattenLine(lineOf(e))
+}
+
+func flattenLine(l LogLine) LogLine {
+	l.Verb = strings.ReplaceAll(l.Verb, "\n", " ")
+	l.Arg = strings.ReplaceAll(l.Arg, "\n", " ")
+	return l
+}
+
+func lineOf(e agentlog.Event) LogLine {
 	switch e.Kind {
 	case agentlog.Say:
 		return sayLine(e.Detail)

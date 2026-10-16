@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 type BoardRow struct {

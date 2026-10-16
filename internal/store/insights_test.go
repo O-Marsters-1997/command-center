@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
@@ -41,7 +41,7 @@ func mergeInsightsTicket(t *testing.T, store *storepkg.Store, ticketURL string, 
 
 func withdraw(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time, merged bool) {
 	t.Helper()
-	if err := store.WithdrawTicket(t.Context(), ticketURL, at, merged); err != nil {
+	if _, err := store.WithdrawTicket(t.Context(), ticketURL, at, merged); err != nil {
 		t.Fatalf("WithdrawTicket(%s): %v", ticketURL, err)
 	}
 }

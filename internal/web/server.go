@@ -19,12 +19,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -89,7 +89,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(s)
 	}
-	s.view = view.NewReader(d.Store, d.DataDir, renderLogLine, d.BoardPollSeconds, d.SpendLimit5h)
+	s.view = view.NewReader(d.Store, d.DataDir, d.BoardPollSeconds, d.SpendLimit5h)
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", s.handle(s.handleIndex))
 	mux.Handle("GET /tickets", s.handle(s.handleTickets))

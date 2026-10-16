@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
-	"github.com/O-Marsters-1997/command-center/internal/spend"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
 type LaunchMembership struct {
@@ -48,10 +48,17 @@ type PushFact struct {
 }
 
 type RefreshFact struct {
+	Tried                    bool
 	Refused                  bool
 	Reason                   string
 	VerificationFailed       bool
 	VerificationFailedDetail string
+	Conflict                 option.Option[ConflictAt]
+}
+
+type Recorded struct {
+	Opened bool
+	Merged bool
 }
 
 type VerdictFacts struct {
@@ -65,12 +72,18 @@ type Input struct {
 	Observed     bool
 	Tickets      []Ticket
 	Obs          Observation
+	Prev         Observation
+	Repos        []RepoStatus
 	Memberships  map[TicketURL]LaunchMembership
 	Runs         map[TicketURL]RunSummary
 	Pushes       map[TicketURL]PushFact
 	Refreshes    map[TicketURL]RefreshFact
+	Restacked    map[TicketURL]bool
+	Sessions     map[TicketURL]string
+	Recorded     map[TicketURL]Recorded
+	LastVerdicts map[TicketURL]string
 	Verdict      VerdictFacts
-	PendingVerbs map[TicketURL][]Verb
+	Intents      map[TicketURL][]Intent
 	Removals     map[TicketURL]string
 	FiveHour     float64
 }
@@ -91,6 +104,7 @@ type Entry struct {
 	OpensAsDraft   bool
 	PromptHash     string
 	LastPush       option.Option[PushRow]
+	Restacked      bool
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -104,6 +118,14 @@ type Snapshot struct {
 	running     int
 	maxAgents   int
 	spendPaused bool
+	intents     map[TicketURL][]Intent
+	sessions    map[TicketURL]string
+	removals    map[TicketURL]Removal
+	transitions []Transition
+	verdicts    map[TicketURL]string
+	repos       []RepoStatus
+	obs         Observation
+	refreshes   map[TicketURL]RefreshFact
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -172,6 +194,12 @@ func (r Rules) Derive(in Input) Snapshot {
 		byURL:       make(map[TicketURL]int, len(in.Tickets)),
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
+		intents:     in.Intents,
+		sessions:    in.Sessions,
+		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
+		repos:       in.Repos,
+		obs:         in.Obs,
+		refreshes:   in.Refreshes,
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
@@ -213,15 +241,18 @@ func (r Rules) Derive(in Input) Snapshot {
 			lastPush = option.Some(row)
 		}
 		snap.byURL[t.URL] = len(snap.Entries)
-		snap.Entries = append(snap.Entries, Entry{
+		entry := Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
 			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
-			LaunchID: membership.LaunchID, Base: base,
-		})
+			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
+		}
+		snap.Entries = append(snap.Entries, entry)
+		snap.removals[t.URL] = removalFor(entry, pr)
 	}
+	snap.transitions, snap.verdicts = r.transitions(in)
 	return snap
 }
 

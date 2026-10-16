@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )

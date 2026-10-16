@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gh/ghtest"
-	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/runner/runnertest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
-	"github.com/O-Marsters-1997/command-center/internal/tp/tptest"
 )
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
+	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
 func fragmentServer(t *testing.T) *web.Server {

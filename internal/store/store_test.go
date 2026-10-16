@@ -18,12 +18,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
@@ -300,8 +300,12 @@ func TestStore_WithdrawTicket(t *testing.T) {
 			t.Fatalf("RecordPush: %v", err)
 		}
 
-		if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
+		withdrawnRuns, err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false)
+		if err != nil {
 			t.Fatalf("WithdrawTicket: %v", err)
+		}
+		if diff := cmp.Diff([]plan.RunID{plan.RunID(runID)}, withdrawnRuns); diff != "" {
+			t.Errorf("WithdrawTicket() run ids mismatch (-want +got):\n%s", diff)
 		}
 
 		if got := readTickets(t, store); len(got) != 0 {
@@ -342,7 +346,7 @@ func TestStore_WithdrawTicket(t *testing.T) {
 				t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
 			}
 		}
-		if err := store.WithdrawTicket(ctx, ticket.URL, testNow.Add(time.Hour), false); err != nil {
+		if _, err := store.WithdrawTicket(ctx, ticket.URL, testNow.Add(time.Hour), false); err != nil {
 			t.Fatalf("WithdrawTicket: %v", err)
 		}
 		events, err := store.Events(ctx)

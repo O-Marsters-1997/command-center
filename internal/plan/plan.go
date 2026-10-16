@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
 // PRState is a pull request's state as this package needs it. The zero value is Absent.

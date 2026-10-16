@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 )
 
 type fakeSource struct {

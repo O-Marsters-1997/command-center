@@ -1,6 +1,6 @@
 package plan
 
-import "github.com/O-Marsters-1997/command-center/internal/verdict"
+import "github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 
 const SettingsFile = ".command-centre.toml"
 

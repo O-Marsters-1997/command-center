@@ -4,99 +4,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/command"
-	"github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	requested := map[plan.TicketURL]bool{}
-	err := l.eachIntent(ctx, plan.VerbRefresh, func(intent store.VerbIntent) error {
-		url := plan.TicketURL(intent.TicketID)
-		requested[url] = true
-		e, ok := snap.Entry(url)
-		if !ok {
-			return nil
-		}
-		row := e.LastPush.UnwrapOr(plan.PushRow{})
-		if err := l.refreshOne(ctx, snap, obs, e.Ticket, row, true); err != nil {
+	for _, r := range snap.Refreshes() {
+		e, _ := snap.Entry(r.Ticket)
+		if err := l.refreshOne(ctx, snap, obs, e.Ticket, r.Row, r.Requested); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
-		return nil
-	})
-	if err != nil {
-		return err
+		if r.Requested {
+			if err := l.consumeAll(ctx, ticketIntents(snap, r.Ticket)); err != nil {
+				return err
+			}
+		}
 	}
-	return l.autoRefresh(ctx, snap, obs, requested)
+	return l.consumeAll(ctx, orphanIntents(snap))
 }
 
-func (l *Loop) autoRefresh(
-	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[plan.TicketURL]bool,
-) error {
-	outcomes, err := l.store.LatestRefreshOutcomes(ctx)
-	if err != nil {
-		return fmt.Errorf("latest refresh outcomes: %w", err)
-	}
+func (l *Loop) consumeAll(ctx context.Context, intents []plan.Intent) error {
+	return l.consumeEach(ctx, intents, func(plan.Intent) error { return nil })
+}
 
-	return eachEntry(snap, func(e plan.Entry) bool {
-		t := e.Ticket
-		if requested[t.URL] {
-			return false
-		}
-		if e.Run.IsNone() || e.Run.Unwrap().Outcome != option.Some(plan.OutcomePush) {
-			return false
-		}
-		if obs.PRs[t.Ref()].State != plan.Open {
-			return false
-		}
-		if e.LastPush.IsNone() {
-			return false
-		}
-		pushRow := e.LastPush.Unwrap()
-		if !baseMoved(pushRow, obs, t.Repo) {
-			return false
-		}
-		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, pushRow, obs) {
-			return false
-		}
-		return true
-	}, func(e plan.Entry) error {
-		return l.refreshOne(ctx, snap, obs, e.Ticket, e.LastPush.Unwrap(), false)
+func ticketIntents(snap plan.Snapshot, url plan.TicketURL) []plan.Intent {
+	return slices.DeleteFunc(snap.Intents(plan.VerbRefresh), func(i plan.Intent) bool { return i.Ticket != url })
+}
+
+func orphanIntents(snap plan.Snapshot) []plan.Intent {
+	return slices.DeleteFunc(snap.Intents(plan.VerbRefresh), func(i plan.Intent) bool {
+		_, ok := snap.Entry(i.Ticket)
+		return ok
 	})
 }
 
 func conflictDetail(branchTip, baseTip plan.SHA, mergeErr error) string {
 	return fmt.Sprintf("%s %s %s", branchTip, baseTip, mergeErr)
-}
-
-func parseConflictDetail(detail string) (branchTip, baseTip plan.SHA, ok bool) {
-	fields := strings.SplitN(detail, " ", 3)
-	if len(fields) < 3 {
-		return "", "", false
-	}
-	return plan.SHA(fields[0]), plan.SHA(fields[1]), true
-}
-
-func supersededConflict(o store.RefreshOutcome, t plan.Ticket, row plan.PushRow, obs plan.Observation) bool {
-	if o.Kind != store.EventRefreshConflicted {
-		return false
-	}
-	branchTip, baseTip, ok := parseConflictDetail(o.Detail)
-	if !ok {
-		return false
-	}
-	return obs.BranchTips[t.Ref()] != branchTip ||
-		obs.BranchTips[plan.BranchRef{Repo: t.Repo, Branch: row.BaseBranch}] != baseTip
-}
-
-func baseMoved(row plan.PushRow, obs plan.Observation, repo string) bool {
-	return row.BaseBranch != "" &&
-		obs.BranchTips[plan.BranchRef{Repo: repo, Branch: row.BaseBranch}] != row.BaseSHAAtPush
 }
 
 func (l *Loop) refreshOne(

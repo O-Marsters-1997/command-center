@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner/runnertest"
-	"github.com/O-Marsters-1997/command-center/internal/tp/tptest"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 func TestReRun(t *testing.T) {

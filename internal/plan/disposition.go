@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 type Outcome int

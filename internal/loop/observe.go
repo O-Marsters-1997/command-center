@@ -10,9 +10,9 @@ import (
 	"slices"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -103,7 +103,7 @@ func observeRepo(
 		return plan.Observation{}, fmt.Errorf("fetch: %w", err)
 	}
 
-	settings, source, settingsErr := config.ReadRepoSettings(ctx, path)
+	settings, source, settingsErr := readRepoSettings(ctx, path)
 	if settingsErr != nil {
 		obs.SettingsErrors[name] = settingsErr.Error()
 	} else {

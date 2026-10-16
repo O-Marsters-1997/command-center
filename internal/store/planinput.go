@@ -2,11 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 )
 
 // VerdictFacts measures checking time in successful ticks rather than wall time.
@@ -26,7 +27,6 @@ func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	return plan.VerdictFacts{PushRows: pushRows, CheckingFor: checkingFor}, nil
 }
 
-// PlanInput leaves Now for the caller to set.
 func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	tickets, err := s.Tickets(ctx)
 	if err != nil {
@@ -52,9 +52,21 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read refresh facts: %w", err)
 	}
-	pendingVerbs, err := s.PendingIntentsByTicket(ctx)
+	intents, err := s.PendingIntents(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read pending intents: %w", err)
+	}
+	repos, err := s.repoStatuses(ctx)
+	if err != nil {
+		return plan.Input{}, err
+	}
+	restacked, err := s.RestackedSinceLastPush(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read restacked tickets: %w", err)
+	}
+	lastVerdicts, err := s.LastVerdicts(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read last verdicts: %w", err)
 	}
 	removals, err := s.RemovalRefusals(ctx)
 	if err != nil {
@@ -71,13 +83,50 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	}
 
 	planTickets := make([]plan.Ticket, len(tickets))
+	sessions := make(map[plan.TicketURL]string, len(runs))
+	recorded := make(map[plan.TicketURL]plan.Recorded, len(tickets))
+	verdicts := make(map[plan.TicketURL]string, len(lastVerdicts))
 	for i, t := range tickets {
 		planTickets[i] = t.Plan()
+		url := plan.TicketURL(t.URL)
+		if _, ok := runs[url]; ok {
+			session, err := s.LatestSessionID(ctx, t.URL)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return plan.Input{}, fmt.Errorf("read latest session: %w", err)
+			}
+			if err == nil {
+				sessions[url] = session
+			}
+		}
+		var rec plan.Recorded
+		if rec.Opened, err = s.HasEvent(ctx, t.URL, EventPROpened); err != nil {
+			return plan.Input{}, fmt.Errorf("read pr_opened event: %w", err)
+		}
+		if rec.Merged, err = s.HasEvent(ctx, t.URL, EventPRMerged); err != nil {
+			return plan.Input{}, fmt.Errorf("read pr_merged event: %w", err)
+		}
+		recorded[url] = rec
+	}
+	for url, v := range lastVerdicts {
+		verdicts[plan.TicketURL(url)] = v
 	}
 	return plan.Input{
-		Observed: observed, Tickets: planTickets, Obs: obs,
+		Observed: observed, Tickets: planTickets, Obs: obs, Repos: repos,
 		Memberships: memberships, Runs: runs, Pushes: pushes, Refreshes: refreshes,
-		Verdict: verdictFacts, PendingVerbs: pendingVerbs, Removals: removals,
+		Restacked: restacked, Sessions: sessions, Recorded: recorded, LastVerdicts: verdicts,
+		Verdict: verdictFacts, Intents: intents, Removals: removals,
 		FiveHour: gauges[agentlog.FiveHour].Utilization,
 	}, nil
+}
+
+func (s *Store) repoStatuses(ctx context.Context) ([]plan.RepoStatus, error) {
+	repos, err := s.Repos(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read repos: %w", err)
+	}
+	statuses := make([]plan.RepoStatus, len(repos))
+	for i, r := range repos {
+		statuses[i] = plan.RepoStatus{Name: r.Name, Phase: r.Phase, RefusalKind: r.RefusalKind, Refusal: r.Refusal}
+	}
+	return statuses, nil
 }

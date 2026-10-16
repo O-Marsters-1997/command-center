@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 )
 
 func launchTickets(t *testing.T, store *storepkg.Store, urls ...string) {

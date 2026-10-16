@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -234,14 +234,9 @@ func writeEvent(w io.Writer, id int64, data string) error {
 }
 
 func renderLogLine(line view.LogLine) (template.HTML, error) {
-	line.Verb, line.Arg = flatten(line.Verb), flatten(line.Arg)
 	var buf strings.Builder
 	if err := templates.ExecuteTemplate(&buf, "logline", line); err != nil {
 		return "", fmt.Errorf("render log line: %w", err)
 	}
 	return template.HTML(buf.String()), nil
-}
-
-func flatten(s string) string {
-	return strings.ReplaceAll(s, "\n", " ")
 }

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/runner/runnertest"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 

@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 type forge interface {
@@ -87,6 +87,7 @@ func (l *Loop) Nudger() Nudger { return Nudger{ch: l.nudgeCh} }
 type tick struct {
 	now       time.Time
 	obs       plan.Observation
+	prev      plan.Observation
 	spawned   []plan.TicketURL
 	cancelled map[int]bool
 }

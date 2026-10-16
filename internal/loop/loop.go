@@ -12,14 +12,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 type Loop struct {
@@ -50,20 +50,32 @@ func (l *Loop) event(ctx context.Context, ticketURL string, kind store.EventKind
 
 var errIntentPending = errors.New("intent stays pending")
 
-func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.VerbIntent) error) error {
-	intents, err := l.store.PendingVerbIntents(ctx, verb)
+func (l *Loop) eachIntent(ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent) error) error {
+	return l.consumeEach(ctx, snap.Intents(verb), fn)
+}
+
+func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(plan.Intent) error) error {
+	pending, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return fmt.Errorf("list pending %s intents: %w", verb, err)
 	}
+	intents := make([]plan.Intent, len(pending))
+	for i, p := range pending {
+		intents[i] = plan.Intent{ID: p.ID, Ticket: plan.TicketURL(p.TicketID), Verb: verb, Payload: p.Payload}
+	}
+	return l.consumeEach(ctx, intents, fn)
+}
+
+func (l *Loop) consumeEach(ctx context.Context, intents []plan.Intent, fn func(plan.Intent) error) error {
 	for _, intent := range intents {
 		switch err := fn(intent); {
 		case errors.Is(err, errIntentPending):
 			continue
 		case err != nil:
-			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.TicketID, err)
+			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
-			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.TicketID, err)
+			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
 	}
 	return nil
@@ -110,18 +122,14 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err != nil {
 		return l.failTick(ctx, err)
 	}
-	if err := l.recordRepoProblems(ctx, t.obs); err != nil {
-		return l.failTick(ctx, fmt.Errorf("record repo problems: %w", err))
-	}
-	skipped, err := l.skippedRepos(ctx, t.obs)
-	if err != nil {
-		return l.failTick(ctx, fmt.Errorf("skipped repos: %w", err))
-	}
-	snap, err := l.derive(ctx, t.obs)
+	snap, err := l.derive(ctx, t)
 	if err != nil {
 		return l.failTick(ctx, fmt.Errorf("derive: %w", err))
 	}
-	return l.failTick(ctx, l.act(ctx, snap.Skipping(skipped), t, byURL))
+	if err := l.recordRepoProblems(ctx, snap); err != nil {
+		return l.failTick(ctx, fmt.Errorf("record repo problems: %w", err))
+	}
+	return l.failTick(ctx, l.act(ctx, snap.Skipping(snap.SkippedRepos()), t, byURL))
 }
 
 func (l *Loop) failTick(ctx context.Context, err error) error {
@@ -144,17 +152,12 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err != nil {
 		return nil, fmt.Errorf("last observation: %w", err)
 	}
+	t.prev = prev
 	if err := l.recordRepoStates(ctx, t.obs); err != nil {
 		return nil, fmt.Errorf("record repo states: %w", err)
 	}
 	if err := l.tickCheckingWaits(ctx, tickets); err != nil {
 		return nil, fmt.Errorf("tick checking waits: %w", err)
-	}
-	if err := l.recordOpenedEvents(ctx, prev, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("opened events: %w", err)
-	}
-	if err := l.recordChecksLanded(ctx, prev, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("checks landed: %w", err)
 	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
 		return nil, fmt.Errorf("apply launch intents: %w", err)
@@ -174,20 +177,17 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
 		return nil, fmt.Errorf("save observation: %w", err)
 	}
-	if err := l.recordVerdictTransitions(ctx, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("verdict transitions: %w", err)
-	}
-	if err := l.recordMergedEvents(ctx, t.obs, tickets); err != nil {
-		return nil, fmt.Errorf("merged events: %w", err)
-	}
 	return byURL, nil
 }
 
 func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket) error {
+	if err := l.recordTransitions(ctx, snap); err != nil {
+		return fmt.Errorf("transitions: %w", err)
+	}
 	if err := l.applyReRunIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("re-run: %w", err)
 	}
-	if err := l.applyFollowUpIntents(ctx, t, byURL); err != nil {
+	if err := l.applyFollowUpIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("follow-up: %w", err)
 	}
 	if err := l.applyAbortIntents(ctx, snap, t.obs); err != nil {
@@ -207,7 +207,11 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyRemoveWorktreeIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
-	if err := l.pushPushable(ctx, snap, t.obs); err != nil {
+	snap, err := l.derive(ctx, t)
+	if err != nil {
+		return fmt.Errorf("derive for push: %w", err)
+	}
+	if err := l.pushPushable(ctx, snap.Skipping(snap.SkippedRepos()), t.obs); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 	if err := l.applyDraftGate(ctx, snap); err != nil {
@@ -225,14 +229,15 @@ func (t *tick) markSpawnedAlive() {
 	}
 }
 
-func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot, error) {
+func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 	in, err := l.store.PlanInput(ctx)
 	if err != nil {
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = l.clock.Now()
-	in.Obs = obs
-	return l.rules(obs).Derive(in), nil
+	in.Obs = t.obs
+	in.Prev = t.prev
+	return l.rules(t.obs).Derive(in), nil
 }
 
 func (l *Loop) rules(obs plan.Observation) plan.Rules {
@@ -264,48 +269,12 @@ func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error
 	return nil
 }
 
-func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) error {
-	repos, err := l.store.Repos(ctx)
-	if err != nil {
-		return fmt.Errorf("list repos: %w", err)
-	}
-	var parts []string
-	for repo, reason := range obs.SettingsErrors {
-		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, reason))
-	}
-	for repo, reason := range obs.RepoErrors {
-		parts = append(parts, fmt.Sprintf("observe %s: %s", repo, reason))
-	}
-	for _, repo := range repos {
-		if repo.Phase == plan.RepoRefused && repo.RefusalKind != plan.RefusalSettingsParse {
-			parts = append(parts, fmt.Sprintf("%s refused (%s): %s", repo.Name, repo.RefusalKind, repo.Refusal))
-		}
-	}
+func (l *Loop) recordRepoProblems(ctx context.Context, snap plan.Snapshot) error {
+	parts := snap.RepoProblems()
 	if len(parts) == 0 {
 		return nil
 	}
-	slices.Sort(parts)
 	return l.recordTickError(ctx, strings.Join(parts, "; "))
-}
-
-func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[string]bool, error) {
-	repos, err := l.store.Repos(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list repos: %w", err)
-	}
-	skipped := map[string]bool{}
-	for _, repo := range repos {
-		if repo.Phase != plan.RepoReady {
-			skipped[repo.Name] = true
-		}
-	}
-	for repo := range obs.SettingsErrors {
-		skipped[repo] = true
-	}
-	for repo := range obs.RepoErrors {
-		skipped[repo] = true
-	}
-	return skipped, nil
 }
 
 func (l *Loop) Run(ctx context.Context) error {
@@ -323,8 +292,8 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, plan.VerbImport, func(intent store.VerbIntent) error {
-		return l.importFeature(ctx, intent.TicketID)
+	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) error {
+		return l.importFeature(ctx, string(intent.Ticket))
 	})
 }
 
@@ -409,13 +378,13 @@ func (l *Loop) cancelRun(t *tick, ticketURL string, pgid int) error {
 }
 
 func (l *Loop) applyKillIntents(ctx context.Context, t *tick) error {
-	return l.eachIntent(ctx, plan.VerbKill, func(intent store.VerbIntent) error {
+	return l.eachPendingIntent(ctx, plan.VerbKill, func(intent plan.Intent) error {
 		latest, err := l.store.LatestRunsByTicket(ctx)
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
-		if run, ok := latest[plan.TicketURL(intent.TicketID)]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
-			return l.cancelRun(t, intent.TicketID, run.Pgid.Unwrap())
+		if run, ok := latest[intent.Ticket]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
+			return l.cancelRun(t, string(intent.Ticket), run.Pgid.Unwrap())
 		}
 		return nil
 	})

@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker/trackertest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
 
 func importLoop(store *storepkg.Store, at time.Time, tickets ...tracker.Ticket) *loop.Loop {

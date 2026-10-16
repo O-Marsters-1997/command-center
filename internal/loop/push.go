@@ -4,56 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/option"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	lastPushed, err := l.store.LastPushedTips(ctx)
-	if err != nil {
-		return fmt.Errorf("last pushed tips: %w", err)
-	}
-
-	var candidates []plan.PushCandidate
-	if err := eachEntry(snap, func(e plan.Entry) bool {
-		if e.Run.IsNone() || e.Run.Unwrap().Outcome != option.Some(plan.OutcomePush) {
-			return false
-		}
-		_, ok := obs.LocalTips[e.Ticket.Ref()]
-		return ok && !obs.Runs[e.Ticket.URL].Alive
-	}, func(e plan.Entry) error {
-		candidates = append(candidates,
-			plan.PushCandidate{
-				URL: e.Ticket.URL, LocalTip: obs.LocalTips[e.Ticket.Ref()], LastPushedTip: lastPushed[e.Ticket.URL],
-			})
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	toPush := plan.PushPlan(candidates)
-	if len(toPush) == 0 {
-		return nil
-	}
-
-	facts, err := l.store.PushFacts(ctx)
-	if err != nil {
-		return fmt.Errorf("push facts: %w", err)
-	}
-	refreshFacts, err := l.store.RefreshFacts(ctx)
-	if err != nil {
-		return fmt.Errorf("refresh facts: %w", err)
-	}
-
-	for _, ticketURL := range toPush {
-		if facts[ticketURL].Failed || facts[ticketURL].Refused || refreshFacts[ticketURL].VerificationFailed {
-			continue
-		}
-		e, _ := snap.Entry(ticketURL)
-		tip := obs.LocalTips[e.Ticket.Ref()]
-		if err := l.pushOne(ctx, e, tip, obs); err != nil {
+	for _, p := range snap.Pushable(obs) {
+		e, _ := snap.Entry(p.Ticket)
+		if err := l.pushOne(ctx, e, p, obs); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 	}
@@ -61,16 +20,16 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 }
 
 func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, plan.VerbRetryPush, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(plan.TicketURL(intent.TicketID))
+	return l.eachIntent(ctx, snap, plan.VerbRetryPush, func(intent plan.Intent) error {
+		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
 			return nil
 		}
-		tip, ok := obs.LocalTips[e.Ticket.Ref()]
+		p, ok := snap.Push(intent.Ticket, obs)
 		if !ok {
 			return nil
 		}
-		if err := l.pushOne(ctx, e, tip, obs); err != nil {
+		if err := l.pushOne(ctx, e, p, obs); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		return nil
@@ -92,12 +51,9 @@ func pushBranch(ctx context.Context, repoPath, branch string, tip plan.SHA, rest
 	return wrapGit("force-push restacked "+branch, git.PushRestacked(ctx, repoPath, branch, recordedTip))
 }
 
-func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip plan.SHA, obs plan.Observation) error {
+func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.Observation) error {
 	t := e.Ticket
 	url := string(t.URL)
-	if !e.Unlock.Unlocked {
-		return nil
-	}
 	base := e.Unlock.BaseBranch
 	repoPath := l.checkout(t.Repo)
 
@@ -109,22 +65,17 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip plan.SHA, obs
 		return l.event(ctx, url, store.EventPushRefused, path)
 	}
 
-	pushedTips, err := l.store.LastPushedTips(ctx)
-	if err != nil {
-		return fmt.Errorf("last pushed tips: %w", err)
+	var lastPushed plan.SHA
+	if e.LastPush.IsSome() {
+		lastPushed = e.LastPush.Unwrap().PushedTip
 	}
-	restacked, err := l.store.RestackedSinceLastPush(ctx)
-	if err != nil {
-		return fmt.Errorf("restacked since last push: %w", err)
-	}
-	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL], restacked[t.URL]); err != nil {
+	if err := pushBranch(ctx, repoPath, t.Branch, lastPushed, p.Force); err != nil {
 		return l.event(ctx, url, store.EventPushFailed, err.Error())
 	}
 
 	if obs.PRs[t.Ref()].State != plan.Open {
-		body := plan.PRBody(base, obs.PRs[plan.BranchRef{Repo: t.Repo, Branch: base}].Number)
 		worktree := obs.Worktrees[t.Ref()]
-		if err := l.forge.Create(ctx, worktree, base, body, e.OpensAsDraft); err != nil {
+		if err := l.forge.Create(ctx, worktree, base, p.Body, p.OpensAsDraft); err != nil {
 			return l.event(ctx, url, store.EventPushFailed, err.Error())
 		}
 	}
@@ -134,10 +85,10 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip plan.SHA, obs
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
 	push := store.Push{
-		Ticket: plan.TicketURL(url), Tip: localTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
+		Ticket: plan.TicketURL(url), Tip: p.LocalTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
 	}
 	if err := l.store.RecordPush(ctx, push); err != nil {
 		return fmt.Errorf("record push of %s: %w", t.Branch, err)
 	}
-	return l.event(ctx, url, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", localTip, base))
+	return l.event(ctx, url, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", p.LocalTip, base))
 }

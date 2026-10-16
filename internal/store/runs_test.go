@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 )
 
 func readRunCost(t *testing.T, dsn string, runID int64) sql.NullFloat64 {
@@ -298,7 +299,7 @@ func TestStore_ActiveLaunchHashes(t *testing.T) {
 	}
 }
 
-func TestStore_PendingIntentsByTicket(t *testing.T) {
+func TestStore_PendingIntents(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	store := openStore(t)
@@ -308,34 +309,39 @@ func TestStore_PendingIntentsByTicket(t *testing.T) {
 		t.Fatalf("UpsertTickets(CC-2): %v", err)
 	}
 	for i, q := range []struct {
-		ticket string
-		verb   plan.Verb
+		ticket  string
+		verb    plan.Verb
+		payload string
 	}{
-		{"sandbox://CC-1", plan.VerbKill},
-		{"sandbox://CC-1", plan.VerbFollowUp},
-		{"sandbox://CC-2", plan.VerbReRun},
+		{"sandbox://CC-1", plan.VerbKill, ""},
+		{"sandbox://CC-1", plan.VerbFollowUp, "go on"},
+		{"sandbox://CC-2", plan.VerbReRun, ""},
 	} {
 		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
-			Ticket: q.ticket, Verb: q.verb, At: testNow.Add(time.Duration(i) * time.Second),
+			Ticket: q.ticket, Verb: q.verb, Payload: q.payload, At: testNow.Add(time.Duration(i) * time.Second),
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent(%s, %s): %v", q.ticket, q.verb, err)
 		}
 	}
-	read := func(t *testing.T) map[plan.TicketURL][]plan.Verb {
+	read := func(t *testing.T) map[plan.TicketURL][]plan.Intent {
 		t.Helper()
-		byTicket, err := store.PendingIntentsByTicket(ctx)
+		byTicket, err := store.PendingIntents(ctx)
 		if err != nil {
-			t.Fatalf("PendingIntentsByTicket: %v", err)
+			t.Fatalf("PendingIntents: %v", err)
 		}
 		return byTicket
 	}
+	ignoreID := cmpopts.IgnoreFields(plan.Intent{}, "ID")
 
-	want := map[plan.TicketURL][]plan.Verb{
-		"sandbox://CC-1": {plan.VerbKill, plan.VerbFollowUp},
-		"sandbox://CC-2": {plan.VerbReRun},
+	want := map[plan.TicketURL][]plan.Intent{
+		"sandbox://CC-1": {
+			{Ticket: "sandbox://CC-1", Verb: plan.VerbKill},
+			{Ticket: "sandbox://CC-1", Verb: plan.VerbFollowUp, Payload: "go on"},
+		},
+		"sandbox://CC-2": {{Ticket: "sandbox://CC-2", Verb: plan.VerbReRun}},
 	}
-	if diff := cmp.Diff(want, read(t)); diff != "" {
-		t.Fatalf("PendingIntentsByTicket() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, read(t), ignoreID); diff != "" {
+		t.Fatalf("PendingIntents() mismatch (-want +got):\n%s", diff)
 	}
 
 	kills, err := store.PendingVerbIntents(ctx, plan.VerbKill)
@@ -345,9 +351,9 @@ func TestStore_PendingIntentsByTicket(t *testing.T) {
 	if err := store.ConsumeVerbIntent(ctx, kills[0].ID, testNow.Add(time.Minute)); err != nil {
 		t.Fatalf("ConsumeVerbIntent(%d): %v", kills[0].ID, err)
 	}
-	want["sandbox://CC-1"] = []plan.Verb{plan.VerbFollowUp}
-	if diff := cmp.Diff(want, read(t)); diff != "" {
-		t.Errorf("PendingIntentsByTicket() after consuming the kill mismatch (-want +got):\n%s", diff)
+	want["sandbox://CC-1"] = want["sandbox://CC-1"][1:]
+	if diff := cmp.Diff(want, read(t), ignoreID); diff != "" {
+		t.Errorf("PendingIntents() after consuming the kill mismatch (-want +got):\n%s", diff)
 	}
 }
 

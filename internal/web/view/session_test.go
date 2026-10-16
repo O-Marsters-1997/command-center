@@ -2,15 +2,14 @@ package view_test
 
 import (
 	"fmt"
-	"html/template"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -18,7 +17,7 @@ import (
 func TestReader_Session(t *testing.T) {
 	t.Parallel()
 
-	t.Run("builds each run's log once", func(t *testing.T) {
+	t.Run("gives each turn its own run's log", func(t *testing.T) {
 		t.Parallel()
 		const ticketURL = "https://github.com/acme/web/issues/1"
 		ctx := t.Context()
@@ -65,27 +64,19 @@ func TestReader_Session(t *testing.T) {
 			t.Fatalf("SaveObservation: %v", err)
 		}
 
-		renders := 0
-		count := func(view.LogLine) (template.HTML, error) {
-			renders++
-			return "", nil
-		}
-		want := 0
-		for _, path := range logPaths {
-			before := renders
-			if _, err := view.BuildLogDetail(count, view.LogSource{Path: path}, view.Params{Log: view.LogAll}); err != nil {
-				t.Fatalf("BuildLogDetail(%q): %v", path, err)
-			}
-			want += renders - before
-		}
-		renders = 0
-
-		reader := view.NewReader(st, "", count, 0, 0)
-		if _, err := reader.Session(ctx, testNow, view.SessionRef{Owner: "acme", Name: "web", N: "1"}, false); err != nil {
+		reader := view.NewReader(st, "", 0, 0)
+		page, err := reader.Session(ctx, testNow, view.SessionRef{Owner: "acme", Name: "web", N: "1"}, false)
+		if err != nil {
 			t.Fatalf("Session(acme/web/1): %v", err)
 		}
-		if renders != want {
-			t.Errorf("Session(acme/web/1) rendered %d lines, want %d (each run's log built once)", renders, want)
+		if len(page.Turns) != len(logPaths) {
+			t.Fatalf("Session(acme/web/1) turns = %d, want %d", len(page.Turns), len(logPaths))
+		}
+		for i, turn := range page.Turns {
+			if turn.Log.Path != logPaths[i] || turn.Log.Lines != i+2 {
+				t.Errorf("Session(acme/web/1) turn %d log = {%q, %d lines}, want {%q, %d lines}",
+					i, turn.Log.Path, turn.Log.Lines, logPaths[i], i+2)
+			}
 		}
 	})
 }

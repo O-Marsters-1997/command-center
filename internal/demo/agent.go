@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // Agent simulates a run's stream-json log and commits scenario files with real Git.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 )
 
 // RecordReadings deduplicates readings from overlapping runs by time and window.

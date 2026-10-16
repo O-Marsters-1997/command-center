@@ -11,12 +11,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh/ghtest"
-	"github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -135,7 +135,7 @@ func TestRetarget(t *testing.T) {
 			}
 			if hasEvent(events, "pushed", "") {
 				t.Errorf("events = %+v, want no pushed event: the same pushed tip against a new base "+
-					"must leave plan.PushPlan selecting nothing", events)
+					"must leave Snapshot.Pushable selecting nothing", events)
 			}
 		})
 	}

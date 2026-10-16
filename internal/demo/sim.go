@@ -16,12 +16,12 @@ import (
 	"sync"
 	"time"
 
+	ccgit "github.com/O-Marsters-1997/command-center/internal/adapter/git"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 

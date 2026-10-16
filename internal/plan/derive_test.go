@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
 func key(branch string) plan.BranchRef { return plan.BranchRef{Repo: "r", Branch: branch} }

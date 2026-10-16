@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -35,6 +35,14 @@ func TestLineOf(t *testing.T) {
 					t.Errorf("LineOf(%s).Shape = %q, want %q", tt.kind, got, tt.want)
 				}
 			})
+		}
+	})
+
+	t.Run("flattens a multi-line argument", func(t *testing.T) {
+		t.Parallel()
+		line := view.LineOf(agentlog.Event{Kind: agentlog.Skill, Tool: "tdd", Detail: "one\ntwo"})
+		if line.Arg != "one two" {
+			t.Errorf("LineOf(skill).Arg = %q, want %q", line.Arg, "one two")
 		}
 	})
 

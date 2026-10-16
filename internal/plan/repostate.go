@@ -1,5 +1,31 @@
 package plan
 
+import (
+	"fmt"
+	"strings"
+)
+
+type MergeSettings struct {
+	AllowMergeCommit bool
+	AllowRebaseMerge bool
+	DefaultBranch    string
+}
+
+func RepoRefusal(s MergeSettings) (kind RefusalKind, reason string) {
+	switch {
+	case s.AllowMergeCommit:
+		return RefusalMergeSettings, "repo allows merge commits (allow_merge_commit=true): " +
+			"command-centre requires squash-only merges"
+	case s.AllowRebaseMerge:
+		return RefusalMergeSettings, "repo allows rebase merges (allow_rebase_merge=true): " +
+			"command-centre requires squash-only merges"
+	case s.DefaultBranch != DefaultBaseBranch:
+		return RefusalDefaultBranch, fmt.Sprintf("default branch is `%s`, not `%s`; rename it on GitHub, "+
+			"then Track again.", s.DefaultBranch, DefaultBaseBranch)
+	}
+	return "", ""
+}
+
 type RepoStatus struct {
 	Name        string
 	Phase       RepoPhase
@@ -21,4 +47,23 @@ func NextRepoStatus(current RepoStatus, obs Observation) RepoStatus {
 		return RepoStatus{Name: current.Name, Phase: RepoReady}
 	}
 	return current
+}
+
+func NormaliseRemote(url string) string {
+	return strings.ToLower(hostPath(url))
+}
+
+func hostPath(url string) string {
+	url = strings.TrimSpace(url)
+	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
+
+	if scheme := strings.Index(url, "://"); scheme >= 0 {
+		url = url[scheme+3:]
+	} else if colon := strings.Index(url, ":"); colon >= 0 && !strings.Contains(url[:colon], "/") {
+		url = url[:colon] + "/" + url[colon+1:]
+	}
+	if at := strings.Index(url, "@"); at >= 0 {
+		url = url[at+1:]
+	}
+	return strings.TrimSuffix(url, "/")
 }

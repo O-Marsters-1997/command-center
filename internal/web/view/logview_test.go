@@ -1,9 +1,7 @@
 package view_test
 
 import (
-	"errors"
 	"fmt"
-	"html/template"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,7 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -27,25 +25,21 @@ func readTestdata(t *testing.T, name string) string {
 	return string(body)
 }
 
-func logDetail(t *testing.T, render view.LineRenderer, src view.LogSource, mode view.LogFilter) view.LogDetail {
-	t.Helper()
-	detail, err := view.BuildLogDetail(render, src, view.Params{Log: mode})
-	if err != nil {
-		t.Fatalf("BuildLogDetail(%+v): %v", src, err)
-	}
-	return detail
+func logDetail(src view.LogSource, mode view.LogFilter) view.LogDetail {
+	return view.BuildLogDetail(src, view.Params{Log: mode})
 }
 
-func testLine(l view.LogLine) (template.HTML, error) {
+func lineText(l view.LogLine) string {
 	parts := []string{"line-" + l.Kind, l.Verb, l.Arg, l.Result}
-	line := strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " ")
-	if l.Kind == "say" {
-		line = "line-say "
+	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " ")
+}
+
+func lineTexts(lines []view.LogLine) []string {
+	var texts []string
+	for _, l := range lines {
+		texts = append(texts, lineText(l))
 	}
-	if l.Anchor {
-		line += ` id="first-fail"`
-	}
-	return template.HTML(line), nil
+	return texts
 }
 
 func groupLineCounts(detail view.LogDetail) [2]int {
@@ -66,7 +60,7 @@ func anchorCount(detail view.LogDetail) int {
 				n++
 			}
 			for _, line := range item.Group.Lines {
-				if strings.Contains(string(line), `id="first-fail"`) {
+				if line.Anchor {
 					n++
 				}
 			}
@@ -170,20 +164,9 @@ func TestBuildLogDetail(t *testing.T) {
 	runLog := readTestdata(t, "run.jsonl")
 	sessionLog := readTestdata(t, "session.jsonl")
 
-	t.Run("refuses a line that fails to render", func(t *testing.T) {
-		t.Parallel()
-		errRender := errors.New("render failed")
-		failing := func(view.LogLine) (template.HTML, error) { return "", errRender }
-		src := view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}
-
-		if _, err := view.BuildLogDetail(failing, src, view.Params{Log: view.LogAll}); !errors.Is(err, errRender) {
-			t.Errorf("BuildLogDetail(failing render) error = %v, want %v", err, errRender)
-		}
-	})
-
 	t.Run("cuts phases at each skill", func(t *testing.T) {
 		t.Parallel()
-		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}, view.LogAll)
+		detail := logDetail(view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}, view.LogAll)
 
 		type phase struct{ Skill, Note, At string }
 		var got []phase
@@ -217,7 +200,7 @@ func TestBuildLogDetail(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(string(tt.mode), func(t *testing.T) {
 				t.Parallel()
-				detail := logDetail(t, testLine, view.LogSource{Path: path, TicketURL: "sandbox://x"}, tt.mode)
+				detail := logDetail(view.LogSource{Path: path, TicketURL: "sandbox://x"}, tt.mode)
 				if len(detail.Phases) != 2 {
 					t.Fatalf("BuildLogDetail(%s) phases = %d, want 2", tt.mode, len(detail.Phases))
 				}
@@ -238,13 +221,13 @@ func TestBuildLogDetail(t *testing.T) {
 		}
 		src := view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x", Records: records}
 
-		detail := logDetail(t, testLine, src, view.LogAll)
+		detail := logDetail(src, view.LogAll)
 
 		first, last := detail.Phases[0].Items[0], detail.Phases[len(detail.Phases)-1].Items
-		if first.Kind != "record" || first.Line != "line-record merged PR #11 merged" {
+		if first.Kind != "record" || lineText(first.Line) != "line-record merged PR #11 merged" {
 			t.Errorf("BuildLogDetail() first item = %+v, want the early record", first)
 		}
-		if got := last[len(last)-1]; got.Kind != "record" || got.Line != "line-record merged PR #12 merged" {
+		if got := last[len(last)-1]; got.Kind != "record" || lineText(got.Line) != "line-record merged PR #12 merged" {
 			t.Errorf("BuildLogDetail() last item = %+v, want the late record", got)
 		}
 		if !strings.HasSuffix(detail.StreamPath, "&records=7") {
@@ -254,10 +237,10 @@ func TestBuildLogDetail(t *testing.T) {
 		for _, mode := range allModes[1:] {
 			t.Run(string(mode), func(t *testing.T) {
 				t.Parallel()
-				for _, phase := range logDetail(t, testLine, src, mode).Phases {
+				for _, phase := range logDetail(src, mode).Phases {
 					for _, item := range phase.Items {
 						if item.Kind == "record" {
-							t.Errorf("BuildLogDetail(%s) rendered record %q, want records under all only", mode, item.Line)
+							t.Errorf("BuildLogDetail(%s) rendered record %q, want records under all only", mode, lineText(item.Line))
 						}
 					}
 				}
@@ -272,12 +255,12 @@ func TestBuildLogDetail(t *testing.T) {
 			Records: []store.Event{{ID: 3, At: testNow, Kind: "pr_merged", Detail: "PR #12 merged"}},
 		}
 
-		detail := logDetail(t, testLine, src, view.LogAll)
+		detail := logDetail(src, view.LogAll)
 
 		if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
 			t.Fatalf("BuildLogDetail(pruned) phases = %+v, want one phase holding one line", detail.Phases)
 		}
-		if got, want := detail.Phases[0].Items[0].Line, template.HTML("line-record merged PR #12 merged"); got != want {
+		if got, want := lineText(detail.Phases[0].Items[0].Line), "line-record merged PR #12 merged"; got != want {
 			t.Errorf("BuildLogDetail(pruned) line = %q, want %q", got, want)
 		}
 		if detail.PhaseCount != 0 {
@@ -310,7 +293,7 @@ func TestBuildLogDetail(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				src := view.LogSource{Path: writeRunLog(t, tt.log), Streaming: tt.streaming, TicketURL: "sandbox://x"}
-				worked := logDetail(t, testLine, src, view.LogAll).Worked
+				worked := logDetail(src, view.LogAll).Worked
 				if worked.Label != tt.wantLabel || worked.Stats != tt.wantStats {
 					t.Errorf("BuildLogDetail(%s).Worked = {%q %q}, want {%q %q}",
 						tt.name, worked.Label, worked.Stats, tt.wantLabel, tt.wantStats)
@@ -321,13 +304,13 @@ func TestBuildLogDetail(t *testing.T) {
 
 	t.Run("anchors only the run's first failure", func(t *testing.T) {
 		t.Parallel()
-		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}, view.LogAll)
+		detail := logDetail(view.LogSource{Path: writeRunLog(t, runLog), TicketURL: "sandbox://x"}, view.LogAll)
 
 		if got := anchorCount(detail); got != 1 {
 			t.Fatalf("BuildLogDetail(run) anchors = %d, want 1", got)
 		}
 		failing := detail.Phases[0].Items[0].Group
-		if !strings.Contains(string(failing.Lines[0]), `id="first-fail"`) || !failing.Open || failing.FailNote == "" {
+		if !failing.Lines[0].Anchor || !failing.Open || failing.FailNote == "" {
 			t.Errorf("BuildLogDetail(run) failing group = %+v, want it anchored, open and noting its failure", failing)
 		}
 	})
@@ -338,7 +321,7 @@ func TestBuildLogDetail(t *testing.T) {
 		for _, mode := range []view.LogFilter{view.LogSkills, view.LogTools} {
 			t.Run(string(mode), func(t *testing.T) {
 				t.Parallel()
-				detail := logDetail(t, testLine, view.LogSource{Path: path, TicketURL: "sandbox://x"}, mode)
+				detail := logDetail(view.LogSource{Path: path, TicketURL: "sandbox://x"}, mode)
 				if got := anchorCount(detail); got != 1 {
 					t.Errorf("BuildLogDetail(%s) anchors = %d, want 1", mode, got)
 				}
@@ -348,7 +331,7 @@ func TestBuildLogDetail(t *testing.T) {
 
 	t.Run("folds each run of calls into one summarised group", func(t *testing.T) {
 		t.Parallel()
-		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
+		detail := logDetail(view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
 
 		items := detail.Phases[0].Items
 		if len(items) != 2 || items[0].Kind != "say" || items[1].Kind != "calls" {
@@ -358,8 +341,8 @@ func TestBuildLogDetail(t *testing.T) {
 		if group.Open {
 			t.Errorf("BuildLogDetail(session) group.Open = true, want a closed group")
 		}
-		want := []template.HTML{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
-		if diff := cmp.Diff(want, group.Lines); diff != "" {
+		want := []string{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
+		if diff := cmp.Diff(want, lineTexts(group.Lines)); diff != "" {
 			t.Errorf("BuildLogDetail(session) group lines mismatch (-want +got):\n%s", diff)
 		}
 		if len(detail.Phases[1].Items) != 1 {
@@ -388,7 +371,7 @@ func TestBuildLogDetail(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				src := view.LogSource{Path: writeRunLog(t, toolCalls(tt.tools...)), TicketURL: "x"}
-				items := logDetail(t, testLine, src, view.LogAll).Phases[0].Items
+				items := logDetail(src, view.LogAll).Phases[0].Items
 				if len(items) != 1 || items[0].Group.Summary != tt.want {
 					t.Errorf("BuildLogDetail(%v) items = %+v, want one group summarised %q", tt.tools, items, tt.want)
 				}
@@ -398,9 +381,9 @@ func TestBuildLogDetail(t *testing.T) {
 
 	t.Run("lifts the final answer out of the fold", func(t *testing.T) {
 		t.Parallel()
-		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
-		if detail.Final != "line-say " {
-			t.Errorf("BuildLogDetail(session).Final = %q, want the closing prose", detail.Final)
+		detail := logDetail(view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
+		if detail.Final == nil || detail.Final.Kind != "say" {
+			t.Errorf("BuildLogDetail(session).Final = %+v, want the closing prose", detail.Final)
 		}
 		for _, item := range detail.Phases[1].Items {
 			if item.Kind == "say" {
@@ -410,9 +393,9 @@ func TestBuildLogDetail(t *testing.T) {
 
 		live := sessionLog[:strings.LastIndex(strings.TrimSuffix(sessionLog, "\n"), "\n")+1]
 		source := view.LogSource{Path: writeRunLog(t, live), Streaming: true, TicketURL: "x"}
-		alive := logDetail(t, testLine, source, view.LogAll)
-		if alive.Final != "" {
-			t.Errorf("BuildLogDetail(live session).Final = %q, want none", alive.Final)
+		alive := logDetail(source, view.LogAll)
+		if alive.Final != nil {
+			t.Errorf("BuildLogDetail(live session).Final = %+v, want none", alive.Final)
 		}
 	})
 
@@ -421,7 +404,7 @@ func TestBuildLogDetail(t *testing.T) {
 		path := writeRunLog(t, runLog)
 		for _, streaming := range []bool{true, false} {
 			src := view.LogSource{Path: path, Streaming: streaming, TicketURL: "x"}
-			if got := logDetail(t, testLine, src, view.LogAll).Streaming; got != streaming {
+			if got := logDetail(src, view.LogAll).Streaming; got != streaming {
 				t.Errorf("BuildLogDetail(streaming %v).Streaming = %v, want %v", streaming, got, streaming)
 			}
 		}
@@ -434,24 +417,22 @@ func TestBuildLogDetail(t *testing.T) {
 			`{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"content":` +
 			`[{"type":"tool_result","tool_use_id":"c","content":"ok"}]}}` + "\n"
 
-		detail := logDetail(t, testLine, view.LogSource{Path: writeRunLog(t, log), TicketURL: "sandbox://x"}, view.LogAll)
+		detail := logDetail(view.LogSource{Path: writeRunLog(t, log), TicketURL: "sandbox://x"}, view.LogAll)
 
 		if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
 			t.Fatalf("BuildLogDetail(commit) phases = %+v, want one phase with one item", detail.Phases)
 		}
-		if item := detail.Phases[0].Items[0]; item.Kind != "commit" || item.Line != "line-commit commit add it ✓ 1s" {
+		item := detail.Phases[0].Items[0]
+		if item.Kind != "commit" || lineText(item.Line) != "line-commit commit add it ✓ 1s" {
 			t.Errorf("BuildLogDetail(commit) item = %+v, want a commit line carrying the message", item)
 		}
 	})
 
 	t.Run("edit and write counts", func(t *testing.T) {
 		t.Parallel()
-		body, err := os.ReadFile(filepath.Join("..", "..", "agentlog", "testdata", "edits.jsonl"))
+		body, err := os.ReadFile(filepath.Join("..", "..", "plan", "agentlog", "testdata", "edits.jsonl"))
 		if err != nil {
 			t.Fatalf("os.ReadFile(edits.jsonl): %v", err)
-		}
-		counts := func(l view.LogLine) (template.HTML, error) {
-			return template.HTML(fmt.Sprintf("+%d -%d", l.Added, l.Removed)), nil
 		}
 		tests := []struct {
 			name string
@@ -468,11 +449,11 @@ func TestBuildLogDetail(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				detail := logDetail(t, counts, view.LogSource{Path: writeRunLog(t, tt.log), TicketURL: "sandbox://x"}, view.LogAll)
+				detail := logDetail(view.LogSource{Path: writeRunLog(t, tt.log), TicketURL: "sandbox://x"}, view.LogAll)
 				var got []string
 				for _, item := range detail.Phases[0].Items {
 					for _, line := range item.Group.Lines {
-						got = append(got, string(line))
+						got = append(got, fmt.Sprintf("+%d -%d", line.Added, line.Removed))
 					}
 				}
 				if diff := cmp.Diff(tt.want, got); diff != "" {

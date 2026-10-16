@@ -45,7 +45,7 @@
           <span class="phase-at">{{.At}}</span>
         </header>
         {{- range .Items}}
-        {{if .Line}}{{.Line}}{{else if .Folded}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{.}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{end}}
+        {{if .Folded}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{template "logline" .}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{else}}{{template "logline" .Line}}{{end}}
         {{- end}}
       </section>
       {{- end}}
@@ -54,7 +54,7 @@
       {{- end}}
     </div>
     {{- with .Log.Final}}
-    <div class="run-final">{{.}}</div>
+    <div class="run-final">{{template "logline" .}}</div>
     {{- end}}
     {{- with .Ask}}
     <div class="line line-ask"><span class="line-label">ask</span><span class="ask-text">{{.}}</span></div>
