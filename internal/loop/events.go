@@ -3,14 +3,10 @@ package loop
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 type Clock interface {
@@ -23,118 +19,34 @@ type RealClock struct{}
 func (RealClock) Now() time.Time                         { return time.Now() }
 func (RealClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
-func (l *Loop) recordOpenedEvents(ctx context.Context, prev, obs plan.Observation, tickets []store.Ticket) error {
-	for _, t := range tickets {
-		key := t.Ref()
-		pr, observed := obs.PRs[key]
-		if _, seen := prev.PRs[key]; !observed || seen {
-			continue
-		}
-		exists, err := l.store.HasEvent(ctx, t.URL, store.EventPROpened)
-		if err != nil {
-			return fmt.Errorf("check pr_opened event for %s: %w", t.URL, err)
-		}
-		if exists {
-			continue
-		}
-		detail := fmt.Sprintf("PR #%d https://github.com/%s/pull/%d", pr.Number, t.Repo, pr.Number)
-		if err := l.event(ctx, t.URL, store.EventPROpened, detail); err != nil {
-			return fmt.Errorf("record pr_opened for %s: %w", t.URL, err)
-		}
-	}
-	return nil
+var transitionEvents = map[plan.TransitionKind]store.EventKind{
+	plan.TransitionOpened:       store.EventPROpened,
+	plan.TransitionMerged:       store.EventPRMerged,
+	plan.TransitionChecksLanded: store.EventChecksLanded,
+	plan.TransitionVerdict:      store.EventVerdictTransition,
 }
 
-func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation, tickets []store.Ticket) error {
-	for _, t := range tickets {
-		pr := obs.PRs[t.Ref()]
-		if pr.State != plan.Merged {
-			continue
+func (l *Loop) recordTransitions(ctx context.Context, snap plan.Snapshot) error {
+	verdictChanged := false
+	for _, tr := range snap.Transitions() {
+		kind, ok := transitionEvents[tr.Kind]
+		if !ok {
+			return fmt.Errorf("transition kind %q has no event", tr.Kind)
 		}
-		exists, err := l.store.HasEvent(ctx, t.URL, store.EventPRMerged)
-		if err != nil {
-			return fmt.Errorf("check pr_merged event for %s: %w", t.URL, err)
+		ev := store.Event{At: tr.At, TicketURL: string(tr.Ticket), Kind: kind, Detail: tr.Detail}
+		if err := l.store.AppendEvent(ctx, ev); err != nil {
+			return fmt.Errorf("record %s for %s: %w", kind, tr.Ticket, err)
 		}
-		if exists {
-			continue
-		}
-		if err := l.store.AppendEvent(ctx, store.Event{
-			At: pr.MergedAt, TicketURL: t.URL, Kind: store.EventPRMerged,
-			Detail: fmt.Sprintf("PR #%d merged", pr.Number),
-		}); err != nil {
-			return fmt.Errorf("record pr_merged for %s: %w", t.URL, err)
-		}
+		verdictChanged = verdictChanged || tr.Kind == plan.TransitionVerdict
 	}
-	return nil
-}
-
-func (l *Loop) recordChecksLanded(ctx context.Context, prev, obs plan.Observation, tickets []store.Ticket) error {
-	for _, t := range tickets {
-		key := t.Ref()
-		now := obs.PRs[key].Checks
-		before := prev.PRs[key].Checks
-		for _, name := range slices.Sorted(maps.Keys(now)) {
-			landed := plan.ToVerdictCheckState(now[name])
-			if landed == verdict.Pending {
-				continue
-			}
-			if was, ok := before[name]; ok && plan.ToVerdictCheckState(was) != verdict.Pending {
-				continue
-			}
-			if err := l.event(ctx, t.URL, store.EventChecksLanded, name+" "+landed.String()); err != nil {
-				return fmt.Errorf("record check %s for %s: %w", name, t.URL, err)
-			}
-		}
-	}
-	return nil
-}
-
-func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observation, tickets []store.Ticket) error {
-	latest, err := l.store.LatestRunsByTicket(ctx)
-	if err != nil {
-		return fmt.Errorf("latest runs: %w", err)
-	}
-	pushFacts, err := l.store.PushFacts(ctx)
-	if err != nil {
-		return fmt.Errorf("push facts: %w", err)
-	}
-	lastVerdicts, err := l.store.LastVerdicts(ctx)
-	if err != nil {
-		return fmt.Errorf("last verdicts: %w", err)
-	}
-	vd, err := l.store.VerdictFacts(ctx)
-	if err != nil {
-		return fmt.Errorf("verdict facts: %w", err)
-	}
-	changed := false
-	for _, t := range tickets {
-		url := plan.TicketURL(t.URL)
-		summary, ok := latest[url]
-		if !ok || summary.Outcome != option.Some(plan.OutcomePush) {
-			continue
-		}
-		pf := pushFacts[url]
-		if pf.Refused || pf.Failed || obs.PRs[t.Ref()].State != plan.Open {
-			continue
-		}
-		result := l.rules(obs).ApplyVerdict(t.Plan(), obs, vd)
-		if result.IsNone() {
-			continue
-		}
-		current := result.Unwrap().Kind.String()
-		if current == "" || lastVerdicts[t.URL] == current {
-			continue
-		}
-		lastVerdicts[t.URL] = current
-		changed = true
-		if err := l.event(ctx, t.URL, store.EventVerdictTransition, current+": "+result.Unwrap().Reason); err != nil {
-			return fmt.Errorf("record verdict transition for %s: %w", t.URL, err)
-		}
-	}
-	if !changed {
+	if !verdictChanged {
 		return nil
 	}
-	if err := l.store.SaveLastVerdicts(ctx, lastVerdicts); err != nil {
+	saved := make(map[string]string, len(snap.Verdicts()))
+	for url, v := range snap.Verdicts() {
+		saved[string(url)] = v
+	}
+	if err := l.store.SaveLastVerdicts(ctx, saved); err != nil {
 		return fmt.Errorf("save last verdicts: %w", err)
 	}
 	return nil
