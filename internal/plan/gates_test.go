@@ -111,8 +111,11 @@ func TestSnapshot_Refreshes(t *testing.T) {
 		},
 		{
 			name: "requested once even when the base is unmoved", baseTip: "b0",
-			intents: []plan.Intent{{ID: 1, Ticket: child.URL, Verb: plan.VerbRefresh}, {ID: 2, Ticket: child.URL, Verb: plan.VerbRefresh}},
-			want:    []plan.Refresh{{Ticket: child.URL, Row: row, Requested: true}},
+			intents: []plan.Intent{
+				{ID: 1, Ticket: child.URL, Verb: plan.VerbRefresh},
+				{ID: 2, Ticket: child.URL, Verb: plan.VerbRefresh},
+			},
+			want: []plan.Refresh{{Ticket: child.URL, Row: row, Requested: true}},
 		},
 	}
 	for _, tt := range tests {
@@ -137,5 +140,34 @@ func TestSnapshot_Refreshes(t *testing.T) {
 				t.Errorf("Refreshes() mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestSnapshot_RepoGates(t *testing.T) {
+	t.Parallel()
+	snap := derive(plan.Rules{}, plan.Input{
+		Repos: []plan.RepoStatus{
+			{Name: "ready", Phase: plan.RepoReady},
+			{Name: "cloning", Phase: plan.RepoCloning},
+			{Name: "merge", Phase: plan.RepoRefused, RefusalKind: plan.RefusalMergeSettings, Refusal: "no merge commits"},
+			{Name: "parse", Phase: plan.RepoRefused, RefusalKind: plan.RefusalSettingsParse, Refusal: "bad toml"},
+		},
+		Obs: plan.Observation{
+			SettingsErrors: map[string]string{"parse": "bad toml"},
+			RepoErrors:     map[string]string{"errored": "fetch failed"},
+		},
+	})
+
+	wantSkipped := map[string]bool{"cloning": true, "merge": true, "parse": true, "errored": true}
+	if diff := cmp.Diff(wantSkipped, snap.SkippedRepos()); diff != "" {
+		t.Errorf("SkippedRepos() mismatch (-want +got):\n%s", diff)
+	}
+	wantProblems := []string{
+		"merge refused (" + string(plan.RefusalMergeSettings) + "): no merge commits",
+		"observe errored: fetch failed",
+		"settings for parse: bad toml",
+	}
+	if diff := cmp.Diff(wantProblems, snap.RepoProblems()); diff != "" {
+		t.Errorf("RepoProblems() mismatch (-want +got):\n%s", diff)
 	}
 }

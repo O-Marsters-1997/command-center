@@ -2,6 +2,7 @@ package plan
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -105,4 +106,37 @@ func (s Snapshot) autoRefreshable(e Entry) bool {
 	}
 	at := fact.Conflict.Unwrap()
 	return s.obs.BranchTips[t.Ref()] != at.BranchTip || baseTip != at.BaseTip
+}
+
+func (s Snapshot) SkippedRepos() map[string]bool {
+	skipped := map[string]bool{}
+	for _, repo := range s.repos {
+		if repo.Phase != RepoReady {
+			skipped[repo.Name] = true
+		}
+	}
+	for repo := range s.obs.SettingsErrors {
+		skipped[repo] = true
+	}
+	for repo := range s.obs.RepoErrors {
+		skipped[repo] = true
+	}
+	return skipped
+}
+
+func (s Snapshot) RepoProblems() []string {
+	var parts []string
+	for repo, reason := range s.obs.SettingsErrors {
+		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, reason))
+	}
+	for repo, reason := range s.obs.RepoErrors {
+		parts = append(parts, fmt.Sprintf("observe %s: %s", repo, reason))
+	}
+	for _, repo := range s.repos {
+		if repo.Phase == RepoRefused && repo.RefusalKind != RefusalSettingsParse {
+			parts = append(parts, fmt.Sprintf("%s refused (%s): %s", repo.Name, repo.RefusalKind, repo.Refusal))
+		}
+	}
+	slices.Sort(parts)
+	return parts
 }

@@ -118,6 +118,7 @@ type Snapshot struct {
 	maxAgents   int
 	spendPaused bool
 	intents     map[TicketURL][]Intent
+	repos       []RepoStatus
 	obs         Observation
 	refreshes   map[TicketURL]RefreshFact
 }
@@ -189,6 +190,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
+		repos:       in.Repos,
 		obs:         in.Obs,
 		refreshes:   in.Refreshes,
 	}
