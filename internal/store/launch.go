@@ -11,18 +11,39 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 const maxLaunchMemberships = 5000
 
 type launchPayload struct {
-	PromptHash string `json:"prompt_hash"`
-	Group      string `json:"group"`
+	PromptHash string           `json:"prompt_hash"`
+	Group      string           `json:"group"`
+	Context    string           `json:"context"`
+	Choice     plan.AgentChoice `json:"choice"`
+}
+
+func choiceColumns(c plan.AgentChoice) (model, effort sql.NullString) {
+	model = nullIfEmpty(c.Model)
+	if c.Effort.IsSome() {
+		effort = notNull(string(c.Effort.Unwrap()))
+	}
+	return model, effort
+}
+
+func choiceFrom(model, effort sql.NullString) plan.AgentChoice {
+	choice := plan.AgentChoice{Model: model.String, Effort: option.None[plan.Effort]()}
+	if effort.Valid {
+		choice.Effort = option.Some(plan.Effort(effort.String))
+	}
+	return choice
 }
 
 func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
-	payload, err := json.Marshal(launchPayload{PromptHash: l.PromptHash, Group: l.Group})
+	payload, err := json.Marshal(launchPayload{
+		PromptHash: l.PromptHash, Group: l.Group, Context: l.Context, Choice: l.Choice,
+	})
 	if err != nil {
 		return fmt.Errorf("encode launch intent payload for %s: %w", l.Ticket, err)
 	}
@@ -58,6 +79,8 @@ func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) error {
 type pendingIntent struct {
 	ticketID   string
 	promptHash string
+	context    string
+	choice     plan.AgentChoice
 }
 
 func claimLaunchIntents(
@@ -80,13 +103,19 @@ func claimLaunchIntents(
 			order = append(order, payload.Group)
 		}
 		groups[payload.Group] = append(groups[payload.Group],
-			pendingIntent{ticketID: row.TicketID, promptHash: payload.PromptHash})
+			pendingIntent{
+				ticketID: row.TicketID, promptHash: payload.PromptHash,
+				context: payload.Context, choice: payload.Choice,
+			})
 	}
 	return groups, order, nil
 }
 
 func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []pendingIntent) error {
-	launchID, err := q.InsertLaunch(ctx, at)
+	model, effort := choiceColumns(members[0].choice)
+	launchID, err := q.InsertLaunch(ctx, ccdb.InsertLaunchParams{
+		CreatedAt: at, Context: members[0].context, Model: model, Effort: effort,
+	})
 	if err != nil {
 		return fmt.Errorf("insert launch: %w", err)
 	}
@@ -134,6 +163,8 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.
 			LaunchID:   row.LaunchID,
 			Members:    int(row.Members),
 			PromptHash: row.PromptHash,
+			Context:    row.Context,
+			Choice:     choiceFrom(row.Model, row.Effort),
 		}
 	}
 	for ticketID := range cancelled {

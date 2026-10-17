@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { createStore } from "solid-js/store";
+import { cardTag, subline, waveSubtitle } from "./graph-card";
 import { type GraphNode, applyPoll } from "./graph-state";
 import { defineIsland, hx } from "./island";
 import {
@@ -20,35 +21,6 @@ const DIRECTIONS: Record<string, [number, number]> = {
 };
 
 type Status = { kind: "loading" } | { kind: "ok" } | { kind: "error"; message: string };
-
-function nodeTag(node: GraphNode): string {
-  if (node.glyph === "failed") return node.reason;
-  if (node.glyph === "attention") return "Review";
-  return node.glyph === "running" ? node.elapsed : "";
-}
-
-function assertNever(value: never): never {
-  throw new Error(`unhandled glyph ${String(value)}`);
-}
-
-function nodeFoot(node: GraphNode): string {
-  switch (node.glyph) {
-    case "blocked":
-      return node.after?.length ? `after ${node.after.join(", ")}` : "Blocked";
-    case "ready":
-      return "Ready to launch";
-    case "done":
-      return node.pr_number ? `Merged #${node.pr_number}` : "Merged";
-    case "failed":
-    case "attention":
-    case "running":
-    case "pending":
-    case "checking":
-      return node.reason || (node.pr_number ? `PR #${node.pr_number}` : node.state);
-    default:
-      return assertNever(node.glyph);
-  }
-}
 
 defineIsland("cc-graph", { src: "" }, (props, element) => {
   const src = props.src || element.dataset.src || "/graph.json";
@@ -171,9 +143,9 @@ defineIsland("cc-graph", { src: "" }, (props, element) => {
         onKeyDown={(e) => onNodeKeyDown(e, node)}
       >
         <span class="flex items-center gap-[7px]">
-          <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.state}</span>
-          <span class="text-xs text-meta">{node.ref}</span>
-          <span class="ml-auto text-2xs text-muted">{nodeTag(node)}</span>
+          <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`} title={node.label} />
+          <span class="font-mono text-xs text-meta">{node.ref}</span>
+          <span class="ml-auto truncate text-2xs text-muted">{cardTag(node)}</span>
         </span>
         <span
           class="line-clamp-2 overflow-hidden text-sm font-medium leading-[1.35]"
@@ -181,7 +153,7 @@ defineIsland("cc-graph", { src: "" }, (props, element) => {
           {node.title || "untitled"}
         </span>
         <span class="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted">
-          {nodeFoot(node)}
+          {subline(node)}
         </span>
       </a>
     );
@@ -201,7 +173,9 @@ defineIsland("cc-graph", { src: "" }, (props, element) => {
             <For each={cols()}>
               {(col) => (
                 <section class="grid gap-2">
-                  <h3 class="text-xs font-medium text-fg-2">{waveLabel(col)}</h3>
+                  <h3 class="text-xs text-muted">
+                    <b class="font-medium text-fg-2">{waveLabel(col)}</b> {waveSubtitle(col, nodes.filter((n) => n.col === col))}
+                  </h3>
                   <For each={nodes.filter((n) => n.col === col)}>{(node) => nodeLink(node, true)}</For>
                 </section>
               )}
@@ -214,10 +188,10 @@ defineIsland("cc-graph", { src: "" }, (props, element) => {
             <For each={cols()}>
               {(col) => (
                 <span
-                  class="absolute top-1 text-xs font-medium text-fg-2"
+                  class="absolute top-1 w-60 truncate text-xs text-muted"
                   style={{ left: `${MARGIN + col * CARD.colW}px` }}
                 >
-                  {waveLabel(col)}
+                  <b class="font-medium text-fg-2">{waveLabel(col)}</b> {waveSubtitle(col, nodes.filter((n) => n.col === col))}
                 </span>
               )}
             </For>

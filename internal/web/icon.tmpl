@@ -6,8 +6,11 @@
 {{- else if eq . "chart"}}<path d="M3 3v18h18"/><path d="M8 16v-4M13 16V8M18 16v-6"/>
 {{- else if eq . "repo"}}<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h12"/>
 {{- else if eq . "plus"}}<path d="M12 5v14M5 12h14"/>
+{{- else if eq . "x"}}<path d="M6 6l12 12M18 6 6 18"/>
 {{- else if eq . "chev"}}<path d="m9 6 6 6-6 6"/>
 {{- else if eq . "term"}}<path d="m5 17 5-5-5-5"/><path d="M12 19h7"/>
 {{- else if eq . "keys"}}<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>
+{{- else if eq . "lock"}}<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+{{- else if eq . "send"}}<path d="M12 19V5M6 11l6-6 6 6"/>
 {{- end}}
 {{- end}}

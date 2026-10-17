@@ -31,6 +31,9 @@ type Launch struct {
 	ID        int64
 	CreatedAt time.Time
 	State     string
+	Context   string
+	Model     sql.NullString
+	Effort    sql.NullString
 }
 
 type LaunchMember struct {
@@ -89,6 +92,9 @@ type Run struct {
 	SessionID     sql.NullString
 	Message       sql.NullString
 	Question      sql.NullString
+	LastMessage   sql.NullString
+	Model         sql.NullString
+	Effort        sql.NullString
 }
 
 type Ticket struct {

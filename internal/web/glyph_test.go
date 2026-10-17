@@ -19,18 +19,18 @@ func testBoardGlyphs(t *testing.T) {
 		now := testNow.Add(90 * time.Second)
 		page := renderPage(t, newServer(runningRowStore(t, ticket, testNow, now), now))
 
-		row := htmltest.Parse(t, page).One(t, `tr.group`)
-		if glyphs := row.Find(`.glyph-running.glyph-pulse`); len(glyphs) != 1 {
+		row := htmltest.Parse(t, page).One(t, `a[data-ref]`)
+		if glyphs := row.Find(`.glyph-pulse[data-glyph="running"]`); len(glyphs) != 1 {
 			t.Errorf("GET /tickets running row has %d pulsing glyphs, want 1", len(glyphs))
 		}
 	})
 
 	t.Run("an ended board's glyphs do not pulse", func(t *testing.T) {
 		t.Parallel()
-		board := htmltest.Parse(t, renderPage(t, newServer(seededStore(t, testNow), testNow))).One(t, `table#board`)
+		board := htmltest.Parse(t, renderPage(t, newServer(seededStore(t, testNow), testNow))).One(t, `div#board`)
 
 		for _, word := range []string{"ready", "blocked"} {
-			board.One(t, `.glyph-`+word)
+			board.One(t, `[data-glyph="`+word+`"]`)
 		}
 		if glyphs := board.Find(`.glyph-pulse`); len(glyphs) != 0 {
 			t.Errorf("GET /tickets ended board has %d pulsing glyphs, want 0", len(glyphs))
@@ -44,10 +44,10 @@ func testBoardGlyphs(t *testing.T) {
 			t.Fatalf("RenderStatesBoard: %v", err)
 		}
 
-		board := htmltest.Parse(t, body).One(t, "table#board")
+		board := htmltest.Parse(t, body).One(t, "div#board")
 		for _, word := range []string{"failed", "attention", "running", "pending", "checking", "ready", "blocked", "done"} {
-			if got := board.Find(`.glyph-` + word); len(got) == 0 {
-				t.Errorf("RenderStatesBoard(all states) has no glyph-%s", word)
+			if got := board.Find(`[data-glyph="` + word + `"]`); len(got) == 0 {
+				t.Errorf("RenderStatesBoard(all states) has no data-glyph %s", word)
 			}
 		}
 	})

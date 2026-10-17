@@ -15,7 +15,7 @@ cc-wait agent-done.log 'commits_ci.sh repo-cc-1-x'
 exec cc tick --count 1
 
 exec cc request GET /tickets
-stdout '>needs_you</span>'
+stdout 'title="Needs you"'
 stdout 'protected path'
 
 exec cc request GET /events

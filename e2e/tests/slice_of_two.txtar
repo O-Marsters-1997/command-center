@@ -20,7 +20,7 @@ exec cc request GET /events
 stdout 'authorised with 2 member'
 stdout -count=1 'run_launched'
 exec cc request GET /tickets
-stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1'
+stdout 'waiting on #CC-1'
 
 cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 
@@ -56,6 +56,6 @@ grep -count=2 'commits.sh' $WORK/agent.log
 # Nothing was cd-ed into and ps was never run: the whole run is driven by cc request and cc
 # tick alone, against the repo's siblings on disk.
 exec cc request GET /tickets
-stdout '>#CC-1</a>'
-stdout '>#CC-2</a>'
-! stdout '>blocked</span>'
+stdout 'data-ref="#CC-1"'
+stdout 'data-ref="#CC-2"'
+! stdout 'title="Blocked"'

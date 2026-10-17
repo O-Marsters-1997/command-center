@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 )
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) error {
@@ -76,13 +75,6 @@ func (s *Server) handleSetRepoProject(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *Server) respondRepoGroups(w http.ResponseWriter, r *http.Request) error {
-	if !hx.IsRequest(r) {
-		seeOther(w, r, "/repos")
-		return nil
-	}
-	groups, err := s.view.RepoGroups(r.Context())
-	if err != nil {
-		return fmt.Errorf("render repo groups: %w", err)
-	}
-	return renderHTML(w, "repoGroups", groups)
+	seeOther(w, r, returnPath(r.FormValue("return"), "/repos", "/repos"))
+	return nil
 }

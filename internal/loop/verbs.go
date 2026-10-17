@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -71,8 +72,10 @@ func (l *Loop) applyFollowUpIntents(
 }
 
 func (l *Loop) followUpOne(
-	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, promptText string,
+	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, payload string,
 ) error {
+	picked := store.DecodeFollowUpPayload(payload)
+	promptText := picked.Message
 	url := plan.TicketURL(ticket.URL)
 	if t.obs.Runs[url].Alive {
 		return errIntentPending
@@ -91,6 +94,14 @@ func (l *Loop) followUpOne(
 		kind: plan.RunKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
 	}
 
+	launched, _ := snap.Entry(url)
+	spec.choice = launched.Ticket.Choice
+	if picked.Model != "" {
+		spec.choice.Model = picked.Model
+	}
+	if picked.Effort != "" {
+		spec.choice.Effort = option.Some(picked.Effort)
+	}
 	session, _ := snap.Session(url)
 	sessionID, err := l.resumableSession(session)
 	if err != nil {
@@ -159,21 +170,23 @@ func (l *Loop) applyReRunIntents(
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		if err := l.reRunOne(ctx, t, ticket, baseBranch, entry.PromptHash); err != nil {
+		if err := l.reRunOne(ctx, t, ticket, entry.Ticket, baseBranch, entry.PromptHash); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil
 	})
 }
 
-func (l *Loop) reRunOne(ctx context.Context, t *tick, ticket store.Ticket, baseBranch, promptHash string) error {
+func (l *Loop) reRunOne(
+	ctx context.Context, t *tick, ticket store.Ticket, launched plan.Ticket, baseBranch, promptHash string,
+) error {
 	repoPath := l.checkout(ticket.Repo)
 	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		if err := l.cutAndSpawn(ctx, t, ticket, baseBranch, promptHash); err != nil {
+		if err := l.cutAndSpawn(ctx, t, ticket, launched, baseBranch, promptHash); err != nil {
 			return fmt.Errorf("re-cut %s: %w", ticket.Branch, err)
 		}
 		return nil
@@ -185,7 +198,7 @@ func (l *Loop) reRunOne(ctx context.Context, t *tick, ticket store.Ticket, baseB
 	}
 	if err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
+		kind: plan.RunKindAgent, prompt: agentPrompt(ticket, launched), choice: launched.Choice,
 	}); err != nil {
 		return fmt.Errorf("spawn re-run in %s: %w", worktreePath, err)
 	}

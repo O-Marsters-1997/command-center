@@ -1,10 +1,12 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -40,6 +43,10 @@ type SessionPage struct {
 
 	PendingMessages []string
 	Model           string
+	Models          []string
+	Efforts         []plan.Effort
+	Launched        option.Option[Age]
+	Worked          option.Option[WorkedSummary]
 }
 
 func (s SessionPage) Empty() bool {
@@ -89,6 +96,17 @@ func SessionPath(ticketURL string) string {
 	return ref.Path()
 }
 
+func sessionCrumbs(row Row) []Crumb {
+	var crumbs []Crumb
+	if row.Project != "" {
+		crumbs = append(crumbs, projectCrumb(row.Mark()))
+	}
+	if row.Feature != "" {
+		crumbs = append(crumbs, Crumb{Label: row.Feature, Path: "/f/" + url.PathEscape(row.Feature)})
+	}
+	return append(crumbs, Crumb{Label: cmp.Or(row.Title, row.Ticket())})
+}
+
 func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw bool) (SessionPage, error) {
 	board, err := r.Board(ctx, now, Params{})
 	if err != nil {
@@ -107,14 +125,25 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	var pendingMessages []string
 	for _, intent := range intents {
 		if intent.TicketID == ticketURL {
-			pendingMessages = append(pendingMessages, intent.Payload)
+			pendingMessages = append(pendingMessages, store.DecodeFollowUpPayload(intent.Payload).Message)
 		}
+	}
+	snap, err := r.Snapshot(ctx, now)
+	if err != nil {
+		return SessionPage{}, fmt.Errorf("load snapshot: %w", err)
+	}
+	entry, _ := snap.Entry(plan.TicketURL(ticketURL))
+	model := cmp.Or(entry.Ticket.Choice.Model, config.AgentModel)
+	models := config.AgentModels()
+	if !slices.Contains(models, model) {
+		models = append(models, model)
 	}
 
 	self := ref.Path()
 	chrome := board.Chrome
 	chrome.Home = false
 	chrome.titled(row.Ticket())
+	chrome.Crumbs = sessionCrumbs(row)
 	prURL := ""
 	if row.PRNumber > 0 {
 		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)
@@ -135,8 +164,16 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load ticket events: %w", err)
 	}
-	current := LogSource{Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records}
+	current := LogSource{
+		Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records, Checks: row.Checks,
+	}
 	row.Log = BuildLogDetail(current, Params{Log: LogAll})
+	worked := option.None[WorkedSummary]()
+	if row.Log.PhaseCount > 0 {
+		summary := row.Log.Summary
+		summary.SpendPctWeek = row.SpendPctWeek
+		worked = option.Some(summary)
+	}
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
 		turns = buildTurns(row, runs)
@@ -153,7 +190,19 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load raw log: %w", err)
 	}
+	launched := option.None[Age]()
+	if row.Feature != "" {
+		at, err := r.store.FeatureFirstLaunch(ctx, row.Feature)
+		switch {
+		case err == nil:
+			launched = option.Some(relative(now, at))
+		case !errors.Is(err, store.ErrNotFound):
+			return SessionPage{}, fmt.Errorf("load feature first launch: %w", err)
+		}
+	}
 	return SessionPage{
+		Launched:       launched,
+		Worked:         worked,
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		Actions:        actions,
@@ -170,7 +219,9 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		RawPath:        self + "?log=raw",
 
 		PendingMessages: pendingMessages,
-		Model:           config.AgentModel,
+		Model:           model,
+		Models:          models,
+		Efforts:         plan.AllEfforts(),
 	}, nil
 }
 

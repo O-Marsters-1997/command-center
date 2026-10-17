@@ -169,6 +169,12 @@ func TestSessionPage(t *testing.T) {
 					t.Errorf("GET /s/acme/web/1 heading lacks %q", want)
 				}
 			}
+			if got := main.One(t, ".prompt-meta").Text(); !strings.Contains(got, "Launched from the ticket") {
+				t.Errorf("GET /s/acme/web/1 prompt caption = %q, want it to say where the prompt came from", got)
+			}
+			if got := main.One(t, "p.session-meta").Text(); !strings.Contains(got, "acme/web #1") {
+				t.Errorf("GET /s/acme/web/1 head meta = %q, want repo and ref", got)
+			}
 			if got := main.One(t, "pre.prompt-text").Text(); !strings.Contains(got, "Implement <b>#1</b>") {
 				t.Errorf("GET /s/acme/web/1 prompt = %q, want the literal text %q", got, "Implement <b>#1</b>")
 			}
@@ -282,6 +288,53 @@ func TestSessionPage(t *testing.T) {
 		}
 	})
 
+	t.Run("shows stored events, one checks grid and the worked summary", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
+		started := testNow.Add(-5 * time.Minute)
+		obs := plan.Observation{
+			ObservedAt: testNow,
+			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
+			PRs: map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): {
+				Number: 7, State: plan.Open, HeadRef: "cc-1",
+				Checks: map[string]plan.CheckState{
+					"unit": {
+						Status: "COMPLETED", Conclusion: "SUCCESS", StartedAt: started, CompletedAt: started.Add(48 * time.Second),
+					},
+					"lint": {
+						Status: "COMPLETED", Conclusion: "FAILURE", StartedAt: started, CompletedAt: started.Add(72 * time.Second),
+						DetailsURL: "https://github.com/acme/web/actions/runs/9",
+					},
+				},
+			}},
+		}
+		if err := st.SaveObservation(ctx, obs); err != nil {
+			t.Fatalf("SaveObservation: %v", err)
+		}
+		for _, e := range []storepkg.Event{
+			{Kind: "pushed", Detail: "pushed abc123 to origin/main"},
+			{Kind: "checks_landed", Detail: "unit passed"},
+			{Kind: "checks_landed", Detail: "lint failed"},
+		} {
+			e.At, e.TicketURL = testNow, sessionTicket
+			if err := st.AppendEvent(ctx, e); err != nil {
+				t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
+			}
+		}
+
+		got := sessionMain(t, st, "/s/acme/web/1").Text()
+
+		for _, want := range []string{"abc123 to origin/main", "1m 12s", "48s", "output", "Worked"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("GET /s/acme/web/1 text = %q, want it to contain %q", got, want)
+			}
+		}
+		if strings.Contains(got, "passed unit") {
+			t.Errorf("GET /s/acme/web/1 text = %q, want the per-check records folded into the grid", got)
+		}
+	})
+
 	t.Run("shows the merge line of a run whose log was pruned", func(t *testing.T) {
 		t.Parallel()
 		ctx := t.Context()
@@ -316,8 +369,9 @@ func TestSessionPage(t *testing.T) {
 		composer := main.One(t, ".composer")
 		composer.One(t, `input[name="verb"][value="follow-up"]`)
 		composer.One(t, `textarea[aria-label="follow-up prompt"]`)
-		if got := main.One(t, ".composer-chip").Text(); !strings.Contains(got, config.AgentModel) {
-			t.Errorf("running GET /s/acme/web/1 model chip = %q, want %q", got, config.AgentModel)
+		composer.One(t, `select[name="effort"]`)
+		if got := composer.One(t, `select[name="model"] option[selected]`).Text(); got != config.AgentModel {
+			t.Errorf("running GET /s/acme/web/1 selected model = %q, want %q", got, config.AgentModel)
 		}
 
 		idle, _ := sessionStoreEnding(t, sessionRunOpts{
@@ -405,7 +459,7 @@ func TestSessionPage(t *testing.T) {
 		root.One(t, `a[data-key="o"][target="_blank"]`)
 	})
 
-	t.Run("board, feature and session keep the same verb controls", func(t *testing.T) {
+	t.Run("a session asks before kill, on both of its pages", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 		if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
@@ -414,30 +468,13 @@ func TestSessionPage(t *testing.T) {
 			t.Fatalf("QueueVerbIntent(kill): %v", err)
 		}
 		srv := newServer(st, testNow)
-		confirms := map[string]string{}
-		for _, tc := range []struct{ path, verbPath string }{
-			{path: "/tickets", verbPath: "/verb?all=1"},
-			{path: "/f/checkout", verbPath: "/verb?feature=checkout"},
-		} {
-			board := htmltest.Parse(t, renderPath(t, srv, tc.path)).One(t, "table#board")
-			board.One(t, `[data-section="in-progress"]`)
-			form := board.One(t, `form[hx-post="`+tc.verbPath+`"]`)
-			confirms[tc.path], _ = form.Attr("hx-confirm")
-			form.One(t, `button[name="verb"][value="kill"]`)
-			if got := board.Text(); !strings.Contains(got, "kill queued") {
-				t.Errorf("GET %s board = %q, want kill queued", tc.path, got)
-			}
-		}
 		for _, path := range []string{"/s/acme/web/1", "/s/acme/web/1/actions"} {
 			actions := htmltest.Parse(t, renderPath(t, srv, path)).One(t, "#session-actions")
 			form := actions.One(t, `form[hx-post="/verb"]`)
-			confirms[path], _ = form.Attr("hx-confirm")
 			form.One(t, `button[name="verb"][value="kill"][disabled]`)
 			actions.One(t, `.pending-mark[data-glyph="pending"]`)
-		}
-		for path, confirm := range confirms {
-			if confirm != confirms["/tickets"] || !strings.Contains(confirm, "kill on "+sessionTicket) {
-				t.Errorf("GET %s kill confirmation = %q, want the board's %q", path, confirm, confirms["/tickets"])
+			if confirm, _ := form.Attr("hx-confirm"); !strings.Contains(confirm, "kill on "+sessionTicket) {
+				t.Errorf("GET %s kill confirmation = %q, want it to name kill on %s", path, confirm, sessionTicket)
 			}
 		}
 	})
@@ -453,6 +490,13 @@ func TestSessionPage(t *testing.T) {
 		if keys := sessionMain(t, noFeature, "/s/acme/web/1").Find(`[data-key="f"]`); len(keys) != 0 {
 			t.Errorf("GET /s/acme/web/1 with no feature carries the feature key: %s", keys[0].HTML())
 		}
+	})
+
+	t.Run("the breadcrumb links to the feature with the nav attributes", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+
+		sessionMain(t, st, "/s/acme/web/1").One(t, `ol.crumbs a[href="/f/checkout"][hx-select="#main"][hx-push-url="true"]`)
 	})
 
 	t.Run("the composer is outside every polled element", func(t *testing.T) {
@@ -515,7 +559,10 @@ func testVerbFromSession(t *testing.T) {
 		srv := newServer(st, testNow)
 
 		rec := do(t, srv, http.MethodPost, "/verb", req{
-			Form:   url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"}},
+			Form: url.Values{
+				"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"},
+				"model": {"opus"}, "effort": {"high"},
+			},
 			Header: http.Header{"Hx-Request": {"true"}},
 		})
 		if rec.Code != http.StatusOK {

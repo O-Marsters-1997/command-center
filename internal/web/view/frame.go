@@ -61,6 +61,11 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	f.snap = plan.RulesFor(plan.Daemon{}, f.in.Obs).Derive(f.in)
 	f.projects = projectMarks(f.repos)
 	f.rows = deriveRows(f.tickets, f.in, f.snap, f.projects)
+	activities, err := r.store.Activities(ctx)
+	if err != nil {
+		return frame{}, fmt.Errorf("load activities: %w", err)
+	}
+	applyActivities(f.rows, activities, now)
 	f.chrome = r.buildChrome(f)
 	f.chrome.scopeToProject(f.project)
 	f.chrome.ScopeMenu = scopeChoices(ScopeList(projects, f.repos), f.project.Name, p.Repo)

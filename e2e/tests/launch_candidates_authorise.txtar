@@ -20,8 +20,8 @@ exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/is
 exec cc tick --count 1
 exec cc request GET /tickets
 
-stdout '>#CC-1</a>'
-stdout '>#CC-2</a>'
-stdout '>queued</span>'
+stdout 'data-ref="#CC-1"'
+stdout 'data-ref="#CC-2"'
+stdout 'title="Queued"'
 stdout 'waiting for a slot'
-stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'
+stdout 'waiting on #CC-1&#39;s PR'

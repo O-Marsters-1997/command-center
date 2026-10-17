@@ -83,8 +83,10 @@ func (pr *pullRequest) check(now time.Time, repo, name, outcome string) gh.Check
 		state.Status = "IN_PROGRESS"
 	case outcome == ciPass:
 		state.Status, state.Conclusion = "COMPLETED", "SUCCESS"
+		state.CompletedAt = pr.runStart.Add(pr.issue.CIAfter)
 	default:
 		state.Status, state.Conclusion = "COMPLETED", "FAILURE"
+		state.CompletedAt = pr.runStart.Add(pr.issue.CIAfter)
 	}
 	return state
 }

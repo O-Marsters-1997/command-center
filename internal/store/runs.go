@@ -58,7 +58,10 @@ func (s *Store) RunDetails(ctx context.Context, id plan.RunID) (RunDetails, erro
 func (s *Store) InsertSessionRunSkeleton(
 	ctx context.Context, r RunSkeleton,
 ) (runID int64, sessionID string, err error) {
+	model, effort := choiceColumns(r.Choice)
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
+		Model:       model,
+		Effort:      effort,
 		TicketID:    notNull(r.Ticket),
 		Kind:        string(r.Kind),
 		BaselineSHA: notNull(r.BaselineSHA),
@@ -103,12 +106,17 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 	if d.Cost.IsSome() {
 		costParam = sql.NullFloat64{Float64: d.Cost.Unwrap(), Valid: true}
 	}
+	var lastMessageParam sql.NullString
+	if d.LastMessage.IsSome() {
+		lastMessageParam = notNull(d.LastMessage.Unwrap())
+	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Outcome:  notNull(d.Outcome.String()),
-		ExitCode: exitCodeParam,
-		EndedAt:  notNullTime(d.EndedAt.UTC()),
-		CostUsd:  costParam,
-		ID:       int64(d.RunID),
+		Outcome:     notNull(d.Outcome.String()),
+		ExitCode:    exitCodeParam,
+		EndedAt:     notNullTime(d.EndedAt.UTC()),
+		CostUsd:     costParam,
+		LastMessage: lastMessageParam,
+		ID:          int64(d.RunID),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
 }

@@ -177,6 +177,50 @@ func TestLaunch(t *testing.T) {
 		assertPromptGolden(t, "testdata/prompt-implement.golden.txt", string(written), filepath.Dir(spawns[0].PromptPath))
 	})
 
+	t.Run("spawns with the launch's model, effort and context", func(t *testing.T) {
+		t.Parallel()
+		f := newLoopFixture(t)
+		url := f.Tickets[0].URL
+		const launchContext = "prefer table tests"
+		choice := plan.AgentChoice{Model: "opus", Effort: option.Some(plan.EffortHigh)}
+		launch := storepkg.LaunchRequest{
+			Ticket: url, Group: "g", At: testAt, Context: launchContext, Choice: choice,
+			PromptHash: plan.Hash(plan.Compose(plan.Ticket{URL: plan.TicketURL(url), LaunchContext: launchContext})),
+		}
+		if err := f.Store.QueueLaunchIntent(t.Context(), launch); err != nil {
+			t.Fatalf("QueueLaunchIntent(%q): %v", url, err)
+		}
+		f.Tick(t)
+
+		spawns := f.Fake.Spawns()
+		if len(spawns) != 1 {
+			t.Fatalf("spawns = %d, want 1", len(spawns))
+		}
+		if spawns[0].Model != choice.Model || spawns[0].Effort != choice.Effort {
+			t.Errorf("spawn model and effort = %q, %v, want %q, %v",
+				spawns[0].Model, spawns[0].Effort, choice.Model, choice.Effort)
+		}
+		if !strings.Contains(spawns[0].Prompt, launchContext) {
+			t.Errorf("spawn prompt = %q, want it to carry the launch context", spawns[0].Prompt)
+		}
+	})
+
+	t.Run("a launch stored without a choice spawns on the configured model", func(t *testing.T) {
+		t.Parallel()
+		f := newLoopFixture(t)
+		f.AuthoriseAll(t)
+		f.Tick(t)
+
+		spawns := f.Fake.Spawns()
+		if len(spawns) != 1 {
+			t.Fatalf("spawns = %d, want 1", len(spawns))
+		}
+		if spawns[0].Model != config.AgentModel || spawns[0].Effort.IsSome() {
+			t.Errorf("spawn model and effort = %q, %v, want %q and none",
+				spawns[0].Model, spawns[0].Effort, config.AgentModel)
+		}
+	})
+
 	t.Run("acts on a ticket whatever the views scope out", func(t *testing.T) {
 		t.Parallel()
 		hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
@@ -341,6 +385,24 @@ func TestDispose(t *testing.T) {
 
 		if got := f.latest(t).Outcome; got != option.Some(plan.OutcomePush) {
 			t.Errorf("outcome = %v, want push", got)
+		}
+	})
+
+	t.Run("keeps the run's final message after disposal", func(t *testing.T) {
+		t.Parallel()
+		f := newRunFixture(t)
+		f.spawn(t, 999, f.baseline, writeLog(t, killedRunAssistantLine+
+			`{"type":"result","result":"Opened the PR.","total_cost_usd":0.42}`+"\n"))
+		fake := &runnertest.Runner{}
+		fake.Exit(999, 0)
+		f.tick(t, f.worktreeObs(), fake)
+
+		activities, err := f.store.Activities(t.Context())
+		if err != nil {
+			t.Fatalf("Activities: %v", err)
+		}
+		if len(activities) != 1 || activities[0].LastMessage != "Opened the PR." {
+			t.Errorf("Activities() = %+v, want one ticket with last message %q", activities, "Opened the PR.")
 		}
 	})
 

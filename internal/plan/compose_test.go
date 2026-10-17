@@ -18,6 +18,16 @@ func TestCompose(t *testing.T) {
 		}
 	})
 
+	t.Run("ends with the launch context", func(t *testing.T) {
+		t.Parallel()
+		ticket := plan.Ticket{
+			URL: "sandbox://CC-2", WorkedExampleBranch: "cc-1-first", LaunchContext: "prefer table tests",
+		}
+		if got := plan.Compose(ticket); !strings.HasSuffix(got, "prefer table tests") {
+			t.Errorf("Compose(%+v) = %q, want it to end with the launch context", ticket, got)
+		}
+	})
+
 	t.Run("adds a worked example when the blocker branch is set", func(t *testing.T) {
 		t.Parallel()
 		ticket := plan.Ticket{URL: "sandbox://CC-2", WorkedExampleBranch: "cc-1-first"}

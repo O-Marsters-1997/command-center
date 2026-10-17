@@ -33,13 +33,15 @@ type RepoRow struct {
 	Path          string
 	RefusedBranch string
 	Project       string
+	Glyph         plan.GlyphWord
+	Status        string
+	OpenTickets   int
 	Steps         []CheckStep
 }
 
 type ReposPage struct {
 	Chrome
 	Groups          []RepoGroup
-	NewProject      NewProjectForm
 	LastImportError option.Option[ImportError]
 	Query           string
 	Search          *RepoSearch
@@ -49,11 +51,6 @@ type RepoGroup struct {
 	Scope ScopeEntry
 	Count int
 	Rows  []RepoRow
-
-	Editable bool
-
-	Projects []string
-	Hues     []int
 }
 
 type NewProjectForm struct {
@@ -74,20 +71,58 @@ type RepoPage struct {
 	Known           bool
 	Ready           bool
 	Banner          Banner
-	Features        []FeatureRow
+	Project         ProjectMark
+	OpenTickets     int
+	Base            string
+	Projects        []ProjectMark
+	NewProject      NewProjectForm
+	Unimported      []FeatureRow
 	LastImportError option.Option[ImportError]
 	Tickets         Board
+}
+
+func (p RepoPage) Path() string { return RepoPath(p.Title) }
+
+func repoCrumbs(fullName string) []Crumb {
+	return []Crumb{{Label: "Repos", Path: "/repos"}, {Label: fullName, Mono: true}}
 }
 
 func RepoPath(fullName string) string {
 	return "/repos/" + fullName
 }
 
-func trackedRow(r store.Repo) RepoRow {
+func trackedRow(r store.Repo, open int) RepoRow {
+	state := bannerState(r)
+	glyph, _ := bannerWords(state, r)
+	steps := checkSteps(state, r.RefusalKind)
 	return RepoRow{
 		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name), Project: r.Project,
-		Steps: checkSteps(bannerState(r), r.RefusalKind),
+		Glyph: glyph, Status: repoStatus(state, steps), OpenTickets: open, Steps: steps,
 	}
+}
+
+func repoStatus(state BannerState, steps []CheckStep) string {
+	switch state {
+	case BannerReady:
+		return "Checks passed"
+	case BannerRefused:
+		if i := slices.IndexFunc(steps, func(s CheckStep) bool { return s.Glyph == plan.GlyphFailed }); i >= 0 {
+			return "Failed: " + steps[i].Label
+		}
+		return "Failed: checks"
+	case BannerUnknown, BannerUntracked, BannerCloning:
+	}
+	return "Checking the repo on GitHub…"
+}
+
+func openByRepo(rows []Row) map[string]int {
+	open := make(map[string]int)
+	for _, row := range rows {
+		if row.Glyph != plan.GlyphDone {
+			open[row.Repo]++
+		}
+	}
+	return open
 }
 
 func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
@@ -111,56 +146,50 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	chrome := f.chrome
 	chrome.setCurrent(keyRepos)
 	chrome.titled("Repos")
-	groups, form := repoGroups(f.repos, f.projectList)
+	chrome.Crumbs = []Crumb{{Label: "Repos"}}
 	importErr, err := r.importError(ctx, now)
 	if err != nil {
 		return ReposPage{}, fmt.Errorf("import error: %w", err)
 	}
-	return ReposPage{Chrome: chrome, Groups: groups, NewProject: form, LastImportError: importErr}, nil
+	groups := repoGroups(f.repos, f.projectList, openByRepo(f.rows))
+	return ReposPage{Chrome: chrome, Groups: groups, LastImportError: importErr}, nil
 }
 
-func (r *Reader) RepoGroups(ctx context.Context) ([]RepoGroup, error) {
-	repos, err := r.store.Repos(ctx)
+func (r *Reader) RepoGroups(ctx context.Context, now time.Time) ([]RepoGroup, error) {
+	f, err := r.loadFrame(ctx, now, Params{})
 	if err != nil {
-		return nil, fmt.Errorf("load repo groups: load repos: %w", err)
+		return nil, fmt.Errorf("load repo groups: %w", err)
 	}
-	projects, err := r.store.Projects(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load repo groups: load projects: %w", err)
-	}
-	groups, _ := repoGroups(repos, projects)
-	return groups, nil
+	return repoGroups(f.repos, f.projectList, openByRepo(f.rows)), nil
 }
 
-func repoGroups(repos []store.Repo, projects []store.Project) ([]RepoGroup, NewProjectForm) {
+func repoGroups(repos []store.Repo, projects []store.Project, open map[string]int) []RepoGroup {
 	byName := make(map[string]store.Repo, len(repos))
-	names := make([]string, 0, len(repos))
+	var loose []string
 	for _, repo := range repos {
 		byName[repo.Name] = repo
-		names = append(names, repo.Name)
+		if repo.Project == "" {
+			loose = append(loose, repo.Name)
+		}
 	}
-	projectNames := make([]string, 0, len(projects))
-	for _, p := range projects {
-		projectNames = append(projectNames, p.Name)
-	}
+	slices.Sort(loose)
 	var groups []RepoGroup
-	for _, scope := range ScopeList(projects, repos) {
-		members := []string{scope.Value}
-		if scope.Kind == ScopeProject {
-			i := slices.IndexFunc(projects, func(p store.Project) bool { return p.Name == scope.Value })
-			members = projects[i].Repos
+	add := func(scope ScopeEntry, members []string) {
+		if len(members) == 0 {
+			return
 		}
-		group := RepoGroup{
-			Scope: scope, Count: len(members), Projects: projectNames, Hues: hues(),
-			Editable: scope.Kind == ScopeProject,
-		}
+		group := RepoGroup{Scope: scope, Count: len(members)}
 		for _, name := range members {
-			group.Rows = append(group.Rows, trackedRow(byName[name]))
+			group.Rows = append(group.Rows, trackedRow(byName[name], open[name]))
 		}
 		groups = append(groups, group)
 	}
-	form := NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: hues(), Repos: names}
-	return groups, form
+	for _, scope := range ScopeList(projects, nil) {
+		i := slices.IndexFunc(projects, func(p store.Project) bool { return p.Name == scope.Value })
+		add(scope, projects[i].Repos)
+	}
+	add(ScopeEntry{Label: "No project", Kind: ScopeRepo}, loose)
+	return groups
 }
 
 func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.RepoSummary) ([]RepoRow, error) {
@@ -172,7 +201,7 @@ func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.Re
 	rows := make([]RepoRow, 0, len(tracked))
 	for _, repo := range tracked {
 		if strings.Contains(strings.ToLower(repo.Name), q) {
-			rows = append(rows, trackedRow(repo))
+			rows = append(rows, trackedRow(repo, 0))
 		}
 	}
 	if q == "" {
@@ -200,20 +229,19 @@ func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
 }
 
 type RepoPageRequest struct {
-	Scope    string
-	Offered  []string
-	Selected []string
+	Scope   string
+	Offered []string
 }
 
 func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageRequest) (RepoPage, error) {
-	scope, offered, selected := req.Scope, req.Offered, req.Selected
+	scope, offered := req.Scope, req.Offered
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("load chrome: %w", err)
 	}
 	chrome.setCurrent(keyRepos)
 	chrome.titled(scope)
-	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, RepoPath(scope)
+	chrome.Crumbs = repoCrumbs(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
 	if page.Banner, err = r.Banner(ctx, scope); err != nil {
 		return RepoPage{}, fmt.Errorf("load banner: %w", err)
@@ -249,21 +277,34 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageReques
 	}
 
 	page.Title = repo.Name
-	page.RepoCrumb, page.RepoCrumbPath = page.Title, RepoPath(page.Title)
+	page.Crumbs = repoCrumbs(page.Title)
 	page.Remote = repo.Remote
 	page.Known = true
 	page.Ready = repo.Phase == plan.RepoReady
+	page.Project = ProjectMark{Name: repo.Project, Hue: repo.Hue}
+	page.Base = "origin/" + plan.DefaultBaseBranch
+	projects, err := r.store.Projects(ctx)
+	if err != nil {
+		return RepoPage{}, fmt.Errorf("load projects: %w", err)
+	}
+	for _, p := range projects {
+		page.Projects = append(page.Projects, ProjectMark{Name: p.Name, Hue: p.Hue})
+	}
+	page.NewProject = NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: hues(), Repos: []string{repo.Name}}
 	for _, f := range offered {
-		page.Features = append(page.Features, FeatureRow{Feature: f, Imported: imported[f], OtherRepos: others[f]})
+		if !imported[f] {
+			page.Unimported = append(page.Unimported, FeatureRow{Feature: f, OtherRepos: others[f]})
+		}
 	}
 	page.LastImportError, err = r.importError(ctx, now)
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("import error: %w", err)
 	}
-	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}, "ticket": selected}))
+	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}}))
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("load board: %w", err)
 	}
+	page.OpenTickets = openByRepo(rowsIn(page.Tickets.Groups))[repo.Name]
 	return page, nil
 }
 

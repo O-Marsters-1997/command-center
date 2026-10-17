@@ -26,11 +26,12 @@ func (s PRState) String() string {
 }
 
 type CheckState struct {
-	Name       string    `json:"name"`
-	Status     string    `json:"status"`
-	Conclusion string    `json:"conclusion"`
-	DetailsURL string    `json:"details_url"`
-	StartedAt  time.Time `json:"started_at"`
+	Name        string    `json:"name"`
+	Status      string    `json:"status"`
+	Conclusion  string    `json:"conclusion"`
+	DetailsURL  string    `json:"details_url"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletedAt time.Time `json:"completed_at"`
 }
 
 // PR is a pull request with checks reduced to the latest completed run per name.
@@ -223,15 +224,16 @@ type rawIssue struct {
 
 // rawCheck is the union of CheckRun and StatusContext as gh flattens them into one array.
 type rawCheck struct {
-	Typename   string `json:"__typename"`
-	Name       string `json:"name"`
-	Context    string `json:"context"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
-	State      string `json:"state"`
-	DetailsURL string `json:"detailsUrl"`
-	TargetURL  string `json:"targetUrl"`
-	StartedAt  string `json:"startedAt"`
+	Typename    string `json:"__typename"`
+	Name        string `json:"name"`
+	Context     string `json:"context"`
+	Status      string `json:"status"`
+	Conclusion  string `json:"conclusion"`
+	State       string `json:"state"`
+	DetailsURL  string `json:"detailsUrl"`
+	TargetURL   string `json:"targetUrl"`
+	StartedAt   string `json:"startedAt"`
+	CompletedAt string `json:"completedAt"`
 }
 
 func decode(raw []byte) ([]PR, error) {
@@ -325,11 +327,22 @@ func collapse(r rawCheck) (CheckState, bool) {
 		status, conclusion, url = statusContextStatus(r.State), r.State, r.TargetURL
 	}
 
-	started, err := time.Parse(time.RFC3339, r.StartedAt)
+	return CheckState{
+		Name:        name,
+		Status:      status,
+		Conclusion:  conclusion,
+		DetailsURL:  url,
+		StartedAt:   parseTimeOrZero(r.StartedAt),
+		CompletedAt: parseTimeOrZero(r.CompletedAt),
+	}, true
+}
+
+func parseTimeOrZero(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		started = time.Time{}
+		return time.Time{}
 	}
-	return CheckState{Name: name, Status: status, Conclusion: conclusion, DetailsURL: url, StartedAt: started}, true
+	return t
 }
 
 func statusContextStatus(state string) string {

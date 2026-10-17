@@ -39,7 +39,7 @@ func testBoardSquares(t *testing.T) {
 	t.Run("only the project's ticket carries a square", func(t *testing.T) {
 		t.Parallel()
 		var squares []string
-		for _, row := range htmltest.Parse(t, board).One(t, "table#board").Find("tr.group") {
+		for _, row := range htmltest.Parse(t, board).One(t, "div#board").Find("a[data-ref]") {
 			for _, avatar := range row.Find(`[data-hue][title]`) {
 				squares = append(squares, avatar.Text())
 			}

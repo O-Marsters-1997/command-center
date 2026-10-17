@@ -1,5 +1,3 @@
-import { waveDepths } from "./layout";
-
 export interface Candidate {
   url: string;
   ref: string;
@@ -60,8 +58,21 @@ export function toggleResult(candidates: Candidate[], ticked: Set<string>, url: 
   return { ticked: next };
 }
 
-export function columnsFor(candidates: Candidate[]): Map<string, number> {
-  return waveDepths(candidates.map((c) => ({ url: c.url, blocking: c.blocked_by })));
+export function launchLabel(candidates: Candidate[], ticked: Set<string>): string {
+  const chosen = candidates.filter((c) => ticked.has(c.url));
+  const now = chosen.filter((c) => c.label === NOW).length;
+  const arm = chosen.filter((c) => c.label === ON_UNLOCK).length;
+  if (now > 0 && arm > 0) return `Launch ${now} now · arm ${arm}`;
+  if (now > 0) return `Launch ${now} now`;
+  if (arm > 0) return `Arm ${arm}`;
+  return "Select tickets to launch";
+}
+
+export function whenLabel(c: Candidate, candidates: Candidate[]): string {
+  if (c.label !== ON_UNLOCK) return c.repo;
+  const refs = new Map(candidates.map((other) => [other.url, other.ref]));
+  const blockers = (c.blocked_by || []).map((url) => refs.get(url) ?? `#${url.split("/").pop()}`);
+  return `after ${blockers.join(", ")}`;
 }
 
 interface Sections {

@@ -96,11 +96,24 @@ func (q *Queries) FeatureFirstLaunch(ctx context.Context, feature string) (time.
 }
 
 const insertLaunch = `-- name: InsertLaunch :one
-INSERT INTO launches (created_at, state) VALUES ($1, 'active') RETURNING id
+INSERT INTO launches (created_at, state, context, model, effort)
+VALUES ($1, 'active', $2, $3, $4) RETURNING id
 `
 
-func (q *Queries) InsertLaunch(ctx context.Context, createdAt time.Time) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertLaunch, createdAt)
+type InsertLaunchParams struct {
+	CreatedAt time.Time
+	Context   string
+	Model     sql.NullString
+	Effort    sql.NullString
+}
+
+func (q *Queries) InsertLaunch(ctx context.Context, arg InsertLaunchParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertLaunch,
+		arg.CreatedAt,
+		arg.Context,
+		arg.Model,
+		arg.Effort,
+	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -137,7 +150,7 @@ func (q *Queries) InsertLaunchMembers(ctx context.Context, arg InsertLaunchMembe
 }
 
 const listLaunchMemberships = `-- name: ListLaunchMemberships :many
-SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
+SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash, l.context, l.model, l.effort,
        COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
 FROM launch_members lm
 JOIN launches l ON l.id = lm.launch_id
@@ -151,6 +164,9 @@ type ListLaunchMembershipsRow struct {
 	LaunchID   int64
 	State      string
 	PromptHash string
+	Context    string
+	Model      sql.NullString
+	Effort     sql.NullString
 	Members    int64
 }
 
@@ -168,6 +184,9 @@ func (q *Queries) ListLaunchMemberships(ctx context.Context, maxRows int32) ([]L
 			&i.LaunchID,
 			&i.State,
 			&i.PromptHash,
+			&i.Context,
+			&i.Model,
+			&i.Effort,
 			&i.Members,
 		); err != nil {
 			return nil, err

@@ -2,13 +2,12 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<h1>Tickets</h1>
-{{with .Tabs}}{{with index . 0}}<p class="page-purpose">{{.Count}} ticket{{if ne .Count 1}}s{{end}} in this scope.</p>{{end}}{{end}}
+<h1>All tickets</h1>
+<p class="page-purpose">{{.OpenCount}} open across {{.FeatureCount}} {{if eq .FeatureCount 1}}feature{{else}}features{{end}}{{if .ProjectCount}} in {{.ProjectCount}} {{if eq .ProjectCount 1}}project{{else}}projects{{end}}{{end}}.</p>
 <nav class="pill-tabs" aria-label="ticket filters">
   {{- range .Tabs}}
   <a class="pill-tab" href="{{.Path}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{.Title}} <span class="section-count">{{.Count}}</span></a>
   {{- end}}
 </nav>
-{{template "boardForm" .}}
-<div id="launch-modal"></div>
+{{template "board" .}}
 {{template "shellEnd" .}}

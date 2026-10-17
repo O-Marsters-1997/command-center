@@ -12,6 +12,8 @@ export interface Row {
   ref: string;
   title: string;
   state: State;
+  label: string;
+  detail: string;
   glyph: Glyph;
   alive: boolean;
   blocking: string[] | null;
@@ -19,6 +21,8 @@ export interface Row {
   reason: string;
   elapsed: string;
   pr_number: number;
+  checks_passed: number;
+  checks_total: number;
   session_path: string;
 }
 

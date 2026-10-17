@@ -31,8 +31,8 @@ func TestInsightsPage(t *testing.T) {
 
 		root := htmltest.Parse(t, renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a"))
 		root.One(t, `a[href="/insights?feature=feat-a"]`)
-		if got := root.One(t, "ol.crumbs").Text(); !strings.Contains(got, "feat-a") {
-			t.Errorf("GET /insights?feature=feat-a breadcrumb = %q, want it to name feat-a", got)
+		if got := root.One(t, "ol.crumbs").Text(); strings.TrimSpace(got) != "Insights" {
+			t.Errorf("GET /insights?feature=feat-a breadcrumb = %q, want a single Insights crumb", got)
 		}
 	})
 

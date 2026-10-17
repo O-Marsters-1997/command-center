@@ -1,9 +1,9 @@
 -- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message)
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message, model, effort)
 VALUES (
   sqlc.arg(ticket_id), sqlc.arg(kind), sqlc.arg(baseline_sha), sqlc.arg(prompt_hash),
   CASE WHEN sqlc.arg(new_session)::boolean THEN gen_random_uuid() ELSE sqlc.narg(session_id)::text::uuid END,
-  sqlc.narg(message)
+  sqlc.narg(message), sqlc.narg(model), sqlc.narg(effort)
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id;
 
 -- name: LatestSessionID :one
@@ -16,8 +16,18 @@ WHERE id = sqlc.arg(id);
 
 -- name: RecordDisposition :execrows
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
-    cost_usd = sqlc.arg(cost_usd)
+    cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message)
 WHERE id = sqlc.arg(id) AND outcome IS NULL;
+
+-- name: TicketActivities :many
+SELECT e.ticket_id::text AS ticket_url, MAX(e.at)::timestamptz AS at,
+  COALESCE((
+    SELECT r.last_message FROM runs r
+    WHERE r.ticket_id = e.ticket_id AND r.last_message IS NOT NULL ORDER BY r.id DESC LIMIT 1
+  ), '')::text AS last_message
+FROM events e
+WHERE e.ticket_id IS NOT NULL
+GROUP BY e.ticket_id;
 
 -- name: RecordQuestion :execrows
 UPDATE runs SET question = sqlc.arg(question) WHERE id = sqlc.arg(id);

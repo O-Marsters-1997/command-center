@@ -44,12 +44,45 @@ type Board struct {
 	Groups           []Group
 	Sections         []Section
 	Tabs             []FilterTab
+	Context          RowContext
 	BoardPath        string
 	BoardPollSeconds int
 	Launched         option.Option[Age]
 	TicketCount      int
 	WaveCount        int
 	Launch           option.Option[LaunchModal]
+}
+
+func (b Board) LaunchCount() int {
+	return len(slices.DeleteFunc(rowsIn(b.Groups), func(r Row) bool { return !r.Launchable }))
+}
+
+func (b Board) OpenCount() int {
+	open := 0
+	for _, r := range rowsIn(b.Groups) {
+		if sectionKey(r.Glyph) != SectionDone {
+			open++
+		}
+	}
+	return open
+}
+
+func (b Board) FeatureCount() int {
+	return distinctCount(rowsIn(b.Groups), func(r Row) string { return r.Feature })
+}
+
+func (b Board) ProjectCount() int {
+	return distinctCount(rowsIn(b.Groups), func(r Row) string { return r.Project })
+}
+
+func distinctCount(rows []Row, of func(Row) string) int {
+	seen := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		if v := of(r); v != "" {
+			seen[v] = true
+		}
+	}
+	return len(seen)
 }
 
 func (b Board) rowFor(ref SessionRef) (Row, bool) {
@@ -118,6 +151,10 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	chrome := f.chrome
 	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
 	scoped := rowsIn(groups)
+	chrome.Crumbs = []Crumb{{Label: "All tickets"}}
+	if params.Feature != "" {
+		chrome.Crumbs = featureCrumbs(scoped, params.Feature)
+	}
 	sections := Sectioned(scoped)
 	blocking := make(map[plan.TicketURL][]plan.TicketURL, len(scoped))
 	for _, row := range scoped {
@@ -133,7 +170,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 			return Board{}, fmt.Errorf("load feature first launch: %w", err)
 		}
 	}
+	context := ContextFeature
+	if params.Feature != "" {
+		context = ContextRepo
+	}
 	return Board{
+		Context:          context,
 		Launched:         launched,
 		TicketCount:      len(scoped),
 		WaveCount:        plan.WaveCount(blocking),
@@ -185,7 +227,6 @@ func (r *Reader) buildChrome(f frame) Chrome {
 		PageTitle:    appTitle,
 		Keymap:       Keymap,
 		RepoScope:    params.Repo,
-		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
 		Launch:       NavItem{Path: params.withScope("/launch"), Key: keyLaunch},
 		Nav: []NavItem{
@@ -207,9 +248,6 @@ func (r *Reader) buildChrome(f frame) Chrome {
 	}
 	if lastErr.IsSome() && (!observed || lastErr.Unwrap().At.After(obs.ObservedAt)) {
 		c.LastError = option.Some(TickError{Age: relative(now, lastErr.Unwrap().At), Message: lastErr.Unwrap().Message})
-	}
-	if params.Repo != "" {
-		c.RepoCrumbPath = RepoPath(params.Repo)
 	}
 	return c
 }

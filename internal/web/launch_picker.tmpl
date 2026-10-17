@@ -1,21 +1,33 @@
 {{template "shellStart" .}}
 {{template "scopeCrumbs" .}}
-<li>launch</li>
 {{template "shellAction" .}}
 {{template "shellContent" .}}
 <h1>Launch a feature</h1>
+<div id="launch-modal">
+{{- if .Launch}}{{template "launchDialog" .Launch -}}
+{{- else -}}
+<dialog class="launch-dialog launch-dialog-picker" open aria-labelledby="launch-dialog-title">
+<header class="launch-head">
+<h2 id="launch-dialog-title" class="launch-dialog-title">Launch a feature</h2>
+<a class="btn btn-ghost btn-sm btn-icon" href="/" aria-label="Close" {{template "nav" "/"}}>{{template "icon" "x"}}</a>
+</header>
+<div class="launch-body">
 {{if .Features -}}
-<p class="page-purpose">Choose a feature to review what would start.</p>
-<ul class="flex max-w-3xl flex-col gap-0.5" aria-label="features with launchable work">
+<ul class="launch-picks" aria-label="features with launchable work">
   {{range .Features -}}
   <li><a class="launch-pick" href="{{.Path}}" {{template "nav" .Path}}>
+    {{template "mark" .Project}}
     <span class="launch-pick-name">{{.Name}}</span>
-    <span class="launch-pick-n">{{.Now}} ready now{{if .OnUnlock}} &middot; {{.OnUnlock}} on unlock{{end}}</span>
+    <span class="launch-pick-n">{{.Now}} ready{{if .OnUnlock}} &middot; {{.OnUnlock}} on unlock{{end}}</span>
+    {{template "icon" "chev"}}
   </a></li>
   {{- end}}
 </ul>
 {{- else -}}
-<p class="page-purpose">No feature has work to launch.</p>
+<p class="text-muted">No feature has work to launch.</p>
 {{- end}}
-<div id="launch-modal">{{with .Launch}}{{template "launchDialog" .}}{{end}}</div>
+</div>
+</dialog>
+{{- end}}
+</div>
 {{template "shellEnd" .}}

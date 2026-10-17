@@ -1,6 +1,9 @@
 package store
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -8,11 +11,12 @@ import (
 )
 
 type Disposition struct {
-	RunID    plan.RunID
-	Outcome  plan.Outcome
-	ExitCode option.Option[int]
-	Cost     option.Option[float64]
-	EndedAt  time.Time
+	RunID       plan.RunID
+	Outcome     plan.Outcome
+	ExitCode    option.Option[int]
+	Cost        option.Option[float64]
+	LastMessage option.Option[string]
+	EndedAt     time.Time
 }
 
 type Push struct {
@@ -43,6 +47,7 @@ type RunSkeleton struct {
 	Kind        plan.RunKind
 	BaselineSHA string
 	PromptHash  string
+	Choice      plan.AgentChoice
 	Session     RunSession
 }
 
@@ -64,6 +69,8 @@ type LaunchRequest struct {
 	Ticket     string
 	PromptHash string
 	Group      string
+	Context    string
+	Choice     plan.AgentChoice
 	At         time.Time
 }
 
@@ -72,6 +79,28 @@ type VerbRequest struct {
 	Verb    plan.Verb
 	Payload string
 	At      time.Time
+}
+
+type FollowUpPayload struct {
+	Message string      `json:"message"`
+	Model   string      `json:"model"`
+	Effort  plan.Effort `json:"effort,omitempty"`
+}
+
+func (p FollowUpPayload) Encode() (string, error) {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return "", fmt.Errorf("encode follow-up payload: %w", err)
+	}
+	return string(raw), nil
+}
+
+func DecodeFollowUpPayload(raw string) FollowUpPayload {
+	var p FollowUpPayload
+	if strings.HasPrefix(raw, "{") && json.Unmarshal([]byte(raw), &p) == nil {
+		return p
+	}
+	return FollowUpPayload{Message: raw}
 }
 
 type EditRequest struct {

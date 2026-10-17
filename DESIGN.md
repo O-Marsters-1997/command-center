@@ -290,18 +290,44 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 - **Rail anatomy.** From the top: a 44px head with the mark and the launch button, a 30px search
   field with a `⌘K` key hint, then the nav. Below that are three sections: Needs you (cards),
   In flight (feature groups with 28px heads and 30px rows), and Settled (collapsed). A footer
-  holds the 5h and week meters, and the shortcuts button.
+  holds the 5h and week meters, and the shortcuts button. The scope row opens a floating menu
+  (Float shadow, 16px corners) of All projects and each project with its avatar and a `⌘0`–`⌘9`
+  hint; search matches replace the three sections in the same rail.
 - **Top bar.** 44px: breadcrumbs on the left and at most one secondary action on the right.
+  Crumbs read `project / feature / title` on a session, `project / feature` on a feature,
+  `Repos / owner/name` (mono) on a repo, and a single crumb elsewhere. A project crumb carries
+  its avatar; every crumb but the last is a link.
 - **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
 - **Session.** The transcript is centred at max 720px, with the composer floating at the foot.
-  A 300px feature-stack panel sits on the right. Below 1180px the panel becomes an overlay that
-  opens on demand.
+  The head is the state badge, the title and a mono `repo #n · branch` line. The prompt is a
+  right-aligned bubble under "Launched from the ticket · age", with a mono "Worked · 0.4% of
+  week · wall · turns" line beneath it, and Transcript and Raw log are right-aligned pill tabs.
+  Stored events (launched, pushed, PR opened, agent run finished) read as record lines, and the
+  checks that landed fold into one grid of glyph, name and elapsed, with an output link on each
+  failure. A 300px feature-stack panel sits on the right: the feature with its
+  avatar and merged/total, Graph and Board buttons, then Wave 1, Wave 2… groups of rows (glyph,
+  title, right-aligned elapsed or share of week) with the current ticket outlined, then Repo,
+  Branch, PR, Checks and Spend (share of week, never dollars) and a closed "Edit blockers"
+  disclosure. Below 1180px the panel becomes an overlay that opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.
+- **Feature page.** The top bar carries Graph/Board pill tabs and a secondary `Launch · N`. The
+  head is the name, `project · launched age · N tickets in M waves · V switches view`, and a
+  segment bar with its legend. The graph has one column per wave, headed `Wave n` with a
+  subtitle (`4 in progress`, `unlocks as wave 1 merges`). A node card is glyph, mono ref, title
+  and one subline (`PR #n · a/b checks`, `after #x, #y`, or the detail), with the state label
+  top-right only for Needs you. The board is the grouped list: glyph, ref, title over detail,
+  repo, checks, PR, and elapsed or spend, with no verbs, checkboxes, stack or state columns.
+- **All tickets.** The head is `All tickets` over a one-line count (`N open across F features in
+  P projects`), then pill tabs with counts, then the same grouped list. A row names its feature
+  in a chip with the project avatar where the feature page names the repo. The list is read-only:
+  a click opens the session, and nothing on it selects, posts or launches.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
+  Pill tabs scroll sideways inside their own track, long paths wrap, and no page scrolls
+  horizontally.
 
 ### Routes
 
@@ -312,8 +338,9 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 | `/f/{feature}` | Feature board, grouped by attention |
 | `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
 | `/tickets` | All tickets, filter tabs |
-| `/insights` | Limits, spend per merged ticket |
-| `/repos`, `/repos/{owner}/{name}` | Tracked repos; repo banner, checks, tickets |
+| `/insights` | Limits with reset times, spend per merged ticket, spend split, merged tickets |
+| `/repos` | Track search, then tracked repos grouped under project headings, "No project" last; a row is check glyph, mono name, status line, open-ticket count and chevron |
+| `/repos/{owner}/{name}` | State badge, mono name, project · open tickets · base, settings callout, Checks, Tickets, Unimported features, and the Project module where a repo is assigned or a project made |
 
 ## Elevation & Depth
 
@@ -383,7 +410,7 @@ state's soft colour.
 - **Project avatar:** a 16px lettered square on a project hue, drawn by the named class `avatar`
   with `[data-hue]`. A project is a named set of repos
   ([ADR 6](docs/adr/0006-scope-is-a-view-concern.md)). The avatar marks the project beside
-  every ticket, feature and repo, and in the rail's scope menu (`G 0`–`G 9`). A repo with no
+  every ticket, feature and repo, and in the rail's scope menu (`⌘0`–`⌘9`, or `G 0`–`G 9`). A repo with no
   project gets the neutral `surface-3` square.
 
 ### Tabs
@@ -398,13 +425,21 @@ ticket filters. No underline tabs.
   Columns: glyph, mono ref, title over a muted subline, then right-aligned metrics.
 - **Tables:** 34px heads in 12px/510 `muted`, 40px cells, `border-soft` rules only, inside a 10px
   `border-soft` frame. No vertical rules and no tinted header.
+- **Modules:** a page body stacks modules (`.module`) 28px apart, each an `h2` 10px above its
+  content. Insights and the repo page use them; every table inside one sits in the frame.
 
 ### Session rail
 
-- **Card** (Needs you only): a 10px panel holding the glyph and title, then repo · feature in
-  `muted`, then two clamped lines of the last activity, then one inline `btn-sm` verb (Reply for
-  an agent's question). The selected card takes an `accent-line` border and an `accent-soft`
-  halo.
+- **Order:** head, search with `⌘K`, project scope row, nav with counts, then Needs you, In
+  flight and a collapsed Settled, with the 5h/Week meters and Shortcuts in the footer.
+- **Card** (Needs you only): a 10px panel holding the glyph and title with the age since the
+  ticket's latest event ("2m") in mono `meta` at the top right, then avatar · feature · mono ref in
+  `muted`, then "Label. Last line" (the run's final agent message from `runs.last_message`, else
+  the reason) clamped to two lines with the label in medium weight
+  (tinted `accent` or `s-failed` by glyph), then one inline `btn-sm` verb (Reply for an agent's
+  question). The label is the state's sentence-case word and the detail is the reason with ticket
+  URLs shortened to refs; the raw state name and log paths never render. The selected card takes
+  an `accent-line` border and an `accent-soft` halo.
 - **Feature group:** a 28px head with a chevron, the scope avatar, the name, and merged/total in
   `meta`. Its 30px rows carry the glyph, the title and a mono metric (timer or ref).
 - **Settled:** collapsed behind its head, and it reopens on new activity.
@@ -419,8 +454,9 @@ ticket filters. No underline tabs.
   are right-aligned 16px bubbles on `surface-2`.
 - **Callouts:** a failed or attention panel on the soft state ground, holding the primary verb.
 - **Composer:** a 16px panel with Float, a body-read textarea, and a bar of 26px ghost pickers
-  ending in a 30px round indigo send button. The model, effort and worktree pickers are target
-  UI with no data yet.
+  ending in a 30px round indigo send button. The model and effort pickers are native selects
+  whose choice rides the follow-up; the "Worktree" access label with its lock icon is static, as
+  the permission mode stays pinned.
 
 ### Inputs
 
@@ -436,9 +472,19 @@ ticket filters. No underline tabs.
 
 - **Dialog:** a scrim at 18% ink, a 620px panel with 16px corners and Overlay, at 12vh. Head,
   scrolling body and footer are split by `border-soft`. On a phone it is a bottom sheet.
+- **Launch dialog:** the 620px dialog. The head holds the project avatar and name, `Launch
+  {feature}`, a ghost Change feature button and a close icon. The body has Ready now and On unlock
+  sections of rows (checkbox, glyph dot, ref, title, then the repo or `after #x, #y` right-aligned
+  in `meta`), and a `details` disclosure for tickets already in flight or refused. The footer holds
+  the Composer (extra context for every agent in the launch, a model select, an effort select and
+  a static `base origin/main` chip), then Cancel and the primary `Launch N now · arm M` with a `⌘↵`
+  kbd. `/launch` with no feature opens the
+  same dialog as a feature picker: one row per feature with its avatar and its ready and on-unlock
+  counts.
 - **Toast:** a centred dark pill (`fg` on `surface`), 38px, 72px off the bottom, carrying an
   Undo button. Every triage verb gets one. Undo is target UI with no data yet.
-- **Shortcut sheet:** a 480px dialog with grouped `dl` rows of `kbd` keys.
+- **Shortcut sheet:** opened by `?`, a 480px dialog with a 15px title and grouped `dl` rows of
+  `kbd` keys.
 
 ### Motion
 

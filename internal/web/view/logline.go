@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 type LineShape string
@@ -35,6 +36,8 @@ type LogLine struct {
 	Anchor  bool
 	CallID  string
 	Replace bool
+	Record  store.EventKind
+	Checks  []Check
 }
 
 type ProseBlock struct {
@@ -68,7 +71,11 @@ func lineOf(e agentlog.Event) LogLine {
 	case agentlog.Skill:
 		return LogLine{Kind: e.Kind.String(), Shape: LineSkill, Verb: e.Tool, Arg: e.Detail}
 	case agentlog.Record:
-		return recordLine(e.Tool, e.Detail)
+		line := recordLine(e.Tool, e.Detail)
+		if e.At > 0 {
+			line.Result = formatOffset(e.At)
+		}
+		return line
 	case agentlog.Commit:
 		result := "✓" + elapsedSuffix(e.Elapsed)
 		return LogLine{
@@ -84,19 +91,34 @@ func lineOf(e agentlog.Event) LogLine {
 }
 
 func recordLine(kind, detail string) LogLine {
-	line := LogLine{Kind: agentlog.Record.String(), Shape: LineRecord, Verb: kind, Arg: detail}
+	line := LogLine{
+		Kind: agentlog.Record.String(), Shape: LineRecord, Verb: kind, Arg: detail, Record: store.EventKind(kind),
+	}
 	switch kind {
-	case "pr_opened":
+	case string(store.EventRunLaunched):
+		line.Verb = "launched"
+		if _, where, ok := strings.Cut(detail, " in "); ok {
+			line.Arg = "in " + where
+			if path, sha, ok := strings.Cut(where, " from "); ok {
+				line.Arg = "in " + path + " from base @ " + sha[:min(len(sha), 7)]
+			}
+		}
+	case string(store.EventPushed):
+		line.Verb = "pushed"
+		line.Arg = strings.TrimPrefix(detail, "pushed ")
+	case string(store.EventRunDisposed):
+		line.Verb = "agent run finished"
+	case string(store.EventPROpened):
 		line.Verb = "opened"
 		if number, href, _ := strings.Cut(detail, " https://"); href != "" {
 			line.Arg, line.Href = number, "https://"+href
 		}
-	case "checks_landed":
+	case string(store.EventChecksLanded):
 		line.Verb = "check"
 		if i := strings.LastIndexByte(detail, ' '); i >= 0 {
 			line.Verb, line.Arg = detail[i+1:], detail[:i]
 		}
-	case "pr_merged":
+	case string(store.EventPRMerged):
 		line.Verb = "merged"
 	}
 	return line

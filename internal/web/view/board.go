@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 
@@ -28,6 +29,10 @@ type Row struct {
 	Title           string         `json:"title"`
 	State           string         `json:"state"`
 	Reason          string         `json:"reason"`
+	Label           string         `json:"label"`
+	Detail          string         `json:"detail"`
+	Updated         Age            `json:"-"`
+	Last            string         `json:"-"`
 	Question        string         `json:"-"`
 	Glyph           plan.GlyphWord `json:"glyph"`
 	Alive           bool           `json:"alive"`
@@ -53,6 +58,8 @@ type Row struct {
 	LogPath         string         `json:"-"`
 	CancelCount     int            `json:"-"`
 	SpendTokens     int            `json:"-"`
+	ChecksPassed    int            `json:"checks_passed"`
+	ChecksTotal     int            `json:"checks_total"`
 	Checks          []Check        `json:"-"`
 	RedChecks       []Check        `json:"-"`
 	Draft           bool           `json:"-"`
@@ -62,12 +69,9 @@ type Row struct {
 	SpendPctWeek    float64        `json:"-"`
 	TicketOpen      bool           `json:"-"`
 
-	Checked     bool         `json:"-"`
 	Launchable  bool         `json:"-"`
 	Buttons     []VerbButton `json:"-"`
 	SessionPath string       `json:"session_path"`
-	TogglePath  string       `json:"-"`
-	TogglePush  string       `json:"-"`
 	VerbPath    string       `json:"-"`
 	Log         LogDetail    `json:"-"`
 }
@@ -77,32 +81,26 @@ type Check struct {
 	Status     string
 	Conclusion string
 	DetailsURL string
+	Elapsed    string
 }
 
 func (r Row) Ticket() string { return ticketRef(r.URL) }
 
 func ticketRef(url string) string { return "#" + path.Base(url) }
 
+var (
+	reasonURL     = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s,;']*[^\s,;:'.]`)
+	reasonLogPath = regexp.MustCompile(`[;,:]?\s*log at \S+$`)
+)
+
+func detailOf(reason string) string {
+	reason = reasonLogPath.ReplaceAllString(reason, "")
+	return reasonURL.ReplaceAllStringFunc(reason, ticketRef)
+}
+
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
 func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput.String() }
-
-func (r Row) Stack() string {
-	if r.Base == "" || r.Base == defaultBaseBranch {
-		return fmt.Sprintf("L%d", r.MergeOrder)
-	}
-	return fmt.Sprintf("L%d ← %s", r.MergeOrder, r.Base)
-}
-
-func (r Row) ChecksPassed() int {
-	passed := 0
-	for _, c := range r.Checks {
-		if c.Conclusion == "SUCCESS" {
-			passed++
-		}
-	}
-	return passed
-}
 
 // DetailID supplies the selector and id required by htmx's hx-target and hx-preserve.
 func (r Row) DetailID() string {
@@ -118,10 +116,7 @@ type Group struct {
 func applyViewState(rows []Row, params Params) {
 	for i := range rows {
 		r := &rows[i]
-		r.Checked = slices.Contains(params.Tickets, r.URL)
 		r.SessionPath = params.withScope(cmp.Or(SessionPath(r.URL), ticketsPath))
-		toggledTicket := params.ToggleTicket(r.URL)
-		r.TogglePath, r.TogglePush = toggledTicket.BoardPath(), toggledTicket.PagePath()
 		r.VerbPath = params.verbPath()
 		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
 		r.Buttons = r.VerbButtons()
@@ -169,6 +164,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Title:          in.Obs.Titles[url],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
+			Label:          e.State.Label(),
+			Detail:         detailOf(string(e.Reason)),
 			Question:       question,
 			Glyph:          e.State.Glyph(),
 			Alive:          in.Obs.Runs[url].Alive,
@@ -194,6 +191,14 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		})
 	}
 
+	for i := range rows {
+		for _, c := range rows[i].Checks {
+			if c.Conclusion == "SUCCESS" {
+				rows[i].ChecksPassed++
+			}
+		}
+		rows[i].ChecksTotal = len(rows[i].Checks)
+	}
 	longestElapsed := 0
 	for _, r := range rows {
 		longestElapsed = max(longestElapsed, r.ElapsedSeconds)
@@ -221,9 +226,18 @@ func sortedChecks(checks map[string]plan.CheckState) []Check {
 	out := make([]Check, 0, len(checks))
 	for _, name := range slices.Sorted(maps.Keys(checks)) {
 		cs := checks[name]
-		out = append(out, Check{Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL})
+		out = append(out, Check{
+			Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL, Elapsed: checkElapsed(cs),
+		})
 	}
 	return out
+}
+
+func checkElapsed(cs plan.CheckState) string {
+	if cs.StartedAt.IsZero() || !cs.CompletedAt.After(cs.StartedAt) {
+		return ""
+	}
+	return formatShort(cs.CompletedAt.Sub(cs.StartedAt))
 }
 
 func redChecksFor(redLeaves []string, checks map[string]plan.CheckState) []Check {

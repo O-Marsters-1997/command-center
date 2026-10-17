@@ -133,6 +133,33 @@ func TestFollowUp(t *testing.T) {
 		}
 	})
 
+	t.Run("spawns with the picked model and effort from a JSON payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		payload, err := storepkg.FollowUpPayload{Message: "now fix it", Model: "opus", Effort: plan.EffortHigh}.Encode()
+		if err != nil {
+			t.Fatalf("Encode: %v", err)
+		}
+		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: payload, At: testAt,
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent: %v", err)
+		}
+		fake := &runnertest.Runner{}
+		f.reset(testAt, fake)
+		f.tick(t)
+
+		spawns := fake.Spawns()
+		if len(spawns) != 1 {
+			t.Fatalf("spawns = %d, want 1", len(spawns))
+		}
+		if got := spawns[0]; got.Model != "opus" || got.Effort != option.Some(plan.EffortHigh) ||
+			!strings.Contains(got.Prompt, "now fix it") || strings.Contains(got.Prompt, `"message"`) {
+			t.Errorf("spawn = model %q effort %v prompt %q, want opus, high and the bare message",
+				got.Model, got.Effort, got.Prompt)
+		}
+	})
+
 	t.Run("refuses with no worktree", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
