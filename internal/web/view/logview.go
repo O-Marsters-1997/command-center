@@ -65,6 +65,7 @@ type LogDetail struct {
 	Phases     []phaseView
 	StreamPath string
 	Worked     workedLine
+	Summary    WorkedSummary
 	Final      *LogLine
 }
 
@@ -73,6 +74,7 @@ type LogSource struct {
 	Streaming bool
 	TicketURL string
 	Records   []store.Event
+	Checks    []Check
 }
 
 func BuildLogDetail(src LogSource, params Params) LogDetail {
@@ -102,8 +104,10 @@ func BuildLogDetail(src LogSource, params Params) LogDetail {
 	detail.Lines = run.Lines
 	detail.PhaseCount = len(run.Phases)
 	detail.Worked = stats.worked()
+	detail.Summary = WorkedSummary{Wall: formatShort(stats.wall), Turns: stats.turns}
 	mergeRecords(&run, records)
 	detail.Phases = buildPhases(run.Phases, mode)
+	gridChecks(detail.Phases, src.Checks)
 	if final != "" {
 		line := sayLine(final)
 		detail.Final = &line
@@ -112,7 +116,35 @@ func BuildLogDetail(src LogSource, params Params) LogDetail {
 }
 
 func RecordShown(e store.Event) bool {
-	return e.Kind == store.EventPRMerged || e.Kind == store.EventPROpened || e.Kind == store.EventChecksLanded
+	return slices.Contains(shownRecords, e.Kind)
+}
+
+var shownRecords = []store.EventKind{
+	store.EventPRMerged, store.EventPROpened, store.EventChecksLanded,
+	store.EventRunLaunched, store.EventPushed, store.EventRunDisposed,
+}
+
+func gridChecks(phases []phaseView, checks []Check) {
+	if len(checks) == 0 {
+		return
+	}
+	var last *LogLine
+	for i := range phases {
+		for j := range phases[i].Items {
+			if line := &phases[i].Items[j].Line; line.Record == store.EventChecksLanded {
+				last = line
+			}
+		}
+	}
+	if last == nil {
+		return
+	}
+	last.Verb, last.Arg, last.Checks = "checks", "", checks
+	for i := range phases {
+		phases[i].Items = slices.DeleteFunc(phases[i].Items, func(it logItem) bool {
+			return it.Line.Record == store.EventChecksLanded && it.Line.Checks == nil
+		})
+	}
 }
 
 func RecordOf(e store.Event) agentlog.Event {

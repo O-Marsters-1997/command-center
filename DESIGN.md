@@ -301,8 +301,11 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
 - **Session.** The transcript is centred at max 720px, with the composer floating at the foot.
   The head is the state badge, the title and a mono `repo #n · branch` line. The prompt is a
-  right-aligned bubble under "Launched from the ticket · age", and Transcript and Raw log are
-  right-aligned pill tabs. A 300px feature-stack panel sits on the right: the feature with its
+  right-aligned bubble under "Launched from the ticket · age", with a mono "Worked · 0.4% of
+  week · wall · turns" line beneath it, and Transcript and Raw log are right-aligned pill tabs.
+  Stored events (launched, pushed, PR opened, agent run finished) read as record lines, and the
+  checks that landed fold into one grid of glyph, name and elapsed, with an output link on each
+  failure. A 300px feature-stack panel sits on the right: the feature with its
   avatar and merged/total, Graph and Board buttons, then Wave 1, Wave 2… groups of rows (glyph,
   title, right-aligned elapsed or share of week) with the current ticket outlined, then Repo,
   Branch, PR, Checks and Spend (share of week, never dollars) and a closed "Edit blockers"

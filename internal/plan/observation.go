@@ -3,11 +3,12 @@ package plan
 import "time"
 
 type CheckState struct {
-	Name       string    `json:"name"`
-	Status     string    `json:"status"`
-	Conclusion string    `json:"conclusion"`
-	DetailsURL string    `json:"details_url"`
-	StartedAt  time.Time `json:"started_at"`
+	Name        string    `json:"name"`
+	Status      string    `json:"status"`
+	Conclusion  string    `json:"conclusion"`
+	DetailsURL  string    `json:"details_url"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletedAt time.Time `json:"completed_at"`
 }
 
 type PR struct {

@@ -39,7 +39,8 @@
         "status": "COMPLETED",
         "conclusion": "SUCCESS",
         "detailsUrl": "https://github.com/o/r/actions/runs/3",
-        "startedAt": "2026-08-20T10:10:00Z"
+        "startedAt": "2026-08-20T10:10:00Z",
+        "completedAt": "2026-08-20T10:11:12Z"
       },
       {
         "__typename": "CheckRun",

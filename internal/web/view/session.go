@@ -44,6 +44,7 @@ type SessionPage struct {
 	PendingMessages []string
 	Model           string
 	Launched        option.Option[Age]
+	Worked          option.Option[WorkedSummary]
 }
 
 func (s SessionPage) Empty() bool {
@@ -151,8 +152,16 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load ticket events: %w", err)
 	}
-	current := LogSource{Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records}
+	current := LogSource{
+		Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records, Checks: row.Checks,
+	}
 	row.Log = BuildLogDetail(current, Params{Log: LogAll})
+	worked := option.None[WorkedSummary]()
+	if row.Log.PhaseCount > 0 {
+		summary := row.Log.Summary
+		summary.SpendPctWeek = row.SpendPctWeek
+		worked = option.Some(summary)
+	}
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
 		turns = buildTurns(row, runs)
@@ -181,6 +190,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	}
 	return SessionPage{
 		Launched:       launched,
+		Worked:         worked,
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		Actions:        actions,

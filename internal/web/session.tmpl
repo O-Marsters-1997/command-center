@@ -24,6 +24,9 @@
     {{- if .Prompt.Kept}}<pre class="prompt-text">{{.Prompt.Text}}</pre>
     {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
     </div>
+    {{- with .Worked}}{{if .IsSome}}{{with .Unwrap}}
+    <span class="prompt-worked text-muted font-mono">Worked{{if .SpendPctWeek}} · {{printf "%.1f" .SpendPctWeek}}% of week{{end}} · {{.Wall}}{{if .Turns}} · {{.Turns}} {{if eq .Turns 1}}turn{{else}}turns{{end}}{{end}}</span>
+    {{- end}}{{end}}{{end}}
   </section>
   <nav class="pill-tabs" aria-label="log view">
     <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>

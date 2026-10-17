@@ -12,6 +12,12 @@ type workedLine struct {
 	Stats string
 }
 
+type WorkedSummary struct {
+	Wall         string
+	Turns        int
+	SpendPctWeek float64
+}
+
 type runStats struct {
 	wall  time.Duration
 	turns int

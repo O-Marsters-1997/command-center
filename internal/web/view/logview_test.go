@@ -227,7 +227,7 @@ func TestBuildLogDetail(t *testing.T) {
 		if first.Kind != "record" || lineText(first.Line) != "line-record merged PR #11 merged" {
 			t.Errorf("BuildLogDetail() first item = %+v, want the early record", first)
 		}
-		if got := last[len(last)-1]; got.Kind != "record" || lineText(got.Line) != "line-record merged PR #12 merged" {
+		if got := last[len(last)-1]; got.Kind != "record" || lineText(got.Line) != "line-record merged PR #12 merged +60:00" {
 			t.Errorf("BuildLogDetail() last item = %+v, want the late record", got)
 		}
 		if !strings.HasSuffix(detail.StreamPath, "&records=7") {
