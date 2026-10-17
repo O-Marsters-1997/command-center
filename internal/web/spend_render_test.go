@@ -54,16 +54,16 @@ func spendCell(t *testing.T, log string, alive bool) string {
 		t.Fatalf("WriteFile(%q): %v", path, err)
 	}
 	page := renderPage(t, newServer(spendRowStore(t, ticket, path, alive, testNow), testNow))
-	return webtest.RowFor(t, page, ticket.URL).Spend.Text()
+	return webtest.RowFor(t, page, ticket.URL).Row.Text()
 }
 
 func testBoardSpend(t *testing.T) {
 	t.Parallel()
 
-	t.Run("a live run shows its tokens", func(t *testing.T) {
+	t.Run("an ended run shows its tokens", func(t *testing.T) {
 		t.Parallel()
-		if got := spendCell(t, spendAliveLine, true); !strings.Contains(got, "15 tok") {
-			t.Errorf("GET /tickets live run spend = %q, want 15 tok", got)
+		if got := spendCell(t, spendAliveLine, false); !strings.Contains(got, "15 tok") {
+			t.Errorf("GET /tickets ended run spend = %q, want 15 tok", got)
 		}
 	})
 

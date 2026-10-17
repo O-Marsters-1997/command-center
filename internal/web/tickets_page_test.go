@@ -13,7 +13,7 @@ import (
 func sectionKeys(t *testing.T, page string) string {
 	t.Helper()
 	var got []string
-	for _, section := range htmltest.Parse(t, page).One(t, "table#board").Find("tbody[data-section]") {
+	for _, section := range htmltest.Parse(t, page).One(t, "div#board").Find("section[data-section]") {
 		key, _ := section.Attr("data-section")
 		got = append(got, key)
 	}
@@ -41,6 +41,23 @@ func TestTicketsPage(t *testing.T) {
 		}
 		if got := sectionKeys(t, page); got != "ready,blocked" {
 			t.Errorf("GET /tickets sections = %q, want ready,blocked", got)
+		}
+	})
+
+	t.Run("heads the page with its open count and names the feature on each row", func(t *testing.T) {
+		t.Parallel()
+		root := htmltest.Parse(t, renderPath(t, threeFeatureServer(t), "/tickets"))
+
+		if got := root.One(t, "h1").Text(); got != "All tickets" {
+			t.Errorf("GET /tickets heading = %q, want All tickets", got)
+		}
+		if got := root.One(t, ".page-purpose").Text(); !strings.Contains(got, "3 open across 2 features") {
+			t.Errorf("GET /tickets purpose = %q, want it to count 3 open across 2 features", got)
+		}
+		for _, row := range root.One(t, "div#board").Find("a[data-ref]") {
+			if len(row.Find(".chip")) != 1 {
+				t.Errorf("GET /tickets row has no feature chip: %s", row.HTML())
+			}
 		}
 	})
 
@@ -73,7 +90,7 @@ func TestTicketsPage(t *testing.T) {
 			if current, _ := tab.Attr("aria-current"); current != "page" {
 				t.Errorf("GET %s tab %s aria-current = %q, want page", tt.path, tt.tab, current)
 			}
-			if get, _ := root.One(t, "table#board").Attr("hx-get"); get != tt.boardGet {
+			if get, _ := root.One(t, "div#board").Attr("hx-get"); get != tt.boardGet {
 				t.Errorf("GET %s board hx-get = %q, want %q", tt.path, get, tt.boardGet)
 			}
 		})

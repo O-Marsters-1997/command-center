@@ -10,9 +10,9 @@ exec cc import project:two-tasks
 exec cc tick --count 1
 exec cc request GET /tickets
 
-stdout '>#CC-1</a>'
-stdout '<div>Ship the first slice</div>'
-stdout '>#CC-2</a>'
+stdout 'data-ref="#CC-1"'
+stdout '>Ship the first slice</b>'
+stdout 'data-ref="#CC-2"'
 ! stdout 'An issue nobody is working on'
 ! stdout '>sandbox://CC-1<'
 
@@ -22,6 +22,6 @@ cc-fake-gh issue-titles-fail
 exec cc tick --count 1
 
 exec cc request GET /tickets
-stdout '<div>Ship the first slice</div>'
+stdout '>Ship the first slice</b>'
 exec cc request -hx GET /rail
 stdout 'tick failed'

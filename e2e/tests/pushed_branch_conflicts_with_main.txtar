@@ -28,9 +28,9 @@ exec git -C $WORK/repo push -q origin main
 cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout '>Conflicts with main</span>'
+stdout 'title="Conflicts with main"'
 stdout 'cc-1-x no longer merges cleanly into main'
-! stdout '>Ready for review</span>'
+! stdout 'title="Ready for review"'
 
 -- mergify-v1.yml --
 queue_rules: []

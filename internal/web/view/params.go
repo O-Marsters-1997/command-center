@@ -9,7 +9,6 @@ import (
 )
 
 type Params struct {
-	Tickets []string
 	Log     LogFilter
 	Repo    string
 	Project string
@@ -20,7 +19,7 @@ type Params struct {
 
 func ParseParams(q url.Values) Params {
 	return Params{
-		Tickets: q["ticket"], Log: ParseLogFilter(q.Get("log")),
+		Log:  ParseLogFilter(q.Get("log")),
 		Repo: q.Get("repo"), Project: q.Get("project"), Feature: q.Get("feature"),
 		Filter: normalizeFilter(q.Get("filter")), All: q.Get("all") == "1",
 	}
@@ -85,9 +84,6 @@ func (v Params) Query() string {
 	if v.Project != "" {
 		q.Set("project", v.Project)
 	}
-	for _, ticket := range v.Tickets {
-		q.Add("ticket", ticket)
-	}
 	return q.Encode()
 }
 
@@ -120,14 +116,4 @@ func withQuery(path, query string) string {
 		return path
 	}
 	return path + "?" + query
-}
-
-func (v Params) ToggleTicket(ticketURL string) Params {
-	next := v
-	if slices.Contains(v.Tickets, ticketURL) {
-		next.Tickets = slices.DeleteFunc(slices.Clone(v.Tickets), func(t string) bool { return t == ticketURL })
-	} else {
-		next.Tickets = append(slices.Clone(v.Tickets), ticketURL)
-	}
-	return next
 }

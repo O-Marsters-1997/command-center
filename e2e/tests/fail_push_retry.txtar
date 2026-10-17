@@ -14,7 +14,7 @@ cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 exec cc tick --count 1
 
 exec cc request GET /tickets
-stdout '>Push failed</span>'
+stdout 'title="Push failed"'
 
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
 grep -count=1 'pr create' $WORK/gh.log

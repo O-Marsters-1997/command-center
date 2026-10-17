@@ -26,4 +26,4 @@ exec cc tick --count 1
 # Each ticket's own row must derive from its own repo's worktree, so both read the same state
 # rather than one of them losing its neighbour's.
 exec cc request GET /tickets
-stdout -count=2 '>Waiting to push</span>'
+stdout -count=2 'title="Waiting to push"'

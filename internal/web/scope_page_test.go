@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -133,16 +132,12 @@ func testBoardScope(t *testing.T) {
 		}
 	})
 
-	t.Run("a repo scope survives the board's own poll and row paths", func(t *testing.T) {
+	t.Run("a repo scope survives the board's own poll", func(t *testing.T) {
 		t.Parallel()
 		page := renderPath(t, threeRepoServer(t), "/board?repo=repo")
 
-		if got, _ := htmltest.Parse(t, page).One(t, "table#board").Attr("hx-get"); got != "/board?repo=repo" {
+		if got, _ := htmltest.Parse(t, page).One(t, "div#board").Attr("hx-get"); got != "/board?repo=repo" {
 			t.Errorf("GET /board?repo=repo poll hx-get = %q, want /board?repo=repo", got)
-		}
-		selection := webtest.RowFor(t, page, "sandbox://ROOT").Row.One(t, `input[name="ticket"]`)
-		if got, _ := selection.Attr("hx-get"); !strings.Contains(got, "repo=repo") {
-			t.Errorf("GET /board?repo=repo ROOT selection hx-get = %q, want it to keep repo=repo", got)
 		}
 	})
 
@@ -171,11 +166,11 @@ func testBoardScope(t *testing.T) {
 				t.Errorf("GET /tickets?project=ACME has no link to %s", href)
 			}
 		}
-		board := root.One(t, "table#board")
+		board := root.One(t, "div#board")
 		if get, _ := board.Attr("hx-get"); get != "/board?all=1&project=acme" {
 			t.Errorf("GET /tickets?project=ACME board hx-get = %q, want /board?all=1&project=acme", get)
 		}
-		if got := board.One(t, `tr.group [data-hue="1"][aria-hidden="true"]`).Text(); got != "A" {
+		if got := board.One(t, `a[data-ref] [data-hue="1"][aria-hidden="true"]`).Text(); got != "A" {
 			t.Errorf("GET /tickets?project=ACME avatar = %q, want A", got)
 		}
 		if others := board.Find(`a[href="/s/acme/solo/4"]`); len(others) != 0 {
@@ -184,7 +179,7 @@ func testBoardScope(t *testing.T) {
 
 		unknown := renderPath(t, server, "/tickets?project="+url.QueryEscape("nope"))
 		webtest.RowFor(t, unknown, "https://github.com/acme/solo/issues/4")
-		if get, _ := htmltest.Parse(t, unknown).One(t, "table#board").Attr("hx-get"); get != "/board?all=1" {
+		if get, _ := htmltest.Parse(t, unknown).One(t, "div#board").Attr("hx-get"); get != "/board?all=1" {
 			t.Errorf("GET /tickets?project=nope board hx-get = %q, want /board?all=1", get)
 		}
 	})

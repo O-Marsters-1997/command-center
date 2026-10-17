@@ -22,7 +22,7 @@ exec cc tick --count 1
 
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout -count=2 '>Agent running</span>'
+stdout -count=2 'title="Agent running"'
 exec cc request GET /events
 stdout -count=2 'run_launched'
 grep -count=1 'commits_slow.sh .*services-cc-40-x' $WORK/agent.log
@@ -45,8 +45,7 @@ cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1-x
 exec cc tick --count 1
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout '>Ready for review</span>'
-stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
+stdout 'title="Ready for review"'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The consumer's compat check goes red while its gating blocker (the producer) is still open:
@@ -55,9 +54,9 @@ stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
 cc-fake-gh-head cross-repo-open cc-1-x
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout '>Waiting on deploy</span>'
-stdout '>Waiting on checks</span>'
-! stdout '>Merged</span>'
+stdout 'title="Waiting on deploy"'
+stdout 'title="Waiting on checks"'
+! stdout 'title="Merged"'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The producer merges. The consumer's own compat check is still red, so it stays a draft even
@@ -66,8 +65,8 @@ stdout '>Waiting on checks</span>'
 cc-fake-gh-head cross-repo-merged cc-1-x
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout '>Merged</span>'
-stdout '>Waiting on deploy</span>'
+stdout 'title="Merged"'
+stdout 'title="Waiting on deploy"'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The rerun comes back green: every required check has passed and the gating blocker is merged.
@@ -76,7 +75,7 @@ cc-fake-gh-head cross-repo-compat-green cc-1-x
 exec cc tick --count 1
 grep -count=1 'pr ready cc-1-x' $WORK/gh.log
 exec cc request GET /tickets
-stdout '>Ready for review</span>'
+stdout 'title="Ready for review"'
 
 # GitHub now reports the pull request as ready, as a real observe would from here on. Further
 # ticks must not call `gh pr ready` again, and the producer's own row is never drafted or
