@@ -542,11 +542,21 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusBadRequest, "unsupported verb %q", rawVerb)
 	}
 
-	var prompt string
+	var payload string
 	if verb == plan.VerbFollowUp {
-		prompt = strings.TrimSpace(r.FormValue("prompt"))
-		if prompt == "" {
+		message := strings.TrimSpace(r.FormValue("prompt"))
+		if message == "" {
 			return errorf(http.StatusBadRequest, "prompt is required for follow-up")
+		}
+		choice, err := parseAgentChoice(r.FormValue("model"), r.FormValue("effort"))
+		if err != nil {
+			return errorf(http.StatusBadRequest, "%v", err)
+		}
+		payload, err = store.FollowUpPayload{
+			Message: message, Model: choice.Model, Effort: choice.Effort.UnwrapOr(""),
+		}.Encode()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -563,10 +573,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 			ticketURL, entry.State, verb, entry.Reason)
 	}
 
-	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, At: s.clock.Now()}
-	if verb == plan.VerbFollowUp {
-		request.Payload = prompt
-	}
+	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, Payload: payload, At: s.clock.Now()}
 	if err := s.store.QueueVerbIntent(ctx, request); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}

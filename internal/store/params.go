@@ -1,6 +1,9 @@
 package store
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -76,6 +79,28 @@ type VerbRequest struct {
 	Verb    plan.Verb
 	Payload string
 	At      time.Time
+}
+
+type FollowUpPayload struct {
+	Message string      `json:"message"`
+	Model   string      `json:"model"`
+	Effort  plan.Effort `json:"effort,omitempty"`
+}
+
+func (p FollowUpPayload) Encode() (string, error) {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return "", fmt.Errorf("encode follow-up payload: %w", err)
+	}
+	return string(raw), nil
+}
+
+func DecodeFollowUpPayload(raw string) FollowUpPayload {
+	var p FollowUpPayload
+	if strings.HasPrefix(raw, "{") && json.Unmarshal([]byte(raw), &p) == nil {
+		return p
+	}
+	return FollowUpPayload{Message: raw}
 }
 
 type EditRequest struct {

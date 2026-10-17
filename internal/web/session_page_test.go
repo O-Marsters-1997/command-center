@@ -322,8 +322,9 @@ func TestSessionPage(t *testing.T) {
 		composer := main.One(t, ".composer")
 		composer.One(t, `input[name="verb"][value="follow-up"]`)
 		composer.One(t, `textarea[aria-label="follow-up prompt"]`)
-		if got := main.One(t, ".composer-chip").Text(); !strings.Contains(got, config.AgentModel) {
-			t.Errorf("running GET /s/acme/web/1 model chip = %q, want %q", got, config.AgentModel)
+		composer.One(t, `select[name="effort"]`)
+		if got := composer.One(t, `select[name="model"] option[selected]`).Text(); got != config.AgentModel {
+			t.Errorf("running GET /s/acme/web/1 selected model = %q, want %q", got, config.AgentModel)
 		}
 
 		idle, _ := sessionStoreEnding(t, sessionRunOpts{
@@ -527,7 +528,10 @@ func testVerbFromSession(t *testing.T) {
 		srv := newServer(st, testNow)
 
 		rec := do(t, srv, http.MethodPost, "/verb", req{
-			Form:   url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"}},
+			Form: url.Values{
+				"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"},
+				"model": {"opus"}, "effort": {"high"},
+			},
 			Header: http.Header{"Hx-Request": {"true"}},
 		})
 		if rec.Code != http.StatusOK {

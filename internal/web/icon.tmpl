@@ -10,5 +10,7 @@
 {{- else if eq . "chev"}}<path d="m9 6 6 6-6 6"/>
 {{- else if eq . "term"}}<path d="m5 17 5-5-5-5"/><path d="M12 19h7"/>
 {{- else if eq . "keys"}}<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>
+{{- else if eq . "lock"}}<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+{{- else if eq . "send"}}<path d="M12 19V5M6 11l6-6 6 6"/>
 {{- end}}
 {{- end}}

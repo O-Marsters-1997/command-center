@@ -150,16 +150,18 @@ func TestVerb(t *testing.T) {
 		htmltest.Parse(t, string(body)).One(t, `main#main[data-home]`).One(t, `a[href="/tickets"]`)
 	})
 
-	t.Run("follow-up queues the prompt as its payload", func(t *testing.T) {
+	t.Run("follow-up queues the prompt, model and effort as its payload", func(t *testing.T) {
 		t.Parallel()
 		store := seededFailed(t)
-		form := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}, "prompt": {"fix the flaky test"}}
+		form := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}, "prompt": {"fix the flaky test"},
+			"model": {"opus"}, "effort": {"high"}}
 
 		got := do(t, openServer(store, fixedClock(testNow), ""), http.MethodPost, "/verb", req{Form: form})
 		if got.Code != http.StatusSeeOther || got.Location != "/" {
 			t.Fatalf("POST /verb follow-up = %d %q, want 303 /", got.Code, got.Location)
 		}
-		if diff := cmp.Diff([]string{"sandbox://CC-1 fix the flaky test"}, pendingVerbs(t, store, "follow-up")); diff != "" {
+		want := []string{`sandbox://CC-1 {"message":"fix the flaky test","model":"opus","effort":"high"}`}
+		if diff := cmp.Diff(want, pendingVerbs(t, store, "follow-up")); diff != "" {
 			t.Errorf("pending follow-up intents mismatch (-want +got):\n%s", diff)
 		}
 	})

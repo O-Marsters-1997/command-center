@@ -445,8 +445,9 @@ ticket filters. No underline tabs.
   are right-aligned 16px bubbles on `surface-2`.
 - **Callouts:** a failed or attention panel on the soft state ground, holding the primary verb.
 - **Composer:** a 16px panel with Float, a body-read textarea, and a bar of 26px ghost pickers
-  ending in a 30px round indigo send button. The model, effort and worktree pickers are target
-  UI with no data yet.
+  ending in a 30px round indigo send button. The model and effort pickers are native selects
+  whose choice rides the follow-up; the "Worktree" access label with its lock icon is static, as
+  the permission mode stays pinned.
 
 ### Inputs
 

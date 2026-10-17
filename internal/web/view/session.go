@@ -43,6 +43,8 @@ type SessionPage struct {
 
 	PendingMessages []string
 	Model           string
+	Models          []string
+	Efforts         []plan.Effort
 	Launched        option.Option[Age]
 }
 
@@ -122,8 +124,18 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	var pendingMessages []string
 	for _, intent := range intents {
 		if intent.TicketID == ticketURL {
-			pendingMessages = append(pendingMessages, intent.Payload)
+			pendingMessages = append(pendingMessages, store.DecodeFollowUpPayload(intent.Payload).Message)
 		}
+	}
+	snap, err := r.Snapshot(ctx, now)
+	if err != nil {
+		return SessionPage{}, fmt.Errorf("load snapshot: %w", err)
+	}
+	entry, _ := snap.Entry(plan.TicketURL(ticketURL))
+	model := cmp.Or(entry.Ticket.Choice.Model, config.AgentModel)
+	models := config.AgentModels()
+	if !slices.Contains(models, model) {
+		models = append(models, model)
 	}
 
 	self := ref.Path()
@@ -197,7 +209,9 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		RawPath:        self + "?log=raw",
 
 		PendingMessages: pendingMessages,
-		Model:           config.AgentModel,
+		Model:           model,
+		Models:          models,
+		Efforts:         plan.AllEfforts(),
 	}, nil
 }
 
