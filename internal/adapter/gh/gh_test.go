@@ -156,6 +156,7 @@ func TestCLI_List(t *testing.T) {
 					"Tests": {
 						Name: "Tests", Status: "COMPLETED", Conclusion: "SUCCESS",
 						DetailsURL: "https://github.com/o/r/actions/runs/3", StartedAt: at("2026-08-20T10:10:00Z"),
+						CompletedAt: at("2026-08-20T10:11:12Z"),
 					},
 					"ci/legacy": {
 						Name: "ci/legacy", Status: "COMPLETED", Conclusion: "SUCCESS",

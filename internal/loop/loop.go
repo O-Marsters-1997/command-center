@@ -811,5 +811,9 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		return fmt.Errorf("record spawn of run %d: %w", runID, err)
 	}
 	t.spawned = append(t.spawned, plan.TicketURL(ticket.URL))
-	return l.event(ctx, ticket.URL, store.EventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))
+	detail := fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree)
+	if spec.baseline != "" {
+		detail += " from " + spec.baseline
+	}
+	return l.event(ctx, ticket.URL, store.EventRunLaunched, detail)
 }

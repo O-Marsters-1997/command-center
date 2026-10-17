@@ -84,6 +84,7 @@ type Check struct {
 	Status     string
 	Conclusion string
 	DetailsURL string
+	Elapsed    string
 }
 
 func (r Row) Ticket() string { return ticketRef(r.URL) }
@@ -238,9 +239,18 @@ func sortedChecks(checks map[string]plan.CheckState) []Check {
 	out := make([]Check, 0, len(checks))
 	for _, name := range slices.Sorted(maps.Keys(checks)) {
 		cs := checks[name]
-		out = append(out, Check{Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL})
+		out = append(out, Check{
+			Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL, Elapsed: checkElapsed(cs),
+		})
 	}
 	return out
+}
+
+func checkElapsed(cs plan.CheckState) string {
+	if cs.StartedAt.IsZero() || !cs.CompletedAt.After(cs.StartedAt) {
+		return ""
+	}
+	return formatShort(cs.CompletedAt.Sub(cs.StartedAt))
 }
 
 func redChecksFor(redLeaves []string, checks map[string]plan.CheckState) []Check {

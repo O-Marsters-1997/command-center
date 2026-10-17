@@ -1617,7 +1617,28 @@
   max-width: 86%;
 }
 
-.prompt-meta {
+.prompt-meta,
+.prompt-worked {
+  font-size: var(--text-xs);
+}
+
+.check-grid {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.check-grid > li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.check-elapsed {
+  color: var(--color-muted);
   font-size: var(--text-xs);
 }
 

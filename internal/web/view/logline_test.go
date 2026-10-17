@@ -105,6 +105,21 @@ func TestLineOf(t *testing.T) {
 				want:  record{Verb: "opened", Arg: "PR #12", Href: "https://github.com/o/r/pull/12"},
 			},
 			{
+				name:  "a launch names the worktree",
+				event: store.Event{Kind: "run_launched", Detail: "spawned pid 7 in /w/cc-1 from 0123456789"},
+				want:  record{Verb: "launched", Arg: "in /w/cc-1 from base @ 0123456"},
+			},
+			{
+				name:  "a push names the tip and base",
+				event: store.Event{Kind: "pushed", Detail: "pushed abc to origin/main"},
+				want:  record{Verb: "pushed", Arg: "abc to origin/main"},
+			},
+			{
+				name:  "a disposed run says it finished",
+				event: store.Event{Kind: "run_disposed", Detail: "push"},
+				want:  record{Verb: "agent run finished", Arg: "push"},
+			},
+			{
 				name:  "checks landed split into result and check name",
 				event: store.Event{Kind: "checks_landed", Detail: "Unit tests (go) passed"},
 				want:  record{Verb: "passed", Arg: "Unit tests (go)"},

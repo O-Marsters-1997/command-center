@@ -288,6 +288,53 @@ func TestSessionPage(t *testing.T) {
 		}
 	})
 
+	t.Run("shows stored events, one checks grid and the worked summary", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
+		started := testNow.Add(-5 * time.Minute)
+		obs := plan.Observation{
+			ObservedAt: testNow,
+			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
+			PRs: map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): {
+				Number: 7, State: plan.Open, HeadRef: "cc-1",
+				Checks: map[string]plan.CheckState{
+					"unit": {
+						Status: "COMPLETED", Conclusion: "SUCCESS", StartedAt: started, CompletedAt: started.Add(48 * time.Second),
+					},
+					"lint": {
+						Status: "COMPLETED", Conclusion: "FAILURE", StartedAt: started, CompletedAt: started.Add(72 * time.Second),
+						DetailsURL: "https://github.com/acme/web/actions/runs/9",
+					},
+				},
+			}},
+		}
+		if err := st.SaveObservation(ctx, obs); err != nil {
+			t.Fatalf("SaveObservation: %v", err)
+		}
+		for _, e := range []storepkg.Event{
+			{Kind: "pushed", Detail: "pushed abc123 to origin/main"},
+			{Kind: "checks_landed", Detail: "unit passed"},
+			{Kind: "checks_landed", Detail: "lint failed"},
+		} {
+			e.At, e.TicketURL = testNow, sessionTicket
+			if err := st.AppendEvent(ctx, e); err != nil {
+				t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
+			}
+		}
+
+		got := sessionMain(t, st, "/s/acme/web/1").Text()
+
+		for _, want := range []string{"abc123 to origin/main", "1m 12s", "48s", "output", "Worked"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("GET /s/acme/web/1 text = %q, want it to contain %q", got, want)
+			}
+		}
+		if strings.Contains(got, "passed unit") {
+			t.Errorf("GET /s/acme/web/1 text = %q, want the per-check records folded into the grid", got)
+		}
+	})
+
 	t.Run("shows the merge line of a run whose log was pruned", func(t *testing.T) {
 		t.Parallel()
 		ctx := t.Context()
