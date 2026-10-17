@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -71,8 +72,10 @@ func (l *Loop) applyFollowUpIntents(
 }
 
 func (l *Loop) followUpOne(
-	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, promptText string,
+	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, payload string,
 ) error {
+	picked := store.DecodeFollowUpPayload(payload)
+	promptText := picked.Message
 	url := plan.TicketURL(ticket.URL)
 	if t.obs.Runs[url].Alive {
 		return errIntentPending
@@ -93,6 +96,12 @@ func (l *Loop) followUpOne(
 
 	launched, _ := snap.Entry(url)
 	spec.choice = launched.Ticket.Choice
+	if picked.Model != "" {
+		spec.choice.Model = picked.Model
+	}
+	if picked.Effort != "" {
+		spec.choice.Effort = option.Some(picked.Effort)
+	}
 	session, _ := snap.Session(url)
 	sessionID, err := l.resumableSession(session)
 	if err != nil {

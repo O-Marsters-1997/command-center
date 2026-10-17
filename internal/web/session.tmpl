@@ -152,9 +152,16 @@
     <input type="hidden" name="verb" value="follow-up">
     <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
     <div class="composer-bar">
-      <span class="composer-chip" title="Model for this run">{{.Model}}</span>
-      {{- with .Row.Worktree}}<span class="composer-chip" title="{{.}}" aria-label="Worktree {{.}}">worktree</span>{{end}}
-      <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
+      {{- $model := .Model}}
+      <label class="picker"><span class="sr-only">Model</span><select name="model">
+        {{- range .Models}}<option value="{{.}}"{{if eq . $model}} selected{{end}}>{{.}}</option>{{end -}}
+      </select></label><span class="sep"></span>
+      <label class="picker"><span class="sr-only">Effort</span><select name="effort">
+        <option value="">Default effort</option>
+        {{- range .Efforts}}<option value="{{.}}">{{.}}</option>{{end -}}
+      </select></label><span class="sep"></span>
+      <span class="picker" title="{{.Row.Worktree}}">{{template "icon" "lock"}}Worktree</span>
+      <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">{{template "icon" "send"}}</button>
     </div>
   </form>
   {{- end}}

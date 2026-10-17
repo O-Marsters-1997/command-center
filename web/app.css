@@ -1771,21 +1771,64 @@
 
 .composer {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4);
   border-radius: var(--radius-xl);
   background: var(--color-surface);
   box-shadow: var(--shadow-float);
 }
 
 .composer textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: var(--hit-min);
+  width: 100%;
+  min-height: 44px;
+  padding: 2px 0;
   border: 0;
   background: transparent;
+  font-size: var(--text-md);
+  line-height: 1.6;
   resize: none;
+}
+
+.composer-bar .picker {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.composer-bar .picker:hover {
+  background: var(--color-border-soft);
+}
+
+.composer-bar .picker select {
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+.composer-bar .picker:focus-within {
+  box-shadow: var(--shadow-focus);
+}
+
+.composer-bar .sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 var(--space-1);
+  background: var(--color-border);
 }
 
 .composer textarea:focus-visible {
@@ -1816,8 +1859,9 @@
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
   border: 0;
   border-radius: 999px;
   background: var(--color-accent);
