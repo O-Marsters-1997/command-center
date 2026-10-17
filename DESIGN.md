@@ -326,6 +326,8 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   a click opens the session, and nothing on it selects, posts or launches.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
+  Pill tabs scroll sideways inside their own track, long paths wrap, and no page scrolls
+  horizontally.
 
 ### Routes
 

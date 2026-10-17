@@ -554,6 +554,7 @@
     display: flex;
     align-items: baseline;
     gap: 0.5em;
+    overflow-wrap: anywhere;
   }
 
   .line-label {
@@ -1487,6 +1488,10 @@
   flex-basis: 100%;
 }
 
+.session-worktree code {
+  overflow-wrap: anywhere;
+}
+
 .stack-toggle {
   display: none;
 }
@@ -1842,6 +1847,7 @@
 .composer-bar {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
@@ -2110,6 +2116,16 @@
     .btn {
       height: auto;
       min-height: var(--hit-min);
+    }
+
+    .pill-tabs {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    .pill-tab {
+      gap: var(--space-1);
+      white-space: nowrap;
     }
   }
 
