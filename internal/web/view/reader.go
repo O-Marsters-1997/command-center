@@ -57,6 +57,34 @@ func (b Board) LaunchCount() int {
 	return len(slices.DeleteFunc(rowsIn(b.Groups), func(r Row) bool { return !r.Launchable }))
 }
 
+func (b Board) OpenCount() int {
+	open := 0
+	for _, r := range rowsIn(b.Groups) {
+		if sectionKey(r.Glyph) != SectionDone {
+			open++
+		}
+	}
+	return open
+}
+
+func (b Board) FeatureCount() int {
+	return distinctCount(rowsIn(b.Groups), func(r Row) string { return r.Feature })
+}
+
+func (b Board) ProjectCount() int {
+	return distinctCount(rowsIn(b.Groups), func(r Row) string { return r.Project })
+}
+
+func distinctCount(rows []Row, of func(Row) string) int {
+	seen := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		if v := of(r); v != "" {
+			seen[v] = true
+		}
+	}
+	return len(seen)
+}
+
 func (b Board) rowFor(ref SessionRef) (Row, bool) {
 	rows := rowsIn(b.Groups)
 	i := slices.IndexFunc(rows, func(r Row) bool {

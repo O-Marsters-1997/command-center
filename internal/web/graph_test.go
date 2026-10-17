@@ -28,7 +28,7 @@ type jsonGroup struct {
 func TestBoardFragment(t *testing.T) {
 	t.Parallel()
 
-	board := htmltest.Parse(t, renderBoard(t, seededServer(t))).One(t, "table#board")
+	board := htmltest.Parse(t, renderBoard(t, seededServer(t))).One(t, "div#board")
 	root, err := html.Parse(strings.NewReader(board.HTML()))
 	if err != nil {
 		t.Fatalf("parse board elements: %v", err)
@@ -74,7 +74,7 @@ func TestGraphJSON(t *testing.T) {
 			t.Fatalf("group.Root = %+v, want sandbox://CC-1", group.Root)
 		}
 		rootRow := webtest.RowFor(t, board, "sandbox://CC-1")
-		if got := rootRow.Row.One(t, ".glyph").Text(); got != group.Root.Label {
+		if got := rootRow.State; got != group.Root.Label {
 			t.Errorf("graph root label = %q, want board %q:\n%s", group.Root.Label, got, rootRow.Row.HTML())
 		}
 		if len(group.Children) != 1 || group.Children[0].URL != "sandbox://CC-2" {
@@ -82,7 +82,7 @@ func TestGraphJSON(t *testing.T) {
 		}
 		child := group.Children[0]
 		childRow := webtest.RowFor(t, board, "sandbox://CC-2")
-		if got := childRow.Row.One(t, ".glyph").Text(); got != child.Label {
+		if got := childRow.State; got != child.Label {
 			t.Errorf("graph child label = %q, want board %q:\n%s", child.Label, got, childRow.Row.HTML())
 		}
 		if len(child.Blocking) != 1 || child.Blocking[0] != "sandbox://CC-1" {

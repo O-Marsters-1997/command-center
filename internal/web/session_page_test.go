@@ -458,7 +458,7 @@ func TestSessionPage(t *testing.T) {
 		root.One(t, `a[data-key="o"][target="_blank"]`)
 	})
 
-	t.Run("board and session keep the same verb controls", func(t *testing.T) {
+	t.Run("a session asks before kill, on both of its pages", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 		if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
@@ -467,29 +467,13 @@ func TestSessionPage(t *testing.T) {
 			t.Fatalf("QueueVerbIntent(kill): %v", err)
 		}
 		srv := newServer(st, testNow)
-		confirms := map[string]string{}
-		for _, tc := range []struct{ path, verbPath string }{
-			{path: "/tickets", verbPath: "/verb?all=1"},
-		} {
-			board := htmltest.Parse(t, renderPath(t, srv, tc.path)).One(t, "table#board")
-			board.One(t, `[data-section="in-progress"]`)
-			form := board.One(t, `form[hx-post="`+tc.verbPath+`"]`)
-			confirms[tc.path], _ = form.Attr("hx-confirm")
-			form.One(t, `button[name="verb"][value="kill"]`)
-			if got := board.Text(); !strings.Contains(got, "kill queued") {
-				t.Errorf("GET %s board = %q, want kill queued", tc.path, got)
-			}
-		}
 		for _, path := range []string{"/s/acme/web/1", "/s/acme/web/1/actions"} {
 			actions := htmltest.Parse(t, renderPath(t, srv, path)).One(t, "#session-actions")
 			form := actions.One(t, `form[hx-post="/verb"]`)
-			confirms[path], _ = form.Attr("hx-confirm")
 			form.One(t, `button[name="verb"][value="kill"][disabled]`)
 			actions.One(t, `.pending-mark[data-glyph="pending"]`)
-		}
-		for path, confirm := range confirms {
-			if confirm != confirms["/tickets"] || !strings.Contains(confirm, "kill on "+sessionTicket) {
-				t.Errorf("GET %s kill confirmation = %q, want the board's %q", path, confirm, confirms["/tickets"])
+			if confirm, _ := form.Attr("hx-confirm"); !strings.Contains(confirm, "kill on "+sessionTicket) {
+				t.Errorf("GET %s kill confirmation = %q, want it to name kill on %s", path, confirm, sessionTicket)
 			}
 		}
 	})

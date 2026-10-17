@@ -19,11 +19,6 @@ func TestParseParams(t *testing.T) {
 		want  view.Params
 	}{
 		{name: "empty", want: view.Params{Log: view.LogAll}},
-		{
-			name:  "a stale sel is ignored beside every ticket",
-			query: "sel=a&ticket=x&ticket=y",
-			want:  view.Params{Tickets: []string{"x", "y"}, Log: view.LogAll},
-		},
 		{name: "a named log filter passes through", query: "log=fails", want: view.Params{Log: view.LogFails}},
 		{name: "an unrecognised log filter falls back to all", query: "log=bogus", want: view.Params{Log: view.LogAll}},
 		{name: "repo raw", query: "repo=support-app", want: view.Params{Repo: "support-app", Log: view.LogAll}},
@@ -52,7 +47,6 @@ func TestParams_Query(t *testing.T) {
 		want string
 	}{
 		{name: "empty"},
-		{name: "tickets", v: view.Params{Tickets: []string{"b", "c"}}, want: "ticket=b&ticket=c"},
 		{name: "a non-default log filter", v: view.Params{Log: view.LogFails}, want: "log=fails"},
 		{name: "the default log filter is never written", v: view.Params{Log: view.LogAll}},
 		{
@@ -123,7 +117,7 @@ func TestParams_PagePath(t *testing.T) {
 			v:    view.Params{All: true, Filter: "blocked"},
 			want: "/tickets?filter=blocked",
 		},
-		{name: "a feature", v: view.Params{Feature: "project:x", Tickets: []string{"a"}}, want: "/f/project:x?ticket=a"},
+		{name: "a feature", v: view.Params{Feature: "project:x"}, want: "/f/project:x"},
 		{name: "a repo", v: view.Params{Repo: "acme/web"}, want: "/repos/acme/web"},
 	}
 	for _, tt := range tests {
@@ -131,33 +125,6 @@ func TestParams_PagePath(t *testing.T) {
 			t.Parallel()
 			if got := tt.v.PagePath(); got != tt.want {
 				t.Errorf("%+v.PagePath() = %q, want %q", tt.v, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestParams_ToggleTicket(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		ticket string
-		want   []string
-	}{
-		{ticket: "c", want: []string{"a", "b", "c"}},
-		{ticket: "a", want: []string{"b"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.ticket, func(t *testing.T) {
-			t.Parallel()
-			base := view.Params{Tickets: []string{"a", "b"}}
-
-			got := base.ToggleTicket(tt.ticket)
-
-			if diff := cmp.Diff(tt.want, got.Tickets); diff != "" {
-				t.Errorf("ToggleTicket(%q) mismatch (-want +got):\n%s", tt.ticket, diff)
-			}
-			if diff := cmp.Diff([]string{"a", "b"}, base.Tickets); diff != "" {
-				t.Errorf("ToggleTicket(%q) mutated the receiver (-want +got):\n%s", tt.ticket, diff)
 			}
 		})
 	}

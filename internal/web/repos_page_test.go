@@ -293,7 +293,7 @@ func testScopedRepoPage(t *testing.T) {
 		}
 	}
 	main.One(t, `#checks-h`)
-	board := main.One(t, "table#board")
+	board := main.One(t, "div#board")
 	if got, _ := board.Attr("hx-get"); got != "/board?repo=acme%2Falpha" {
 		t.Errorf("repo board hx-get = %q, want /board?repo=acme%%2Falpha", got)
 	}
@@ -325,7 +325,7 @@ func testScopedRepoPageUnknown(t *testing.T) {
 	if got := main.Text(); !strings.Contains(got, "Not tracked.") {
 		t.Errorf("unknown repo status = %q", got)
 	}
-	if board := main.Find("table#board"); len(board) != 0 {
+	if board := main.Find("div#board"); len(board) != 0 {
 		t.Errorf("unknown repo offers board: %s", board[0].HTML())
 	}
 }

@@ -23,7 +23,7 @@
 {{if .LastImportError.IsSome}}{{template "importRefusal" .LastImportError.Unwrap}}{{end}}
 <section class="module" aria-labelledby="tickets-h">
 <h2 id="tickets-h">Tickets</h2>
-{{template "boardForm" .Tickets}}
+{{template "board" .Tickets}}
 </section>
 {{if .Unimported}}
 <section class="module" aria-labelledby="unimported-h">
@@ -75,5 +75,4 @@
 </section>
 {{end}}
 </div>
-<div id="launch-modal"></div>
 {{template "shellEnd" .}}

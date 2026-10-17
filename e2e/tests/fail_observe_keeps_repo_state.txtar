@@ -12,16 +12,16 @@ cc-fake-gh no-prs
 exec cc import project:two-tasks
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout '>Ready to launch</span>'
-stdout '>Blocked</span>'
+stdout 'title="Ready to launch"'
+stdout 'title="Blocked"'
 ! stdout 'the last tick failed'
 
 cc-fake-gh fail
 exec cc tick --count 1
 
 exec cc request GET /tickets
-stdout '>Ready to launch</span>'
-stdout '>Blocked</span>'
+stdout 'title="Ready to launch"'
+stdout 'title="Blocked"'
 exec cc request -hx GET /rail
 stdout 'tick failed'
 stdout 'gh is unavailable'
@@ -33,4 +33,4 @@ exec cc tick --count 1
 exec cc request -hx GET /rail
 ! stdout 'tick failed'
 exec cc request GET /tickets
-stdout '>Ready to launch</span>'
+stdout 'title="Ready to launch"'

@@ -33,7 +33,7 @@ stdout 'cc-1-x already carries an unresolved merge conflict'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /tickets
-! stdout '<td>running</td>'
+! stdout 'title="Agent running"'
 exec git -C $WORK/repo worktree list
 ! stdout cc-2
 

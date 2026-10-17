@@ -40,12 +40,8 @@ func testBoardTitles(t *testing.T) {
 			if row.Ref != tc.ref {
 				t.Errorf("GET /board %s ref = %q, want %q", tc.ticketURL, row.Ref, tc.ref)
 			}
-			divs := row.Ticket.Find("div")
-			if len(divs) == 0 {
-				t.Fatalf("GET /board %s ticket cell has no title:\n%s", tc.ticketURL, row.Row.HTML())
-			}
-			if got := divs[len(divs)-1].Text(); got != tc.title {
-				t.Errorf("GET /board %s title = %q, want %q", tc.ticketURL, got, tc.title)
+			if row.Title != tc.title {
+				t.Errorf("GET /board %s title = %q, want %q", tc.ticketURL, row.Title, tc.title)
 			}
 		})
 	}

@@ -18,7 +18,7 @@ exec cc tick --count 1
 exec cc request GET /events
 stdout -count=1 'run_launched'
 exec cc request GET /tickets
-stdout -count=4 'waiting on https://github.com/sandbox-org/fan-out/issues/CC-1&#39;s PR'
+stdout -count=4 'waiting on #CC-1&#39;s PR'
 
 cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 
@@ -60,4 +60,4 @@ grep -count=4 'pr create --base cc-1-x --fill --label keep-open --body Merge aft
 grep -count=5 'commits.sh' $WORK/agent.log
 
 exec cc request GET /tickets
-! stdout '<td>blocked</td>'
+! stdout 'title="Blocked"'

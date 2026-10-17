@@ -11,7 +11,7 @@ cc-wait agent-done.log 'asks.sh session-id'
 exec cc tick --count 1
 
 exec cc request GET /tickets
-stdout -count=1 '>Asked you a question</span>'
+stdout -count=1 'title="Asked you a question"'
 stdout 'Which database\?'
 ! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
 

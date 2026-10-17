@@ -320,6 +320,10 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   and one subline (`PR #n · a/b checks`, `after #x, #y`, or the detail), with the state label
   top-right only for Needs you. The board is the grouped list: glyph, ref, title over detail,
   repo, checks, PR, and elapsed or spend, with no verbs, checkboxes, stack or state columns.
+- **All tickets.** The head is `All tickets` over a one-line count (`N open across F features in
+  P projects`), then pill tabs with counts, then the same grouped list. A row names its feature
+  in a chip with the project avatar where the feature page names the repo. The list is read-only:
+  a click opens the session, and nothing on it selects, posts or launches.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
 

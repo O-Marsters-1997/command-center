@@ -69,12 +69,9 @@ type Row struct {
 	SpendPctWeek    float64        `json:"-"`
 	TicketOpen      bool           `json:"-"`
 
-	Checked     bool         `json:"-"`
 	Launchable  bool         `json:"-"`
 	Buttons     []VerbButton `json:"-"`
 	SessionPath string       `json:"session_path"`
-	TogglePath  string       `json:"-"`
-	TogglePush  string       `json:"-"`
 	VerbPath    string       `json:"-"`
 	Log         LogDetail    `json:"-"`
 }
@@ -105,13 +102,6 @@ func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.Ver
 
 func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput.String() }
 
-func (r Row) Stack() string {
-	if r.Base == "" || r.Base == defaultBaseBranch {
-		return fmt.Sprintf("L%d", r.MergeOrder)
-	}
-	return fmt.Sprintf("L%d ← %s", r.MergeOrder, r.Base)
-}
-
 // DetailID supplies the selector and id required by htmx's hx-target and hx-preserve.
 func (r Row) DetailID() string {
 	sum := sha256.Sum256([]byte(r.URL))
@@ -126,10 +116,7 @@ type Group struct {
 func applyViewState(rows []Row, params Params) {
 	for i := range rows {
 		r := &rows[i]
-		r.Checked = slices.Contains(params.Tickets, r.URL)
 		r.SessionPath = params.withScope(cmp.Or(SessionPath(r.URL), ticketsPath))
-		toggledTicket := params.ToggleTicket(r.URL)
-		r.TogglePath, r.TogglePush = toggledTicket.BoardPath(), toggledTicket.PagePath()
 		r.VerbPath = params.verbPath()
 		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
 		r.Buttons = r.VerbButtons()

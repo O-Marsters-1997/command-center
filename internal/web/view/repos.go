@@ -229,13 +229,12 @@ func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
 }
 
 type RepoPageRequest struct {
-	Scope    string
-	Offered  []string
-	Selected []string
+	Scope   string
+	Offered []string
 }
 
 func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageRequest) (RepoPage, error) {
-	scope, offered, selected := req.Scope, req.Offered, req.Selected
+	scope, offered := req.Scope, req.Offered
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("load chrome: %w", err)
@@ -301,7 +300,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageReques
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("import error: %w", err)
 	}
-	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}, "ticket": selected}))
+	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}}))
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("load board: %w", err)
 	}

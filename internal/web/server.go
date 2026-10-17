@@ -673,7 +673,7 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 			return fmt.Errorf("import features: %w", err)
 		}
 	}
-	req := view.RepoPageRequest{Scope: scope, Offered: offered, Selected: r.URL.Query()["ticket"]}
+	req := view.RepoPageRequest{Scope: scope, Offered: offered}
 	page, err := s.view.RepoPage(ctx, s.clock.Now(), req)
 	if err != nil {
 		return fmt.Errorf("load repo page: %w", err)

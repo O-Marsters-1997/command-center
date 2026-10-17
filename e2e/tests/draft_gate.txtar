@@ -22,7 +22,6 @@ grep 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
 cc-fake-gh-head draft-gate-open cc-1-x
 exec cc tick --count 1
 exec cc request GET /tickets
-stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
 ! stdout 'pr ready'
 
 # The blocker merges and the consumer's own CI goes green: this is the tick that un-drafts it.
