@@ -556,7 +556,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 			Message: message, Model: choice.Model, Effort: choice.Effort.UnwrapOr(""),
 		}.Encode()
 		if err != nil {
-			return err
+			return fmt.Errorf("encode follow-up payload: %w", err)
 		}
 	}
 
