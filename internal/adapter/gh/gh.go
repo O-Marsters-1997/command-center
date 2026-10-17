@@ -327,17 +327,22 @@ func collapse(r rawCheck) (CheckState, bool) {
 		status, conclusion, url = statusContextStatus(r.State), r.State, r.TargetURL
 	}
 
-	started, err := time.Parse(time.RFC3339, r.StartedAt)
-	if err != nil {
-		started = time.Time{}
-	}
-	finished, err := time.Parse(time.RFC3339, r.CompletedAt)
-	if err != nil {
-		finished = time.Time{}
-	}
 	return CheckState{
-		Name: name, Status: status, Conclusion: conclusion, DetailsURL: url, StartedAt: started, CompletedAt: finished,
+		Name:        name,
+		Status:      status,
+		Conclusion:  conclusion,
+		DetailsURL:  url,
+		StartedAt:   parseTimeOrZero(r.StartedAt),
+		CompletedAt: parseTimeOrZero(r.CompletedAt),
 	}, true
+}
+
+func parseTimeOrZero(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 func statusContextStatus(state string) string {
