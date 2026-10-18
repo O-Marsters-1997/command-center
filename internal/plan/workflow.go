@@ -51,7 +51,7 @@ type Next struct {
 }
 
 func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
-	var main []Step
+	var forward []Step
 	fix := option.None[Step]()
 	for _, s := range w.Steps {
 		switch {
@@ -59,15 +59,15 @@ func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
 			fix = option.Some(s)
 		case s.Command && !hasVerify:
 		default:
-			main = append(main, s)
+			forward = append(forward, s)
 		}
 	}
-	if len(main) == 0 {
+	if len(forward) == 0 {
 		return Next{Kind: NextDone}
 	}
-	pass = fromLatest(pass, main[0].Name)
+	pass = fromLatest(pass, forward[0].Name)
 	if len(pass) == 0 {
-		return runStep(main[0], 0)
+		return runStep(forward[0], 0)
 	}
 	if slices.ContainsFunc(pass, func(r StepRun) bool { return r.Alive }) {
 		return Next{Kind: NextRun}
@@ -89,19 +89,19 @@ func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
 		if outcome != OutcomePassed {
 			return park(last.Step, outcome)
 		}
-		return rerun(main, failed, rounds)
+		return rerun(forward, failed, rounds)
 	}
 
-	i := slices.IndexFunc(main, func(s Step) bool { return s.Name == last.Step })
+	i := slices.IndexFunc(forward, func(s Step) bool { return s.Name == last.Step })
 	if i < 0 {
 		return unknownStep(last.Step)
 	}
-	final := i == len(main)-1
+	final := i == len(forward)-1
 	switch {
 	case final && outcome == OutcomePush:
 		return Next{Kind: NextDone}
 	case outcome == OutcomePassed && !final:
-		return runStep(main[i+1], rounds)
+		return runStep(forward[i+1], rounds)
 	case outcome == OutcomeFailed && !final && fix.IsSome() && rounds < w.MaxFixRounds:
 		return runStep(fix.Unwrap(), rounds+1)
 	case outcome == OutcomeFailed && !final && fix.IsSome():
@@ -120,12 +120,12 @@ func fromLatest(pass []StepRun, first StepName) []StepRun {
 	return pass
 }
 
-func rerun(main []Step, name StepName, round int) Next {
-	i := slices.IndexFunc(main, func(s Step) bool { return s.Name == name })
+func rerun(forward []Step, name StepName, round int) Next {
+	i := slices.IndexFunc(forward, func(s Step) bool { return s.Name == name })
 	if i < 0 {
 		return unknownStep(name)
 	}
-	return runStep(main[i], round)
+	return runStep(forward[i], round)
 }
 
 func runStep(s Step, round int) Next {

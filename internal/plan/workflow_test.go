@@ -71,6 +71,21 @@ func TestWorkflow_Next(t *testing.T) {
 			kind: plan.NextPark, reason: "step check",
 		},
 		{
+			name: "fix that fails parks naming fix", hasVerify: true,
+			pass: []plan.StepRun{
+				run("setup", passed), run("implement", passed), run("check", failed), run("fix", failed),
+			},
+			kind: plan.NextPark, reason: "step fix",
+		},
+		{
+			name: "failed implement exhausting fix rounds says so", hasVerify: true,
+			pass: []plan.StepRun{
+				run("setup", passed), run("implement", failed), run("fix", passed),
+				run("implement", failed), run("fix", passed), run("implement", failed),
+			},
+			kind: plan.NextPark, reason: "still failing after 2 fix rounds",
+		},
+		{
 			name: "a live run means no next step", hasVerify: true,
 			pass: []plan.StepRun{run("setup", passed), live},
 			kind: plan.NextRun,
