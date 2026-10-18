@@ -16,7 +16,9 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -47,6 +49,91 @@ type SessionPage struct {
 	Efforts         []plan.Effort
 	Launched        option.Option[Age]
 	Worked          option.Option[WorkedSummary]
+	Steps           []StepCell
+	Selected        option.Option[StepCell]
+	stepsPath       string
+}
+
+func (s SessionPage) StepsPath() string { return s.stepsPath }
+
+type StepCell struct {
+	Step    string
+	Round   int
+	Glyph   plan.GlyphWord
+	Model   string
+	Wall    string
+	PctWeek float64
+	Turns   int
+	Live    bool
+	RunID   plan.RunID
+}
+
+func (c StepCell) Label() string {
+	if c.Round > 0 {
+		return c.Step + " " + strconv.Itoa(c.Round)
+	}
+	return c.Step
+}
+
+func (s SessionPage) StepPath(c StepCell) string {
+	return s.TranscriptPath + "?run=" + strconv.FormatInt(int64(c.RunID), 10)
+}
+
+func (s SessionPage) StepLive() bool {
+	return slices.ContainsFunc(s.Steps, func(c StepCell) bool { return c.Live })
+}
+
+func (s SessionPage) IsSelected(c StepCell) bool {
+	return s.Selected.IsSome() && s.Selected.Unwrap().RunID == c.RunID
+}
+
+const fixStep plan.StepName = "fix"
+
+type stepInputs struct {
+	live   option.Option[WorkedSummary]
+	alive  bool
+	factor float64
+	pick   plan.RunID
+}
+
+func buildSteps(runs []store.SessionRun, in stepInputs) ([]StepCell, option.Option[StepCell]) {
+	cells := make([]StepCell, len(runs))
+	fixes := 0
+	for i, r := range runs {
+		cell := StepCell{Step: string(r.Step), Model: r.Model, RunID: plan.RunID(r.ID), Glyph: plan.GlyphPending}
+		if r.Step == fixStep {
+			fixes++
+			cell.Round = fixes
+		}
+		switch outcome, err := plan.ParseOutcome(r.Outcome); {
+		case i == len(runs)-1 && in.alive:
+			cell.Glyph, cell.Live = plan.GlyphRunning, true
+			if in.live.IsSome() {
+				cell.Wall, cell.Turns = in.live.Unwrap().Wall, in.live.Unwrap().Turns
+			}
+		case err == nil:
+			cell.Glyph = outcome.Glyph()
+		}
+		if r.Metrics.IsSome() && !cell.Live {
+			m := r.Metrics.Unwrap()
+			cell.Turns = m.Turns
+			if m.Wall.IsSome() {
+				cell.Wall = formatShort(m.Wall.Unwrap())
+			}
+		}
+		if r.Cost.IsSome() {
+			cell.PctWeek = spend.PctWeek(r.Cost.Unwrap(), in.factor)
+		}
+		cells[i] = cell
+	}
+	if len(cells) == 0 {
+		return nil, option.None[StepCell]()
+	}
+	selected := cells[len(cells)-1]
+	if i := slices.IndexFunc(cells, func(c StepCell) bool { return c.RunID == in.pick }); i >= 0 {
+		selected = cells[i]
+	}
+	return cells, option.Some(selected)
 }
 
 func (s SessionPage) Empty() bool {
@@ -72,6 +159,7 @@ type SessionRef struct {
 	Owner string
 	Name  string
 	N     string
+	Run   plan.RunID
 }
 
 func ParseSessionRef(ticketURL plan.TicketURL) (SessionRef, error) {
@@ -80,6 +168,13 @@ func ParseSessionRef(ticketURL plan.TicketURL) (SessionRef, error) {
 		return SessionRef{}, fmt.Errorf("parse session ref %q: not an owner/name/issues/n URL", ticketURL)
 	}
 	return SessionRef{Owner: parts[len(parts)-4], Name: parts[len(parts)-3], N: parts[len(parts)-1]}, nil
+}
+
+func (r SessionRef) pathWithRun() string {
+	if r.Run == 0 {
+		return r.Path()
+	}
+	return r.Path() + "?run=" + strconv.FormatInt(int64(r.Run), 10)
 }
 
 func (r SessionRef) Path() string {
@@ -178,6 +273,17 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if !raw {
 		turns = buildTurns(row, runs)
 	}
+	fits, err := r.store.FitFactors(ctx, now)
+	if err != nil {
+		return SessionPage{}, fmt.Errorf("load fit factors: %w", err)
+	}
+	steps, selected := buildSteps(runs, stepInputs{
+		live: worked, alive: row.Alive, factor: fits[agentlog.SevenDay].Factor, pick: ref.Run,
+	})
+	picked := slices.IndexFunc(runs, func(run store.SessionRun) bool { return plan.RunID(run.ID) == ref.Run })
+	if picked >= 0 && !raw {
+		turns = turns[picked : picked+1]
+	}
 	promptLog := row.LogPath
 	if len(runs) > 0 {
 		promptLog = runs[0].LogPath
@@ -202,6 +308,9 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	}
 	return SessionPage{
 		Launched:       launched,
+		Steps:          steps,
+		Selected:       selected,
+		stepsPath:      ref.pathWithRun(),
 		Worked:         worked,
 		Turns:          turns,
 		ActionsPath:    self + "/actions",

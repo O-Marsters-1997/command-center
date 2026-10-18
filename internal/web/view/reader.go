@@ -87,6 +87,7 @@ func distinctCount(rows []Row, of func(Row) string) int {
 
 func (b Board) rowFor(ref SessionRef) (Row, bool) {
 	rows := rowsIn(b.Groups)
+	ref.Run = 0
 	i := slices.IndexFunc(rows, func(r Row) bool {
 		found, err := ParseSessionRef(plan.TicketURL(r.URL))
 		return err == nil && found == ref

@@ -176,7 +176,12 @@ const latestSessionRuns = `-- name: LatestSessionRuns :many
 SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
   COALESCE(runs.message, '')::text AS message,
-  COALESCE(runs.question, '')::text AS question
+  COALESCE(runs.question, '')::text AS question,
+  runs.step,
+  COALESCE(runs.model, '')::text AS model,
+  COALESCE(runs.outcome, '')::text AS outcome,
+  runs.cost_usd,
+  COALESCE(runs.metrics, 'null'::jsonb) AS metrics
 FROM runs
 WHERE runs.ticket_id = $1 AND runs.kind IN ('agent', 'follow_up') AND runs.session_id = (
   SELECT latest.session_id FROM runs latest
@@ -191,6 +196,11 @@ type LatestSessionRunsRow struct {
 	LogPath  string
 	Message  string
 	Question string
+	Step     string
+	Model    string
+	Outcome  string
+	CostUsd  sql.NullFloat64
+	Metrics  json.RawMessage
 }
 
 func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString) ([]LatestSessionRunsRow, error) {
@@ -207,6 +217,11 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 			&i.LogPath,
 			&i.Message,
 			&i.Question,
+			&i.Step,
+			&i.Model,
+			&i.Outcome,
+			&i.CostUsd,
+			&i.Metrics,
 		); err != nil {
 			return nil, err
 		}

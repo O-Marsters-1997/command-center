@@ -28,6 +28,7 @@
     <span class="prompt-worked text-muted font-mono">Worked{{if .SpendPctWeek}} · {{printf "%.1f" .SpendPctWeek}}% of week{{end}} · {{.Wall}}{{if .Turns}} · {{.Turns}} {{if eq .Turns 1}}turn{{else}}turns{{end}}{{end}}</span>
     {{- end}}{{end}}{{end}}
   </section>
+  {{template "stepStrip" .}}
   <nav class="pill-tabs" aria-label="log view">
     <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
     <a class="pill-tab" href="{{.RawPath}}" {{template "nav" .RawPath}}{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
@@ -166,4 +167,13 @@
   </form>
   {{- end}}
 </div>{{end}}
+{{define "stepStrip"}}{{if .Steps}}<nav id="step-strip" class="flex items-center gap-2 mb-4 overflow-x-auto" aria-label="steps"{{if .StepLive}} hx-get="{{.StepsPath}}" hx-trigger="every 5s" hx-select="#step-strip" hx-swap="outerHTML" hx-sync="this:drop"{{end}}>
+  {{- range .Steps}}
+  <a class="btn step-cell shrink-0 h-auto min-h-7 py-1 px-3 font-mono" href="{{$.StepPath .}}" {{template "nav" ($.StepPath .)}} title="{{.Model}}"{{if $.IsSelected .}} aria-current="page"{{end}}>
+    <span class="glyph glyph-{{.Glyph}}{{if .Live}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>
+    <span>{{.Label}}</span>
+    <span class="text-muted">{{with .Wall}}{{.}}{{end}}{{if .PctWeek}} · {{printf "%.1f" .PctWeek}}%{{end}}{{if .Turns}} · {{.Turns}}t{{end}}</span>
+  </a>
+  {{- end}}
+</nav>{{end}}{{end}}
 {{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .Title}} <span class="stack-row-title">{{.}}</span>{{end}}{{with .Metric}}<span class="stack-row-metric font-mono text-muted">{{.}}</span>{{end}}{{end}}

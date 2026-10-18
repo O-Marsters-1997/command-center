@@ -485,7 +485,7 @@ func TestStore_SessionRunsForTicket(t *testing.T) {
 			t.Fatalf("SessionRunsForTicket: %v", err)
 		}
 		want := []storepkg.SessionRun{{ID: launchID}, {ID: followID, Message: "go on"}}
-		if diff := cmp.Diff(want, got); diff != "" {
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(storepkg.SessionRun{}, "Cost", "Metrics")); diff != "" {
 			t.Errorf("SessionRunsForTicket(%s) mismatch (-want +got):\n%s", ticket, diff)
 		}
 	})
