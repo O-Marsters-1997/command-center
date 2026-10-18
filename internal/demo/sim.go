@@ -324,7 +324,7 @@ func (s *Sim) states(ctx context.Context) (map[plan.TicketURL]plan.State, error)
 		return nil, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = s.clock.Now()
-	snap := plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
+	snap := plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in)
 	states := make(map[plan.TicketURL]plan.State, len(s.issues))
 	for _, i := range s.issues {
 		ref := plan.TicketURL(i.url)

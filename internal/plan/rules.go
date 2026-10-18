@@ -20,6 +20,8 @@ type Rules struct {
 	Checks       map[string]verdict.Predicate
 	MergifySHA   map[string]string
 	CompatCheck  map[string]string
+	Verify       map[string]bool
+	Workflows    map[string]Workflow
 	MaxAgents    int
 	SpendLimit5h int
 }
@@ -27,6 +29,7 @@ type Rules struct {
 type Daemon struct {
 	MaxAgents    int
 	SpendLimit5h int
+	Workflows    map[string]Workflow
 }
 
 func RulesFor(daemon Daemon, obs Observation) Rules {
@@ -37,6 +40,8 @@ func RulesFor(daemon Daemon, obs Observation) Rules {
 		Checks:       make(map[string]verdict.Predicate, n),
 		MergifySHA:   make(map[string]string, n),
 		CompatCheck:  make(map[string]string, n),
+		Verify:       make(map[string]bool, n),
+		Workflows:    daemon.Workflows,
 		MaxAgents:    daemon.MaxAgents,
 		SpendLimit5h: daemon.SpendLimit5h,
 	}
@@ -46,6 +51,7 @@ func RulesFor(daemon Daemon, obs Observation) Rules {
 		rules.Checks[name] = s.Checks
 		rules.MergifySHA[name] = s.MergifySHA
 		rules.CompatCheck[name] = s.CompatCheck
+		rules.Verify[name] = len(s.VerifyCommand) > 0
 	}
 	for name := range obs.SettingsErrors {
 		add(name, RepoSettings{})

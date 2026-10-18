@@ -299,6 +299,46 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 	return items, nil
 }
 
+const listPassRuns = `-- name: ListPassRuns :many
+SELECT id, ticket_id::text AS ticket_id, step, outcome FROM runs
+WHERE ticket_id IS NOT NULL ORDER BY id
+`
+
+type ListPassRunsRow struct {
+	ID       int64
+	TicketID string
+	Step     string
+	Outcome  sql.NullString
+}
+
+func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPassRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPassRunsRow
+	for rows.Next() {
+		var i ListPassRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Step,
+			&i.Outcome,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingIntentsByTicket = `-- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id
 `
@@ -332,7 +372,7 @@ func (q *Queries) PendingIntentsByTicket(ctx context.Context) ([]PendingIntentsB
 }
 
 const pendingRunsAwaitingDisposition = `-- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path, step, workflow_hash FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL
 `
 
@@ -344,6 +384,8 @@ type PendingRunsAwaitingDispositionRow struct {
 	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
 	LogPath       sql.NullString
+	Step          string
+	WorkflowHash  string
 }
 
 func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRunsAwaitingDispositionRow, error) {
@@ -363,6 +405,8 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 			&i.ProcStartedAt,
 			&i.BaselineSHA,
 			&i.LogPath,
+			&i.Step,
+			&i.WorkflowHash,
 		); err != nil {
 			return nil, err
 		}
@@ -506,6 +550,17 @@ func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const runBaseline = `-- name: RunBaseline :one
+SELECT COALESCE(baseline_sha, '')::text AS baseline_sha FROM runs WHERE id = $1
+`
+
+func (q *Queries) RunBaseline(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, runBaseline, id)
+	var baseline_sha string
+	err := row.Scan(&baseline_sha)
+	return baseline_sha, err
 }
 
 const runDetails = `-- name: RunDetails :one

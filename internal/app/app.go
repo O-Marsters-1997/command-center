@@ -117,6 +117,7 @@ func New(
 	server := web.NewServer(web.Deps{
 		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
 		SpendLimit5h: cfg.SpendLimit5h, BoardPollSeconds: cfg.BoardPollSeconds,
+		AgentCommand: cfg.AgentCommand,
 	})
 
 	return &App{

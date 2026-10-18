@@ -3,6 +3,7 @@ package web_test
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func activeLaunchHashes(t *testing.T, store *storepkg.Store) map[string]string {
@@ -168,6 +170,21 @@ func TestLaunch(t *testing.T) {
 			server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
 			if got := do(t, server, http.MethodPost, "/launch", req{Form: field}); got.Code != http.StatusBadRequest {
 				t.Errorf("POST /launch %v status = %d, want 400", field, got.Code)
+			}
+		}
+	})
+
+	t.Run("refuses a workflow other than v0 when agent_command has no {tools}", func(t *testing.T) {
+		t.Parallel()
+		deps := web.Deps{
+			Logger: slog.New(slog.DiscardHandler), Store: seededStore(t, testNow), Clock: fixedClock(testNow),
+			AgentCommand: []string{"claude", "-p", "{prompt}"},
+		}
+		server := web.NewServer(deps)
+		for workflow, want := range map[string]int{"v1": http.StatusBadRequest, "v0": http.StatusSeeOther} {
+			form := url.Values{"ticket": {"sandbox://CC-1"}, "workflow": {workflow}}
+			if got := do(t, server, http.MethodPost, "/launch", req{Form: form}); got.Code != want {
+				t.Errorf("POST /launch workflow=%s status = %d, want %d", workflow, got.Code, want)
 			}
 		}
 	})
