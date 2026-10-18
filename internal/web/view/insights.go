@@ -18,11 +18,12 @@ const insightsDefaultRangeDays = 30
 const insightsDateFormat = "2006-01-02"
 
 type InsightsResponse struct {
-	Since        string          `json:"since"`
-	Until        string          `json:"until"`
-	Timezone     string          `json:"timezone"`
-	Points       []InsightsPoint `json:"points"`
-	WastePctWeek float64         `json:"waste_pct_week"`
+	Since        string           `json:"since"`
+	Until        string           `json:"until"`
+	Timezone     string           `json:"timezone"`
+	Points       []InsightsPoint  `json:"points"`
+	WastePctWeek float64          `json:"waste_pct_week"`
+	Workflows    []WorkflowSeries `json:"workflows"`
 }
 
 type InsightsPoint struct {
@@ -75,10 +76,11 @@ func systemTimezoneName() string {
 
 type InsightsPage struct {
 	Chrome
-	Chart  InsightsChart
-	Limits []Limit
-	Split  SpendSplit
-	Merged []MergedRow
+	Chart     InsightsChart
+	Limits    []Limit
+	Split     SpendSplit
+	Merged    []MergedRow
+	Workflows []WorkflowSeries
 }
 
 type MergedRow struct {
@@ -191,7 +193,7 @@ func NewInsightsPage(chrome Chrome, resp InsightsResponse, now time.Time) Insigh
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
 		Limits: buildLimits(chrome.Gauges, now), Split: buildSpendSplit(resp.Points),
-		Merged: buildMergedRows(resp.Points, resp.Timezone),
+		Merged: buildMergedRows(resp.Points, resp.Timezone), Workflows: resp.Workflows,
 	}
 }
 
@@ -218,6 +220,14 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load withdrawn ticket waste: %w", err)
 	}
+	workflowSpend, err := r.store.MergedTicketWorkflowSpend(ctx, spendQuery)
+	if err != nil {
+		return InsightsResponse{}, fmt.Errorf("load workflow spend: %w", err)
+	}
+	withdrawn, err := r.store.WithdrawnWorkflowTickets(ctx, spendQuery)
+	if err != nil {
+		return InsightsResponse{}, fmt.Errorf("load withdrawn workflow tickets: %w", err)
+	}
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load fit factors: %w", err)
@@ -227,6 +237,7 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	resp := InsightsResponse{
 		Since: since.Format(insightsDateFormat), Until: until.Format(insightsDateFormat), Timezone: tz,
 		Points: make([]InsightsPoint, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
+		Workflows: buildWorkflowSeries(workflowSpend, withdrawn, factor),
 	}
 	for i, p := range merged {
 		agentPct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.FollowUpUSD, factor)

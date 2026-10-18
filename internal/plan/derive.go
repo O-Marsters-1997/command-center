@@ -20,6 +20,7 @@ type LaunchMembership struct {
 	PromptHash string
 	Context    string
 	Choice     AgentChoice
+	Workflow   string
 }
 
 type RunSummary struct {
@@ -34,6 +35,8 @@ type RunSummary struct {
 	PromptHash    string
 	Kind          RunKind
 	Question      string
+	Step          StepName
+	WorkflowHash  string
 }
 
 type PushRow struct {
@@ -88,6 +91,7 @@ type Input struct {
 	Intents      map[TicketURL][]Intent
 	Removals     map[TicketURL]string
 	FiveHour     float64
+	Passes       map[TicketURL][]StepRun
 }
 
 type Entry struct {
@@ -107,6 +111,8 @@ type Entry struct {
 	PromptHash     string
 	LastPush       option.Option[PushRow]
 	Restacked      bool
+	Next           Next
+	Workflow       string
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -217,6 +223,12 @@ func (r Rules) Derive(in Input) Snapshot {
 		if r.conflictedBase(t, base, in) {
 			conflictedBase = base
 		}
+		workflow, next := r.nextFor(t, in, membership.Workflow)
+		if run.IsSome() && len(workflow.Steps) != 1 {
+			fact := run.Unwrap()
+			fact.Next = option.Some(next)
+			run = option.Some(fact)
+		}
 		state, reason := Status(Facts{
 			Unlock:          unlock,
 			Authorised:      authorised,
@@ -231,6 +243,8 @@ func (r Rules) Derive(in Input) Snapshot {
 			PromptHashMatches: authorised && membership.PromptHash == Hash(Compose(t)),
 			HasRun:            run.IsSome(),
 			ConflictedBase:    conflictedBase,
+			Next:              next,
+			InFlight:          run.IsSome() && next.Kind == NextRun && next.Step.IsSome(),
 		})
 		if in.Runs[t.URL].Pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
 			snap.running++
@@ -251,12 +265,39 @@ func (r Rules) Derive(in Input) Snapshot {
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
+			Next: next, Workflow: membership.Workflow,
 		}
 		snap.Entries = append(snap.Entries, entry)
 		snap.removals[t.URL] = removalFor(entry, pr)
 	}
 	snap.transitions, snap.verdicts = r.transitions(in)
 	return snap
+}
+
+func (r Rules) nextFor(t Ticket, in Input, launchWorkflow string) (Workflow, Next) {
+	summary, hasRun := in.Runs[t.URL]
+	var w Workflow
+	var found bool
+	switch {
+	case !hasRun:
+		w, found = r.Workflows[launchWorkflow]
+	case summary.WorkflowHash == "":
+		return Workflow{}, Next{}
+	default:
+		for _, candidate := range r.Workflows {
+			if candidate.Hash == summary.WorkflowHash {
+				w, found = candidate, true
+			}
+		}
+		if !found {
+			return Workflow{}, Next{Kind: NextPark, Reason: Reason(fmt.Sprintf(
+				"workflow %s is not in this build", summary.WorkflowHash))}
+		}
+	}
+	if !found {
+		return Workflow{}, Next{}
+	}
+	return w, w.Next(in.Passes[t.URL], r.Verify[t.Repo])
 }
 
 func (r Rules) conflictedBase(t Ticket, base string, in Input) bool {

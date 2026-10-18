@@ -3,7 +3,9 @@ package agentlog_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -26,6 +28,9 @@ func TestParseMetrics(t *testing.T) {
 			fixture: "run27.jsonl",
 			want: agentlog.RunMetrics{
 				CostUSD: option.Some(cost),
+				Wall:    option.Some(561464 * time.Millisecond),
+				Turns:   4, Input: 82, CacheWrite: 62232, CacheRead: 9858576, Output: 35983,
+				Tools: map[string]int{"Bash": 2, "Read": 1, "Skill": 2},
 				Requests: []agentlog.RequestUsage{
 					{Input: 2, CacheCreate: 28560, CacheRead: 24902, Output: 6},
 					{Input: 2, CacheCreate: 138, CacheRead: 125101, Output: 8},
@@ -38,6 +43,8 @@ func TestParseMetrics(t *testing.T) {
 			name:    "a run with no result line keeps its requests and has no cost",
 			fixture: "alive.jsonl",
 			want: agentlog.RunMetrics{
+				Turns: 3, Input: 11, CacheWrite: 22, CacheRead: 33, Output: 16,
+				Tools: map[string]int{"Bash": 1, "Edit": 1, "Skill": 1},
 				Requests: []agentlog.RequestUsage{
 					{Input: 10, CacheCreate: 20, CacheRead: 30, Output: 5},
 					{Input: 1, CacheCreate: 2, CacheRead: 3, Output: 4},
@@ -48,7 +55,18 @@ func TestParseMetrics(t *testing.T) {
 		{
 			name:    "a dialect that emits no cost has no CostUSD, not zero",
 			fixture: "no_cost.jsonl",
-			want:    agentlog.RunMetrics{Requests: []agentlog.RequestUsage{{Output: 3}}},
+			want: agentlog.RunMetrics{
+				Wall: option.Some(500 * time.Millisecond), Turns: 1, Input: 5, Output: 3, Tools: map[string]int{"Bash": 1},
+				Requests: []agentlog.RequestUsage{{Output: 3}},
+			},
+		},
+		{
+			name:    "subagent requests are not turns but their tools are counted",
+			fixture: "subagent.jsonl",
+			want: agentlog.RunMetrics{
+				Turns: 2, Input: 4, Output: 4, Tools: map[string]int{"Task": 1, "Bash": 1},
+				Requests: slices.Repeat([]agentlog.RequestUsage{{Input: 1, Output: 1}}, 4),
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -58,7 +76,7 @@ func TestParseMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseMetrics(%s) error = %v", tt.fixture, err)
 			}
-			equalOption := cmp.Comparer(func(a, b option.Option[float64]) bool { return a == b })
+			equalOption := cmpopts.EquateComparable(option.Option[float64]{}, option.Option[time.Duration]{})
 			tokensOnly := cmpopts.IgnoreFields(agentlog.RequestUsage{}, "At", "Model")
 			if diff := cmp.Diff(tt.want, got, equalOption, tokensOnly); diff != "" {
 				t.Errorf("ParseMetrics(%s) mismatch (-want +got):\n%s", tt.fixture, diff)

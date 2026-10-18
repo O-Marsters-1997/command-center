@@ -34,6 +34,7 @@ type Launch struct {
 	Context   string
 	Model     sql.NullString
 	Effort    sql.NullString
+	Workflow  string
 }
 
 type LaunchMember struct {
@@ -95,6 +96,10 @@ type Run struct {
 	LastMessage   sql.NullString
 	Model         sql.NullString
 	Effort        sql.NullString
+	Metrics       json.RawMessage
+	Step          string
+	Workflow      string
+	WorkflowHash  string
 }
 
 type Ticket struct {

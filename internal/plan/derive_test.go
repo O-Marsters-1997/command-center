@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +49,79 @@ func TestRules_Derive(t *testing.T) {
 	t.Run("conflicting peer", deriveConflictingPeer)
 	t.Run("a chain does not serialise past the holding peer", deriveChainHeldByOnePeer)
 	t.Run("draft reason", deriveDraftReason)
+	t.Run("workflow pass", deriveWorkflowPass)
+}
+
+func deriveWorkflowPass(t *testing.T) {
+	t.Parallel()
+
+	steps := []plan.Step{{Name: "read"}, {Name: "check"}, {Name: "fix", OnFail: true}, {Name: "pr"}}
+	v1 := plan.Workflow{Name: "v1", Hash: "h1", MaxFixRounds: 1, Steps: steps}
+	v0 := plan.Workflow{Name: "v0", Hash: "h0", Steps: []plan.Step{{Name: "implement"}}}
+	rules := plan.Rules{Workflows: map[string]plan.Workflow{"v0": v0, "v1": v1}}
+	tk := ticket("1", "cc-1-first")
+	passed, failed := option.Some(plan.OutcomePassed), option.Some(plan.OutcomeFailed)
+	run := func(step plan.StepName, o option.Option[plan.Outcome]) plan.StepRun {
+		return plan.StepRun{ID: 1, Step: step, Outcome: o}
+	}
+	derived := func(hash string, last plan.StepRun, pass ...plan.StepRun) plan.Entry {
+		in := plan.Input{
+			Tickets:     []plan.Ticket{tk},
+			Memberships: map[plan.TicketURL]plan.LaunchMembership{tk.URL: {LaunchID: 1, Workflow: "v1"}},
+			Runs: map[plan.TicketURL]plan.RunSummary{
+				tk.URL: {Outcome: last.Outcome, Step: last.Step, WorkflowHash: hash},
+			},
+			Passes: map[plan.TicketURL][]plan.StepRun{tk.URL: pass},
+		}
+		return entry(t, derive(rules, in), tk.URL)
+	}
+
+	tests := []struct {
+		name      string
+		hash      string
+		last      plan.StepRun
+		pass      []plan.StepRun
+		state     plan.State
+		reason    string
+		wantFlown bool
+	}{
+		{
+			name: "a passed step queues the next", hash: "h1", last: run("read", passed),
+			pass: []plan.StepRun{run("read", passed)}, state: plan.Queued, reason: "next step: check", wantFlown: true,
+		},
+		{
+			name: "a failed check queues fix", hash: "h1", last: run("check", failed),
+			pass:  []plan.StepRun{run("read", passed), run("check", failed)},
+			state: plan.Queued, reason: "next step: fix (fix round 1)", wantFlown: true,
+		},
+		{
+			name: "exhausted fix rounds fail naming the step", hash: "h1", last: run("check", failed),
+			pass: []plan.StepRun{
+				run("read", passed), run("check", failed), run("fix", passed), run("check", failed),
+			},
+			state: plan.Failed, reason: "step check",
+		},
+		{
+			name: "a pass whose workflow left the build fails", hash: "gone", last: run("read", passed),
+			pass: []plan.StepRun{run("read", passed)}, state: plan.Failed, reason: "not in this build",
+		},
+		{
+			name: "a failed single-step workflow keeps its own reason", hash: "h0", last: run("implement", failed),
+			pass: []plan.StepRun{run("implement", failed)}, state: plan.Failed, reason: "no commits after",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := derived(tt.hash, tt.last, tt.pass...)
+			if got.State != tt.state || !strings.Contains(string(got.Reason), tt.reason) {
+				t.Errorf("state, reason = %v, %q; want %v containing %q", got.State, got.Reason, tt.state, tt.reason)
+			}
+			if inFlight := got.Next.Kind == plan.NextRun && got.Next.Step.IsSome(); inFlight != tt.wantFlown {
+				t.Errorf("Next runs a step = %t, want %t", inFlight, tt.wantFlown)
+			}
+		})
+	}
 }
 
 func deriveConflictedBase(t *testing.T) {

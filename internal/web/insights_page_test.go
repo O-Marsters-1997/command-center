@@ -5,7 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
@@ -45,6 +48,41 @@ func TestInsightsPage(t *testing.T) {
 		mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
 		htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights")).One(t, `main#main svg[width]`)
+	})
+
+	t.Run("breaks merged spend down by workflow and step", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		now := testNow.Add(31*24*time.Hour + 3*time.Hour)
+		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+			Ticket: "sandbox://CC-1", Kind: "agent", PromptHash: "h",
+			Step: "implement", Workflow: "default", WorkflowHash: "abcdef0123456789",
+		})
+		if err != nil {
+			t.Fatalf("InsertRunSkeleton: %v", err)
+		}
+		if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, Cost: option.Some(4.20), EndedAt: now.Add(-time.Hour),
+		}); err != nil {
+			t.Fatalf("RecordDisposition: %v", err)
+		}
+		if err := store.AppendEvent(t.Context(), storepkg.Event{
+			At: now.Add(-2 * time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened,
+		}); err != nil {
+			t.Fatalf("AppendEvent: %v", err)
+		}
+		mergeInsightsTicket(t, store, "sandbox://CC-1", now)
+
+		root := htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights"))
+		table := root.One(t, `[aria-label="workflow default·abcdef0"]`)
+		got := table.Text()
+		if !strings.Contains(got, "implement") {
+			t.Errorf("GET /insights workflow table = %q, want the implement step", got)
+		}
+		if !strings.Contains(got, "rework 1.0") {
+			t.Errorf("GET /insights workflow table = %q, want rework 1.0 for the run after the PR opened", got)
+		}
 	})
 
 	t.Run("shows each limit's reset time", func(t *testing.T) {

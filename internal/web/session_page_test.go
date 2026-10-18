@@ -61,7 +61,8 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 		}
 	}
 	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: sessionTicket, Kind: opts.Kind, PromptHash: "hash",
+		Ticket: sessionTicket, Kind: opts.Kind, PromptHash: "hash", Step: "implement",
+		Session: storepkg.RunSession{StartNew: true},
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%q): %v", sessionTicket, err)
@@ -153,6 +154,31 @@ func TestSessionPage(t *testing.T) {
 
 	t.Run("transcript", testSessionTranscript)
 	t.Run("stack panel", testSessionStackPanel)
+
+	t.Run("a live v0 ticket shows one polling implement cell that swaps main", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Alive: true})
+		main := sessionMain(t, st, "/s/acme/web/1")
+
+		strip := main.One(t, "#step-strip")
+		if _, ok := strip.Attr("hx-trigger"); !ok {
+			t.Error("GET /s/acme/web/1 step strip has no hx-trigger, want it to poll while a step is live")
+		}
+		cells := strip.Find("a.step-cell")
+		if len(cells) != 1 {
+			t.Fatalf("GET /s/acme/web/1 step cells = %d, want 1", len(cells))
+		}
+		cells[0].One(t, `[data-glyph="running"]`)
+		if got := cells[0].Text(); !strings.Contains(got, "implement") {
+			t.Errorf("GET /s/acme/web/1 step cell = %q, want it to name implement", got)
+		}
+		if got, _ := cells[0].Attr("hx-select"); got != "#main" {
+			t.Errorf("GET /s/acme/web/1 step cell hx-select = %q, want #main", got)
+		}
+		if got, _ := cells[0].Attr("href"); !strings.HasPrefix(got, "/s/acme/web/1?run=") {
+			t.Errorf("GET /s/acme/web/1 step cell href = %q, want the session route with ?run=", got)
+		}
+	})
 
 	for _, kind := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
 		t.Run(string(kind)+" shows the header and the prompt as given", func(t *testing.T) {

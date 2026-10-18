@@ -57,6 +57,7 @@ func New(d Deps, opts ...Option) *Loop {
 		remoteOf:   gh.CLI{}.RepoRemote,
 		trackerFor: tracker.Resolve(gh.CLI{}),
 		nudgeCh:    make(chan struct{}, 1),
+		workflows:  config.Workflows(),
 	}
 	for _, opt := range opts {
 		opt(l)

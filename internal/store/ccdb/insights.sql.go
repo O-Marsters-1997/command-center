@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -53,6 +54,149 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 			&i.Merged,
 			&i.AgentUsd,
 			&i.FollowUpUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mergedTicketRework = `-- name: MergedTicketRework :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+), opens AS (
+    SELECT ticket_id, MIN(at) AS opened_at FROM events WHERE kind = 'pr_opened' GROUP BY ticket_id
+)
+SELECT t.url AS ticket_id,
+       (SELECT COUNT(*) FROM runs r WHERE r.ticket_id = t.url AND r.kind = 'follow_up'
+            AND r.ended_at > o.opened_at AND r.ended_at < m.merged_at)::bigint AS follow_ups,
+       (SELECT COUNT(*) FROM runs r WHERE r.ticket_id = t.url AND r.kind = 'agent'
+            AND r.ended_at > o.opened_at AND r.ended_at < m.merged_at)::bigint AS re_runs,
+       (SELECT COUNT(*) FROM events e WHERE e.ticket_id = t.url AND e.kind = 'verdict_transition'
+            AND e.detail LIKE 'ci_failed:%' AND e.at > o.opened_at AND e.at < m.merged_at)::bigint AS red_ci
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+LEFT JOIN opens o ON o.ticket_id = t.url
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+`
+
+type MergedTicketReworkParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type MergedTicketReworkRow struct {
+	TicketID  string
+	FollowUps int64
+	ReRuns    int64
+	RedCi     int64
+}
+
+func (q *Queries) MergedTicketRework(ctx context.Context, arg MergedTicketReworkParams) ([]MergedTicketReworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketRework,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MergedTicketReworkRow
+	for rows.Next() {
+		var i MergedTicketReworkRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.FollowUps,
+			&i.ReRuns,
+			&i.RedCi,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mergedTicketRuns = `-- name: MergedTicketRuns :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+)
+SELECT t.url AS ticket_id, m.merged_at, r.step, r.workflow, r.workflow_hash,
+       COALESCE(r.cost_usd, 0)::double precision AS cost_usd,
+       (r.metrics IS NOT NULL)::boolean AS measured, COALESCE(r.metrics, '{}'::jsonb) AS metrics
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY m.merged_at, t.url, r.id
+`
+
+type MergedTicketRunsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type MergedTicketRunsRow struct {
+	TicketID     string
+	MergedAt     time.Time
+	Step         string
+	Workflow     string
+	WorkflowHash string
+	CostUsd      float64
+	Measured     bool
+	Metrics      json.RawMessage
+}
+
+func (q *Queries) MergedTicketRuns(ctx context.Context, arg MergedTicketRunsParams) ([]MergedTicketRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketRuns,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MergedTicketRunsRow
+	for rows.Next() {
+		var i MergedTicketRunsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.MergedAt,
+			&i.Step,
+			&i.Workflow,
+			&i.WorkflowHash,
+			&i.CostUsd,
+			&i.Measured,
+			&i.Metrics,
 		); err != nil {
 			return nil, err
 		}
@@ -167,4 +311,59 @@ func (q *Queries) WithdrawnTicketWaste(ctx context.Context, arg WithdrawnTicketW
 	var waste_usd float64
 	err := row.Scan(&waste_usd)
 	return waste_usd, err
+}
+
+const withdrawnWorkflowTickets = `-- name: WithdrawnWorkflowTickets :many
+SELECT r.workflow_hash, COUNT(DISTINCT t.url)::bigint AS withdrawn
+FROM tickets t
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
+WHERE t.withdrawn_at IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged')
+  AND r.id = (SELECT MIN(f.id) FROM runs f WHERE f.ticket_id = t.url)
+  AND ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (t.withdrawn_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+GROUP BY r.workflow_hash
+`
+
+type WithdrawnWorkflowTicketsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type WithdrawnWorkflowTicketsRow struct {
+	WorkflowHash string
+	Withdrawn    int64
+}
+
+func (q *Queries) WithdrawnWorkflowTickets(ctx context.Context, arg WithdrawnWorkflowTicketsParams) ([]WithdrawnWorkflowTicketsRow, error) {
+	rows, err := q.db.QueryContext(ctx, withdrawnWorkflowTickets,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WithdrawnWorkflowTicketsRow
+	for rows.Next() {
+		var i WithdrawnWorkflowTicketsRow
+		if err := rows.Scan(&i.WorkflowHash, &i.Withdrawn); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -78,7 +78,7 @@ func ComposeMessage(text string, after Outcome) string {
 		return fmt.Sprintf(
 			"The owner interrupted you with a message. Your last tool call may have been cut off, "+
 				"so check its effect before going on:\n\n%s", text)
-	case OutcomePush, OutcomeFailed, OutcomeCutFailed:
+	case OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomePassed:
 	}
 	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 }

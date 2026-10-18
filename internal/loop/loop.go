@@ -36,6 +36,7 @@ type Loop struct {
 	ws         config.Workspace
 	trackerFor tracker.Resolver
 	nudgeCh    chan struct{}
+	workflows  map[string]plan.Workflow
 }
 
 func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
@@ -241,7 +242,8 @@ func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 }
 
 func (l *Loop) rules(obs plan.Observation) plan.Rules {
-	return plan.RulesFor(plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h}, obs)
+	daemon := plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h, Workflows: l.workflows}
+	return plan.RulesFor(daemon, obs)
 }
 
 func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error {
@@ -461,23 +463,27 @@ func (l *Loop) reconcileRuns(ctx context.Context, t *tick, byTicket map[plan.Tic
 func (l *Loop) disposeRun(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 ) error {
-	outcome, err := l.outcomeFor(ctx, run, ticket, obs)
-	if err != nil {
-		return fmt.Errorf("outcome: %w", err)
-	}
-
 	exitCode := option.None[int]()
 	if code, ok := l.runner.Reap(run.Pgid); ok {
 		exitCode = option.Some(code)
 	}
+	lastMessage, _ := parseLog(l.logger, run.LogPath, "last message", agentlog.ParseLastMessage)
+	outcome, err := l.outcomeFor(ctx, run, ticket, obs, exitCode, lastMessage)
+	if err != nil {
+		return fmt.Errorf("outcome: %w", err)
+	}
+	if _, step, known := l.stepOf(run); known {
+		l.writeHandoff(run, step, lastMessage, outcome == plan.OutcomeFailed)
+	}
 	cost := option.None[float64]()
+	metrics := option.None[agentlog.RunMetrics]()
 	if m, ok := parseLog(l.logger, run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
 		cost = m.CostUSD
+		metrics = option.Some(m)
 	}
-	lastMessage, _ := parseLog(l.logger, run.LogPath, "last message", agentlog.ParseLastMessage)
 	disposition := store.Disposition{
 		RunID: plan.RunID(run.ID), Outcome: outcome, ExitCode: exitCode, Cost: cost,
-		LastMessage: lastMessage, EndedAt: l.clock.Now(),
+		LastMessage: lastMessage, Metrics: metrics, EndedAt: l.clock.Now(),
 	}
 	if err := l.store.RecordDisposition(ctx, disposition); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
@@ -494,6 +500,7 @@ func (l *Loop) disposeRun(
 
 func (l *Loop) outcomeFor(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
+	exitCode option.Option[int], lastMessage option.Option[string],
 ) (plan.Outcome, error) {
 	if run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp {
 		queued, err := l.followUpQueued(ctx, run.TicketID)
@@ -514,10 +521,30 @@ func (l *Loop) outcomeFor(
 		}
 		return plan.OutcomeAsked, nil
 	}
-	commits := 0
-	if run.BaselineSHA != "" {
+	baseline := run.BaselineSHA
+	w, step, known := l.stepOf(run)
+	if known && len(w.Steps) > 1 {
+		hasVerify := len(obs.Settings[ticket.Repo].VerifyCommand) > 0
+		if !finalStep(w, step) {
+			evidence := plan.StepEvidence{ExitCode: exitCode, Handoff: lastMessage}
+			if !step.Command && !step.Writes && baseline != "" {
+				var err error
+				evidence.Commits, err = l.commitsSinceBaseline(ctx, ticket, obs, plan.SHA(baseline))
+				if err != nil {
+					return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
+				}
+			}
+			return step.StepOutcome(evidence), nil
+		}
 		var err error
-		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, plan.SHA(run.BaselineSHA))
+		if baseline, err = l.passBaseline(ctx, w, run, hasVerify); err != nil {
+			return 0, fmt.Errorf("pass baseline for run %d: %w", run.ID, err)
+		}
+	}
+	commits := 0
+	if baseline != "" {
+		var err error
+		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, plan.SHA(baseline))
 		if err != nil {
 			return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
 		}
@@ -636,8 +663,17 @@ func (l *Loop) launchEligible(
 	}
 
 	for _, ticketURL := range toLaunch {
+		if slices.Contains(t.spawned, ticketURL) {
+			continue
+		}
 		entry, _ := snap.Entry(ticketURL)
-		err := l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Ticket, entry.Unlock.BaseBranch, entry.PromptHash)
+		var err error
+		if entry.Run.IsSome() {
+			err = l.advancePass(ctx, t, byTicket[ticketURL], entry)
+		} else {
+			err = l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Ticket, entry.Unlock.BaseBranch, entry.PromptHash,
+				l.startOf(entry, t.obs))
+		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", ticketURL, err)
 		}
@@ -678,12 +714,17 @@ func eachEntry(snap plan.Snapshot, keep func(plan.Entry) bool, fn func(plan.Entr
 
 func (l *Loop) cutAndSpawn(
 	ctx context.Context, t *tick, ticket store.Ticket, launched plan.Ticket, baseBranch, promptHash string,
+	begin start,
 ) error {
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
-		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
+		failed := store.RunSkeleton{
+			Ticket: ticket.URL, PromptHash: promptHash,
+			Step: begin.step.Name, Workflow: begin.workflow.Name, WorkflowHash: begin.workflow.Hash,
+		}
+		if _, insertErr := l.store.InsertCutFailedRun(ctx, failed, l.clock.Now()); insertErr != nil {
 			return errors.Join(
 				fmt.Errorf("cut %s: %w", branch, err),
 				fmt.Errorf("record failed cut of %s: %w", branch, insertErr),
@@ -708,7 +749,8 @@ func (l *Loop) cutAndSpawn(
 
 	if err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: plan.RunKindAgent, prompt: agentPrompt(ticket, launched), choice: launched.Choice,
+		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, launched, begin.step, nil), choice: launched.Choice,
+		workflow: begin.workflow, step: begin.step, verify: begin.verify,
 	}); err != nil {
 		return fmt.Errorf("spawn agent in %s: %w", worktreePath, err)
 	}
@@ -729,6 +771,9 @@ type spawnSpec struct {
 	kind                             plan.RunKind
 	choice                           plan.AgentChoice
 	resumeSessionID, message         string
+	workflow                         plan.Workflow
+	step                             plan.Step
+	verify                           []string
 }
 
 func (spec spawnSpec) session() store.RunSession {
@@ -744,25 +789,44 @@ func (spec spawnSpec) session() store.RunSession {
 
 func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
 	ticket := spec.ticket
+	if spec.workflow.Name == "" {
+		spec.workflow = l.workflows[config.DefaultWorkflow]
+		spec.step = spec.workflow.Steps[0]
+	}
+	step := spec.step
 	choice := spec.choice
-	if choice.Model == "" {
+	switch {
+	case step.Command:
+		spec.kind = plan.RunKindCommand
+		choice = plan.AgentChoice{}
+	case step.Model != "":
+		choice = plan.AgentChoice{Model: step.Model}
+	case choice.Model == "":
 		choice.Model = config.AgentModel
 	}
 	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
 		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash,
 		Choice: choice, Session: spec.session(),
+		Step: step.Name, Workflow: spec.workflow.Name, WorkflowHash: spec.workflow.Hash,
 	})
 	if err != nil {
 		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
 	}
 
 	prompt := spec.prompt
-	if spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp {
+	canAsk := len(step.Tools) == 0 || slices.Contains(step.Tools, "Write")
+	if !step.Command && canAsk && (spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp) {
 		prompt += plan.ComposeAsking(l.questionPath(plan.RunID(runID)))
 	}
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
-		return fmt.Errorf("write prompt for run %d: %w", runID, err)
+	if !step.Command {
+		if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
+			return fmt.Errorf("write prompt for run %d: %w", runID, err)
+		}
+	}
+	systemPromptPath, err := l.systemPromptFor(runID, spec)
+	if err != nil {
+		return err
 	}
 
 	logPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", runID))
@@ -782,6 +846,7 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		SettingsPath: l.ws.SettingsPath,
 		Model:        choice.Model,
 		Effort:       choice.Effort,
+		Tools:        step.Tools,
 		Prompt:       prompt,
 		PromptPath:   promptPath,
 		SessionID:    sessionID,
@@ -789,7 +854,10 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		LogFile:      logFile,
 	}
 	if spec.kind == plan.RunKindAgent {
-		spawnCfg.SystemPromptPath = l.ws.SystemPromptPath
+		spawnCfg.SystemPromptPath = systemPromptPath
+	}
+	if step.Command {
+		spawnCfg = runner.SpawnConfig{AgentCommand: spec.verify, WorktreePath: spec.worktree, LogFile: logFile}
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {

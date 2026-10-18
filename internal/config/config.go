@@ -32,6 +32,7 @@ var defaultAgentCommand = []string{
 	"--permission-mode", "auto",
 	"--model", "{model}",
 	"--effort", "{effort}",
+	"{tools}",
 	"{session}",
 }
 

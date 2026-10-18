@@ -35,7 +35,7 @@ func TestParseVerb(t *testing.T) {
 func TestParseRunKind(t *testing.T) {
 	t.Parallel()
 
-	for _, want := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
+	for _, want := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp, plan.RunKindCommand} {
 		t.Run(string(want), func(t *testing.T) {
 			t.Parallel()
 			if got, err := plan.ParseRunKind(string(want)); err != nil || got != want {

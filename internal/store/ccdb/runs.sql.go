@@ -64,21 +64,28 @@ func (q *Queries) ConsumeVerbIntent(ctx context.Context, arg ConsumeVerbIntentPa
 }
 
 const insertCutFailedRun = `-- name: InsertCutFailedRun :one
-INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
-VALUES ($1, 'agent', $2, $3, $4) RETURNING id
+INSERT INTO runs (ticket_id, kind, prompt_hash, step, workflow, workflow_hash, outcome, ended_at)
+VALUES ($1, 'agent', $2, $3, $4, $5,
+  $6, $7) RETURNING id
 `
 
 type InsertCutFailedRunParams struct {
-	TicketID   sql.NullString
-	PromptHash sql.NullString
-	Outcome    sql.NullString
-	EndedAt    sql.NullTime
+	TicketID     sql.NullString
+	PromptHash   sql.NullString
+	Step         string
+	Workflow     string
+	WorkflowHash string
+	Outcome      sql.NullString
+	EndedAt      sql.NullTime
 }
 
 func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRunParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, insertCutFailedRun,
 		arg.TicketID,
 		arg.PromptHash,
+		arg.Step,
+		arg.Workflow,
+		arg.WorkflowHash,
 		arg.Outcome,
 		arg.EndedAt,
 	)
@@ -88,24 +95,28 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 }
 
 const insertRunSkeleton = `-- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message, model, effort)
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, step, workflow, workflow_hash, session_id, message, model, effort)
 VALUES (
   $1, $2, $3, $4,
-  CASE WHEN $5::boolean THEN gen_random_uuid() ELSE $6::text::uuid END,
-  $7, $8, $9
+  $5, $6, $7,
+  CASE WHEN $8::boolean THEN gen_random_uuid() ELSE $9::text::uuid END,
+  $10, $11, $12
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id
 `
 
 type InsertRunSkeletonParams struct {
-	TicketID    sql.NullString
-	Kind        string
-	BaselineSHA sql.NullString
-	PromptHash  sql.NullString
-	NewSession  bool
-	SessionID   sql.NullString
-	Message     sql.NullString
-	Model       sql.NullString
-	Effort      sql.NullString
+	TicketID     sql.NullString
+	Kind         string
+	BaselineSHA  sql.NullString
+	PromptHash   sql.NullString
+	Step         string
+	Workflow     string
+	WorkflowHash string
+	NewSession   bool
+	SessionID    sql.NullString
+	Message      sql.NullString
+	Model        sql.NullString
+	Effort       sql.NullString
 }
 
 type InsertRunSkeletonRow struct {
@@ -119,6 +130,9 @@ func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonPa
 		arg.Kind,
 		arg.BaselineSHA,
 		arg.PromptHash,
+		arg.Step,
+		arg.Workflow,
+		arg.WorkflowHash,
 		arg.NewSession,
 		arg.SessionID,
 		arg.Message,
@@ -162,7 +176,12 @@ const latestSessionRuns = `-- name: LatestSessionRuns :many
 SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
   COALESCE(runs.message, '')::text AS message,
-  COALESCE(runs.question, '')::text AS question
+  COALESCE(runs.question, '')::text AS question,
+  runs.step,
+  COALESCE(runs.model, '')::text AS model,
+  COALESCE(runs.outcome, '')::text AS outcome,
+  runs.cost_usd,
+  COALESCE(runs.metrics, 'null'::jsonb) AS metrics
 FROM runs
 WHERE runs.ticket_id = $1 AND runs.kind IN ('agent', 'follow_up') AND runs.session_id = (
   SELECT latest.session_id FROM runs latest
@@ -177,6 +196,11 @@ type LatestSessionRunsRow struct {
 	LogPath  string
 	Message  string
 	Question string
+	Step     string
+	Model    string
+	Outcome  string
+	CostUsd  sql.NullFloat64
+	Metrics  json.RawMessage
 }
 
 func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString) ([]LatestSessionRunsRow, error) {
@@ -193,6 +217,11 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 			&i.LogPath,
 			&i.Message,
 			&i.Question,
+			&i.Step,
+			&i.Model,
+			&i.Outcome,
+			&i.CostUsd,
+			&i.Metrics,
 		); err != nil {
 			return nil, err
 		}
@@ -209,7 +238,7 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 
 const listLatestRunsByTicket = `-- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
-       outcome, exit_code, ended_at, prompt_hash, kind, question
+       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash
 FROM runs
 WHERE ticket_id IS NOT NULL
 ORDER BY ticket_id, id DESC
@@ -228,6 +257,8 @@ type ListLatestRunsByTicketRow struct {
 	PromptHash    sql.NullString
 	Kind          string
 	Question      sql.NullString
+	Step          string
+	WorkflowHash  string
 }
 
 func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsByTicketRow, error) {
@@ -252,6 +283,48 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 			&i.PromptHash,
 			&i.Kind,
 			&i.Question,
+			&i.Step,
+			&i.WorkflowHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPassRuns = `-- name: ListPassRuns :many
+SELECT id, ticket_id::text AS ticket_id, step, outcome FROM runs
+WHERE ticket_id IS NOT NULL ORDER BY id
+`
+
+type ListPassRunsRow struct {
+	ID       int64
+	TicketID string
+	Step     string
+	Outcome  sql.NullString
+}
+
+func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPassRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPassRunsRow
+	for rows.Next() {
+		var i ListPassRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Step,
+			&i.Outcome,
 		); err != nil {
 			return nil, err
 		}
@@ -299,7 +372,7 @@ func (q *Queries) PendingIntentsByTicket(ctx context.Context) ([]PendingIntentsB
 }
 
 const pendingRunsAwaitingDisposition = `-- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path, step, workflow_hash FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL
 `
 
@@ -311,6 +384,8 @@ type PendingRunsAwaitingDispositionRow struct {
 	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
 	LogPath       sql.NullString
+	Step          string
+	WorkflowHash  string
 }
 
 func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRunsAwaitingDispositionRow, error) {
@@ -330,6 +405,8 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 			&i.ProcStartedAt,
 			&i.BaselineSHA,
 			&i.LogPath,
+			&i.Step,
+			&i.WorkflowHash,
 		); err != nil {
 			return nil, err
 		}
@@ -402,8 +479,9 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 
 const recordDisposition = `-- name: RecordDisposition :execrows
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
-    cost_usd = $4, last_message = $5
-WHERE id = $6 AND outcome IS NULL
+    cost_usd = $4, last_message = $5,
+    metrics = $6
+WHERE id = $7 AND outcome IS NULL
 `
 
 type RecordDispositionParams struct {
@@ -412,6 +490,7 @@ type RecordDispositionParams struct {
 	EndedAt     sql.NullTime
 	CostUsd     sql.NullFloat64
 	LastMessage sql.NullString
+	Metrics     json.RawMessage
 	ID          int64
 }
 
@@ -422,6 +501,7 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.EndedAt,
 		arg.CostUsd,
 		arg.LastMessage,
+		arg.Metrics,
 		arg.ID,
 	)
 	if err != nil {
@@ -470,6 +550,17 @@ func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const runBaseline = `-- name: RunBaseline :one
+SELECT COALESCE(baseline_sha, '')::text AS baseline_sha FROM runs WHERE id = $1
+`
+
+func (q *Queries) RunBaseline(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, runBaseline, id)
+	var baseline_sha string
+	err := row.Scan(&baseline_sha)
+	return baseline_sha, err
 }
 
 const runDetails = `-- name: RunDetails :one

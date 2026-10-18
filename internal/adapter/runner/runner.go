@@ -27,6 +27,7 @@ type SpawnConfig struct {
 	SystemPromptPath string
 	Model            string
 	Effort           option.Option[plan.Effort]
+	Tools            []string
 	Prompt           string
 	PromptPath       string
 	SessionID        string
@@ -87,8 +88,14 @@ func buildArgv(cfg SpawnConfig) []string {
 	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {
-		if a == "{session}" {
+		switch a {
+		case "{session}":
 			argv = append(argv, sessionArgs(cfg)...)
+			continue
+		case "{tools}":
+			if len(cfg.Tools) > 0 {
+				argv = append(append(argv, "--tools"), cfg.Tools...)
+			}
 			continue
 		}
 		if path, ok := omitWhenEmpty[a]; ok && path == "" {

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
@@ -159,6 +161,56 @@ func TestStore_RecordDisposition(t *testing.T) {
 		}
 	})
 
+	t.Run("metrics", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name    string
+			metrics option.Option[agentlog.RunMetrics]
+			want    map[string]any
+		}{
+			{
+				name: "written alongside the outcome without cost or requests",
+				metrics: option.Some(agentlog.RunMetrics{
+					CostUSD: option.Some(1.5), Requests: []agentlog.RequestUsage{{Output: 9}},
+					Wall: option.Some(2 * time.Second), Turns: 3, Input: 1, CacheWrite: 2, CacheRead: 3, Output: 4,
+					Tools: map[string]int{"Bash": 2},
+				}),
+				want: map[string]any{
+					"wall": float64(2 * time.Second), "turns": 3.0, "input": 1.0, "cache_write": 2.0,
+					"cache_read": 3.0, "output": 4.0, "tools": map[string]any{"Bash": 2.0},
+				},
+			},
+			{name: "NULL when never measured", metrics: option.None[agentlog.RunMetrics]()},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				dsn := cctest.DSN(t)
+				store := openStoreAt(t, dsn)
+				seedOneTicket(t, store)
+				runID := insertAgentRun(t, store)
+				if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+					RunID: plan.RunID(runID), Outcome: plan.OutcomePush, Metrics: tt.metrics, EndedAt: testNow,
+				}); err != nil {
+					t.Fatalf("RecordDisposition: %v", err)
+				}
+				var raw sql.NullString
+				if err := openRawDB(t, dsn).QueryRow(`SELECT metrics::text FROM runs WHERE id = $1`, runID).Scan(&raw); err != nil {
+					t.Fatalf("read metrics for run %d: %v", runID, err)
+				}
+				var got map[string]any
+				if raw.Valid {
+					if err := json.Unmarshal([]byte(raw.String), &got); err != nil {
+						t.Fatalf("decode runs.metrics %q: %v", raw.String, err)
+					}
+				}
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("runs.metrics mismatch (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
+
 	t.Run("twice reports not found", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
@@ -179,7 +231,8 @@ func TestStore_InsertCutFailedRun(t *testing.T) {
 	t.Parallel()
 	store := openStore(t)
 	seedOneTicket(t, store)
-	if _, err := store.InsertCutFailedRun(t.Context(), "sandbox://CC-1", "hash-1", testNow); err != nil {
+	cut := storepkg.RunSkeleton{Ticket: "sandbox://CC-1", PromptHash: "hash-1"}
+	if _, err := store.InsertCutFailedRun(t.Context(), cut, testNow); err != nil {
 		t.Fatalf("InsertCutFailedRun: %v", err)
 	}
 
@@ -376,11 +429,17 @@ func TestStore_LatestSessionID(t *testing.T) {
 	if agentSession == "" {
 		t.Fatal("InsertSessionRunSkeleton(StartNew) session = \"\", want an id")
 	}
-	if _, err := store.InsertCutFailedRun(ctx, ticket, "", testNow); err != nil {
+	if _, err := store.InsertCutFailedRun(ctx, storepkg.RunSkeleton{Ticket: ticket}, testNow); err != nil {
 		t.Fatalf("InsertCutFailedRun: %v", err)
 	}
+	if _, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "command", Step: "check", Session: storepkg.RunSession{StartNew: true},
+	}); err != nil {
+		t.Fatalf("InsertSessionRunSkeleton(command): %v", err)
+	}
 	if got, err := store.LatestSessionID(ctx, ticket); err != nil || got != agentSession {
-		t.Errorf("LatestSessionID() after an agent run and a cut failure = %q, %v, want %q", got, err, agentSession)
+		t.Errorf("LatestSessionID() after agent, cut failure and command runs = %q, %v, want %q",
+			got, err, agentSession)
 	}
 	_, followSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: agentSession, Message: "go on"},
@@ -432,7 +491,7 @@ func TestStore_SessionRunsForTicket(t *testing.T) {
 			t.Fatalf("SessionRunsForTicket: %v", err)
 		}
 		want := []storepkg.SessionRun{{ID: launchID}, {ID: followID, Message: "go on"}}
-		if diff := cmp.Diff(want, got); diff != "" {
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(storepkg.SessionRun{}, "Cost", "Metrics")); diff != "" {
 			t.Errorf("SessionRunsForTicket(%s) mismatch (-want +got):\n%s", ticket, diff)
 		}
 	})

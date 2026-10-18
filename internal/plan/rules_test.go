@@ -17,7 +17,7 @@ func TestRulesFor(t *testing.T) {
 		Settings: map[string]plan.RepoSettings{
 			"a": {
 				Stacking: true, Deny: []string{".github/**"}, CompatCheck: "compat", MergifySHA: "sha256:1",
-				Checks: verdict.Predicate{Success: "CI"},
+				Checks: verdict.Predicate{Success: "CI"}, VerifyCommand: []string{"just", "test"},
 			},
 			"b": {},
 		},
@@ -32,6 +32,7 @@ func TestRulesFor(t *testing.T) {
 		Checks:       map[string]verdict.Predicate{"a": {Success: "CI"}, "b": {}, "c": {}},
 		MergifySHA:   map[string]string{"a": "sha256:1", "b": "", "c": ""},
 		CompatCheck:  map[string]string{"a": "compat", "b": "", "c": ""},
+		Verify:       map[string]bool{"a": true, "b": false, "c": false},
 		MaxAgents:    3,
 		SpendLimit5h: 80,
 	}

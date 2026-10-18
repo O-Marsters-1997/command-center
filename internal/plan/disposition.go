@@ -16,6 +16,7 @@ const (
 	OutcomeCutFailed
 	OutcomeAsked
 	OutcomeContinued
+	OutcomePassed
 )
 
 func (o Outcome) String() string {
@@ -30,12 +31,26 @@ func (o Outcome) String() string {
 		return "asked"
 	case OutcomeContinued:
 		return "continued"
+	case OutcomePassed:
+		return "passed"
 	default:
 		return "failed"
 	}
 }
 
-var allOutcomes = []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued}
+func (o Outcome) Glyph() GlyphWord {
+	switch o {
+	case OutcomePush, OutcomeContinued, OutcomePassed:
+		return GlyphDone
+	case OutcomeAsked:
+		return GlyphAttention
+	case OutcomeFailed, OutcomeCutFailed:
+		return GlyphFailed
+	}
+	return GlyphFailed
+}
+
+var allOutcomes = []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued, OutcomePassed}
 
 func AllOutcomes() []Outcome { return slices.Clone(allOutcomes) }
 

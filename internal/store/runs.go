@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
@@ -60,15 +61,18 @@ func (s *Store) InsertSessionRunSkeleton(
 ) (runID int64, sessionID string, err error) {
 	model, effort := choiceColumns(r.Choice)
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
-		Model:       model,
-		Effort:      effort,
-		TicketID:    notNull(r.Ticket),
-		Kind:        string(r.Kind),
-		BaselineSHA: notNull(r.BaselineSHA),
-		PromptHash:  notNull(r.PromptHash),
-		NewSession:  r.Session.StartNew,
-		SessionID:   nullIfEmpty(r.Session.JoinID),
-		Message:     nullIfEmpty(r.Session.Message),
+		Model:        model,
+		Effort:       effort,
+		TicketID:     notNull(r.Ticket),
+		Kind:         string(r.Kind),
+		BaselineSHA:  notNull(r.BaselineSHA),
+		PromptHash:   notNull(r.PromptHash),
+		Step:         string(r.Step),
+		Workflow:     r.Workflow,
+		WorkflowHash: r.WorkflowHash,
+		NewSession:   r.Session.StartNew,
+		SessionID:    nullIfEmpty(r.Session.JoinID),
+		Message:      nullIfEmpty(r.Session.Message),
 	})
 	if err != nil {
 		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
@@ -110,7 +114,16 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 	if d.LastMessage.IsSome() {
 		lastMessageParam = notNull(d.LastMessage.Unwrap())
 	}
+	var metricsParam json.RawMessage
+	if d.Metrics.IsSome() {
+		raw, err := json.Marshal(d.Metrics.Unwrap())
+		if err != nil {
+			return fmt.Errorf("encode metrics for run %d: %w", d.RunID, err)
+		}
+		metricsParam = raw
+	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+		Metrics:     metricsParam,
 		Outcome:     notNull(d.Outcome.String()),
 		ExitCode:    exitCodeParam,
 		EndedAt:     notNullTime(d.EndedAt.UTC()),
@@ -127,15 +140,18 @@ func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string
 }
 
 // InsertCutFailedRun records a run that never got a worktree, baseline or process.
-func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
+func (s *Store) InsertCutFailedRun(ctx context.Context, r RunSkeleton, at time.Time) (int64, error) {
 	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
-		TicketID:   notNull(ticketID),
-		PromptHash: notNull(promptHash),
-		Outcome:    notNull(plan.OutcomeCutFailed.String()),
-		EndedAt:    notNullTime(at.UTC()),
+		TicketID:     notNull(r.Ticket),
+		PromptHash:   notNull(r.PromptHash),
+		Step:         string(r.Step),
+		Workflow:     r.Workflow,
+		WorkflowHash: r.WorkflowHash,
+		Outcome:      notNull(plan.OutcomeCutFailed.String()),
+		EndedAt:      notNullTime(at.UTC()),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
+		return 0, fmt.Errorf("insert cut-failed run for %s: %w", r.Ticket, err)
 	}
 	return id, nil
 }
@@ -149,6 +165,37 @@ type PendingRun struct {
 	ProcStartedAt time.Time
 	BaselineSHA   string
 	LogPath       string
+	Step          plan.StepName
+	WorkflowHash  string
+}
+
+func (s *Store) PassRuns(ctx context.Context) (map[plan.TicketURL][]plan.StepRun, error) {
+	rows, err := s.q.ListPassRuns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select pass runs: %w", err)
+	}
+	passes := map[plan.TicketURL][]plan.StepRun{}
+	for _, row := range rows {
+		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid}
+		if row.Outcome.Valid {
+			outcome, err := plan.ParseOutcome(row.Outcome.String)
+			if err != nil {
+				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
+			}
+			run.Outcome = option.Some(outcome)
+		}
+		url := plan.TicketURL(row.TicketID)
+		passes[url] = append(passes[url], run)
+	}
+	return passes, nil
+}
+
+func (s *Store) RunBaseline(ctx context.Context, id plan.RunID) (string, error) {
+	sha, err := s.q.RunBaseline(ctx, int64(id))
+	if err != nil {
+		return "", fmt.Errorf("select baseline of run %d: %w", id, err)
+	}
+	return sha, nil
 }
 
 // PendingRunsAwaitingDisposition excludes runs without a process or with an outcome.
@@ -169,6 +216,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
+		p.Step, p.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
 		pending = append(pending, p)
 	}
 	return pending, nil
@@ -210,6 +258,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		summary.BaselineSHA, summary.LogPath = plan.SHA(row.BaselineSHA.String), row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
 		summary.Question = row.Question.String
+		summary.Step, summary.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
 		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil
@@ -317,6 +366,11 @@ type SessionRun struct {
 	LogPath  string
 	Message  string
 	Question string
+	Step     plan.StepName
+	Model    string
+	Outcome  string
+	Cost     option.Option[float64]
+	Metrics  option.Option[agentlog.RunMetrics]
 }
 
 func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]SessionRun, error) {
@@ -326,7 +380,22 @@ func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]Se
 	}
 	runs := make([]SessionRun, len(rows))
 	for i, row := range rows {
-		runs[i] = SessionRun{ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question}
+		run := SessionRun{
+			ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question,
+			Step: plan.StepName(row.Step), Model: row.Model, Outcome: row.Outcome,
+			Cost: option.None[float64](), Metrics: option.None[agentlog.RunMetrics](),
+		}
+		if row.CostUsd.Valid {
+			run.Cost = option.Some(row.CostUsd.Float64)
+		}
+		if string(row.Metrics) != "null" {
+			var m agentlog.RunMetrics
+			if err := json.Unmarshal(row.Metrics, &m); err != nil {
+				return nil, fmt.Errorf("decode metrics of run %d: %w", row.ID, err)
+			}
+			run.Metrics = option.Some(m)
+		}
+		runs[i] = run
 	}
 	return runs, nil
 }

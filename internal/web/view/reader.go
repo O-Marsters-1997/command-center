@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -87,6 +88,7 @@ func distinctCount(rows []Row, of func(Row) string) int {
 
 func (b Board) rowFor(ref SessionRef) (Row, bool) {
 	rows := rowsIn(b.Groups)
+	ref.Run = 0
 	i := slices.IndexFunc(rows, func(r Row) bool {
 		found, err := ParseSessionRef(plan.TicketURL(r.URL))
 		return err == nil && found == ref
@@ -125,7 +127,7 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = now
-	return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil
+	return plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in), nil
 }
 
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {

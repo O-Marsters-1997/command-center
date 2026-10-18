@@ -75,7 +75,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 
 	if obs.PRs[t.Ref()].State != plan.Open {
 		worktree := obs.Worktrees[t.Ref()]
-		if err := l.forge.Create(ctx, worktree, base, p.Body, p.OpensAsDraft); err != nil {
+		if err := l.forge.Create(ctx, worktree, base, l.prBody(ctx, t.URL, p.Body), p.OpensAsDraft); err != nil {
 			return l.event(ctx, url, store.EventPushFailed, err.Error())
 		}
 	}

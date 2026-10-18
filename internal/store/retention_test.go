@@ -28,7 +28,7 @@ func TestStore_PruneHistory(t *testing.T) {
 		reading        = `INSERT INTO utilization_readings (at, "window", utilization, resets_at) VALUES `
 		interval       = `INSERT INTO utilization_intervals ("window", start_at, end_at, ` +
 			`utilization_start, utilization_end, weight_usd) VALUES `
-		run  = "INSERT INTO runs (ticket_id, kind, ended_at) VALUES "
+		run  = "INSERT INTO runs (ticket_id, kind, step, workflow, workflow_hash, ended_at) VALUES "
 		push = "INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at) VALUES "
 	)
 	for _, stmt := range []string{
@@ -49,7 +49,7 @@ func TestStore_PruneHistory(t *testing.T) {
 		interval + "('five_hour', " + ago(16*day) + ", " + ago(15*day) + ", 0, 0.1, 1)",
 		interval + "('five_hour', " + ago(14*day-time.Hour) + ", " + ago(13*day) + ", 0, 0.1, 1)",
 
-		run + "('sandbox://CC-1', 'agent', " + ago(500*day) + ")",
+		run + "('sandbox://CC-1', 'agent', 'implement', 'v0', 'h', " + ago(500*day) + ")",
 		push + "('sandbox://CC-1', 'a', 'main', 'b', " + ago(500*day) + ")",
 	} {
 		mustExec(t.Context(), t, db, stmt)

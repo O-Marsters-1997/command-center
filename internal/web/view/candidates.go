@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -41,13 +42,18 @@ type LaunchModal struct {
 	Models       []string
 	DefaultModel string
 	Efforts      []plan.Effort
+	Workflows    []string
+	Workflow     string
 }
 
 func newLaunchModal() LaunchModal {
-	return LaunchModal{Models: config.AgentModels(), DefaultModel: config.AgentModel, Efforts: plan.AllEfforts()}
+	return LaunchModal{Models: config.AgentModels(), DefaultModel: config.AgentModel, Efforts: plan.AllEfforts(),
+		Workflows: slices.Sorted(maps.Keys(config.Workflows())), Workflow: config.DefaultWorkflow}
 }
 
 func (m LaunchModal) ModelList() string { return strings.Join(m.Models, ",") }
+
+func (m LaunchModal) WorkflowList() string { return strings.Join(m.Workflows, ",") }
 
 func (m LaunchModal) EffortList() string {
 	efforts := make([]string, len(m.Efforts))

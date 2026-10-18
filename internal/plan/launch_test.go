@@ -95,6 +95,15 @@ func TestLaunchPlan(t *testing.T) {
 			want:      nil,
 		},
 		{
+			name: "in-flight passes take slots before new launches",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-2", HasRun: true, InFlight: true},
+			},
+			maxAgents: 1,
+			want:      []plan.TicketURL{"sandbox://CC-2"},
+		},
+		{
 			name: "no free slots launches nothing",
 			candidates: []plan.LaunchCandidate{
 				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},

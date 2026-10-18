@@ -170,7 +170,7 @@ func (l *Loop) applyReRunIntents(
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		if err := l.reRunOne(ctx, t, ticket, entry.Ticket, baseBranch, entry.PromptHash); err != nil {
+		if err := l.reRunOne(ctx, t, ticket, entry, baseBranch); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil
@@ -178,15 +178,17 @@ func (l *Loop) applyReRunIntents(
 }
 
 func (l *Loop) reRunOne(
-	ctx context.Context, t *tick, ticket store.Ticket, launched plan.Ticket, baseBranch, promptHash string,
+	ctx context.Context, t *tick, ticket store.Ticket, entry plan.Entry, baseBranch string,
 ) error {
+	launched, promptHash := entry.Ticket, entry.PromptHash
+	begin := l.startOf(entry, t.obs)
 	repoPath := l.checkout(ticket.Repo)
 	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		if err := l.cutAndSpawn(ctx, t, ticket, launched, baseBranch, promptHash); err != nil {
+		if err := l.cutAndSpawn(ctx, t, ticket, launched, baseBranch, promptHash, begin); err != nil {
 			return fmt.Errorf("re-cut %s: %w", ticket.Branch, err)
 		}
 		return nil
@@ -198,7 +200,8 @@ func (l *Loop) reRunOne(
 	}
 	if err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: plan.RunKindAgent, prompt: agentPrompt(ticket, launched), choice: launched.Choice,
+		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, launched, begin.step, nil), choice: launched.Choice,
+		workflow: begin.workflow, step: begin.step, verify: begin.verify,
 	}); err != nil {
 		return fmt.Errorf("spawn re-run in %s: %w", worktreePath, err)
 	}
@@ -290,7 +293,7 @@ func (l *Loop) removeWorktreeOne(
 
 func (l *Loop) pruneRunLogs(ids []plan.RunID) {
 	for _, id := range ids {
-		for _, ext := range []string{"jsonl", "prompt"} {
+		for _, ext := range []string{"jsonl", "prompt", "handoff.md", "system.md"} {
 			path := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.%s", id, ext))
 			if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				l.logger.Warn("remove run file", "path", path, "err", err)

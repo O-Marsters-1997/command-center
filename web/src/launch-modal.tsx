@@ -68,7 +68,7 @@ function Banner(props: { children: JSX.Element }) {
 
 const split = (list: string) => (list ? list.split(",") : []);
 
-defineIsland("cc-launch-modal", { feature: "", tickets: "", models: "", model: "", efforts: "" }, (props, element) => {
+defineIsland("cc-launch-modal", { feature: "", tickets: "", models: "", model: "", efforts: "", workflows: "", workflow: "" }, (props, element) => {
   const [candidates, setCandidates] = createSignal<Candidate[]>([]);
   const [ticked, setTicked] = createSignal<Set<string>>(new Set());
   const [refusal, setRefusal] = createSignal<string | null>(null);
@@ -210,6 +210,15 @@ defineIsland("cc-launch-modal", { feature: "", tickets: "", models: "", model: "
                   <select class="select" name="effort" aria-label="Effort">
                     <option value="">default effort</option>
                     <For each={split(props.efforts)}>{(e) => <option value={e}>{e}</option>}</For>
+                  </select>
+                  <select class="select" name="workflow" aria-label="Workflow">
+                    <For each={split(props.workflows)}>
+                      {(w) => (
+                        <option value={w} selected={w === props.workflow}>
+                          {w}
+                        </option>
+                      )}
+                    </For>
                   </select>
                   <span class="composer-chip">base origin/main</span>
                 </div>
