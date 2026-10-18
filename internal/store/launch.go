@@ -22,6 +22,7 @@ type launchPayload struct {
 	Group      string           `json:"group"`
 	Context    string           `json:"context"`
 	Choice     plan.AgentChoice `json:"choice"`
+	Workflow   string           `json:"workflow"`
 }
 
 func choiceColumns(c plan.AgentChoice) (model, effort sql.NullString) {
@@ -42,7 +43,7 @@ func choiceFrom(model, effort sql.NullString) plan.AgentChoice {
 
 func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
 	payload, err := json.Marshal(launchPayload{
-		PromptHash: l.PromptHash, Group: l.Group, Context: l.Context, Choice: l.Choice,
+		PromptHash: l.PromptHash, Group: l.Group, Context: l.Context, Choice: l.Choice, Workflow: l.Workflow,
 	})
 	if err != nil {
 		return fmt.Errorf("encode launch intent payload for %s: %w", l.Ticket, err)
@@ -81,6 +82,7 @@ type pendingIntent struct {
 	promptHash string
 	context    string
 	choice     plan.AgentChoice
+	workflow   string
 }
 
 func claimLaunchIntents(
@@ -105,7 +107,7 @@ func claimLaunchIntents(
 		groups[payload.Group] = append(groups[payload.Group],
 			pendingIntent{
 				ticketID: row.TicketID, promptHash: payload.PromptHash,
-				context: payload.Context, choice: payload.Choice,
+				context: payload.Context, choice: payload.Choice, workflow: payload.Workflow,
 			})
 	}
 	return groups, order, nil
@@ -114,7 +116,7 @@ func claimLaunchIntents(
 func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []pendingIntent) error {
 	model, effort := choiceColumns(members[0].choice)
 	launchID, err := q.InsertLaunch(ctx, ccdb.InsertLaunchParams{
-		CreatedAt: at, Context: members[0].context, Model: model, Effort: effort,
+		CreatedAt: at, Context: members[0].context, Model: model, Effort: effort, Workflow: members[0].workflow,
 	})
 	if err != nil {
 		return fmt.Errorf("insert launch: %w", err)
@@ -165,6 +167,7 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.
 			PromptHash: row.PromptHash,
 			Context:    row.Context,
 			Choice:     choiceFrom(row.Model, row.Effort),
+			Workflow:   row.Workflow,
 		}
 	}
 	for ticketID := range cancelled {

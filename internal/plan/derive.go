@@ -20,6 +20,7 @@ type LaunchMembership struct {
 	PromptHash string
 	Context    string
 	Choice     AgentChoice
+	Workflow   string
 }
 
 type RunSummary struct {
