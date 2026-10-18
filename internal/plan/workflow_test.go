@@ -137,6 +137,40 @@ func TestWorkflow_Next(t *testing.T) {
 	}
 }
 
+func TestResumable(t *testing.T) {
+	t.Parallel()
+
+	implement := plan.StepRun{ID: 1, Step: "implement"}
+	check := plan.StepRun{ID: 2, Step: "check", Command: true}
+	fix := plan.StepRun{ID: 3, Step: "fix"}
+
+	tests := []struct {
+		name string
+		pass []plan.StepRun
+		want plan.RunID
+	}{
+		{name: "empty pass"},
+		{name: "only a command run", pass: []plan.StepRun{check}},
+		{name: "skips the command run after implement", pass: []plan.StepRun{implement, check}, want: 1},
+		{name: "prefers the later fix", pass: []plan.StepRun{implement, check, fix, check}, want: 3},
+		{name: "ignores liveness and outcome", pass: []plan.StepRun{
+			implement, {ID: 4, Step: "fix", Alive: true, Outcome: option.Some(plan.OutcomeFailed)},
+		}, want: 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var got plan.RunID
+			if r := plan.Resumable(tt.pass); r.IsSome() {
+				got = r.Unwrap().ID
+			}
+			if got != tt.want {
+				t.Errorf("Resumable() run = %d, want %d (0 is none)", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStep_StepOutcome(t *testing.T) {
 	t.Parallel()
 
