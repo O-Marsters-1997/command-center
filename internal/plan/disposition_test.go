@@ -39,7 +39,7 @@ func TestOutcome_Glyph(t *testing.T) {
 		plan.OutcomePush:      plan.GlyphDone,
 		plan.OutcomeContinued: plan.GlyphDone,
 		plan.OutcomePassed:    plan.GlyphDone,
-		plan.OutcomeAsked:    plan.GlyphAttention,
+		plan.OutcomeAsked:     plan.GlyphAttention,
 		plan.OutcomeFailed:    plan.GlyphFailed,
 		plan.OutcomeCutFailed: plan.GlyphFailed,
 	}
