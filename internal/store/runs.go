@@ -110,7 +110,16 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 	if d.LastMessage.IsSome() {
 		lastMessageParam = notNull(d.LastMessage.Unwrap())
 	}
+	var metricsParam json.RawMessage
+	if d.Metrics.IsSome() {
+		raw, err := json.Marshal(d.Metrics.Unwrap())
+		if err != nil {
+			return fmt.Errorf("encode metrics for run %d: %w", d.RunID, err)
+		}
+		metricsParam = raw
+	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+		Metrics:     metricsParam,
 		Outcome:     notNull(d.Outcome.String()),
 		ExitCode:    exitCodeParam,
 		EndedAt:     notNullTime(d.EndedAt.UTC()),
