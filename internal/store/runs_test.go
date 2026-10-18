@@ -438,7 +438,8 @@ func TestStore_LatestSessionID(t *testing.T) {
 		t.Fatalf("InsertSessionRunSkeleton(command): %v", err)
 	}
 	if got, err := store.LatestSessionID(ctx, ticket); err != nil || got != agentSession {
-		t.Errorf("LatestSessionID() after an agent run, a cut failure and a command run = %q, %v, want %q", got, err, agentSession)
+		t.Errorf("LatestSessionID() after agent, cut failure and command runs = %q, %v, want %q",
+			got, err, agentSession)
 	}
 	_, followSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: agentSession, Message: "go on"},
