@@ -38,7 +38,8 @@ func TestOutcome_Glyph(t *testing.T) {
 	want := map[plan.Outcome]plan.GlyphWord{
 		plan.OutcomePush:      plan.GlyphDone,
 		plan.OutcomeContinued: plan.GlyphDone,
-		plan.OutcomeAsked:     plan.GlyphAttention,
+		plan.OutcomePassed:    plan.GlyphDone,
+		plan.OutcomeAsked:    plan.GlyphAttention,
 		plan.OutcomeFailed:    plan.GlyphFailed,
 		plan.OutcomeCutFailed: plan.GlyphFailed,
 	}
