@@ -30,6 +30,7 @@ type Workflow struct {
 type StepRun struct {
 	ID      RunID
 	Step    StepName
+	Command bool
 	Alive   bool
 	Outcome option.Option[Outcome]
 	Handoff option.Option[string]
@@ -109,6 +110,15 @@ func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
 			"step %s still failing after %d fix rounds", last.Step, rounds))}
 	}
 	return park(last.Step, outcome)
+}
+
+func Resumable(pass []StepRun) option.Option[StepRun] {
+	for i := len(pass) - 1; i >= 0; i-- {
+		if !pass[i].Command {
+			return option.Some(pass[i])
+		}
+	}
+	return option.None[StepRun]()
 }
 
 func fromLatest(pass []StepRun, first StepName) []StepRun {

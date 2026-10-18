@@ -432,8 +432,14 @@ func TestStore_LatestSessionID(t *testing.T) {
 	if _, err := store.InsertCutFailedRun(ctx, storepkg.RunSkeleton{Ticket: ticket}, testNow); err != nil {
 		t.Fatalf("InsertCutFailedRun: %v", err)
 	}
+	if _, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "command", Step: "check", Session: storepkg.RunSession{StartNew: true},
+	}); err != nil {
+		t.Fatalf("InsertSessionRunSkeleton(command): %v", err)
+	}
 	if got, err := store.LatestSessionID(ctx, ticket); err != nil || got != agentSession {
-		t.Errorf("LatestSessionID() after an agent run and a cut failure = %q, %v, want %q", got, err, agentSession)
+		t.Errorf("LatestSessionID() after agent, cut failure and command runs = %q, %v, want %q",
+			got, err, agentSession)
 	}
 	_, followSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: agentSession, Message: "go on"},
