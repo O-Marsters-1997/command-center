@@ -4,7 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -188,5 +191,58 @@ func TestStore_WithdrawnTicketWaste(t *testing.T) {
 	}
 	if points := mergedSpend(t, store); len(points) != 1 || points[0].Ticket != "sandbox://CC-2" {
 		t.Errorf("MergedTicketSpend(june 10) = %+v, want only CC-2", points)
+	}
+}
+
+func TestStore_MergedTicketWorkflowSpend(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	mergedAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+
+	type metrics = option.Option[agentlog.RunMetrics]
+	dispose := func(step plan.StepName, hash string, cost float64, m metrics, at time.Time) {
+		t.Helper()
+		runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "h",
+			Step: step, Workflow: "wf", WorkflowHash: hash,
+		})
+		if err != nil {
+			t.Fatalf("InsertRunSkeleton: %v", err)
+		}
+		if err := store.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, Cost: option.Some(cost), Metrics: m, EndedAt: at,
+		}); err != nil {
+			t.Fatalf("RecordDisposition: %v", err)
+		}
+	}
+	measured := func(wall time.Duration, turns int) metrics {
+		tools := map[string]int{"Bash": turns}
+		return option.Some(agentlog.RunMetrics{Wall: option.Some(wall), Turns: turns, Tools: tools})
+	}
+
+	dispose("implement", "aaa", 1, measured(time.Minute, 2), mergedAt.Add(-3*time.Hour))
+	dispose("implement", "aaa", 2, measured(time.Minute, 3), mergedAt.Add(-2*time.Hour))
+	dispose("review", "bbb", 4, option.None[agentlog.RunMetrics](), mergedAt.Add(-time.Hour))
+	dispose("implement", "aaa", 8, measured(time.Minute, 1), mergedAt.Add(time.Hour))
+	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+
+	got, err := store.MergedTicketWorkflowSpend(ctx, june10)
+	if err != nil {
+		t.Fatalf("MergedTicketWorkflowSpend: %v", err)
+	}
+	want := []storepkg.WorkflowTicketSpend{{
+		Ticket: "sandbox://CC-1", MergedAt: mergedAt, Workflow: "wf", WorkflowHash: "aaa",
+		Steps: []storepkg.StepSpend{
+			{Step: "implement", WeightUSD: 3, Metrics: agentlog.RunMetrics{
+				Wall: option.Some(2 * time.Minute), Turns: 5, Tools: map[string]int{"Bash": 5},
+			}},
+			{Step: "review", WeightUSD: 4},
+		},
+	}}
+	opts := cmp.AllowUnexported(option.Option[time.Duration]{}, option.Option[float64]{})
+	if diff := cmp.Diff(want, got, opts); diff != "" {
+		t.Errorf("MergedTicketWorkflowSpend(june 10) mismatch (-want +got):\n%s", diff)
 	}
 }
