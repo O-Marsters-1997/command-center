@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
@@ -16,6 +17,7 @@ type Disposition struct {
 	ExitCode    option.Option[int]
 	Cost        option.Option[float64]
 	LastMessage option.Option[string]
+	Metrics     option.Option[agentlog.RunMetrics]
 	EndedAt     time.Time
 }
 

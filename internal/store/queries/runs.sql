@@ -17,7 +17,8 @@ WHERE id = sqlc.arg(id);
 
 -- name: RecordDisposition :execrows
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
-    cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message)
+    cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message),
+    metrics = sqlc.narg(metrics)
 WHERE id = sqlc.arg(id) AND outcome IS NULL;
 
 -- name: TicketActivities :many

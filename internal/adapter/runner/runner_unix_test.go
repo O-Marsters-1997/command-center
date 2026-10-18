@@ -121,6 +121,17 @@ func TestProcessRunner_Spawn(t *testing.T) {
 			want:    func(runner.SpawnConfig) string { return "before after" },
 		},
 		{
+			name:      "expands the tools element to --tools and each tool",
+			command:   []string{"before", "{tools}", "after"},
+			configure: func(_ *testing.T, cfg *runner.SpawnConfig) { cfg.Tools = []string{"Read", "Bash"} },
+			want:      func(runner.SpawnConfig) string { return "before --tools Read Bash after" },
+		},
+		{
+			name:    "drops the tools element when no tools are chosen",
+			command: []string{"before", "{tools}", "after"},
+			want:    func(runner.SpawnConfig) string { return "before after" },
+		},
+		{
 			name:    "substitutes the system prompt path",
 			command: []string{"{system_prompt}"},
 			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
