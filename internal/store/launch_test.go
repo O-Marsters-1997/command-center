@@ -194,7 +194,8 @@ func TestStore_LaunchMemberships(t *testing.T) {
 		if got := memberships["sandbox://CC-1"].Workflow; got != "custom" {
 			t.Errorf("LaunchMemberships()[CC-1].Workflow = %q, want custom", got)
 		}
-		if got := memberships["sandbox://CC-2"]; got.Context != "" || got.Choice != (plan.AgentChoice{}) || got.Workflow != "v0" {
+		if got := memberships["sandbox://CC-2"]; got.Context != "" ||
+			got.Choice != (plan.AgentChoice{}) || got.Workflow != "v0" {
 			t.Errorf("LaunchMemberships()[CC-2] = %+v, want the default choice, no context and workflow v0", got)
 		}
 	})
