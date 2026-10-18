@@ -179,7 +179,7 @@ func TestStore_LaunchMemberships(t *testing.T) {
 		choice := plan.AgentChoice{Model: "opus", Effort: option.Some(plan.EffortHigh)}
 		queueLaunch(t, store, storepkg.LaunchRequest{
 			Ticket: "sandbox://CC-1", PromptHash: "hash", Group: "group-a",
-			Context: "prefer table tests", Choice: choice, At: testNow,
+			Context: "prefer table tests", Choice: choice, Workflow: "custom", At: testNow,
 		})
 		queueLaunch(t, store, storepkg.LaunchRequest{
 			Ticket: "sandbox://CC-2", PromptHash: "hash", Group: "group-b", At: testNow,
@@ -191,8 +191,11 @@ func TestStore_LaunchMemberships(t *testing.T) {
 			t.Errorf("LaunchMemberships()[CC-1] = %+v, want context %q and choice %+v",
 				got, "prefer table tests", choice)
 		}
-		if got := memberships["sandbox://CC-2"]; got.Context != "" || got.Choice != (plan.AgentChoice{}) {
-			t.Errorf("LaunchMemberships()[CC-2] = %+v, want the default choice and no context", got)
+		if got := memberships["sandbox://CC-1"].Workflow; got != "custom" {
+			t.Errorf("LaunchMemberships()[CC-1].Workflow = %q, want custom", got)
+		}
+		if got := memberships["sandbox://CC-2"]; got.Context != "" || got.Choice != (plan.AgentChoice{}) || got.Workflow != "v0" {
+			t.Errorf("LaunchMemberships()[CC-2] = %+v, want the default choice, no context and workflow v0", got)
 		}
 	})
 

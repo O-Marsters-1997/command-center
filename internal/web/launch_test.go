@@ -161,9 +161,9 @@ func TestLaunch(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects a model or effort outside the offered set", func(t *testing.T) {
+	t.Run("rejects a model, effort or workflow outside the offered set", func(t *testing.T) {
 		t.Parallel()
-		for _, field := range []url.Values{{"model": {"gpt-9"}}, {"effort": {"extreme"}}} {
+		for _, field := range []url.Values{{"model": {"gpt-9"}}, {"effort": {"extreme"}}, {"workflow": {"v9"}}} {
 			field.Set("ticket", "sandbox://CC-1")
 			server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
 			if got := do(t, server, http.MethodPost, "/launch", req{Form: field}); got.Code != http.StatusBadRequest {

@@ -34,6 +34,7 @@ type Launch struct {
 	Context   string
 	Model     sql.NullString
 	Effort    sql.NullString
+	Workflow  string
 }
 
 type LaunchMember struct {

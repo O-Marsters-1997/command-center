@@ -77,6 +77,7 @@ type LaunchRequest struct {
 	Group      string
 	Context    string
 	Choice     plan.AgentChoice
+	Workflow   string
 	At         time.Time
 }
 

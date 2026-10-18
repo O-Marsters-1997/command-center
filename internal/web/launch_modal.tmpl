@@ -13,7 +13,7 @@
 {{- else if .Empty -}}
 <div class="launch-body"><p class="text-muted">{{.Feature}} has no tickets to launch.</p></div>
 {{- else -}}
-<cc-launch-modal{{if .Feature}} feature="{{.Feature}}"{{else}} tickets="{{.TicketQuery}}"{{end}} models="{{.ModelList}}" model="{{.DefaultModel}}" efforts="{{.EffortList}}"></cc-launch-modal>
+<cc-launch-modal{{if .Feature}} feature="{{.Feature}}"{{else}} tickets="{{.TicketQuery}}"{{end}} models="{{.ModelList}}" model="{{.DefaultModel}}" efforts="{{.EffortList}}" workflows="{{.WorkflowList}}" workflow="{{.Workflow}}"></cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
 {{- if or .Pending .Refused .Empty}}
