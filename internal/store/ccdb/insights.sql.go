@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -53,6 +54,79 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 			&i.Merged,
 			&i.AgentUsd,
 			&i.FollowUpUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mergedTicketRuns = `-- name: MergedTicketRuns :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+)
+SELECT t.url AS ticket_id, m.merged_at, r.step, r.workflow, r.workflow_hash,
+       COALESCE(r.cost_usd, 0)::double precision AS cost_usd,
+       (r.metrics IS NOT NULL)::boolean AS measured, COALESCE(r.metrics, '{}'::jsonb) AS metrics
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY m.merged_at, t.url, r.id
+`
+
+type MergedTicketRunsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type MergedTicketRunsRow struct {
+	TicketID     string
+	MergedAt     time.Time
+	Step         string
+	Workflow     string
+	WorkflowHash string
+	CostUsd      float64
+	Measured     bool
+	Metrics      json.RawMessage
+}
+
+func (q *Queries) MergedTicketRuns(ctx context.Context, arg MergedTicketRunsParams) ([]MergedTicketRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketRuns,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MergedTicketRunsRow
+	for rows.Next() {
+		var i MergedTicketRunsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.MergedAt,
+			&i.Step,
+			&i.Workflow,
+			&i.WorkflowHash,
+			&i.CostUsd,
+			&i.Measured,
+			&i.Metrics,
 		); err != nil {
 			return nil, err
 		}

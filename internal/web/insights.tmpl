@@ -51,6 +51,19 @@
   <tfoot><tr><th scope="row">total</th><td class="text-right">{{printf "%.2f" .Split.Total}}%</td></tr></tfoot>
 </table></div>
 </section>
+<section class="module" aria-labelledby="workflow-h">
+<h2 id="workflow-h">Spend by workflow</h2>
+<p class="module-sub">Median per merged ticket, by workflow version and step.</p>
+{{range .Workflows}}<div class="table-frame mb-4"><table class="w-full" aria-label="workflow {{.Workflow}}·{{.ShortHash}}">
+  <caption class="text-left"><b>{{.Workflow}}·{{.ShortHash}}</b> <span class="text-muted">{{.Tickets}} merged · {{printf "%.2f" .MedianPct}}% of week · {{if .MedianWall}}{{.MedianWall}}{{else}}—{{end}}</span></caption>
+  <thead><tr><th scope="col">step</th><th scope="col" class="text-right">% of week</th><th scope="col" class="text-right">wall</th><th scope="col" class="text-right">turns</th><th scope="col" class="text-right">cache read</th><th scope="col">tools</th></tr></thead>
+  <tbody>
+    {{range .Steps}}<tr><th scope="row">{{.Step}}</th><td class="text-right">{{printf "%.2f" .MedianPct}}%</td><td class="text-right">{{if .MedianWall}}{{.MedianWall}}{{else}}—{{end}}</td><td class="text-right">{{.MedianTurns}}</td><td class="text-right">{{printf "%.0f" .CacheReadPct}}%</td><td class="text-muted">{{range $tool, $n := .Tools}}{{$tool}} {{$n}} {{end}}</td></tr>
+    {{end -}}
+  </tbody>
+</table></div>
+{{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}
+</section>
 <section class="module" aria-labelledby="merged-h">
 <h2 id="merged-h">Merged tickets</h2>
 {{if .Merged}}<div class="table-frame"><table class="w-full" aria-label="merged tickets">
