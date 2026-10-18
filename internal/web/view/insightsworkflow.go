@@ -47,7 +47,9 @@ type workflowSamples struct {
 	tickets     int
 }
 
-func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, withdrawn map[string]int, factor float64) []WorkflowSeries {
+func buildWorkflowSeries(
+	tickets []store.WorkflowTicketSpend, withdrawn map[string]int, factor float64,
+) []WorkflowSeries {
 	var order []*workflowSamples
 	byHash := make(map[string]*workflowSamples)
 	for _, t := range tickets {

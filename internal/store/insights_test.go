@@ -205,11 +205,14 @@ func TestStore_MergedTicketWorkflowSpend_Rework(t *testing.T) {
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", openedAt.Add(time.Hour), 1)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", openedAt.Add(2*time.Hour), 1)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 1)
+	verdict := func(at time.Time, detail string) storepkg.Event {
+		return storepkg.Event{At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: detail}
+	}
 	appendEvents(t, store,
-		storepkg.Event{At: openedAt.Add(-2 * time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: "ci_failed: Tests"},
+		verdict(openedAt.Add(-2*time.Hour), "ci_failed: Tests"),
 		storepkg.Event{At: openedAt, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened},
-		storepkg.Event{At: openedAt.Add(time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: "ci_failed: Tests"},
-		storepkg.Event{At: openedAt.Add(90 * time.Minute), TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: "review_me: green"},
+		verdict(openedAt.Add(time.Hour), "ci_failed: Tests"),
+		verdict(openedAt.Add(90*time.Minute), "review_me: green"),
 	)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
 
@@ -242,13 +245,9 @@ func TestStore_WithdrawnWorkflowTickets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WithdrawnWorkflowTickets: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("WithdrawnWorkflowTickets(june 10) = %v, want one hash", got)
-	}
-	for hash, n := range got {
-		if n != 1 {
-			t.Errorf("WithdrawnWorkflowTickets(june 10)[%s] = %d, want 1 unmerged ticket counted once", hash, n)
-		}
+	want := map[string]int{"": 1}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("WithdrawnWorkflowTickets(june 10) mismatch (-want +got):\n%s", diff)
 	}
 }
 
