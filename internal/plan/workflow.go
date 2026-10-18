@@ -51,9 +51,8 @@ type Next struct {
 	Reason Reason
 }
 
-func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
-	var forward []Step
-	fix := option.None[Step]()
+func (w Workflow) split(hasVerify bool) (forward []Step, fix option.Option[Step]) {
+	fix = option.None[Step]()
 	for _, s := range w.Steps {
 		switch {
 		case s.OnFail:
@@ -63,6 +62,27 @@ func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
 			forward = append(forward, s)
 		}
 	}
+	return forward, fix
+}
+
+func (w Workflow) First(hasVerify bool) option.Option[Step] {
+	forward, _ := w.split(hasVerify)
+	if len(forward) == 0 {
+		return option.None[Step]()
+	}
+	return option.Some(forward[0])
+}
+
+func (w Workflow) Pass(runs []StepRun, hasVerify bool) []StepRun {
+	forward, _ := w.split(hasVerify)
+	if len(forward) == 0 {
+		return nil
+	}
+	return fromLatest(runs, forward[0].Name)
+}
+
+func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
+	forward, fix := w.split(hasVerify)
 	if len(forward) == 0 {
 		return Next{Kind: NextDone}
 	}
@@ -150,6 +170,8 @@ func unknownStep(step StepName) Next {
 	return Next{Kind: NextPark, Reason: Reason(fmt.Sprintf("step %s is not in the workflow", step))}
 }
 
+const FindingsMarker = "FINDINGS"
+
 type StepEvidence struct {
 	ExitCode option.Option[int]
 	Commits  int
@@ -162,7 +184,8 @@ func (s Step) StepOutcome(e StepEvidence) Outcome {
 	case s.Command:
 		ok = e.ExitCode.IsSome() && e.ExitCode.Unwrap() == 0
 	case s.Writes:
-		ok = strings.TrimSpace(e.Handoff.UnwrapOr("")) != ""
+		handoff := strings.TrimSpace(e.Handoff.UnwrapOr(""))
+		ok = handoff != "" && !strings.HasPrefix(handoff, FindingsMarker)
 	default:
 		ok = e.Commits > 0
 	}

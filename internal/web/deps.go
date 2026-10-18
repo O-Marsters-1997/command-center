@@ -22,6 +22,7 @@ type Deps struct {
 	Nudger           Nudger
 	SpendLimit5h     int
 	BoardPollSeconds int
+	AgentCommand     []string
 }
 
 type Option func(*Server)

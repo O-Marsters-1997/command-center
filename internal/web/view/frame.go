@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -58,7 +59,7 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	p, f.project = p.Scoped(f.repos, projects, f.tickets)
 	f.params = p
 	f.in.Now = now
-	f.snap = plan.RulesFor(plan.Daemon{}, f.in.Obs).Derive(f.in)
+	f.snap = plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, f.in.Obs).Derive(f.in)
 	f.projects = projectMarks(f.repos)
 	f.rows = deriveRows(f.tickets, f.in, f.snap, f.projects)
 	activities, err := r.store.Activities(ctx)

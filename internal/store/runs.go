@@ -165,6 +165,37 @@ type PendingRun struct {
 	ProcStartedAt time.Time
 	BaselineSHA   string
 	LogPath       string
+	Step          plan.StepName
+	WorkflowHash  string
+}
+
+func (s *Store) PassRuns(ctx context.Context) (map[plan.TicketURL][]plan.StepRun, error) {
+	rows, err := s.q.ListPassRuns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select pass runs: %w", err)
+	}
+	passes := map[plan.TicketURL][]plan.StepRun{}
+	for _, row := range rows {
+		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid}
+		if row.Outcome.Valid {
+			outcome, err := plan.ParseOutcome(row.Outcome.String)
+			if err != nil {
+				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
+			}
+			run.Outcome = option.Some(outcome)
+		}
+		url := plan.TicketURL(row.TicketID)
+		passes[url] = append(passes[url], run)
+	}
+	return passes, nil
+}
+
+func (s *Store) RunBaseline(ctx context.Context, id plan.RunID) (string, error) {
+	sha, err := s.q.RunBaseline(ctx, int64(id))
+	if err != nil {
+		return "", fmt.Errorf("select baseline of run %d: %w", id, err)
+	}
+	return sha, nil
 }
 
 // PendingRunsAwaitingDisposition excludes runs without a process or with an outcome.
@@ -185,6 +216,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
+		p.Step, p.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
 		pending = append(pending, p)
 	}
 	return pending, nil

@@ -53,6 +53,7 @@ type Server struct {
 	mux        http.Handler
 	nudger     Nudger
 	pushable   pushableCache
+	agentCmd   []string
 }
 
 const pushableTTL = time.Minute
@@ -83,7 +84,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 		d.BoardPollSeconds = config.DefaultBoardPollSeconds
 	}
 	s := &Server{
-		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger,
+		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand,
 		trackerFor: tracker.Resolve(gh.CLI{}),
 		pushable:   pushableCache{list: gh.CLI{}.PushableRepos},
 	}
@@ -476,6 +477,9 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	workflow := cmp.Or(r.FormValue("workflow"), config.DefaultWorkflow)
 	if _, ok := config.Workflows()[workflow]; !ok {
 		return errorf(http.StatusBadRequest, "unknown workflow %q", workflow)
+	}
+	if workflow != config.DefaultWorkflow && len(s.agentCmd) > 0 && !slices.Contains(s.agentCmd, "{tools}") {
+		return errorf(http.StatusBadRequest, "workflow %q needs an agent_command with {tools}", workflow)
 	}
 	launchContext := strings.TrimSpace(r.FormValue("context"))
 	base, err := snap.Preview(plan.TicketURLs(requested), "")

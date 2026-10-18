@@ -77,6 +77,11 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		return plan.Input{}, fmt.Errorf("read verdict facts: %w", err)
 	}
 
+	passes, err := s.PassRuns(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read pass runs: %w", err)
+	}
+
 	gauges, err := s.LatestReadings(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read latest readings: %w", err)
@@ -116,6 +121,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		Restacked: restacked, Sessions: sessions, Recorded: recorded, LastVerdicts: verdicts,
 		Verdict: verdictFacts, Intents: intents, Removals: removals,
 		FiveHour: gauges[agentlog.FiveHour].Utilization,
+		Passes:   passes,
 	}, nil
 }
 

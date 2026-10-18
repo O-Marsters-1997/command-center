@@ -40,8 +40,15 @@ VALUES (sqlc.arg(ticket_id), 'agent', sqlc.arg(prompt_hash), sqlc.arg(step), sql
   sqlc.arg(outcome), sqlc.arg(ended_at)) RETURNING id;
 
 -- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path, step, workflow_hash FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL;
+
+-- name: ListPassRuns :many
+SELECT id, ticket_id::text AS ticket_id, step, outcome FROM runs
+WHERE ticket_id IS NOT NULL ORDER BY id;
+
+-- name: RunBaseline :one
+SELECT COALESCE(baseline_sha, '')::text AS baseline_sha FROM runs WHERE id = sqlc.arg(id);
 
 -- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,

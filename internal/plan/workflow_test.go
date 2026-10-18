@@ -188,6 +188,10 @@ func TestStep_StepOutcome(t *testing.T) {
 			plan.StepEvidence{Handoff: option.Some("notes")}, plan.OutcomePassed,
 		},
 		{
+			"writer with findings", plan.Step{Writes: true},
+			plan.StepEvidence{Handoff: option.Some("FINDINGS\n- a.go:1 wrong")}, plan.OutcomeFailed,
+		},
+		{
 			"writer with blank handoff", plan.Step{Writes: true},
 			plan.StepEvidence{Handoff: option.Some(" \n")}, plan.OutcomeFailed,
 		},
