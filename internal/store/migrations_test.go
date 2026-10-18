@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pressly/goose/v3"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -123,6 +124,31 @@ func TestMigrations(t *testing.T) {
 		}
 		if got := ticks["https://x/1"]; got != 2 {
 			t.Errorf("CheckingTicks()[x/1] = %d, want 2", got)
+		}
+	})
+
+	t.Run("backfill existing runs to v0's implement step", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		dsn := cctest.UnmigratedDSN(t)
+		db := migrateTo(t, dsn, 42)
+		mustExec(ctx, t, db, `INSERT INTO tickets (url, repo, branch) VALUES ('https://x/1', 'r', 'b1')`)
+		mustExec(ctx, t, db, `INSERT INTO runs (ticket_id, kind, prompt_hash) VALUES ('https://x/1', 'agent', 'h')`)
+
+		store := openStoreAt(t, dsn)
+		latest, err := store.LatestRunsByTicket(ctx)
+		if err != nil {
+			t.Fatalf("LatestRunsByTicket: %v", err)
+		}
+		v0 := config.Workflows()[config.DefaultWorkflow]
+		got := latest["https://x/1"]
+		if got.Step != "implement" || got.WorkflowHash != v0.Hash {
+			t.Errorf("backfilled run = step %q hash %q, want implement and %q", got.Step, got.WorkflowHash, v0.Hash)
+		}
+		var workflow string
+		row := openRawDB(t, dsn).QueryRowContext(ctx, `SELECT workflow FROM runs`)
+		if err := row.Scan(&workflow); err != nil || workflow != v0.Name {
+			t.Errorf("backfilled workflow = %q, %v, want %q", workflow, err, v0.Name)
 		}
 	})
 

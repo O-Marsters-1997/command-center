@@ -95,6 +95,9 @@ type Run struct {
 	LastMessage   sql.NullString
 	Model         sql.NullString
 	Effort        sql.NullString
+	Step          string
+	Workflow      string
+	WorkflowHash  string
 }
 
 type Ticket struct {

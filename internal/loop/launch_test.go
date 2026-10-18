@@ -144,6 +144,10 @@ func TestLaunch(t *testing.T) {
 			t.Errorf("run = pgid %v, baseline %q, outcome %v, want pgid 1, a baseline and no outcome",
 				summary.Pgid, summary.BaselineSHA, summary.Outcome)
 		}
+		wantHash := config.Workflows()[config.DefaultWorkflow].Hash
+		if summary.Step != "implement" || summary.WorkflowHash != wantHash {
+			t.Errorf("run step %q hash %q, want implement and %q", summary.Step, summary.WorkflowHash, wantHash)
+		}
 	})
 
 	t.Run("starts a new session for the implement run", func(t *testing.T) {

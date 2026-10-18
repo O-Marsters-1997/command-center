@@ -179,7 +179,8 @@ func TestStore_InsertCutFailedRun(t *testing.T) {
 	t.Parallel()
 	store := openStore(t)
 	seedOneTicket(t, store)
-	if _, err := store.InsertCutFailedRun(t.Context(), "sandbox://CC-1", "hash-1", testNow); err != nil {
+	cut := storepkg.RunSkeleton{Ticket: "sandbox://CC-1", PromptHash: "hash-1"}
+	if _, err := store.InsertCutFailedRun(t.Context(), cut, testNow); err != nil {
 		t.Fatalf("InsertCutFailedRun: %v", err)
 	}
 
@@ -376,7 +377,7 @@ func TestStore_LatestSessionID(t *testing.T) {
 	if agentSession == "" {
 		t.Fatal("InsertSessionRunSkeleton(StartNew) session = \"\", want an id")
 	}
-	if _, err := store.InsertCutFailedRun(ctx, ticket, "", testNow); err != nil {
+	if _, err := store.InsertCutFailedRun(ctx, storepkg.RunSkeleton{Ticket: ticket}, testNow); err != nil {
 		t.Fatalf("InsertCutFailedRun: %v", err)
 	}
 	if got, err := store.LatestSessionID(ctx, ticket); err != nil || got != agentSession {
