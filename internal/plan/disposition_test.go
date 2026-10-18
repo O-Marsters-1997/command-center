@@ -12,6 +12,7 @@ func TestParseOutcome(t *testing.T) {
 
 	outcomes := []plan.Outcome{
 		plan.OutcomePush, plan.OutcomeFailed, plan.OutcomeCutFailed, plan.OutcomeAsked, plan.OutcomeContinued,
+		plan.OutcomePassed,
 	}
 	for _, want := range outcomes {
 		t.Run(want.String(), func(t *testing.T) {

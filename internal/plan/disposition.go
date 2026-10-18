@@ -16,6 +16,7 @@ const (
 	OutcomeCutFailed
 	OutcomeAsked
 	OutcomeContinued
+	OutcomePassed
 )
 
 func (o Outcome) String() string {
@@ -30,12 +31,14 @@ func (o Outcome) String() string {
 		return "asked"
 	case OutcomeContinued:
 		return "continued"
+	case OutcomePassed:
+		return "passed"
 	default:
 		return "failed"
 	}
 }
 
-var allOutcomes = []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued}
+var allOutcomes = []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued, OutcomePassed}
 
 func AllOutcomes() []Outcome { return slices.Clone(allOutcomes) }
 
