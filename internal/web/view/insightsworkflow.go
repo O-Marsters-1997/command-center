@@ -35,12 +35,12 @@ type stepSamples struct {
 }
 
 type workflowSamples struct {
-	name, hash   string
-	ticketPcts   []float64
-	ticketWalls  []float64
-	steps        map[plan.StepName]*stepSamples
-	stepOrder    []plan.StepName
-	ticketsCount int
+	name, hash  string
+	ticketPcts  []float64
+	ticketWalls []float64
+	steps       map[plan.StepName]*stepSamples
+	stepOrder   []plan.StepName
+	tickets     int
 }
 
 func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, factor float64) []WorkflowSeries {
@@ -53,7 +53,7 @@ func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, factor float64) []
 			byHash[t.WorkflowHash] = w
 			order = append(order, w)
 		}
-		w.ticketsCount++
+		w.tickets++
 		var pct, wall float64
 		var measured bool
 		for _, s := range t.Steps {
@@ -90,7 +90,7 @@ func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, factor float64) []
 	series := make([]WorkflowSeries, len(order))
 	for i, w := range order {
 		series[i] = WorkflowSeries{
-			Workflow: w.name, ShortHash: w.hash[:min(shortHashLen, len(w.hash))], Tickets: w.ticketsCount,
+			Workflow: w.name, ShortHash: w.hash[:min(shortHashLen, len(w.hash))], Tickets: w.tickets,
 			MedianPct: median(w.ticketPcts), MedianWall: wallLabel(w.ticketWalls),
 			Steps: make([]StepBreakdown, len(w.stepOrder)),
 		}
