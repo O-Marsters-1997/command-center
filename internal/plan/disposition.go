@@ -44,9 +44,10 @@ func (o Outcome) Glyph() GlyphWord {
 		return GlyphDone
 	case OutcomeAsked:
 		return GlyphAttention
-	default:
+	case OutcomeFailed, OutcomeCutFailed:
 		return GlyphFailed
 	}
+	return GlyphFailed
 }
 
 var allOutcomes = []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued, OutcomePassed}
