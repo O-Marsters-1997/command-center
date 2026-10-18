@@ -32,6 +32,23 @@ func TestParseOutcome(t *testing.T) {
 	})
 }
 
+func TestOutcome_Glyph(t *testing.T) {
+	t.Parallel()
+
+	want := map[plan.Outcome]plan.GlyphWord{
+		plan.OutcomePush:      plan.GlyphDone,
+		plan.OutcomeContinued: plan.GlyphDone,
+		plan.OutcomeAsked:     plan.GlyphAttention,
+		plan.OutcomeFailed:    plan.GlyphFailed,
+		plan.OutcomeCutFailed: plan.GlyphFailed,
+	}
+	for _, o := range plan.AllOutcomes() {
+		if got := o.Glyph(); got != want[o] {
+			t.Errorf("%v.Glyph() = %q, want %q", o, got, want[o])
+		}
+	}
+}
+
 func TestAsked(t *testing.T) {
 	t.Parallel()
 

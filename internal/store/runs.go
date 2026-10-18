@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
@@ -333,6 +334,11 @@ type SessionRun struct {
 	LogPath  string
 	Message  string
 	Question string
+	Step     plan.StepName
+	Model    string
+	Outcome  string
+	Cost     option.Option[float64]
+	Metrics  option.Option[agentlog.RunMetrics]
 }
 
 func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]SessionRun, error) {
@@ -342,7 +348,22 @@ func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]Se
 	}
 	runs := make([]SessionRun, len(rows))
 	for i, row := range rows {
-		runs[i] = SessionRun{ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question}
+		run := SessionRun{
+			ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question,
+			Step: plan.StepName(row.Step), Model: row.Model, Outcome: row.Outcome,
+			Cost: option.None[float64](), Metrics: option.None[agentlog.RunMetrics](),
+		}
+		if row.CostUsd.Valid {
+			run.Cost = option.Some(row.CostUsd.Float64)
+		}
+		if string(row.Metrics) != "null" {
+			var m agentlog.RunMetrics
+			if err := json.Unmarshal(row.Metrics, &m); err != nil {
+				return nil, fmt.Errorf("decode metrics of run %d: %w", row.ID, err)
+			}
+			run.Metrics = option.Some(m)
+		}
+		runs[i] = run
 	}
 	return runs, nil
 }

@@ -76,7 +76,12 @@ SELECT id FROM runs WHERE ticket_id = sqlc.arg(ticket_id) ORDER BY id;
 SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
   COALESCE(runs.message, '')::text AS message,
-  COALESCE(runs.question, '')::text AS question
+  COALESCE(runs.question, '')::text AS question,
+  runs.step,
+  COALESCE(runs.model, '')::text AS model,
+  COALESCE(runs.outcome, '')::text AS outcome,
+  runs.cost_usd,
+  COALESCE(runs.metrics, 'null'::jsonb) AS metrics
 FROM runs
 WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.kind IN ('agent', 'follow_up') AND runs.session_id = (
   SELECT latest.session_id FROM runs latest

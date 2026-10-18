@@ -2107,6 +2107,11 @@
     padding: 0;
   }
 
+  .step-cell[aria-current="page"] {
+    border-color: var(--color-accent-line);
+    background: var(--color-accent-soft);
+  }
+
   .btn-sm.btn-icon {
     width: 24px;
   }

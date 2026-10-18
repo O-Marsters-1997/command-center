@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/hx"
@@ -28,7 +29,10 @@ func (s *Server) handleSessionActions(w http.ResponseWriter, r *http.Request) er
 }
 
 func sessionRef(r *http.Request) view.SessionRef {
-	return view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: r.PathValue("n")}
+	run, _ := strconv.ParseInt(r.URL.Query().Get("run"), 10, 64)
+	return view.SessionRef{
+		Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: r.PathValue("n"), Run: plan.RunID(run),
+	}
 }
 
 func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL string, verb plan.Verb) error {
