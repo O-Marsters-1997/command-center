@@ -685,7 +685,8 @@ func (l *Loop) cutAndSpawn(
 	repoPath := l.checkout(ticket.Repo)
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
-		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
+		failed := inDefaultWorkflow(store.RunSkeleton{Ticket: ticket.URL, PromptHash: promptHash})
+		if _, insertErr := l.store.InsertCutFailedRun(ctx, failed, l.clock.Now()); insertErr != nil {
 			return errors.Join(
 				fmt.Errorf("cut %s: %w", branch, err),
 				fmt.Errorf("record failed cut of %s: %w", branch, insertErr),
@@ -744,16 +745,22 @@ func (spec spawnSpec) session() store.RunSession {
 	}
 }
 
+func inDefaultWorkflow(r store.RunSkeleton) store.RunSkeleton {
+	w := config.Workflows()[config.DefaultWorkflow]
+	r.Step, r.Workflow, r.WorkflowHash = w.Steps[0].Name, w.Name, w.Hash
+	return r
+}
+
 func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
 	ticket := spec.ticket
 	choice := spec.choice
 	if choice.Model == "" {
 		choice.Model = config.AgentModel
 	}
-	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
+	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, inDefaultWorkflow(store.RunSkeleton{
 		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash,
 		Choice: choice, Session: spec.session(),
-	})
+	}))
 	if err != nil {
 		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
 	}

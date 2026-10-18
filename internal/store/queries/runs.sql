@@ -1,7 +1,8 @@
 -- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message, model, effort)
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, step, workflow, workflow_hash, session_id, message, model, effort)
 VALUES (
   sqlc.arg(ticket_id), sqlc.arg(kind), sqlc.arg(baseline_sha), sqlc.arg(prompt_hash),
+  sqlc.arg(step), sqlc.arg(workflow), sqlc.arg(workflow_hash),
   CASE WHEN sqlc.arg(new_session)::boolean THEN gen_random_uuid() ELSE sqlc.narg(session_id)::text::uuid END,
   sqlc.narg(message), sqlc.narg(model), sqlc.narg(effort)
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id;
@@ -34,8 +35,9 @@ GROUP BY e.ticket_id;
 UPDATE runs SET question = sqlc.arg(question) WHERE id = sqlc.arg(id);
 
 -- name: InsertCutFailedRun :one
-INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
-VALUES (sqlc.arg(ticket_id), 'agent', sqlc.arg(prompt_hash), sqlc.arg(outcome), sqlc.arg(ended_at)) RETURNING id;
+INSERT INTO runs (ticket_id, kind, prompt_hash, step, workflow, workflow_hash, outcome, ended_at)
+VALUES (sqlc.arg(ticket_id), 'agent', sqlc.arg(prompt_hash), sqlc.arg(step), sqlc.arg(workflow), sqlc.arg(workflow_hash),
+  sqlc.arg(outcome), sqlc.arg(ended_at)) RETURNING id;
 
 -- name: PendingRunsAwaitingDisposition :many
 SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
@@ -43,7 +45,7 @@ WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
-       outcome, exit_code, ended_at, prompt_hash, kind, question
+       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash
 FROM runs
 WHERE ticket_id IS NOT NULL
 ORDER BY ticket_id, id DESC;

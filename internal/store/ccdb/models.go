@@ -96,6 +96,9 @@ type Run struct {
 	Model         sql.NullString
 	Effort        sql.NullString
 	Metrics       json.RawMessage
+	Step          string
+	Workflow      string
+	WorkflowHash  string
 }
 
 type Ticket struct {

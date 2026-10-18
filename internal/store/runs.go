@@ -60,15 +60,18 @@ func (s *Store) InsertSessionRunSkeleton(
 ) (runID int64, sessionID string, err error) {
 	model, effort := choiceColumns(r.Choice)
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
-		Model:       model,
-		Effort:      effort,
-		TicketID:    notNull(r.Ticket),
-		Kind:        string(r.Kind),
-		BaselineSHA: notNull(r.BaselineSHA),
-		PromptHash:  notNull(r.PromptHash),
-		NewSession:  r.Session.StartNew,
-		SessionID:   nullIfEmpty(r.Session.JoinID),
-		Message:     nullIfEmpty(r.Session.Message),
+		Model:        model,
+		Effort:       effort,
+		TicketID:     notNull(r.Ticket),
+		Kind:         string(r.Kind),
+		BaselineSHA:  notNull(r.BaselineSHA),
+		PromptHash:   notNull(r.PromptHash),
+		Step:         string(r.Step),
+		Workflow:     r.Workflow,
+		WorkflowHash: r.WorkflowHash,
+		NewSession:   r.Session.StartNew,
+		SessionID:    nullIfEmpty(r.Session.JoinID),
+		Message:      nullIfEmpty(r.Session.Message),
 	})
 	if err != nil {
 		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
@@ -136,15 +139,18 @@ func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string
 }
 
 // InsertCutFailedRun records a run that never got a worktree, baseline or process.
-func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
+func (s *Store) InsertCutFailedRun(ctx context.Context, r RunSkeleton, at time.Time) (int64, error) {
 	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
-		TicketID:   notNull(ticketID),
-		PromptHash: notNull(promptHash),
-		Outcome:    notNull(plan.OutcomeCutFailed.String()),
-		EndedAt:    notNullTime(at.UTC()),
+		TicketID:     notNull(r.Ticket),
+		PromptHash:   notNull(r.PromptHash),
+		Step:         string(r.Step),
+		Workflow:     r.Workflow,
+		WorkflowHash: r.WorkflowHash,
+		Outcome:      notNull(plan.OutcomeCutFailed.String()),
+		EndedAt:      notNullTime(at.UTC()),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
+		return 0, fmt.Errorf("insert cut-failed run for %s: %w", r.Ticket, err)
 	}
 	return id, nil
 }
@@ -219,6 +225,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		summary.BaselineSHA, summary.LogPath = plan.SHA(row.BaselineSHA.String), row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
 		summary.Question = row.Question.String
+		summary.Step, summary.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
 		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil

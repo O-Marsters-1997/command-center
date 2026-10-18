@@ -34,6 +34,8 @@ type RunSummary struct {
 	PromptHash    string
 	Kind          RunKind
 	Question      string
+	Step          StepName
+	WorkflowHash  string
 }
 
 type PushRow struct {

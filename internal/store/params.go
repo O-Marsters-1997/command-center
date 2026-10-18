@@ -51,6 +51,10 @@ type RunSkeleton struct {
 	PromptHash  string
 	Choice      plan.AgentChoice
 	Session     RunSession
+
+	Step         plan.StepName
+	Workflow     string
+	WorkflowHash string
 }
 
 type Spawn struct {
