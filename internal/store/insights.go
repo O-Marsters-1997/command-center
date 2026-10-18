@@ -103,6 +103,17 @@ type WorkflowTicketSpend struct {
 	Workflow     string
 	WorkflowHash string
 	Steps        []StepSpend
+	Rework       Rework
+}
+
+type Rework struct {
+	FollowUps int
+	ReRuns    int
+	RedCI     int
+}
+
+func (r Rework) Total() int {
+	return r.FollowUps + r.ReRuns + r.RedCI
 }
 
 // MergedTicketWorkflowSpend covers every run a ticket needed until pr_merged, follow-ups included.
@@ -114,11 +125,23 @@ func (s *Store) MergedTicketWorkflowSpend(ctx context.Context, q SpendQuery) ([]
 		return nil, fmt.Errorf("select merged ticket runs: %w", err)
 	}
 
+	reworkRows, err := s.q.MergedTicketRework(ctx, ccdb.MergedTicketReworkParams{
+		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select merged ticket rework: %w", err)
+	}
+	rework := make(map[string]Rework, len(reworkRows))
+	for _, row := range reworkRows {
+		rework[row.TicketID] = Rework{FollowUps: int(row.FollowUps), ReRuns: int(row.ReRuns), RedCI: int(row.RedCi)}
+	}
+
 	var tickets []WorkflowTicketSpend
 	for _, row := range rows {
 		if n := len(tickets); n == 0 || tickets[n-1].Ticket != row.TicketID {
 			tickets = append(tickets, WorkflowTicketSpend{
 				Ticket: row.TicketID, MergedAt: row.MergedAt, Workflow: row.Workflow, WorkflowHash: row.WorkflowHash,
+				Rework: rework[row.TicketID],
 			})
 		}
 		ticket := &tickets[len(tickets)-1]
@@ -139,6 +162,20 @@ func (s *Store) MergedTicketWorkflowSpend(ctx context.Context, q SpendQuery) ([]
 		step.Metrics = addMetrics(step.Metrics, m)
 	}
 	return tickets, nil
+}
+
+func (s *Store) WithdrawnWorkflowTickets(ctx context.Context, q SpendQuery) (map[string]int, error) {
+	rows, err := s.q.WithdrawnWorkflowTickets(ctx, ccdb.WithdrawnWorkflowTicketsParams{
+		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select withdrawn workflow tickets: %w", err)
+	}
+	byHash := make(map[string]int, len(rows))
+	for _, row := range rows {
+		byHash[row.WorkflowHash] = int(row.Withdrawn)
+	}
+	return byHash, nil
 }
 
 func addMetrics(a, b agentlog.RunMetrics) agentlog.RunMetrics {

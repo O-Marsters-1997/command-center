@@ -67,12 +67,21 @@ func TestInsightsPage(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("RecordDisposition: %v", err)
 		}
+		if err := store.AppendEvent(t.Context(), storepkg.Event{
+			At: now.Add(-2 * time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened,
+		}); err != nil {
+			t.Fatalf("AppendEvent: %v", err)
+		}
 		mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
 		root := htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights"))
 		table := root.One(t, `[aria-label="workflow default·abcdef0"]`)
-		if got := table.Text(); !strings.Contains(got, "implement") {
+		got := table.Text()
+		if !strings.Contains(got, "implement") {
 			t.Errorf("GET /insights workflow table = %q, want the implement step", got)
+		}
+		if !strings.Contains(got, "rework 1.0") {
+			t.Errorf("GET /insights workflow table = %q, want rework 1.0 for the run after the PR opened", got)
 		}
 	})
 

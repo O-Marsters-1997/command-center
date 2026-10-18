@@ -224,6 +224,10 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load workflow spend: %w", err)
 	}
+	withdrawn, err := r.store.WithdrawnWorkflowTickets(ctx, spendQuery)
+	if err != nil {
+		return InsightsResponse{}, fmt.Errorf("load withdrawn workflow tickets: %w", err)
+	}
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load fit factors: %w", err)
@@ -233,7 +237,7 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	resp := InsightsResponse{
 		Since: since.Format(insightsDateFormat), Until: until.Format(insightsDateFormat), Timezone: tz,
 		Points: make([]InsightsPoint, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
-		Workflows: buildWorkflowSeries(workflowSpend, factor),
+		Workflows: buildWorkflowSeries(workflowSpend, withdrawn, factor),
 	}
 	for i, p := range merged {
 		agentPct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.FollowUpUSD, factor)
