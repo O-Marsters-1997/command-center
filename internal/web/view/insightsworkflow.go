@@ -18,6 +18,9 @@ type WorkflowSeries struct {
 	MedianPct  float64         `json:"median_pct_week"`
 	MedianWall string          `json:"median_wall"`
 	Steps      []StepBreakdown `json:"steps"`
+
+	MedianRework   float64 `json:"median_rework"`
+	WithdrawnShare float64 `json:"withdrawn_share"`
 }
 
 type StepBreakdown struct {
@@ -38,12 +41,13 @@ type workflowSamples struct {
 	name, hash  string
 	ticketPcts  []float64
 	ticketWalls []float64
+	reworks     []float64
 	steps       map[plan.StepName]*stepSamples
 	stepOrder   []plan.StepName
 	tickets     int
 }
 
-func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, factor float64) []WorkflowSeries {
+func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, withdrawn map[string]int, factor float64) []WorkflowSeries {
 	var order []*workflowSamples
 	byHash := make(map[string]*workflowSamples)
 	for _, t := range tickets {
@@ -54,6 +58,7 @@ func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, factor float64) []
 			order = append(order, w)
 		}
 		w.tickets++
+		w.reworks = append(w.reworks, float64(t.Rework.Total()))
 		var pct, wall float64
 		var measured bool
 		for _, s := range t.Steps {
@@ -92,7 +97,11 @@ func buildWorkflowSeries(tickets []store.WorkflowTicketSpend, factor float64) []
 		series[i] = WorkflowSeries{
 			Workflow: w.name, ShortHash: w.hash[:min(shortHashLen, len(w.hash))], Tickets: w.tickets,
 			MedianPct: median(w.ticketPcts), MedianWall: wallLabel(w.ticketWalls),
-			Steps: make([]StepBreakdown, len(w.stepOrder)),
+			Steps:        make([]StepBreakdown, len(w.stepOrder)),
+			MedianRework: median(w.reworks),
+		}
+		if n := withdrawn[w.hash]; n > 0 {
+			series[i].WithdrawnShare = float64(n) / float64(n+w.tickets)
 		}
 		for j, name := range w.stepOrder {
 			ss := w.steps[name]

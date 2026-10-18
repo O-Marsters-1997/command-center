@@ -34,11 +34,15 @@ func TestBuildWorkflowSeries(t *testing.T) {
 			ticket("abcdef0123", store.StepSpend{Step: "implement", WeightUSD: 5}),
 			ticket("fedcba"),
 		}
-		got := view.BuildWorkflowSeries(tickets, 0.1)
+		tickets[0].Rework = store.Rework{ReRuns: 1}
+		tickets[1].Rework = store.Rework{FollowUps: 2, RedCI: 1}
+		tickets[2].Rework = store.Rework{FollowUps: 1}
+		got := view.BuildWorkflowSeries(tickets, map[string]int{"abcdef0123": 3}, 0.1)
 
 		want := []view.WorkflowSeries{
 			{
 				Workflow: "wf", ShortHash: "abcdef0", Tickets: 3, MedianPct: 30, MedianWall: "2m0s",
+				MedianRework: 1, WithdrawnShare: 0.5,
 				Steps: []view.StepBreakdown{{
 					Step: "implement", MedianPct: 30, MedianWall: "2m0s", MedianTurns: 3, CacheReadPct: 50,
 					Tools: map[string]int{"Bash": 3},

@@ -194,6 +194,64 @@ func TestStore_WithdrawnTicketWaste(t *testing.T) {
 	}
 }
 
+func TestStore_MergedTicketWorkflowSpend_Rework(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	mergedAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	openedAt := mergedAt.Add(-4 * time.Hour)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", openedAt.Add(-time.Hour), 1)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", openedAt.Add(time.Hour), 1)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", openedAt.Add(2*time.Hour), 1)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 1)
+	appendEvents(t, store,
+		storepkg.Event{At: openedAt.Add(-2 * time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: "ci_failed: Tests"},
+		storepkg.Event{At: openedAt, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened},
+		storepkg.Event{At: openedAt.Add(time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: "ci_failed: Tests"},
+		storepkg.Event{At: openedAt.Add(90 * time.Minute), TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: "review_me: green"},
+	)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+
+	got, err := store.MergedTicketWorkflowSpend(t.Context(), june10)
+	if err != nil {
+		t.Fatalf("MergedTicketWorkflowSpend: %v", err)
+	}
+	want := storepkg.Rework{FollowUps: 1, ReRuns: 1, RedCI: 1}
+	if len(got) != 1 || got[0].Rework != want {
+		t.Errorf("MergedTicketWorkflowSpend(june 10) = %+v, want one ticket with rework %+v", got, want)
+	}
+}
+
+func TestStore_WithdrawnWorkflowTickets(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", day, 2.00)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", day, 2.00)
+	withdraw(t, store, "sandbox://CC-1", day, false)
+
+	insightsTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
+	disposeInsightsRun(t, store, "sandbox://CC-2", "agent", day.Add(-time.Hour), 9.00)
+	mergeInsightsTicket(t, store, "sandbox://CC-2", day)
+	withdraw(t, store, "sandbox://CC-2", day, true)
+
+	got, err := store.WithdrawnWorkflowTickets(t.Context(), june10)
+	if err != nil {
+		t.Fatalf("WithdrawnWorkflowTickets: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("WithdrawnWorkflowTickets(june 10) = %v, want one hash", got)
+	}
+	for hash, n := range got {
+		if n != 1 {
+			t.Errorf("WithdrawnWorkflowTickets(june 10)[%s] = %d, want 1 unmerged ticket counted once", hash, n)
+		}
+	}
+}
+
 func TestStore_MergedTicketWorkflowSpend(t *testing.T) {
 	t.Parallel()
 	store := openStore(t)
