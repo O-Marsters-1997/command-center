@@ -1,341 +1,113 @@
 # Command Centre
 
-Local app that drives a DAG of tickets across repos to reviewable pull requests
-using agents, one worktree per ticket. It launches agents, watches them, pushes
-what they produced, reads CI, and shows one page. It never merges.
+*An orchestration harness: scope a feature, break it into tickets, launch it, and watch it land as
+atomic pull requests in the order their blockers allow.*
 
+Command Centre takes a feature's tickets as a dependency graph and runs a coding agent on each one,
+in its own git worktree. From one page it cuts the worktree, spawns the agent, pushes what the agent
+produced, opens the pull request, reads CI, and restacks children when a parent merges. Every PR
+stops at reviewable and a human merges it. It runs on a laptop or an always-on host.
+
+## Prerequisites
+
+- Go 1.26.6, [`just`](https://github.com/casey/just) and [`bun`](https://bun.sh)
+- Docker, for the Postgres the store runs on
+- [`gh`](https://cli.github.com), authenticated, for every PR read and write
+- `tp` (treepad), which cuts and removes the per-ticket worktrees
+- The [`claude`](https://docs.claude.com/en/docs/claude-code) CLI, which every agent runs as
+
+Every tracked repo must be squash-merge only. Startup refuses a repo that allows merge commits or
+rebase merges.
+
+## Installation
+
+```sh
+git clone https://github.com/O-Marsters-1997/command-center.git
+cd command-center
+just build    # builds the web assets, then bin/cc
 ```
+
+`go install` won't give you a working binary, because `just assets` generates the CSS and JS and
+they are not committed.
+
+## Usage
+
+Start Postgres, then run the read-only sample. It renders the page but spawns nothing:
+
+```sh
 just up
 just run --config docs/command-centre.sample.toml
 ```
 
-## Status
+Open http://127.0.0.1:7777 and track a repo at `/repos`. Its features and tickets appear on the
+board.
 
-The single-repo pipeline is built and merged: config, store, tick and page;
-unlock, launch preview and consent; cut, spawn, liveness, disposition and crash
-recovery; push policy, push and PR create; the CI verdict; and the terminal
-states with teardown.
+To run agents, drop `--config`. The default, `cc/config.toml`, spawns `claude`:
 
-So is the cross-repo work. A repo's `compat_check`, the draft gate that holds a
-consumer's PR and the `waiting_on_producer_deploy` state
-all have code on main.
-
-So is the operator surface. The board groups rows by blocker, polls itself with
-htmx rather than a meta refresh, expands a row into a detail fragment, tails a
-run's log over SSE, and puts a confirm page in front of `kill` and
-`remove-worktree`.
-
-The newest mechanism is restacking, described below. It has run against real
-GitHub through four consecutive squash merges, which is what turned up the four
-defects fixed in #92, #94 and #96.
-
-The issue tracker lags the code and is not a todo list. Fourteen issues are
-open, and at least seven describe work that has shipped: #74, #75 and #77
-landed as #84, #86 and #88, and #53, #55, #56 and #57 all have code on main.
-[#85](https://github.com/O-Marsters-1997/command-center/issues/85) is the real
-open problem. Two of its four root causes are prose conflicts that no merge
-strategy resolves.
-
-One limitation stands. The Mergify app is not installed on `cc-sandbox`, so
-`.mergify.yml` is committed there but inert, and the `keep-open` label's
-stale-close behaviour stays inspection-only.
-
-## Requirements
-
-- Go 1.26.6, the toolchain pinned in `go.mod`.
-- Docker, for the Postgres the store runs on. `just up` starts it from
-  `compose.yaml`; `database_url` points at any other server instead.
-- `git`.
-- `gh`, authenticated. Every PR read and write shells out to it.
-- `tp`, the treepad CLI. It cuts and removes the per-ticket worktrees.
-
-Every tracked repo must be squash-only on GitHub. Startup reads
-`gh api repos/{owner}/{repo}` and refuses to run if a repo allows merge commits
-or rebase merges, because the merge-don't-rebase design rests on GitHub
-flattening every merge.
-
-## Run it
-
-`--config` defaults to `cc/config.toml`, which is tracked: it is the config this
-project runs itself on, and it names no repo, so the same file works on a
-machine with nothing checked out. Everything machine-specific is an
-environment variable:
-
-| Variable | What |
-|---|---|
-| `CC_DATA_DIR` | Where `state/` and `repos/` go. |
-| `CC_DATABASE_URL` | The Postgres to connect to, overriding the compose default. |
-| `CC_AGENT_COMMAND` | A JSON array replacing `agent_command`, for a local wrapper. |
-
-```
-CC_AGENT_COMMAND='["caffeinate","-i","claude","-p","{prompt}"]' just run
+```sh
+just run
 ```
 
-`docs/command-centre.sample.toml` is the read-only tour instead. It names no
-repos; track one from the page and it renders that repo's tickets off real `gh`
-output:
-
-```
-just run --config docs/command-centre.sample.toml
-```
-
-The page is then on http://127.0.0.1:7777. The sample sets no `agent_command`,
-so it renders the page but cannot spawn anything.
-
-## How it works
-
-`cmd/cc` is a thin main: flags, signal handling, `app.New`, `Run`. Run starts
-two goroutines. One is the reconcile loop. One is an HTTP server bound to
-127.0.0.1.
-
-### Packages
-
-| Package | What |
-|---|---|
-| `internal/config` | The TOML config, repo checkout paths and the workspace layout under the data directory. |
-| `internal/app` | Wiring: `App`, the `With*` options and the flock. |
-| `internal/loop` | The imperative shell: the tick, push, verbs, observe. |
-| `internal/web` | The page: handlers, templates and assets. `internal/web/view` shapes the plan snapshot for them. |
-| `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
-| `internal/plan/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
-| `internal/adapter/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
-| `internal/adapter/tp` | The two `tp` commands the app uses, `new` and `remove --merged`. |
-
-### The tick
-
-`Loop.RunOnce` in `internal/loop/loop.go` observes, decides, then acts. Observe
-runs once; every other step is conditional on observing successfully.
-
-1. Observe: `git fetch origin --prune`, the `gh` PR snapshot, each repo's open
-   issue titles, the worktree map, each repo's current `sha256(.mergify.yml)`.
-2. Tick the checking-waits, save the observation.
-3. Apply launch intents, apply cancel intents, apply kill intents.
-4. Reconcile runs: liveness, then disposition. Save the observation again,
-   carrying this tick's liveness reads.
-5. Retarget: reparent merged branches' descendants onto the base their siblings
-   landed on, preserving their own squash.
-6. Apply abort intents (clear conflicted restacks), apply refresh intents
-   (fast-forward and rebase if needed).
-7. Apply retry-push intents, push whatever is pushable, record verdict
-   transitions.
-8. Apply draft gate (hold cross-repo consumers' PRs in draft).
-9. Apply re-run intents, apply remove-worktree intents.
-10. Launch whatever is now eligible, capped at `max_agents`.
-
-The period is 15 seconds, slept after the work rather than before, so ticks
-never overlap. A failed observe records a tick error and applies nothing, which
-leaves the last good facts on the page and lets the observe age keep growing
-instead of resetting.
-
-The loop is the only writer of the database. No HTTP handler ever acts on the
-world: it writes one intent row, redirects back to the board, and the next
-tick reads it.
-
-### Restacking on squash-merge conflict
-
-When GitHub squash-merges a branch, it flattens its commits into one and writes
-it to the base branch with no ancestry link to the branch's own history. Merging
-the base back into a child branch would therefore replay every commit the base
-already carries, conflicting on every touched line.
-
-The app detects this: the refresh phase checks whether the base's recorded
-boundary commit (from the merged PR's `headRefOid`, falling back to
-`base_sha_at_push`) is still an ancestor of the base's current tip. If it is
-not, the app runs `git rebase --onto <base> <boundary>` instead of merging. That
-replays only what the branch added after the boundary and drops everything up to
-it, because the base already carries that work under new SHAs.
-
-A restack rewrites the branch, so the next push has to force. It may only use
-`--force-with-lease`, and only when a `restacked` event was recorded after the
-row's last push. A restack that stops on a conflict records one too. It has
-already rewritten the branch, so whoever resolves the conflict by hand still
-needs the lease. `advanceOnto` and `restackBoundary` in
-`internal/loop/refresh.go` are the two functions to read.
-
-### The page
-
-`internal/web/server.go` serves the shell, the board, the launch modal, the
-confirm page and a row's detail fragment, each `html/template` over an
-embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
-`confirm.tmpl` and `detail.tmpl`.
-
-| Route | What |
-|---|---|
-| `GET /` | The page: the header, the liveness banner, the launch form and the board nested inside `<div id="board">`. |
-| `GET /board` | The board alone, the same `board.tmpl` fragment `GET /` nests. One row per task, with each row's verbs rendered as forms. |
-| `POST /launch/open` | Opens the launch modal for a feature (queueing its import) or a hand-picked `?ticket=...` slice, the board's checkboxes and the graph island's selection posting the latter. |
-| `GET /launch/candidates` | The candidate set for a feature or a ticket slice, as JSON — what each ticket would do, and why. |
-| `GET /events` | The append-only audit log, as JSON. |
-| `GET /confirm` | The one question a destructive verb asks first: what `?verb=...` does to `?task=...`, and the pgid or worktree path at risk. |
-| `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |
-| `GET /task/{task}/log` | The run's log tail, streamed as JSON over SSE. |
-| `GET /assets/htmx.min.js` | htmx, vendored into the binary. The board needs no network. |
-| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/web/assets/dist/app.css` by `just assets`. The board needs no network. |
-| `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
-| `POST /verb` | Queues one verb intent against one task. |
-
-The board polls `GET /board` every five seconds and swaps the table into
-`<div id="board">`, so a tick never re-renders the shell. The header rides the
-shell as an `hx-swap-oob` region, so the live-agent count, the observe chip and
-the tick-error banner only refresh on a full page load.
-
-The whole mux sits behind `http.CrossOriginProtection`, which rejects a
-cross-site POST -- read from `Sec-Fetch-Site`, with an `Origin`-vs-`Host`
-fallback for older browsers -- and allows a request carrying neither header,
-which is how non-browser clients keep working.
-
-The verbs offered on the board are launch, kill, re-run, retry-push,
-remove-worktree, cancel, refresh and abort. Which verbs a row offers
-is `plan.Verbs`, a decision over its state, so it is table-tested.
-
-The states are blocked, ready, queued, running, failed, cut_failed,
-push_pending, checking, needs_you, push_failed, review_me, merged,
-pr_closed_unmerged, base_gone, cancelled, base_moved, refresh_conflicted and
-waiting_on_producer_deploy. None of them is ever stored. Facts are stored and
-the label is derived on every render.
-
-### Where state lives
-
-The database is a Postgres server, named by the `database_url` config key, else
-`CC_DATABASE_URL`, else `postgres://cc:cc@localhost:5432/cc?sslmode=disable` —
-the server `compose.yaml` stands up and `just up` starts.
-
-Everything else lives under `data_dir`, which is the `data_dir` config key, else
-`CC_DATA_DIR`, else `$UserConfigDir/command-centre`:
-
-```
-state/command-centre.lock    flock, one instance per data dir
-state/runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
-state/runs/<id>.prompt       the prompt that run was given
-state/settings/agent.json    the app-owned deny settings passed to every spawn
-repos/<owner>/<name>/        a repo's checkout, with the worktrees tp cuts beside it
-```
-
-The driver is `github.com/jackc/pgx/v5/stdlib`, which is pure Go, so `CGO_ENABLED=0`
-still builds. What the binary is not is self-contained: it needs a database to be
-up. goose owns the schema from `internal/loop/migrations/`, embedded in the binary
-and applied at `OpenStore`. `0001_init.sql` creates `meta`, `tickets`, `launches`,
-`launch_members`, `runs`, `pushes`, `events` and `intents`.
+Pick a feature, select its tickets and launch. Each ticket moves to running, then to a PR waiting
+for review.
 
 ## Configuration
 
-The config describes only the daemon. Repos are tracked in the database's `repos` table,
-each named `owner/name`.
+Anything machine-specific is an environment variable, so one tracked config runs on any machine:
 
-| Key | What |
+| Variable | What |
 |---|---|
-| `data_dir` | Where state and checkouts live. Overridden by nothing; falls back to `CC_DATA_DIR`, then `$UserConfigDir/command-centre`. A leading `~` expands. |
-| `max_agents` | How many agents may run at once. Default 1. |
-| `port` | The page's port. Default 7777. |
-| `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{model}`, `{prompt}` and `{prompt_file}` are substituted into every element; `{model}` is `claude-sonnet-5-5` for every run. A non-empty argv must name `--permission-mode` and carry `{system_prompt}` and `{model}`; startup refuses one that does not. |
-| `max_turns` | Caps an implement or follow-up run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
-| `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
+| `CC_DATA_DIR` | Where state and repo checkouts go. |
+| `CC_DATABASE_URL` | The Postgres to connect to, instead of the `compose.yaml` one. |
+| `CC_AGENT_COMMAND` | A JSON array replacing `agent_command`, for a local wrapper. |
 
-Repos are not configured: track one from the page at `/repos`.
+[docs/configuration.md](docs/configuration.md) covers every config key, the `agent_command`
+placeholders and the per-repo `.command-centre.toml`.
 
-A tracked repo's checkout is `<data_dir>/repos/<owner>/<name>`. Startup clones when the
-directory is absent, and refuses to start when it holds something whose `origin` names a
-different repository. The ssh and https forms of one repository count as one.
+### Running on a server
 
-The app never resets, pulls or checks out a checkout. It fetches and reads
-remote-tracking refs; work happens in the worktrees tp cuts beside it.
+The page binds `127.0.0.1` and has no login. On an always-on host, put the checked-in `Caddyfile`
+in front of it for TLS. See [docs/deployment.md](docs/deployment.md).
 
-Give a real agent `{prompt}`, not `{prompt_file}`. Claude Code expands a slash
-command only when the prompt arrives as argv text, so a path is read back as
-inert text and `/implement` never fires. `{prompt_file}` stays for anything that
-would rather take a path.
+## How it works
 
-Each repo's `.command-centre.toml`, read from its `origin/main` on every tick (never from a
-branch), holds `tracker`, `stacking`, `deny`, `checks`, `compat_check`, `mergify_sha` and
-`verify_command`. A missing file means defaults; a malformed one skips that repo for the tick and
-shows as the last error. The file's own path is always denied to agent pushes.
+`cc` is one binary: a reconcile loop and an HTTP server sharing a Postgres.
 
-`checks` is the repo's boolean predicate over its gating checks, evaluated by
-`internal/plan/verdict` against a normalised rollup. `mergify_sha` is the
-`sha256(.mergify.yml)` that predicate was written against. When the file's hash
-stops matching, rows hold at `checking` rather than claim green. `deny` adds
-per-repo path patterns to the push policy's default refusals. A repo that
-configures neither `checks` nor `mergify_sha` stops at `checking` and never
-derives a verdict.
+- A feature is a GitHub label, and its tickets are the open issues carrying it. GitHub's "blocked
+  by" links make them a DAG, and a ticket unlocks once its blockers have open or merged PRs.
+- Each ticket gets its own worktree, cut by `tp`, and its agent works there.
+- Every 15 seconds the loop observes git and GitHub. It pushes finished work, opens PRs, derives a
+  CI verdict, and restacks children onto `main` after a parent squash-merges.
+- The page only queues intents. A button writes one row and the next tick acts on it, so the loop
+  is the only writer of reconciled state.
+- The store holds facts. Each row's state label is derived from them on every render.
 
-The file also accepts `compat_check`, the name of the check that reports
-whether a consumer still builds against its producer.
-`internal/loop/draftgate.go` and `internal/loop/verdict_transitions.go` read it.
+The [design doc](docs/designs/command-centre-design.md) has the full mechanism, states and
+invariants.
 
-`verify_command` is the argv a clean merge-forward or restack is checked with before the
-row is offered as sound: a git merge without conflicts is not proof the result compiles
-(issue #110). No shell is involved -- a repo wanting several steps chains them itself
-(`["sh", "-c", "go build ./... && go vet ./..."]`). A repo naming none is unaffected. A
-failure reads `verification_failed`, offering `retry-push` and `re-run`; a later push, or a
-restack that itself verifies clean, clears it.
+## Limitations
 
-## Testing
+- Agents are Claude Code, PRs are GitHub and worktrees are `tp`. None of them is pluggable yet.
+- Tracked repos must be squash-merge only.
+- It never merges, by design.
 
-`go test ./...` is the unit suite. Determinism comes from four seams injected on
-`app.New`: `WithClock`, `WithObserver`, `WithValidator` and `WithRunner`. No unit
-test sleeps.
+## Development
 
-Every test that touches the store gets a database of its own from
-`internal/store/cctest`, dropped when the test ends. It needs a Postgres: set
-`CC_TEST_DATABASE_URL` at one, or leave it unset and testcontainers starts a
-`postgres:17` once per test binary, which is why the suite needs Docker.
-
-`e2e/` is a `rogpeppe/go-internal` testscript harness behind `-tags=e2e`,
-driving the real `cc` binary against a fake `gh`, a fake `tp` and fake agent
-scripts. `cc tick --count N` and `cc request` are its two e2e-only subcommands,
-kept out of the release binary by the build tag. See
-[e2e/README.md](e2e/README.md).
-
-## Commands
-
-```
-just build       # go build -o bin/cc ./cmd/cc
-just up          # docker compose up -d --wait, the Postgres the store runs on
-just down        # docker compose down
-just run *args   # go run ./cmd/cc
-just test        # go test ./...
-just test-e2e    # go test -tags=e2e ./e2e/...
-just fmt         # go fmt ./...
-just tidy        # go mod tidy
-just assets      # build app.css (ignored) and the committed JS (needs bun)
-just lint        # golangci-lint in docker
-just ci          # conflicts, build, lint, test, e2e
+```sh
+just test       # Go unit tests and the web tests
+just test-e2e   # the real binary against a fake gh and tp
+just lint       # golangci-lint in Docker
+just ci         # everything CI runs
 ```
 
-Lint is golangci-lint v2: errcheck, govet, ineffassign, staticcheck, unused,
-misspell, exhaustive and lll at 120, plus goimports with a local prefix. It runs
-with `-tags=e2e` so the harness is linted like everything else. CI runs six
-jobs: test with `-race` on ubuntu and macos, e2e on both, lint, build, a
-`go mod tidy` diff check, and an `assets` job that rebuilds the web assets and
-diffs the committed JS.
-
-`web/app.css` is the Tailwind v4 source. Its `@theme` block holds the colour
-tokens and `@layer components` holds hand-written classes for the state
-grammar, `pill`, `ribbon`, `meter` and the rest. The header, its chips and the
-stale banner use them; the board's own rows do not yet. Go emits no utility
-class anywhere, so nothing depends on Tailwind's scan and no class can be
-purged. `just assets` compiles it into
-`internal/web/assets/dist/app.css`, which is gitignored; `just build` and
-`just run` run `just assets` first, and so does the built JS beside it
-(ADR 16).
+[AGENTS.md](AGENTS.md) holds the conventions, layout and boundaries for contributors and agents.
 
 ## Docs
 
 | File | What |
 |---|---|
-| [docs/prds/prd-command-centre.md](docs/prds/prd-command-centre.md) | What we're building and why. Start here. |
-| [docs/designs/command-centre-design.md](docs/designs/command-centre-design.md) | The design, revision 4. Normative for mechanism, states and invariants. |
-| [docs/prds/prd-operator-surface.md](docs/prds/prd-operator-surface.md) | The page and the operator surface. Part A lands inside Phase 1. |
-| [docs/designs/cloud-agents.md](docs/designs/cloud-agents.md) | Where an always-on host and a hosted runner would fit. A sketch, normative about nothing. |
-| [docs/plans/](docs/plans/) | Build plans for work not yet shipped. A plan is deleted once its phases land. |
-| [docs/command-centre.sample.toml](docs/command-centre.sample.toml) | A runnable config that names no repos. |
-| [e2e/README.md](e2e/README.md) | The end-to-end harness: scripts, fakes, fixtures, and how to add one. |
-
-### Reviews
-
-| File | What |
-|---|---|
-| [phase-3-code-structure-review.md](docs/architecture-reviews/phase-3-code-structure-review.md) | Review of the built code at end of Phase 3. Module boundaries and file structure. Its docs tree is the pre-reorganisation one. |
-| [revision-3-foundations-review.md](docs/architecture-reviews/revision-3-foundations-review.md) | Staff review of revision 3. Drove revision 4. Nine must-fixes. |
-| [revision-2-buildability-review.md](docs/architecture-reviews/revision-2-buildability-review.md) | Staff review of revision 2. Four of its six must-fixes are dissolved by revision 3, see §15. |
-| [revision-2-assessment.md](docs/architecture-reviews/revision-2-assessment.md) | Verdict summary, genre comparison, adaptability. Written against revision 2. |
+| [docs/prds/prd-command-centre.md](docs/prds/prd-command-centre.md) | What is being built and why. |
+| [docs/designs/command-centre-design.md](docs/designs/command-centre-design.md) | The design. Normative for mechanism, states and invariants. |
+| [CONTEXT.md](CONTEXT.md) | The glossary. |
+| [docs/adr/](docs/adr/) | Architecture decisions. |
+| [docs/configuration.md](docs/configuration.md) | The full configuration reference. |
