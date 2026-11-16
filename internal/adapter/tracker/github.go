@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,9 +28,10 @@ func (s *githubSource) run(ctx context.Context, args ...string) ([]byte, error) 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
 
 func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
-	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(listLimit))
+	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
+		"--json", "labels", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
-		return nil, fmt.Errorf("list feature labels: %w", err)
+		return nil, fmt.Errorf("list open issues for features: %w", err)
 	}
 	return decodeFeatures(out)
 }
@@ -76,18 +78,18 @@ type rawLabel struct {
 }
 
 func decodeFeatures(raw []byte) ([]Feature, error) {
-	decoded, err := gh.Decode[[]rawLabel](raw)
+	issues, err := decodeIssues(raw)
 	if err != nil {
-		return nil, fmt.Errorf("label list: %w", err)
+		return nil, fmt.Errorf("decode features: %w", err)
 	}
-	features := make([]Feature, 0, len(decoded))
-	for _, label := range decoded {
-		if strings.HasPrefix(label.Name, "project:") {
-			features = append(features, Feature(label.Name))
+	features := []Feature{}
+	for _, issue := range issues {
+		for _, label := range issue.Labels {
+			f := Feature(label.Name)
+			if strings.HasPrefix(label.Name, "project:") && !slices.Contains(features, f) {
+				features = append(features, f)
+			}
 		}
-	}
-	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read labels: %w", &gh.FullPageError{Limit: listLimit})
 	}
 	return features, nil
 }

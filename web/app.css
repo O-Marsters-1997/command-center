@@ -1285,14 +1285,14 @@
   }
 
   .rail-footer {
-    position: sticky;
-    bottom: 0;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    padding: 10px var(--space-2);
-    background: var(--color-canvas);
-    border-top: 1px solid var(--color-border-soft);
+    padding: var(--space-2) var(--space-2) var(--space-1);
+  }
+
+  .rail-footer:empty {
+    display: none;
   }
 
   .rail-gauge {
@@ -1833,6 +1833,17 @@
   appearance: none;
 }
 
+.composer-bar .picker:has(select)::after {
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  pointer-events: none;
+  transform: rotate(45deg);
+}
+
 .composer-bar .picker:focus-within {
   box-shadow: var(--shadow-focus);
 }
@@ -2017,6 +2028,7 @@
   .pill-tab {
     display: inline-flex;
     align-items: center;
+    gap: var(--space-1);
     min-height: 28px;
     padding: 0 var(--space-3);
     border-radius: 999px;
@@ -2137,7 +2149,6 @@
     }
 
     .pill-tab {
-      gap: var(--space-1);
       white-space: nowrap;
     }
   }
@@ -2448,7 +2459,7 @@
 
   .launch-row-meta {
     flex: none;
-    max-width: 40%;
+    max-width: 55%;
     margin-left: auto;
     overflow: hidden;
     font-size: var(--text-xs);
@@ -2522,7 +2533,7 @@
     }
 
     .launch-row-meta {
-      max-width: 34%;
+      max-width: 50%;
     }
 
     .launch-actions .btn {
