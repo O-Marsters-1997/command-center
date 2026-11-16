@@ -754,6 +754,13 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 		seeOther(w, r, view.RepoPath(repo))
 		return nil
 	}
+	if r.FormValue("hit") != "" {
+		hit, err := s.view.SearchHit(r.Context(), repo)
+		if err != nil {
+			return fmt.Errorf("load search hit: %w", err)
+		}
+		return renderHTML(w, "repoHit", hit)
+	}
 	banner, err := s.view.Banner(r.Context(), repo)
 	if err != nil {
 		return fmt.Errorf("load banner: %w", err)
@@ -765,11 +772,7 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 	query := r.URL.Query().Get("q")
 	host := "/repos?q=" + url.QueryEscape(query)
 	if strings.TrimSpace(query) == "" {
-		groups, err := s.view.RepoGroups(r.Context(), s.clock.Now())
-		if err != nil {
-			return fmt.Errorf("load repo groups: %w", err)
-		}
-		return renderFragment(w, r, host, "repoGroups", groups)
+		return renderFragment(w, r, host, "repoResults", view.RepoSearch{})
 	}
 	search, err := s.searchRepos(r.Context(), query)
 	if err != nil {
@@ -779,7 +782,7 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) searchRepos(ctx context.Context, query string) (view.RepoSearch, error) {
-	var search view.RepoSearch
+	search := view.RepoSearch{Query: strings.TrimSpace(query)}
 	pushable, err := s.pushable.get(ctx, s.clock.Now())
 	if err != nil {
 		search.SearchError = err.Error()
