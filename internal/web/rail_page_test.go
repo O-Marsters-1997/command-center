@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -119,13 +120,10 @@ func testRailQuery(t *testing.T) {
 	body := renderPath(t, server, "/rail?q=billing")
 
 	rail := htmltest.Parse(t, body).One(t, "#rail-body")
-	for _, selector := range []string{`[data-rail-forced]`, `[data-group="settled"]`, `[data-group="needs-you"]`} {
+	for _, selector := range []string{`[data-rail-forced]`, `[data-group="settled"]`} {
 		if got := rail.Find(selector); len(got) == 0 {
 			t.Errorf("GET /rail?q=billing is missing %s", selector)
 		}
-	}
-	if got := rail.Text(); !strings.Contains(got, "No match") {
-		t.Errorf("GET /rail?q=billing text = %q, want an empty section to say No match", got)
 	}
 	plain := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, "#rail-body")
 	if forced := plain.Find("[data-rail-forced]"); len(forced) != 0 {
@@ -146,9 +144,9 @@ func testRailQueryMissing(t *testing.T) {
 	}
 }
 
-func railHealth(t *testing.T, store *storepkg.Store, now time.Time) htmltest.Node {
+func railHealth(t *testing.T, store *storepkg.Store, now time.Time) []htmltest.Node {
 	t.Helper()
-	return htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).One(t, ".rail-health")
+	return htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).Find(".rail-health")
 }
 
 func TestRail(t *testing.T) {
@@ -160,6 +158,14 @@ func TestRail(t *testing.T) {
 	t.Run("shows a loop error in the footer", testRailLoopError)
 	t.Run("a query narrows and forces open without touching the cookie", testRailQuery)
 	t.Run("a query with no match anywhere says so", testRailQueryMissing)
+	t.Run("an empty needs-you section is absent", func(t *testing.T) {
+		t.Parallel()
+		now := testNow
+		rail := htmltest.Parse(t, renderPath(t, newServer(shellStore(t, &now, ""), now), "/rail"))
+		if got := rail.Find(`[data-group="needs-you"]`); len(got) != 0 {
+			t.Errorf("GET /rail with nothing needing you renders %s", got[0].HTML())
+		}
+	})
 	t.Run("narrows to the project in the current URL", testRailProjectScope)
 	t.Run("renders the latest stored reading", testRailLatestReading)
 	t.Run("gauges survive a repeated poll", testRailGaugesStable)
@@ -173,8 +179,8 @@ func TestRail(t *testing.T) {
 			never    bool
 			wantChip string
 		}{
-			{name: "fresh", age: 2 * time.Second, wantChip: "observed 2s ago"},
-			{name: "under twenty", age: 19 * time.Second, wantChip: "observed 19s ago"},
+			{name: "fresh", age: 2 * time.Second},
+			{name: "under twenty", age: 19 * time.Second},
 			{name: "at twenty", age: 20 * time.Second, wantChip: "last good observe: 20s ago"},
 			{name: "well past", age: 5 * time.Minute, wantChip: "last good observe: 5m0s ago"},
 			{name: "no observation", never: true, wantChip: "last good observe: never"},
@@ -185,8 +191,12 @@ func TestRail(t *testing.T) {
 				if tt.never {
 					at = nil
 				}
-				if got := railHealth(t, shellStore(t, at, ""), observedAt.Add(tt.age)).Text(); !strings.Contains(got, tt.wantChip) {
-					t.Errorf("GET /rail chip = %q, want %q", got, tt.wantChip)
+				chips := railHealth(t, shellStore(t, at, ""), observedAt.Add(tt.age))
+				switch {
+				case tt.wantChip == "" && len(chips) != 0:
+					t.Errorf("GET /rail chip = %q, want none", chips[0].Text())
+				case tt.wantChip != "" && (len(chips) != 1 || !strings.Contains(chips[0].Text(), tt.wantChip)):
+					t.Errorf("GET /rail chips = %d, want one reading %q", len(chips), tt.wantChip)
 				}
 			})
 		}
@@ -205,8 +215,8 @@ func TestRail(t *testing.T) {
 		observedAt := testNow
 		now := observedAt.Add(45 * time.Second)
 
-		quiet := htmltest.Parse(t, renderPath(t, newServer(shellStore(t, &observedAt, ""), now), "/rail"))
-		quiet.One(t, ".rail-health")
+		fresh := newServer(shellStore(t, &observedAt, ""), observedAt.Add(2*time.Second))
+		quiet := htmltest.Parse(t, renderPath(t, fresh, "/rail"))
 		if banners := quiet.Find(".rail-health.banner"); len(banners) != 0 {
 			t.Errorf("GET /rail with no failed tick opened a banner: %s", banners[0].HTML())
 		}
@@ -229,29 +239,26 @@ func TestRail(t *testing.T) {
 		}
 
 		rail := htmltest.Parse(t, renderPath(t, newServer(store, observedAt.Add(2*time.Second)), "/rail"))
-		if banners := rail.Find(".rail-health.banner"); len(banners) != 0 {
+		if banners := rail.Find(".rail-health"); len(banners) != 0 {
 			t.Errorf("GET /rail keeps the banner after recovery: %s", banners[0].HTML())
-		}
-		if got := rail.One(t, ".rail-health").Text(); !strings.Contains(got, "observed 2s ago") {
-			t.Errorf("GET /rail recovered chip = %q, want observed 2s ago", got)
 		}
 	})
 
-	t.Run("counts live agents", func(t *testing.T) {
+	t.Run("the scope menu counts running tickets and omits zero", func(t *testing.T) {
 		t.Parallel()
 		now := testNow
 		for _, tt := range []struct {
 			name  string
 			store func(*testing.T) *storepkg.Store
-			want  string
+			want  int
 		}{
 			{
-				name: "one live",
+				name: "one running",
 				store: func(t *testing.T) *storepkg.Store {
 					t.Helper()
 					return detailStore(t, writeLog(t, 1), now, now)
 				},
-				want: "1 live",
+				want: 1,
 			},
 			{
 				name: "idle",
@@ -259,14 +266,18 @@ func TestRail(t *testing.T) {
 					t.Helper()
 					return shellStore(t, &now, "")
 				},
-				want: "0 live",
 			},
-			{name: "a live run whose row reads base gone", store: baseGoneLiveStore, want: "1 live"},
+			{name: "a run whose row reads base gone", store: baseGoneLiveStore, want: 1},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				if got := railHealth(t, tt.store(t), now).Text(); !strings.Contains(got, tt.want) {
-					t.Errorf("GET /rail chip = %q, want %q", got, tt.want)
+				page := htmltest.Parse(t, renderPath(t, newServer(tt.store(t), now), "/tickets"))
+				counts := page.Find("[data-scope-menu] summary .rail-count")
+				switch {
+				case tt.want == 0 && len(counts) != 0:
+					t.Errorf("GET /tickets scope = %q, want no running count", counts[0].Text())
+				case tt.want > 0 && (len(counts) != 1 || counts[0].Text() != fmt.Sprintf("%d running", tt.want)):
+					t.Errorf("GET /tickets scope counts = %d, want one reading %d running", len(counts), tt.want)
 				}
 			})
 		}
