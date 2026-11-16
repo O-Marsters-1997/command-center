@@ -18,7 +18,8 @@ Claude Code passes its statusline command a JSON payload on stdin. In 2.1.325 it
 - `cc record-usage` reads one statusline payload on stdin, turns each window into an
   `agentlog.Reading` stamped with the invocation time, and writes it through
   `Store.RecordReadings`. That already dedupes on `(at, window)`, so it sits beside the loop's
-  run-disposition writer.
+  run-disposition writer. The invocation time never repeats, so it first drops a reading whose
+  utilization and reset time equal the latest stored one, keeping the table to real changes.
 - The user wires it into their statusline command. cc installs nothing.
 - It swallows its own errors, logs them to stderr and exits 0, so it never breaks the statusline.
   It gives up after three seconds.
