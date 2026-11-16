@@ -74,6 +74,7 @@ type Repo struct {
 	SettingsReadAt sql.NullTime
 	TrackedAt      time.Time
 	ProjectID      sql.NullInt64
+	SeedPath       sql.NullString
 }
 
 type Run struct {

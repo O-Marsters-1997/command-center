@@ -55,7 +55,7 @@ func TestEnsureCheckout(t *testing.T) {
 		t.Parallel()
 		_, remote := gittest.WithOrigin(t)
 		checkout := filepath.Join(t.TempDir(), "repos", "r")
-		if err := git.EnsureCheckout(t.Context(), "r", remote, checkout); err != nil {
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
 			t.Fatalf("EnsureCheckout(clone) error = %v", err)
 		}
 		marker := filepath.Join(checkout, "not-from-a-second-clone")
@@ -63,7 +63,7 @@ func TestEnsureCheckout(t *testing.T) {
 			t.Fatalf("WriteFile(%s): %v", marker, err)
 		}
 
-		if err := git.EnsureCheckout(t.Context(), "r", remote, checkout); err != nil {
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
 			t.Fatalf("EnsureCheckout(reuse) error = %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
@@ -78,7 +78,7 @@ func TestEnsureCheckout(t *testing.T) {
 		t.Parallel()
 		_, remote := gittest.WithOrigin(t)
 		checkout := filepath.Join(t.TempDir(), "repos", "r")
-		if err := git.EnsureCheckout(t.Context(), "r", remote, checkout); err != nil {
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
 			t.Fatalf("EnsureCheckout(clone) error = %v", err)
 		}
 		if got := rerere(t, checkout); got[0] != "true" || got[1] != "true" {
@@ -87,7 +87,7 @@ func TestEnsureCheckout(t *testing.T) {
 		gittest.Run(t, checkout, "config", "--unset", "rerere.enabled")
 		gittest.Run(t, checkout, "config", "--unset", "rerere.autoupdate")
 
-		if err := git.EnsureCheckout(t.Context(), "r", remote, checkout); err != nil {
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
 			t.Fatalf("EnsureCheckout(reuse) error = %v", err)
 		}
 		if got := rerere(t, checkout); got[0] != "true" || got[1] != "true" {
@@ -101,7 +101,7 @@ func TestEnsureCheckout(t *testing.T) {
 		gittest.Run(t, repoPath, "config", "core.sshCommand", "false")
 		gittest.Run(t, repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
 
-		err := git.EnsureCheckout(t.Context(), "r", "https://github.com/o/r", repoPath)
+		err := git.EnsureCheckout(t.Context(), "r", "https://github.com/o/r", "", repoPath)
 		if errors.Is(err, git.ErrOriginMismatch) {
 			t.Errorf("EnsureCheckout(https form of origin) error = %v, want no ErrOriginMismatch", err)
 		}
@@ -111,16 +111,57 @@ func TestEnsureCheckout(t *testing.T) {
 		t.Parallel()
 		repoPath, _ := gittest.WithOrigin(t)
 		const configured = "git@github.com:someone/else.git"
-		if err := git.EnsureCheckout(t.Context(), "r", configured, repoPath); !errors.Is(err, git.ErrOriginMismatch) {
+		if err := git.EnsureCheckout(t.Context(), "r", configured, "", repoPath); !errors.Is(err, git.ErrOriginMismatch) {
 			t.Errorf("EnsureCheckout(%q) error = %v, want ErrOriginMismatch", configured, err)
 		}
 	})
 
 	t.Run("refuses a directory that is not a git repo", func(t *testing.T) {
 		t.Parallel()
-		err := git.EnsureCheckout(t.Context(), "r", "git@github.com:o/r.git", t.TempDir())
+		err := git.EnsureCheckout(t.Context(), "r", "git@github.com:o/r.git", "", t.TempDir())
 		if err == nil || errors.Is(err, git.ErrOriginMismatch) {
 			t.Errorf("EnsureCheckout(non-git dir) error = %v, want an error other than ErrOriginMismatch", err)
+		}
+	})
+
+	t.Run("seeds by copy with origin on the tracked remote", func(t *testing.T) {
+		t.Parallel()
+		seedPath, remote := gittest.WithOrigin(t)
+		checkout := filepath.Join(t.TempDir(), "repos", "r")
+		if err := git.EnsureCheckout(t.Context(), "r", remote, seedPath, checkout); err != nil {
+			t.Fatalf("EnsureCheckout(seed) error = %v", err)
+		}
+		if got, err := git.OriginURL(t.Context(), checkout); err != nil || got != remote {
+			t.Errorf("OriginURL(seeded) = %q, %v, want %q", got, err, remote)
+		}
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
+			t.Errorf("EnsureCheckout(first fetch after seed) error = %v", err)
+		}
+	})
+
+	t.Run("refuses a seed that is not a repo or has another origin, leaving no directory", func(t *testing.T) {
+		t.Parallel()
+		otherRepo, _ := gittest.WithOrigin(t)
+		tests := []struct {
+			name     string
+			seedPath string
+			wantIs   error
+		}{
+			{name: "not a git repo", seedPath: t.TempDir()},
+			{name: "origin differs", seedPath: otherRepo, wantIs: git.ErrOriginMismatch},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				checkout := filepath.Join(t.TempDir(), "repos", "r")
+				err := git.EnsureCheckout(t.Context(), "r", "git@github.com:o/r.git", tt.seedPath, checkout)
+				if err == nil || (tt.wantIs != nil && !errors.Is(err, tt.wantIs)) {
+					t.Errorf("EnsureCheckout(seed %s) error = %v, want error matching %v", tt.name, err, tt.wantIs)
+				}
+				if _, statErr := os.Stat(checkout); !errors.Is(statErr, os.ErrNotExist) {
+					t.Errorf("EnsureCheckout(seed %s) left %s behind: %v", tt.name, checkout, statErr)
+				}
+			})
 		}
 	})
 }

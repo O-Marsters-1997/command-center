@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -738,7 +739,11 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 	if !validRepo(repo) {
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
-	queued, err := s.store.QueueTrackIntent(r.Context(), repo, s.clock.Now())
+	seedPath := strings.TrimSpace(r.FormValue("seed_path"))
+	if seedPath != "" && !filepath.IsAbs(seedPath) {
+		return errorf(http.StatusBadRequest, "seed path %q is not an absolute path", seedPath)
+	}
+	queued, err := s.store.QueueTrackIntent(r.Context(), repo, seedPath, s.clock.Now())
 	if err != nil {
 		return fmt.Errorf("queue track intent: %w", err)
 	}

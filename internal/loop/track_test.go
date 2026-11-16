@@ -71,7 +71,7 @@ func readyValidator(validations *[]string) loop.ValidateFunc {
 
 func queueTrack(t *testing.T, st *storepkg.Store, repo string) {
 	t.Helper()
-	if _, err := st.QueueTrackIntent(t.Context(), repo, testAt); err != nil {
+	if _, err := st.QueueTrackIntent(t.Context(), repo, "", testAt); err != nil {
 		t.Fatalf("QueueTrackIntent(%q): %v", repo, err)
 	}
 }
@@ -100,6 +100,25 @@ func TestTrack(t *testing.T) {
 		}
 		if pending, err := st.TrackPending(t.Context(), "acme/new"); err != nil || pending {
 			t.Errorf("TrackPending(acme/new) = %v, %v, want false, nil", pending, err)
+		}
+	})
+
+	t.Run("hands the seed path to validation", func(t *testing.T) {
+		t.Parallel()
+		st := openStore(t)
+		var seen string
+		validate := func(ctx context.Context, dataDir string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
+			seen = repo.SeedPath
+			return readyValidator(new([]string))(ctx, dataDir, repo, now)
+		}
+		if _, err := st.QueueTrackIntent(t.Context(), "acme/new", "/home/me/new", testAt); err != nil {
+			t.Fatalf("QueueTrackIntent(acme/new): %v", err)
+		}
+
+		runOnce(t, validatingLoop(t, st, validate))
+
+		if seen != "/home/me/new" {
+			t.Errorf("validated SeedPath = %q, want /home/me/new", seen)
 		}
 	})
 

@@ -23,6 +23,7 @@ type Repo struct {
 	TrackedAt      time.Time
 	Project        string
 	Hue            int
+	SeedPath       string
 }
 
 func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
@@ -47,7 +48,7 @@ func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
 			Name: row.Name, Remote: row.Remote, Phase: phase,
 			RefusalKind: refusalKind, Refusal: row.Refusal.String,
 			SettingsSource: row.SettingsSource.String, SettingsReadAt: row.SettingsReadAt.Time,
-			TrackedAt: row.TrackedAt, Project: row.Project.String, Hue: int(row.ProjectHue.Int16),
+			TrackedAt: row.TrackedAt, Project: row.Project.String, Hue: int(row.ProjectHue.Int16), SeedPath: row.SeedPath.String,
 		})
 	}
 	return repos, nil
@@ -64,7 +65,7 @@ func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 	err := q.UpsertRepo(ctx, ccdb.UpsertRepoParams{
 		Name: r.Name, Remote: r.Remote, State: string(r.Phase),
 		RefusalKind: nullIfEmpty(string(r.RefusalKind)), Refusal: nullIfEmpty(r.Refusal),
-		TrackedAt: r.TrackedAt.UTC(),
+		TrackedAt: r.TrackedAt.UTC(), SeedPath: nullIfEmpty(r.SeedPath),
 	})
 	if err != nil {
 		return fmt.Errorf("upsert repo %s: %w", r.Name, err)
@@ -83,7 +84,7 @@ func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 }
 
 // QueueTrackIntent reports false if a Track is already pending for the repo.
-func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time) (bool, error) {
+func (s *Store) QueueTrackIntent(ctx context.Context, repo, seedPath string, at time.Time) (bool, error) {
 	pending, err := s.TrackPending(ctx, repo)
 	if err != nil {
 		return false, fmt.Errorf("check pending track for %s: %w", repo, err)
@@ -91,7 +92,7 @@ func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time)
 	if pending {
 		return false, nil
 	}
-	if err := s.QueueVerbIntent(ctx, VerbRequest{Ticket: repo, Verb: plan.VerbTrack, At: at}); err != nil {
+	if err := s.QueueVerbIntent(ctx, VerbRequest{Ticket: repo, Verb: plan.VerbTrack, Payload: seedPath, At: at}); err != nil {
 		return false, fmt.Errorf("queue track for %s: %w", repo, err)
 	}
 	return true, nil

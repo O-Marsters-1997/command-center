@@ -13,7 +13,9 @@ touch, reviewed by no one who owns the repo and read once at startup.
 
 - **A repo is tracked**, a row in `repos` named `owner/name` with its remote, added from the Repos
   page. The app clones it to `<data_dir>/repos/<owner>/<name>`. It never resets, pulls or checks out a
-  checkout: it clones if absent, fetches if `origin` matches, and refuses otherwise.
+  checkout: it clones or seeds by copy if absent, fetches if `origin` matches, and refuses otherwise.
+  The Track form takes an optional local path whose `origin` matches the remote; the app copies it
+  with `git clone --local` and repoints `origin`, so the operator's working tree is never adopted.
 - **The config describes the daemon.** It is tracked at `cc/config.toml`, the `--config` default.
   `data_dir` is a key, `CC_DATA_DIR`, or `os.UserConfigDir()/command-centre`. `CC_AGENT_COMMAND` is a
   JSON array, since a shell split could silently mis-split, and the argv must name

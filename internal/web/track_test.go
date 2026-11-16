@@ -17,12 +17,13 @@ func TestTrack(t *testing.T) {
 	t.Parallel()
 
 	for name, run := range map[string]func(*testing.T){
-		"queues one intent without consulting the tracker": testTrackQueuesOneIntent,
-		"without htmx redirects to the repo page":          testTrackRedirects,
-		"rejects a name that is not owner/name":            testTrackRejectsBadName,
-		"banner polls until the state changes":             testBannerPolls,
-		"banner names the repo state":                      testBannerNamesState,
-		"banner answers 286 once the state is terminal":    testBannerAnswers286,
+		"queues one intent without consulting the tracker":      testTrackQueuesOneIntent,
+		"queues the trimmed seed path, refusing a relative one": testTrackSeedPath,
+		"without htmx redirects to the repo page":               testTrackRedirects,
+		"rejects a name that is not owner/name":                 testTrackRejectsBadName,
+		"banner polls until the state changes":                  testBannerPolls,
+		"banner names the repo state":                           testBannerNamesState,
+		"banner answers 286 once the state is terminal":         testBannerAnswers286,
 	} {
 		t.Run(name, run)
 	}
@@ -68,6 +69,26 @@ func testTrackQueuesOneIntent(t *testing.T) {
 	repos, err := st.Repos(t.Context())
 	if err != nil || len(repos) != 0 {
 		t.Errorf("repos = %+v (err %v), want the handler to write no row", repos, err)
+	}
+}
+
+func testTrackSeedPath(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	st := openStore(t)
+	server := openServer(st, fixedClock(testNow), "")
+
+	relative := do(t, server, http.MethodPost, "/repos/track",
+		req{Form: url.Values{"repo": {"acme/new"}, "seed_path": {"relative/clone"}}})
+	if relative.Code != http.StatusBadRequest {
+		t.Errorf("Track with a relative seed path = %d, want 400", relative.Code)
+	}
+	do(t, server, http.MethodPost, "/repos/track",
+		req{Form: url.Values{"repo": {"acme/new"}, "seed_path": {" /home/me/new "}}})
+
+	intents, err := st.PendingVerbIntents(t.Context(), plan.VerbTrack)
+	if err != nil || len(intents) != 1 || intents[0].Payload != "/home/me/new" {
+		t.Errorf("pending track intents = %+v (err %v), want one carrying /home/me/new", intents, err)
 	}
 }
 

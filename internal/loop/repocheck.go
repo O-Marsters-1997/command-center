@@ -30,7 +30,7 @@ func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time
 	}
 
 	checkout := config.CheckoutPath(dataDir, repo.Name)
-	if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, checkout); err != nil {
+	if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.SeedPath, checkout); err != nil {
 		return refuse(repo, plan.RefusalClone, err.Error()), nil
 	}
 	_, source, err := readRepoSettings(ctx, checkout)
@@ -120,6 +120,7 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 			}
 			repo = repos[i]
 		}
+		repo.SeedPath = intent.Payload
 		if repo.Remote == "" {
 			remote, err := l.remoteOf(ctx, repo.Name)
 			if err != nil {
