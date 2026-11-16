@@ -127,6 +127,7 @@
   </nav>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <div class="sidebar-foot">
+    <footer class="rail-footer" id="rail-footer"></footer>
     <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" data-show-modal="key-sheet">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
   </div>
   {{template "keySheet" .}}
