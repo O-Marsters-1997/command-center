@@ -54,8 +54,8 @@ func recordedGitHub(t *testing.T) func(args []string) ([]byte, error) {
 	}
 	return func(args []string) ([]byte, error) {
 		switch {
-		case slices.Equal(args[:2], []string{"label", "list"}):
-			return readFixture(t, "label_list.json"), nil
+		case slices.Equal(args[:2], []string{"issue", "list"}) && !slices.Contains(args, "--label"):
+			return readFixture(t, "issue_list_open_labels.json"), nil
 		case slices.Equal(args[:2], []string{"issue", "list"}):
 			return readFixture(t, "issue_list_ready_and_beyond.json"), nil
 		case args[0] == "api":
@@ -80,14 +80,16 @@ func recordedTracker(t *testing.T, byFeature map[string][]tracker.Ticket) func(a
 	}
 	return func(args []string) ([]byte, error) {
 		switch args[0] {
-		case "label":
-			labels := []map[string]string{{"name": "bug"}}
-			for feature := range byFeature {
-				labels = append(labels, map[string]string{"name": feature})
-			}
-			return encode(labels), nil
 		case "issue":
-			feature := args[slices.Index(args, "--label")+1]
+			i := slices.Index(args, "--label")
+			if i < 0 {
+				issues := []map[string]any{}
+				for feature := range byFeature {
+					issues = append(issues, map[string]any{"labels": []map[string]string{{"name": feature}, {"name": "bug"}}})
+				}
+				return encode(issues), nil
+			}
+			feature := args[i+1]
 			issues := []map[string]any{}
 			for _, ticket := range byFeature[feature] {
 				labels := []map[string]string{{"name": feature}}
@@ -127,7 +129,7 @@ func TestGithubSource(t *testing.T) {
 func TestGithubSource_Features(t *testing.T) {
 	t.Parallel()
 
-	t.Run("only project labels are features", func(t *testing.T) {
+	t.Run("features are the project labels on open issues, once each", func(t *testing.T) {
 		t.Parallel()
 		got, err := sourceReplaying(t, recordedGitHub(t)).Features(t.Context())
 		if err != nil {
@@ -149,7 +151,7 @@ func TestGithubSource_Features(t *testing.T) {
 
 	t.Run("a full page is refused as truncated", func(t *testing.T) {
 		t.Parallel()
-		page := "[" + strings.Repeat(`{"name":"project:x"},`, gh.ListLimit-1) + `{"name":"project:y"}]`
+		page := "[" + strings.Repeat(`{"labels":[]},`, gh.ListLimit-1) + `{"labels":[]}]`
 		src := sourceReplaying(t, func([]string) ([]byte, error) { return []byte(page), nil })
 
 		_, err := src.Features(t.Context())
