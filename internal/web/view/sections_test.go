@@ -48,8 +48,16 @@ func TestFilterTabs(t *testing.T) {
 		filter view.SectionKey
 		want   []view.SectionKey
 	}{
-		{name: "drops zero-count tabs", filter: view.SectionUnknown, want: []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked}},
-		{name: "keeps the selected zero-count tab", filter: view.SectionDone, want: []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked, view.SectionDone}},
+		{
+			name:   "drops zero-count tabs",
+			filter: view.SectionUnknown,
+			want:   []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked},
+		},
+		{
+			name:   "keeps the selected zero-count tab",
+			filter: view.SectionDone,
+			want:   []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked, view.SectionDone},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
