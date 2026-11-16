@@ -319,11 +319,22 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   subtitle (`4 in progress`, `unlocks as wave 1 merges`). A node card is glyph, mono ref, title
   and one subline (`PR #n · a/b checks`, `after #x, #y`, or the detail), with the state label
   top-right only for Needs you. The board is the grouped list: glyph, ref, title over detail,
-  repo, checks, PR, and elapsed or spend, with no verbs, checkboxes, stack or state columns.
+  repo, checks, PR, and elapsed or spend, with no verbs, stack or state columns. A launchable row
+  (Ready to launch, or Blocked and not yet armed) has a checkbox column; the Ready to launch and
+  Blocked group heads carry `Select all` and `Clear`. See Selection below.
 - **All tickets.** The head is `All tickets` over a one-line count (`N open across F features in
   P projects`), then pill tabs with counts, then the same grouped list. A row names its feature
-  in a chip with the project avatar where the feature page names the repo. The list is read-only:
-  a click opens the session, and nothing on it selects, posts or launches.
+  in a chip with the project avatar where the feature page names the repo. A click opens the
+  session; the checkbox column selects launchable rows exactly as on the feature board.
+- **Selection.** Shift-click selects a range. `J`/`K` move a row cursor, `X` toggles the cursor
+  row, `L` launches the selection, `Esc` clears it and `Enter` opens the cursor row; on a page with
+  no selectable list `J`/`K` walk the rail. Once anything is selected a floating bar shows
+  `N selected · <feature or "across F features">`, Clear, and `Launch n now · arm m`, which goes to
+  `/launch?ticket=…`. Selected rows take the accent tint, meaning "your next move"; the glyph
+  stays the only status colour ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)).
+- **Meters.** With no usage reading a meter says `no reading`, never 0%. A stale reading (older
+  than an hour) draws faded with `read Xh ago`. Insights Limits shows `No reading`, `—` and
+  `reset unknown`, with a line saying readings come from the agents' own usage lines.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
   Pill tabs scroll sideways inside their own track, long paths wrap, and no page scrolls
@@ -339,8 +350,8 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 | `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
 | `/tickets` | All tickets, filter tabs |
 | `/insights` | Limits with reset times, spend per merged ticket, spend split, merged tickets |
-| `/repos` | Track search, then tracked repos grouped under project headings, "No project" last; a row is check glyph, mono name, status line, open-ticket count and chevron |
-| `/repos/{owner}/{name}` | State badge, mono name, project · open tickets · base, settings callout, Checks, Tickets, Unimported features, and the Project module where a repo is assigned or a project made |
+| `/repos` | Projects: a project list beside the detail pane. Each project heading has Edit (name and an avatar-swatch hue picker) and Delete; each repo is a card with a check glyph, mono name, status line, open-ticket count, a project `<select>` and its GitHub features. An unimported feature offers `Import N tickets`, which imports that repo only, then a shimmer `Importing from owner/name…`, then `Imported` with `Launch N ready`. "No project" comes last, and `New project` has a name, swatches and repo checkboxes ([ADR 22](docs/adr/0022-import-is-per-repo.md)) |
+| `/repos/{owner}/{name}` | State badge, mono name, project · open tickets · base, settings callout, Checks, Tickets, and a `Project and imports` link to `/repos` |
 
 ## Elevation & Depth
 

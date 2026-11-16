@@ -31,11 +31,22 @@ func TestFeaturePage(t *testing.T) {
 		if got := len(board.Find("a[data-ref]")); got != 2 {
 			t.Errorf("GET /f/board-scope rows = %d, want 2", got)
 		}
-		for _, control := range []string{"input", "button", "form"} {
-			if found := board.Find(control); len(found) != 0 {
-				t.Errorf("GET /f/board-scope board has a %s: %s", control, found[0].HTML())
-			}
+		if found := board.Find("form"); len(found) != 0 {
+			t.Errorf("GET /f/board-scope board has a form: %s", found[0].HTML())
 		}
+	})
+
+	t.Run("launchable rows carry a checkbox and the groups offer select all", func(t *testing.T) {
+		t.Parallel()
+		board := htmltest.Parse(t, renderPath(t, threeFeatureServer(t), "/f/board-scope")).One(t, "div#board")
+
+		if got := len(board.Find("input[data-select]")); got != 2 {
+			t.Errorf("GET /f/board-scope checkboxes = %d, want one per launchable row", got)
+		}
+		board.One(t, `section[data-section="ready"] button[data-select-all]`)
+		board.One(t, `section[data-section="blocked"] button[data-select-clear]`)
+		board.One(t, `section[data-section="blocked"] input[data-select][data-armed]`)
+		board.One(t, `#select-bar[hidden] a[data-select-launch]`)
 	})
 
 	t.Run("the top bar offers Launch with the count of tickets to launch", func(t *testing.T) {

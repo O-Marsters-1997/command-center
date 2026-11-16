@@ -101,8 +101,8 @@ func TestInsightsPage(t *testing.T) {
 		if got := main.One(t, `time[datetime="2026-09-20T17:05:00Z"]`).Text(); got != "in 2h 05m" {
 			t.Errorf("GET /insights five-hour reset = %q, want %q", got, "in 2h 05m")
 		}
-		if got := main.Text(); !strings.Contains(got, "no reset time yet") {
-			t.Errorf("GET /insights text = %q, want the weekly limit to say no reset time yet", got)
+		if got := main.Text(); !strings.Contains(got, "reset unknown") {
+			t.Errorf("GET /insights text = %q, want the weekly limit to say reset unknown", got)
 		}
 	})
 }

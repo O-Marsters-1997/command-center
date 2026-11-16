@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -266,13 +267,7 @@ func testScopedRepoPage(t *testing.T) {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
-		web.WithTrackerSource(trackertest.ByRemote(map[string]tracker.Source{
-			"github.com/acme/alpha": &trackertest.Source{
-				ByFeature: map[string][]tracker.Ticket{"project:x": nil, "project:y": nil},
-			},
-			"github.com/acme/beta": &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:z": nil}},
-		})))
+	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "")
 
 	body := renderPath(t, server, "/repos/acme/alpha")
 	main := htmltest.Parse(t, body).One(t, "main#main")
@@ -284,9 +279,7 @@ func testScopedRepoPage(t *testing.T) {
 	if got := crumbs.Text(); !strings.Contains(got, "acme/alpha") {
 		t.Errorf("repo breadcrumb = %q, want it to name acme/alpha", got)
 	}
-	wants := []string{
-		"git@github.com:acme/alpha.git", "1 open ticket", "base origin/main", "project:y", "also in acme/beta",
-	}
+	wants := []string{"git@github.com:acme/alpha.git", "1 open ticket", "base origin/main", "Project and imports"}
 	for _, want := range wants {
 		if got := main.Text(); !strings.Contains(got, want) {
 			t.Errorf("repo content lacks %q: %q", want, got)
@@ -300,13 +293,57 @@ func testScopedRepoPage(t *testing.T) {
 	if beta := board.Find(`a[href="/s/acme/beta/2"]`); len(beta) != 0 {
 		t.Errorf("repo board includes beta ticket: %s", beta[0].HTML())
 	}
-	if strings.Contains(main.Text(), "project:z") {
-		t.Error("repo page contains beta-only feature")
+	if forms := main.Find(`form[action$="/import"], form[action$="/project"]`); len(forms) != 0 {
+		t.Errorf("repo page keeps import or project controls: %s", forms[0].HTML())
 	}
-	if imported := main.Find(`form[action="/features/project:x/import"]`); len(imported) != 0 {
-		t.Errorf("imported feature offers import: %s", imported[0].HTML())
+	main.One(t, `p a[href="/repos"]`)
+}
+
+func TestProjectsPageImports(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	issue := func(n int) tracker.Ticket {
+		u := "https://github.com/acme/x/issues/" + strconv.Itoa(n)
+		return tracker.Ticket{URL: u, Number: n, Title: "t", Status: "ready"}
 	}
-	main.One(t, `form[action="/features/project:y/import"]`)
+	alphaX := []storepkg.ImportedTicket{{Ticket: issue(1), Repo: "acme/alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", alphaX, testNow); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+	betaY := []storepkg.ImportedTicket{{Ticket: issue(3), Repo: "acme/beta"}}
+	if err := store.ImportTickets(ctx, "project:y", betaY, testNow); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
+		web.WithTrackerSource(trackertest.ByRemote(map[string]tracker.Source{
+			"github.com/acme/alpha": &trackertest.Source{
+				ByFeature: map[string][]tracker.Ticket{"project:x": {issue(1)}, "project:y": {issue(4), issue(5)}},
+			},
+			"github.com/acme/beta": &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:y": {issue(3)}}},
+		})))
+
+	main := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
+
+	alpha := main.One(t, `ul[aria-label="features of acme/alpha"]`)
+	if got := alpha.Text(); !strings.Contains(got, "also labelled in acme/beta") {
+		t.Errorf("alpha offers = %q, want the other repo named", got)
+	}
+	alpha.One(t, `a[href="/f/project:x/launch"]`)
+	form := alpha.One(t, `form[action="/features/project:y/import"]`)
+	form.One(t, `input[name="repo"][value="acme/alpha"]`)
+	if got := form.One(t, "button").Text(); got != "Import 2 tickets" {
+		t.Errorf("alpha import button = %q, want Import 2 tickets", got)
+	}
+	if forms := alpha.Find(`form[action="/features/project:x/import"]`); len(forms) != 0 {
+		t.Errorf("imported feature offers import: %s", forms[0].HTML())
+	}
+
+	beta := main.One(t, `ul[aria-label="features of acme/beta"]`)
+	if forms := beta.Find(`form[action$="/import"]`); len(forms) != 0 {
+		t.Errorf("beta already imported project:y yet offers import: %s", forms[0].HTML())
+	}
 }
 
 func testScopedRepoPageUnknown(t *testing.T) {

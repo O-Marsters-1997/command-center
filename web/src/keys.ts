@@ -1,3 +1,5 @@
+import { initSelection } from "./select-dom";
+
 export interface KeyInfo {
   readonly key: string;
   readonly altKey: boolean;
@@ -176,6 +178,8 @@ export function initKeys(doc: Document = document, nav: PlatformSource = navigat
     },
   });
 
+  const selection = initSelection(doc, signal);
+
   doc.addEventListener(
     "keydown",
     (e) => {
@@ -190,6 +194,28 @@ export function initKeys(doc: Document = document, nav: PlatformSource = navigat
       }
       const binding = state.lookup(e, doc.activeElement);
       if (binding === null) return;
+      if (selection.hasList()) {
+        const step = binding === "j" ? 1 : binding === "k" ? -1 : 0;
+        if (step !== 0) {
+          e.preventDefault();
+          selection.moveCursor(step);
+          return;
+        }
+        if (binding === "x") {
+          e.preventDefault();
+          selection.toggleCursor();
+          return;
+        }
+        if (binding === "escape" && selection.hasSelection()) {
+          e.preventDefault();
+          selection.clear();
+          return;
+        }
+        if ((binding === "l" && selection.launch()) || (binding === "enter" && selection.openCursor())) {
+          e.preventDefault();
+          return;
+        }
+      }
       if (binding === "j" || binding === "k") {
         const links = [...doc.querySelectorAll("#rail-body .rail-link")].filter(isHTMLElement);
         if (links.length > 0) e.preventDefault();

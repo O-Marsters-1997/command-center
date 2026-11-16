@@ -60,7 +60,7 @@ func TestBoard(t *testing.T) {
 		root := htmltest.Parse(t, renderPage(t, newServer(seededStore(t, testNow), testNow)))
 
 		board := root.One(t, "div#board")
-		for _, forbidden := range []string{"form", "button", "input", "table"} {
+		for _, forbidden := range []string{"form", "table"} {
 			if got := board.Find(forbidden); len(got) != 0 {
 				t.Errorf("GET /tickets board has <%s>: %s", forbidden, got[0].HTML())
 			}

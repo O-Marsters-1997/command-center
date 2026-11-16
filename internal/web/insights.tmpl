@@ -10,12 +10,13 @@
   <ul class="limits" aria-label="limits">
     {{range .Limits}}<li class="limit">
       <span>{{.Label}}</span>
-      <span class="meter" role="meter" aria-valuenow="{{.Pct}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.Label}}"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
-      <b>{{.Pct}}%</b>
-      <span class="text-muted text-xs">{{if .ResetsIn}}resets <time datetime="{{.ResetsAt}}">{{.ResetsIn}}</time>{{else}}no reset time yet{{end}}</span>
+      <span class="meter" role="meter"{{if .Stale}} data-stale{{end}}{{if not .NoReading}} aria-valuenow="{{.Pct}}"{{end}} aria-valuemin="0" aria-valuemax="100" aria-label="{{.Label}}"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
+      <b>{{if .NoReading}}—{{else}}{{.Pct}}%{{end}}</b>
+      <span class="text-muted text-xs">{{if .NoReading}}No reading · reset unknown{{else if .ResetsIn}}resets <time datetime="{{.ResetsAt}}">{{.ResetsIn}}</time>{{if .Stale}} · {{.ReadAgo}}{{end}}{{else}}no reset time yet{{end}}</span>
     </li>
     {{end -}}
   </ul>
+  <p class="module-sub mt-2">Readings come from the usage lines agents write while they run, so a window with no recent run has no reading.</p>
 </section>
 <section class="module" aria-labelledby="spend-h">
   <h2 id="spend-h">Spend per merged ticket</h2>

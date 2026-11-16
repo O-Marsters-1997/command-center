@@ -19,7 +19,7 @@ func testLayoutTitleAndCurrentNav(t *testing.T) {
 	}{
 		{name: "tickets", path: "/tickets", wantTitle: "Tickets · Command Centre", wantCurrent: "/tickets"},
 		{name: "insights", path: "/insights", wantTitle: "Insights · Command Centre", wantCurrent: "/insights"},
-		{name: "repos", path: "/repos", wantTitle: "Repos · Command Centre", wantCurrent: "/repos"},
+		{name: "repos", path: "/repos", wantTitle: "Projects · Command Centre", wantCurrent: "/repos"},
 		{name: "launch", path: "/launch", wantTitle: "Launch · Command Centre", wantCurrent: "/tickets"},
 		{name: "feature", path: "/f/board-scope", wantTitle: "board-scope · Command Centre", wantCurrent: "/tickets"},
 	}
