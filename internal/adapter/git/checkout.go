@@ -17,13 +17,17 @@ var ErrOriginMismatch = errors.New("checkout origin differs from the configured 
 
 // EnsureCheckout clones a missing checkout or verifies its origin without resetting it.
 // An empty remote means a local path repo, never cloned or origin-checked.
-func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
+func EnsureCheckout(ctx context.Context, name, remote, seedPath, checkout string) error {
 	switch _, err := os.Stat(checkout); {
 	case errors.Is(err, os.ErrNotExist):
 		if remote == "" {
 			return fmt.Errorf("repo %s: no checkout at %s, and no remote to clone from", name, checkout)
 		}
-		if err := clone(ctx, name, remote, checkout); err != nil {
+		populate := func() error { return clone(ctx, name, remote, checkout) }
+		if seedPath != "" {
+			populate = func() error { return seed(ctx, name, remote, seedPath, checkout) }
+		}
+		if err := populate(); err != nil {
 			return fmt.Errorf("clone repo %s: %w", name, err)
 		}
 		if err := enableRerere(ctx, checkout); err != nil {
@@ -56,6 +60,27 @@ func enableRerere(ctx context.Context, repoPath string) error {
 		if _, err := git(ctx, repoPath, "config", key, "true"); err != nil {
 			return fmt.Errorf("enable %s in %s: %w", key, repoPath, err)
 		}
+	}
+	return nil
+}
+
+func seed(ctx context.Context, name, remote, seedPath, checkout string) error {
+	origin, err := OriginURL(ctx, seedPath)
+	if err != nil {
+		return fmt.Errorf("repo %s: seed path %s is not a git repository with an origin: %w", name, seedPath, err)
+	}
+	if !SameRemote(origin, remote) {
+		return fmt.Errorf("repo %s: seed path %s has origin %s, but the tracked remote is %s: %w",
+			name, seedPath, origin, remote, ErrOriginMismatch)
+	}
+	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
+		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
+	}
+	if err := command.RunWithin(ctx, tp.LongTimeout, "", "git", "clone", "--local", seedPath, checkout); err != nil {
+		return fmt.Errorf("repo %s: copy %s: %w", name, seedPath, err)
+	}
+	if _, err := git(ctx, checkout, "remote", "set-url", "origin", remote); err != nil {
+		return errors.Join(fmt.Errorf("repo %s: point origin at %s: %w", name, remote, err), os.RemoveAll(checkout))
 	}
 	return nil
 }

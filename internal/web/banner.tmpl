@@ -5,6 +5,7 @@
   {{if .CanTrack -}}
   <form class="mt-1" hx-post="/repos/track" hx-disabled-elt="find button" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
     <input type="hidden" name="repo" value="{{.Repo}}">
+    <input class="block w-full mb-1 px-2 py-1 border rounded" type="text" name="seed_path" placeholder="Seed from a local clone (optional, absolute path)" aria-label="Seed path" autocomplete="off">
     <button type="submit" class="btn btn-primary">{{.TrackLabel}}</button>
   </form>
   {{end -}}

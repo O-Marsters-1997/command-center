@@ -12,7 +12,7 @@ import (
 )
 
 const listRepos = `-- name: ListRepos :many
-SELECT r.name, r.remote, r.state, r.refusal_kind, r.refusal, r.settings_source, r.settings_read_at, r.tracked_at,
+SELECT r.name, r.remote, r.state, r.refusal_kind, r.refusal, r.settings_source, r.settings_read_at, r.tracked_at, r.seed_path,
     p.name AS project, p.hue AS project_hue
 FROM repos r LEFT JOIN projects p ON p.id = r.project_id ORDER BY r.name
 `
@@ -26,6 +26,7 @@ type ListReposRow struct {
 	SettingsSource sql.NullString
 	SettingsReadAt sql.NullTime
 	TrackedAt      time.Time
+	SeedPath       sql.NullString
 	Project        sql.NullString
 	ProjectHue     sql.NullInt16
 }
@@ -48,6 +49,7 @@ func (q *Queries) ListRepos(ctx context.Context) ([]ListReposRow, error) {
 			&i.SettingsSource,
 			&i.SettingsReadAt,
 			&i.TrackedAt,
+			&i.SeedPath,
 			&i.Project,
 			&i.ProjectHue,
 		); err != nil {
@@ -95,11 +97,12 @@ func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) (int
 }
 
 const upsertRepo = `-- name: UpsertRepo :exec
-INSERT INTO repos (name, remote, state, refusal_kind, refusal, tracked_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO repos (name, remote, state, refusal_kind, refusal, tracked_at, seed_path)
+VALUES ($1, $2, $3, $4, $5, $6,
+    $7)
 ON CONFLICT (name) DO UPDATE SET
     remote = EXCLUDED.remote, state = EXCLUDED.state,
-    refusal_kind = EXCLUDED.refusal_kind, refusal = EXCLUDED.refusal
+    refusal_kind = EXCLUDED.refusal_kind, refusal = EXCLUDED.refusal, seed_path = EXCLUDED.seed_path
 `
 
 type UpsertRepoParams struct {
@@ -109,6 +112,7 @@ type UpsertRepoParams struct {
 	RefusalKind sql.NullString
 	Refusal     sql.NullString
 	TrackedAt   time.Time
+	SeedPath    sql.NullString
 }
 
 func (q *Queries) UpsertRepo(ctx context.Context, arg UpsertRepoParams) error {
@@ -119,6 +123,7 @@ func (q *Queries) UpsertRepo(ctx context.Context, arg UpsertRepoParams) error {
 		arg.RefusalKind,
 		arg.Refusal,
 		arg.TrackedAt,
+		arg.SeedPath,
 	)
 	return err
 }

@@ -168,7 +168,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	cfg := config.Config{DataDir: ws.DataDir, MaxAgents: maxAgents, AgentCommand: []string{"demo-agent"}}
 	for _, repo := range sb.Repos(clock.Now()) {
 		checkout := config.CheckoutPath(cfg.DataDir, repo.Name)
-		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, checkout); err != nil {
+		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, "", checkout); err != nil {
 			return nil, fmt.Errorf("ensure checkout of %s: %w", repo.Name, err)
 		}
 		for _, kv := range [][2]string{{"user.name", authorName}, {"user.email", authorEmail}} {
