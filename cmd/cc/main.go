@@ -33,6 +33,9 @@ func main() {
 
 	cmd := subcmd(flag.Args())
 	if cmd == nil {
+		cmd = recordUsageSubcmd(flag.Args())
+	}
+	if cmd == nil {
 		cmd = demoSubcmd(flag.Args())
 	}
 	if cmd == nil {
