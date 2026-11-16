@@ -1825,6 +1825,17 @@
   appearance: none;
 }
 
+.composer-bar .picker:has(select)::after {
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  pointer-events: none;
+  transform: rotate(45deg);
+}
+
 .composer-bar .picker:focus-within {
   box-shadow: var(--shadow-focus);
 }
@@ -2440,7 +2451,7 @@
 
   .launch-row-meta {
     flex: none;
-    max-width: 40%;
+    max-width: 55%;
     margin-left: auto;
     overflow: hidden;
     font-size: var(--text-xs);
@@ -2514,7 +2525,7 @@
     }
 
     .launch-row-meta {
-      max-width: 34%;
+      max-width: 50%;
     }
 
     .launch-actions .btn {
