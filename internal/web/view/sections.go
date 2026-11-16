@@ -93,6 +93,9 @@ func filterTabs(sections []Section, params Params) []FilterTab {
 		Current: filter == SectionUnknown,
 	}}
 	for _, s := range sectionOrder {
+		if counts[s.Key] == 0 && filter != s.Key {
+			continue
+		}
 		tabs = append(tabs, FilterTab{
 			Key: s.Key, Title: s.Title, Count: counts[s.Key], Current: filter == s.Key,
 			Path: Params{Filter: s.Key, Project: params.Project, All: true}.PagePath(),
