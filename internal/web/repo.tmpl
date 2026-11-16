@@ -1,6 +1,7 @@
 {{template "shellStart" .}}
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
+{{if .Ready}}<a class="btn" href="{{.Launch.Path}}" {{template "nav" .Launch.Path}}>Launch</a>{{end}}
 {{template "shellContent" .}}
 <div class="page-narrow">
 <div class="repo-head mb-4">
@@ -14,7 +15,7 @@
 <h2 id="checks-h">Checks</h2>
 <ul class="checklist">
   {{range .Banner.Steps}}
-  <li><span class="glyph glyph-{{.Glyph}}" aria-hidden="true"></span><span class="first-letter:uppercase">{{.Label}}</span><span class="text-muted text-xs ml-auto capitalize">{{.Glyph}}</span></li>
+  <li><span class="glyph glyph-{{.Glyph}}" aria-hidden="true"></span><span class="first-letter:uppercase">{{.Label}}</span><span class="text-muted text-xs ml-auto">{{.Meta}}</span></li>
   {{end}}
 </ul>
 </section>

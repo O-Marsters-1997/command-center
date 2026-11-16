@@ -12,6 +12,7 @@ import (
 type CheckStep struct {
 	Label string
 	Glyph plan.GlyphWord
+	Meta  string
 }
 
 type Banner struct {
@@ -20,6 +21,8 @@ type Banner struct {
 	Glyph plan.GlyphWord
 	Text  string
 	Steps []CheckStep
+
+	Defaults bool
 }
 
 func (b Banner) Polling() bool { return b.State == BannerCloning }
@@ -53,7 +56,8 @@ func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 		b.State = bannerState(repo)
 	}
 	b.Glyph, b.Text = bannerWords(b.State, repo)
-	b.Steps = checkSteps(b.State, repo.RefusalKind)
+	b.Steps = checkSteps(b.State, repo)
+	b.Defaults = b.State == BannerReady && repo.SettingsSource != string(config.SourceFile)
 	return b, nil
 }
 
@@ -77,7 +81,7 @@ func bannerWords(state BannerState, repo store.Repo) (glyph plan.GlyphWord, text
 		if repo.SettingsSource == string(config.SourceFile) {
 			return plan.GlyphDone, "Settings from .command-centre.toml on main."
 		}
-		return plan.GlyphDone, "No .command-centre.toml on main: defaults are in use."
+		return plan.GlyphDone, "No .command-centre.toml on main, so defaults are in use."
 	case BannerRefused:
 		return plan.GlyphFailed, repo.Refusal
 	case BannerUnknown, BannerUntracked:
@@ -86,7 +90,8 @@ func bannerWords(state BannerState, repo store.Repo) (glyph plan.GlyphWord, text
 	return plan.GlyphReady, "Not tracked."
 }
 
-func checkSteps(state BannerState, refusalKind plan.RefusalKind) []CheckStep {
+func checkSteps(state BannerState, repo store.Repo) []CheckStep {
+	refusalKind := repo.RefusalKind
 	labels := []struct {
 		label string
 		kind  plan.RefusalKind
@@ -109,16 +114,21 @@ func checkSteps(state BannerState, refusalKind plan.RefusalKind) []CheckStep {
 	}
 	steps := make([]CheckStep, 0, len(labels))
 	for _, l := range labels {
-		step := CheckStep{Label: l.label, Glyph: plan.GlyphReady}
+		step := CheckStep{Label: l.label, Glyph: plan.GlyphReady, Meta: "Waiting"}
 		switch {
 		case state == BannerReady:
-			step.Glyph = plan.GlyphDone
+			step.Glyph, step.Meta = plan.GlyphDone, "Passed"
+			if l.kind == plan.RefusalSettingsParse && repo.SettingsSource != string(config.SourceFile) {
+				step.Meta = "Missing, defaults in use"
+			}
 		case state == BannerCloning:
-			step.Glyph = plan.GlyphRunning
+			step.Glyph, step.Meta = plan.GlyphRunning, "Running…"
 		case state == BannerRefused && rank(l.kind) < rank(refusalKind):
-			step.Glyph = plan.GlyphDone
+			step.Glyph, step.Meta = plan.GlyphDone, "Passed"
 		case state == BannerRefused && l.kind == refusalKind:
-			step.Glyph = plan.GlyphFailed
+			step.Glyph, step.Meta = plan.GlyphFailed, repo.Refusal
+		case state == BannerRefused:
+			step.Meta = "Skipped"
 		}
 		steps = append(steps, step)
 	}

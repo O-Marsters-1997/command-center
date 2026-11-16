@@ -95,7 +95,7 @@ func RepoPath(fullName string) string {
 func trackedRow(r store.Repo, open int) RepoRow {
 	state := bannerState(r)
 	glyph, _ := bannerWords(state, r)
-	steps := checkSteps(state, r.RefusalKind)
+	steps := checkSteps(state, r)
 	return RepoRow{
 		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name), Project: r.Project,
 		Glyph: glyph, Status: repoStatus(state, steps), OpenTickets: open, Badge: repoBadge(state),

@@ -344,7 +344,9 @@ func testScopedRepoPage(t *testing.T) {
 	}
 	wants := []string{
 		"git@github.com:acme/alpha.git", "1 open ticket", "base origin/main", "project:y", "also in acme/beta",
+		"Passed", "Missing, defaults in use", "See the settings reference",
 	}
+	main.One(t, `a[href="/launch"]`)
 	for _, want := range wants {
 		if got := main.Text(); !strings.Contains(got, want) {
 			t.Errorf("repo content lacks %q: %q", want, got)
