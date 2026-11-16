@@ -31,7 +31,7 @@ func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
 	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
 		"--json", "labels", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
-		return nil, fmt.Errorf("list feature labels: %w", err)
+		return nil, fmt.Errorf("list open issues for features: %w", err)
 	}
 	return decodeFeatures(out)
 }
@@ -80,7 +80,7 @@ type rawLabel struct {
 func decodeFeatures(raw []byte) ([]Feature, error) {
 	issues, err := decodeIssues(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode features: %w", err)
 	}
 	features := []Feature{}
 	for _, issue := range issues {
