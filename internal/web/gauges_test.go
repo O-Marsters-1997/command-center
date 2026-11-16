@@ -33,6 +33,9 @@ func testRailLatestReading(t *testing.T) {
 
 	server := newServer(store, observedAt.Add(45*time.Second))
 	footer := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, "footer.rail-footer")
+	if got, _ := footer.Attr("hx-swap-oob"); got != "true" {
+		t.Errorf("rail footer hx-swap-oob = %q, want true", got)
+	}
 	gauges := footer.Find("span.rail-gauge")
 	if len(gauges) != 2 {
 		t.Fatalf("rail gauges = %d, want 2", len(gauges))

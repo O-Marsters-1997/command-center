@@ -6,8 +6,64 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
+
+func TestReader_RailCountAgreesWithAllTab(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	st := cctest.Store(t)
+	storetest.Tickets(t, st,
+		store.Ticket{URL: "https://github.com/acme/web/issues/1", Repo: "acme/web", Branch: "cc-1", Feature: "alpha"},
+		store.Ticket{URL: "https://github.com/acme/web/issues/2", Repo: "acme/web", Branch: "cc-2", Feature: "beta"},
+	)
+	reader := view.NewReader(st, "", 0, 0)
+	params := view.Params{Feature: "alpha"}
+
+	board, err := reader.Board(ctx, testNow, params)
+	if err != nil {
+		t.Fatalf("Board(feature alpha): %v", err)
+	}
+	chrome, err := reader.Chrome(ctx, testNow, params)
+	if err != nil {
+		t.Fatalf("Chrome(feature alpha): %v", err)
+	}
+	if got, want := chrome.OpenTickets, board.Tabs[0].Count; got != want || want != 1 {
+		t.Errorf("rail count = %d, All tab = %d, want both 1", got, want)
+	}
+}
+
+func TestFilterTabs(t *testing.T) {
+	t.Parallel()
+
+	sections := []view.Section{
+		{Key: view.SectionReady, Rows: []view.Row{{URL: "a"}}},
+		{Key: view.SectionBlocked, Rows: []view.Row{{URL: "b"}}},
+	}
+	tests := []struct {
+		name   string
+		filter view.SectionKey
+		want   []view.SectionKey
+	}{
+		{name: "drops zero-count tabs", filter: view.SectionUnknown, want: []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked}},
+		{name: "keeps the selected zero-count tab", filter: view.SectionDone, want: []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked, view.SectionDone}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var got []view.SectionKey
+			for _, tab := range view.FilterTabs(sections, view.Params{Filter: tt.filter}) {
+				got = append(got, tab.Key)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("FilterTabs() keys mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestSectioned(t *testing.T) {
 	t.Parallel()
