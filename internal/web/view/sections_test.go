@@ -36,6 +36,35 @@ func TestReader_RailCountAgreesWithAllTab(t *testing.T) {
 	}
 }
 
+func TestFilterTabs(t *testing.T) {
+	t.Parallel()
+
+	sections := []view.Section{
+		{Key: view.SectionReady, Rows: []view.Row{{URL: "a"}}},
+		{Key: view.SectionBlocked, Rows: []view.Row{{URL: "b"}}},
+	}
+	tests := []struct {
+		name   string
+		filter view.SectionKey
+		want   []view.SectionKey
+	}{
+		{name: "drops zero-count tabs", filter: view.SectionUnknown, want: []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked}},
+		{name: "keeps the selected zero-count tab", filter: view.SectionDone, want: []view.SectionKey{view.SectionUnknown, view.SectionReady, view.SectionBlocked, view.SectionDone}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var got []view.SectionKey
+			for _, tab := range view.FilterTabs(sections, view.Params{Filter: tt.filter}) {
+				got = append(got, tab.Key)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("FilterTabs() keys mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestSectioned(t *testing.T) {
 	t.Parallel()
 

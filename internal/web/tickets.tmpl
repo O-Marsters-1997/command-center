@@ -3,7 +3,7 @@
 {{template "shellAction" .}}
 {{template "shellContent" .}}
 <h1>All tickets</h1>
-<p class="page-purpose">{{.OpenCount}} open across {{.FeatureCount}} {{if eq .FeatureCount 1}}feature{{else}}features{{end}}{{if .ProjectCount}} in {{.ProjectCount}} {{if eq .ProjectCount 1}}project{{else}}projects{{end}}{{end}}.</p>
+<p class="page-purpose">{{.OpenCount}} open across {{.FeatureCount}} {{if eq .FeatureCount 1}}feature{{else}}features{{end}} in {{.ProjectCount}} {{if eq .ProjectCount 1}}project{{else}}projects{{end}}.</p>
 <nav class="pill-tabs" aria-label="ticket filters">
   {{- range .Tabs}}
   <a class="pill-tab" href="{{.Path}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{.Title}} <span class="section-count">{{.Count}}</span></a>
