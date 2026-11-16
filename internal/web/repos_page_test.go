@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,6 +46,8 @@ func TestReposPage(t *testing.T) {
 		"lists exactly the known repos":                 testReposPageListsKnownRepos,
 		"search merges pushable matches":                testRepoSearchMergesPushable,
 		"search marks a non-main default branch":        testRepoSearchMarksDefaultBranch,
+		"search caps at six and explains no match":      testRepoSearchCapsAtSixAndExplainsNoMatch,
+		"tracking from a search hit answers the row":    testTrackFromSearchHitAnswersRow,
 		"search makes one gh call within the window":    testRepoSearchOneGhCall,
 		"board renders while the pushable fetch blocks": testBoardRendersWhilePushableBlocked,
 		"search refetches once the cache expires":       testRepoSearchRefetches,
@@ -73,8 +76,6 @@ func testReposPageListsKnownRepos(t *testing.T) {
 
 	for _, tt := range []struct{ name, path string }{
 		{name: "repos", path: "/repos"},
-		{name: "empty search", path: "/repos/search"},
-		{name: "empty query", path: "/repos/search?q="},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -101,13 +102,14 @@ func testRepoSearchMergesPushable(t *testing.T) {
 	root := htmltest.Parse(t, body)
 	for _, repo := range []string{"acme/api", "acme/payments-api"} {
 		row := searchRow(t, body, repo)
-		if links := row.Find(`a[href="/repos/` + repo + `"]`); len(links) != 2 {
-			t.Errorf("search result %s links = %d, want name and track: %s", repo, len(links), row.HTML())
+		if links := row.Find(`a[href="/repos/` + repo + `"]`); len(links) != 1 {
+			t.Errorf("search result %s links = %d, want the name only: %s", repo, len(links), row.HTML())
 		}
-		if !strings.Contains(row.Text(), "not tracked") {
-			t.Errorf("search result %s missing not-tracked label: %s", repo, row.HTML())
+		if strings.Contains(row.Text(), "not tracked") {
+			t.Errorf("search result %s carries the old not-tracked prose: %s", repo, row.HTML())
 		}
 	}
+	trackButton(t, searchRow(t, body, "acme/api"))
 	if other := root.Find(`a[href="/repos/acme/ro"]`); len(other) != 0 {
 		t.Errorf("search listed a non-pushable repo: %s", other[0].HTML())
 	}
@@ -121,9 +123,65 @@ func testRepoSearchMergesPushable(t *testing.T) {
 		if got := link.Text(); got != "acme/alpha" {
 			t.Errorf("tracked repo link text = %q, want acme/alpha", got)
 		}
-		if got := rows[0].Text(); strings.Contains(got, "not tracked") {
-			t.Errorf("tracked repo labelled untracked: %s", rows[0].HTML())
+		badge := rows[0].One(t, ".badge")
+		if got := strings.TrimSpace(badge.Text()); got != "Ready" {
+			t.Errorf("tracked repo badge = %q, want Ready", got)
 		}
+		if forms := rows[0].Find("form"); len(forms) != 0 {
+			t.Errorf("tracked repo offers tracking: %s", rows[0].HTML())
+		}
+	}
+}
+
+func trackButton(t *testing.T, row htmltest.Node) {
+	t.Helper()
+	form := row.One(t, `form[hx-post="/repos/track"]`)
+	if got := strings.TrimSpace(form.One(t, "button").Text()); got != "Track" {
+		t.Errorf("track button = %q, want Track", got)
+	}
+}
+
+func testRepoSearchCapsAtSixAndExplainsNoMatch(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+
+	many := make([]gh.RepoSummary, 0, 9)
+	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"} {
+		many = append(many, gh.RepoSummary{FullName: "acme/" + name + "-svc", DefaultBranch: "main"})
+	}
+	server := openServer(openStore(t), fixedClock(testNow), "",
+		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) { return many, nil }))
+
+	if rows := htmltest.Parse(t, renderPath(t, server, "/repos/search?q=svc")).Find(".track-hit"); len(rows) != 6 {
+		t.Errorf("search rows = %d, want 6", len(rows))
+	}
+	none := renderPath(t, server, "/repos/search?q=zzz")
+	if got := htmltest.Parse(t, none).Text(); !strings.Contains(got, "No repos on GitHub match") {
+		t.Errorf("no-match search text = %q", got)
+	}
+	if rows := htmltest.Parse(t, renderPath(t, server, "/repos/search?q=")).Find(".track-hit"); len(rows) != 0 {
+		t.Errorf("empty query rendered %d hits, want none", len(rows))
+	}
+}
+
+func testTrackFromSearchHitAnswersRow(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+
+	server := reposServer(t, new(atomic.Int32))
+	rec := do(t, server, http.MethodPost, "/repos/track", req{
+		Form:   url.Values{"repo": {"acme/api"}, "hit": {"1"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /repos/track = %d, want 200", rec.Code)
+	}
+	row := htmltest.Parse(t, rec.Body).One(t, ".track-hit")
+	if got := strings.TrimSpace(row.One(t, ".badge").Text()); got != "Checking" {
+		t.Errorf("tracked hit badge = %q, want Checking", got)
+	}
+	if forms := row.Find("form"); len(forms) != 0 {
+		t.Errorf("tracked hit still offers tracking: %s", row.HTML())
 	}
 }
 
@@ -136,13 +194,13 @@ func testRepoSearchMarksDefaultBranch(t *testing.T) {
 
 	body := renderPath(t, server, "/repos/search?q=api")
 	paymentsRow, apiRow := searchRow(t, body, "acme/payments-api"), searchRow(t, body, "acme/api")
-	if got := paymentsRow.Text(); !strings.Contains(got, "will be refused: default branch is master") {
-		t.Errorf("master-default repo is not marked: %s", paymentsRow.HTML())
+	if got := strings.TrimSpace(paymentsRow.One(t, ".badge").Text()); got != "Refused: master" {
+		t.Errorf("master-default repo badge = %q, want Refused: master", got)
 	}
-	if links := paymentsRow.Find(`a[href="/repos/acme/payments-api"]`); len(links) != 2 || links[1].Text() != "track →" {
-		t.Errorf("marked row lacks track link: %s", paymentsRow.HTML())
+	if forms := paymentsRow.Find("form"); len(forms) != 0 {
+		t.Errorf("master-default repo offers tracking: %s", paymentsRow.HTML())
 	}
-	if strings.Contains(apiRow.Text(), "will be refused") {
+	if badges := apiRow.Find(".badge"); len(badges) != 0 {
 		t.Errorf("main-default repo is marked: %s", apiRow.HTML())
 	}
 }

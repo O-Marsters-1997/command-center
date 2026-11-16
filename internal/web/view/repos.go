@@ -36,7 +36,7 @@ type RepoRow struct {
 	Glyph         plan.GlyphWord
 	Status        string
 	OpenTickets   int
-	Steps         []CheckStep
+	Badge         string
 }
 
 type ReposPage struct {
@@ -60,6 +60,7 @@ type NewProjectForm struct {
 }
 
 type RepoSearch struct {
+	Query       string
 	Rows        []RepoRow
 	SearchError string
 }
@@ -97,8 +98,27 @@ func trackedRow(r store.Repo, open int) RepoRow {
 	steps := checkSteps(state, r.RefusalKind)
 	return RepoRow{
 		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name), Project: r.Project,
-		Glyph: glyph, Status: repoStatus(state, steps), OpenTickets: open, Steps: steps,
+		Glyph: glyph, Status: repoStatus(state, steps), OpenTickets: open, Badge: repoBadge(state),
 	}
+}
+
+func repoBadge(state BannerState) string {
+	switch state {
+	case BannerReady:
+		return "Ready"
+	case BannerRefused:
+		return "Refused"
+	case BannerUnknown, BannerUntracked, BannerCloning:
+	}
+	return "Checking"
+}
+
+func (r *Reader) SearchHit(ctx context.Context, repo string) (RepoRow, error) {
+	b, err := r.Banner(ctx, repo)
+	if err != nil {
+		return RepoRow{}, fmt.Errorf("load banner: %w", err)
+	}
+	return RepoRow{FullName: b.Repo, Tracked: true, Path: RepoPath(b.Repo), Glyph: b.Glyph, Badge: repoBadge(b.State)}, nil
 }
 
 func repoStatus(state BannerState, steps []CheckStep) string {
@@ -155,14 +175,6 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	return ReposPage{Chrome: chrome, Groups: groups, LastImportError: importErr}, nil
 }
 
-func (r *Reader) RepoGroups(ctx context.Context, now time.Time) ([]RepoGroup, error) {
-	f, err := r.loadFrame(ctx, now, Params{})
-	if err != nil {
-		return nil, fmt.Errorf("load repo groups: %w", err)
-	}
-	return repoGroups(f.repos, f.projectList, openByRepo(f.rows)), nil
-}
-
 func repoGroups(repos []store.Repo, projects []store.Project, open map[string]int) []RepoGroup {
 	byName := make(map[string]store.Repo, len(repos))
 	var loose []string
@@ -192,6 +204,8 @@ func repoGroups(repos []store.Repo, projects []store.Project, open map[string]in
 	return groups
 }
 
+const maxSearchHits = 6
+
 func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.RepoSummary) ([]RepoRow, error) {
 	tracked, err := r.store.Repos(ctx)
 	if err != nil {
@@ -219,7 +233,8 @@ func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.Re
 		untracked = append(untracked, row)
 	}
 	slices.SortFunc(untracked, func(a, b RepoRow) int { return strings.Compare(a.FullName, b.FullName) })
-	return append(rows, untracked...), nil
+	rows = append(rows, untracked...)
+	return rows[:min(len(rows), maxSearchHits)], nil
 }
 
 func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
