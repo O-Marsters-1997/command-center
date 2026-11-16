@@ -79,6 +79,10 @@ type ProjectMark struct {
 
 func (r Row) Mark() ProjectMark { return ProjectMark{Name: r.Project, Hue: r.ProjectHue} }
 
+func (r Row) FeatureTitle() string {
+	return strings.TrimPrefix(cmp.Or(r.Feature, r.Repo), "project:")
+}
+
 func (m ProjectMark) Initial() string { return initial(m.Name) }
 
 func compareMarks(a, b ProjectMark) int {
