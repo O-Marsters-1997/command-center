@@ -6,8 +6,35 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
+
+func TestReader_RailCountAgreesWithAllTab(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	st := cctest.Store(t)
+	storetest.Tickets(t, st,
+		store.Ticket{URL: "https://github.com/acme/web/issues/1", Repo: "acme/web", Branch: "cc-1", Feature: "alpha"},
+		store.Ticket{URL: "https://github.com/acme/web/issues/2", Repo: "acme/web", Branch: "cc-2", Feature: "beta"},
+	)
+	reader := view.NewReader(st, "", 0, 0)
+	params := view.Params{Feature: "alpha"}
+
+	board, err := reader.Board(ctx, testNow, params)
+	if err != nil {
+		t.Fatalf("Board(feature alpha): %v", err)
+	}
+	chrome, err := reader.Chrome(ctx, testNow, params)
+	if err != nil {
+		t.Fatalf("Chrome(feature alpha): %v", err)
+	}
+	if got, want := chrome.OpenTickets, board.Tabs[0].Count; got != want || want != 1 {
+		t.Errorf("rail count = %d, All tab = %d, want both 1", got, want)
+	}
+}
 
 func TestSectioned(t *testing.T) {
 	t.Parallel()
