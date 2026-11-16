@@ -92,7 +92,8 @@ func (s *Store) QueueTrackIntent(ctx context.Context, repo, seedPath string, at 
 	if pending {
 		return false, nil
 	}
-	if err := s.QueueVerbIntent(ctx, VerbRequest{Ticket: repo, Verb: plan.VerbTrack, Payload: seedPath, At: at}); err != nil {
+	req := VerbRequest{Ticket: repo, Verb: plan.VerbTrack, Payload: seedPath, At: at}
+	if err := s.QueueVerbIntent(ctx, req); err != nil {
 		return false, fmt.Errorf("queue track for %s: %w", repo, err)
 	}
 	return true, nil

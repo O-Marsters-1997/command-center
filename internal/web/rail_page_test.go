@@ -107,8 +107,8 @@ func testRailLoopError(t *testing.T) {
 		t.Fatalf("RecordTickError: %v", err)
 	}
 	body := renderPath(t, newServer(st, testNow), "/rail")
-	rail := htmltest.Parse(t, body).One(t, "#rail-body")
-	if got := rail.Text(); !strings.Contains(got, "gh exploded") {
+	footer := htmltest.Parse(t, body).One(t, "#rail-footer")
+	if got := footer.Text(); !strings.Contains(got, "gh exploded") {
 		t.Errorf("rail error not shown: %q", got)
 	}
 }
