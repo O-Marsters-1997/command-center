@@ -78,6 +78,9 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 		if row.Glyph != plan.GlyphDone {
 			f.chrome.OpenTickets++
 		}
+		if row.Glyph == plan.GlyphRunning {
+			f.chrome.Running++
+		}
 	}
 	f.chrome.badge(keyTickets, fmt.Sprint(f.chrome.OpenTickets), false)
 	if n := len(f.chrome.RefusedRepos); n > 0 {

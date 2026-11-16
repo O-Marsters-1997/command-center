@@ -49,9 +49,9 @@ func TestLayout(t *testing.T) {
 	t.Run("scope menu", testLayoutScopeMenu)
 	t.Run("the spend limit notice", testLayoutSpendLimitNotice)
 
-	t.Run("is a well-formed document naming the workspace", func(t *testing.T) {
+	t.Run("is a well-formed document branded Command Centre", func(t *testing.T) {
 		t.Parallel()
-		body := renderPath(t, openServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq"), "/tickets")
+		body := renderPath(t, newServer(shellStore(t, &now, ""), now), "/tickets")
 
 		if !strings.HasPrefix(strings.ToLower(body), "<!doctype html>") {
 			t.Errorf("GET /tickets does not open a document: %q", body[:min(len(body), 40)])
@@ -63,8 +63,8 @@ func TestLayout(t *testing.T) {
 		if got := root.One(t, "head title").Text(); !strings.Contains(got, "Tickets") {
 			t.Errorf("GET /tickets title = %q, want it to name Tickets", got)
 		}
-		if got := root.One(t, "body").Text(); !strings.Contains(got, "fleet-hq") {
-			t.Errorf("GET /tickets body lacks the workspace name fleet-hq")
+		if got := root.One(t, ".sidebar-brand").Text(); !strings.Contains(got, "Command Centre") {
+			t.Errorf("GET /tickets brand = %q, want Command Centre", got)
 		}
 	})
 
