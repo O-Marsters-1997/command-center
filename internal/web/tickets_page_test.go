@@ -54,9 +54,15 @@ func TestTicketsPage(t *testing.T) {
 		if got := root.One(t, ".page-purpose").Text(); !strings.Contains(got, "3 open across 2 features") {
 			t.Errorf("GET /tickets purpose = %q, want it to count 3 open across 2 features", got)
 		}
+		if got := root.One(t, ".page-purpose").Text(); !strings.Contains(got, " in 0 projects.") {
+			t.Errorf("GET /tickets purpose = %q, want it to count projects", got)
+		}
 		for _, row := range root.One(t, "div#board").Find("a[data-ref]") {
 			if len(row.Find(".chip")) != 1 {
 				t.Errorf("GET /tickets row has no feature chip: %s", row.HTML())
+			}
+			if strings.Contains(row.Text(), "—") {
+				t.Errorf("GET /tickets row shows a placeholder dash: %s", row.HTML())
 			}
 		}
 	})
