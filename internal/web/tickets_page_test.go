@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
@@ -51,11 +52,8 @@ func TestTicketsPage(t *testing.T) {
 		if got := root.One(t, "h1").Text(); got != "All tickets" {
 			t.Errorf("GET /tickets heading = %q, want All tickets", got)
 		}
-		if got := root.One(t, ".page-purpose").Text(); !strings.Contains(got, "3 open across 2 features") {
-			t.Errorf("GET /tickets purpose = %q, want it to count 3 open across 2 features", got)
-		}
-		if got := root.One(t, ".page-purpose").Text(); !strings.Contains(got, " in 0 projects.") {
-			t.Errorf("GET /tickets purpose = %q, want it to count projects", got)
+		if got := root.One(t, ".page-purpose").Text(); !strings.Contains(got, "3 open across 2 features in 0 projects.") {
+			t.Errorf("GET /tickets purpose = %q, want 3 open across 2 features in 0 projects.", got)
 		}
 		for _, row := range root.One(t, "div#board").Find("a[data-ref]") {
 			if len(row.Find(".chip")) != 1 {
@@ -64,6 +62,18 @@ func TestTicketsPage(t *testing.T) {
 			if strings.Contains(row.Text(), "—") {
 				t.Errorf("GET /tickets row shows a placeholder dash: %s", row.HTML())
 			}
+		}
+	})
+
+	t.Run("titles a labelled feature without its tracker prefix", func(t *testing.T) {
+		t.Parallel()
+		server := newServer(observedTickets(t,
+			storepkg.Ticket{URL: "sandbox://ONE", Feature: "project:go-backend", Branch: "one"},
+		), testNow)
+		root := htmltest.Parse(t, renderPath(t, server, "/tickets"))
+
+		if got := root.One(t, "div#board .chip").Text(); got != "go-backend" {
+			t.Errorf("GET /tickets feature chip = %q, want go-backend", got)
 		}
 	})
 
