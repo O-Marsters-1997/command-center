@@ -1,0 +1,16 @@
+cc-init-repo
+cc-config two-tasks
+
+stdin statusline.json
+exec cc record-usage
+exec cc request -hx GET /rail
+stdout 'rail-pct">42%'
+
+stdin garbage.txt
+exec cc record-usage
+stderr 'record usage'
+
+-- statusline.json --
+{"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":4102444800}}}
+-- garbage.txt --
+not json

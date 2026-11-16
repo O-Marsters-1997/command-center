@@ -104,7 +104,6 @@ type RailSettled struct {
 }
 
 type RailHealth struct {
-	Live    int
 	Observe Age
 	Stale   bool
 	Error   option.Option[TickError]
@@ -154,7 +153,7 @@ func railFromFrame(f frame, params RailParams) Rail {
 	rail := BuildRail(f.rows, f.now, params)
 	rail.Gauges = f.chrome.Gauges
 	rail.Health = RailHealth{
-		Live: f.chrome.LiveAgents, Observe: f.chrome.Observe, Stale: f.chrome.ObserveStale, Error: f.chrome.LastError,
+		Observe: f.chrome.Observe, Stale: f.chrome.ObserveStale, Error: f.chrome.LastError,
 	}
 	return rail
 }

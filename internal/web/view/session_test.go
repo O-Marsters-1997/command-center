@@ -58,7 +58,7 @@ func TestReader_Session(t *testing.T) {
 			t.Fatalf("SaveObservation: %v", err)
 		}
 
-		reader := view.NewReader(st, "", 0, 0)
+		reader := view.NewReader(st, 0, 0)
 		ref := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
 		page, err := reader.Session(ctx, testNow, ref, false)
 		if err != nil {
@@ -133,7 +133,7 @@ func TestReader_Session(t *testing.T) {
 			t.Fatalf("SaveObservation: %v", err)
 		}
 
-		reader := view.NewReader(st, "", 0, 0)
+		reader := view.NewReader(st, 0, 0)
 		page, err := reader.Session(ctx, testNow, view.SessionRef{Owner: "acme", Name: "web", N: "1"}, false)
 		if err != nil {
 			t.Fatalf("Session(acme/web/1): %v", err)

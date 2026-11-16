@@ -27,7 +27,8 @@ function Section(props: {
     <Show when={props.rows.length > 0}>
       <section class="launch-section">
         <h3 class="launch-section-title">
-          {props.title} <span class="text-muted">{props.hint}</span>
+          {props.title} <span class="text-muted">{props.rows.length}</span>{" "}
+          <span class="text-muted">{props.hint}</span>
         </h3>
         <ul class="launch-rows">
           <For each={props.rows}>
@@ -47,7 +48,13 @@ function Section(props: {
                   <span class="launch-row-ref">{c.ref}</span>
                   <span class="launch-row-title">{c.title}</span>
                 </label>
-                <span class="launch-row-meta">{whenLabel(c, props.all)}</span>
+                <Show when={whenLabel(c, props.all)}>
+                  {(when) => (
+                    <span class="launch-row-meta" title={when()}>
+                      {when()}
+                    </span>
+                  )}
+                </Show>
               </li>
             )}
           </For>
@@ -198,28 +205,42 @@ defineIsland("cc-launch-modal", { feature: "", tickets: "", models: "", model: "
                   placeholder="Extra context for every agent in this launch (optional)"
                 />
                 <div class="composer-bar">
-                  <select class="select" name="model" aria-label="Model">
-                    <For each={split(props.models)}>
-                      {(m) => (
-                        <option value={m} selected={m === props.model}>
-                          {m}
-                        </option>
-                      )}
-                    </For>
-                  </select>
-                  <select class="select" name="effort" aria-label="Effort">
-                    <option value="">default effort</option>
-                    <For each={split(props.efforts)}>{(e) => <option value={e}>{e}</option>}</For>
-                  </select>
-                  <select class="select" name="workflow" aria-label="Workflow">
-                    <For each={split(props.workflows)}>
-                      {(w) => (
-                        <option value={w} selected={w === props.workflow}>
-                          {w}
-                        </option>
-                      )}
-                    </For>
-                  </select>
+                  <span class="picker">
+                    <select name="model" aria-label="Model">
+                      <For each={split(props.models)}>
+                        {(m) => (
+                          <option value={m} selected={m === props.model}>
+                            {m}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  </span>
+                  <span class="sep" />
+                  <span class="picker">
+                    <select name="effort" aria-label="Effort">
+                      <option value="">Default</option>
+                      <For each={split(props.efforts)}>{(e) => <option value={e}>{e}</option>}</For>
+                    </select>
+                  </span>
+                  <span class="sep" />
+                  <Show
+                    when={split(props.workflows).length > 1}
+                    fallback={<input type="hidden" name="workflow" value={props.workflow} />}
+                  >
+                    <span class="picker">
+                      <select name="workflow" aria-label="Workflow">
+                        <For each={split(props.workflows)}>
+                          {(w) => (
+                            <option value={w} selected={w === props.workflow}>
+                              {w}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </span>
+                    <span class="sep" />
+                  </Show>
                   <span class="composer-chip">base origin/main</span>
                 </div>
               </div>

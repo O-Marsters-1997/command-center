@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"time"
 
@@ -106,15 +105,14 @@ func (e InvalidError) Unwrap() error { return e.Err }
 
 type Reader struct {
 	store            *store.Store
-	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
 	spend            *SpendCache
 }
 
-func NewReader(st *store.Store, dataDir string, boardPollSeconds, spendLimit5h int) *Reader {
+func NewReader(st *store.Store, boardPollSeconds, spendLimit5h int) *Reader {
 	return &Reader{
-		store: st, dataDir: dataDir,
+		store:            st,
 		boardPollSeconds: boardPollSeconds,
 		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),
@@ -146,10 +144,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	ApplyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
 	applyViewState(rows, params)
-	groups := FilterGroupsByFeature(FilterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
-	if f.project.Name != "" {
-		groups = FilterGroupsByProject(groups, f.project.Repos)
-	}
+	groups := scopeGroups(rows, params, f.project)
 	chrome := f.chrome
 	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
 	scoped := rowsIn(groups)
@@ -190,6 +185,14 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}, nil
 }
 
+func scopeGroups(rows []Row, params Params, project store.Project) []Group {
+	groups := FilterGroupsByFeature(FilterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
+	if project.Name != "" {
+		groups = FilterGroupsByProject(groups, project.Repos)
+	}
+	return groups
+}
+
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
 	f, err := r.loadFrame(ctx, now, params)
 	if err != nil {
@@ -221,8 +224,6 @@ func (r *Reader) buildChrome(f frame) Chrome {
 	params, now := f.params, f.now
 	obs, observed, lastErr, gauges, split := f.in.Obs, f.in.Observed, f.lastErr, f.gauges, f.split
 	c := Chrome{
-		Workspace:    workspaceName(r.dataDir),
-		LiveAgents:   liveAgents(f.tickets, obs),
 		Observe:      Age{Age: "never"},
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split, now),
@@ -275,21 +276,4 @@ func relative(now, then time.Time) Age {
 		Age:   now.Sub(then).Round(time.Second).String() + " ago",
 		Stamp: then.UTC().Format(time.RFC3339),
 	}
-}
-
-func liveAgents(tickets []store.Ticket, obs plan.Observation) int {
-	live := 0
-	for _, t := range tickets {
-		if obs.Runs[plan.TicketURL(t.URL)].Alive {
-			live++
-		}
-	}
-	return live
-}
-
-func workspaceName(dataDir string) string {
-	if dataDir == "" {
-		return ""
-	}
-	return filepath.Base(dataDir)
 }

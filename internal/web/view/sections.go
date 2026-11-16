@@ -80,19 +80,32 @@ func filterSections(sections []Section, filter SectionKey) []Section {
 	return out
 }
 
+func openCount(rows []Row) int {
+	n := 0
+	for _, r := range rows {
+		if sectionKey(r.Glyph) != SectionDone {
+			n++
+		}
+	}
+	return n
+}
+
 func filterTabs(sections []Section, params Params) []FilterTab {
 	filter := params.Filter
 	total := 0
 	counts := make(map[SectionKey]int, len(sections))
 	for _, s := range sections {
 		counts[s.Key] = len(s.Rows)
-		total += len(s.Rows)
+		total += openCount(s.Rows)
 	}
 	tabs := []FilterTab{{
 		Key: SectionUnknown, Title: "All", Path: params.withScope(ticketsPath), Count: total,
 		Current: filter == SectionUnknown,
 	}}
 	for _, s := range sectionOrder {
+		if counts[s.Key] == 0 && filter != s.Key {
+			continue
+		}
 		tabs = append(tabs, FilterTab{
 			Key: s.Key, Title: s.Title, Count: counts[s.Key], Current: filter == s.Key,
 			Path: Params{Filter: s.Key, Project: params.Project, All: true}.PagePath(),

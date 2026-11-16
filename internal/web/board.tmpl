@@ -44,23 +44,22 @@
         <span class="truncate text-xs text-muted">{{.Detail}}</span>
       </span>
       <span class="hidden truncate text-xs text-fg-2 md:block">
-        {{- if eq $.Context "feature"}}<span class="chip max-w-full border-border-soft text-muted">{{template "mark" .Mark}}<span class="truncate">{{or .Feature .Repo}}</span></span>
+        {{- if eq $.Context "feature"}}<span class="chip max-w-full border-border-soft text-muted">{{template "mark" .Mark}}<span class="truncate">{{.FeatureTitle}}</span></span>
         {{- else}}{{.Repo}}{{end -}}
       </span>
-      <span class="hidden font-mono text-xs md:inline">{{if .ChecksTotal}}{{.ChecksPassed}}/{{.ChecksTotal}}{{else}}—{{end}}</span>
-      <span class="hidden font-mono text-xs md:inline">{{if .PRNumber}}#{{.PRNumber}}{{else}}—{{end}}</span>
+      <span class="hidden font-mono text-xs md:inline">{{if .ChecksTotal}}{{.ChecksPassed}}/{{.ChecksTotal}}{{end}}</span>
+      <span class="hidden font-mono text-xs md:inline">{{if .PRNumber}}#{{.PRNumber}}{{end}}</span>
       <span class="justify-self-end font-mono text-xs text-fg-2">
         {{- if .Elapsed}}{{.Elapsed}}
         {{- else if gt .SpendPctWeek 0.0}}{{printf "%.2f" .SpendPctWeek}}% week
-        {{- else if .SpendTokens}}{{.SpendTokens}} tok
-        {{- else}}—{{end -}}
+        {{- else if .SpendTokens}}{{.SpendTokens}} tok{{end -}}
       </span>
     </a>
     </div>
     {{- end}}
   </section>
   {{- else}}
-  <p class="px-2 py-3 text-sm text-muted">No tickets match this view.</p>
+  <p class="px-2 py-3 text-sm text-muted">{{if and (not .TicketCount) .RepoScope}}No tickets in this repo yet{{else}}No tickets match this view.{{end}}</p>
   {{- end}}
   <div id="select-bar" role="region" aria-label="selection" hidden class="fixed inset-x-0 bottom-4 z-20 mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lg border border-accent-line bg-surface px-4 py-2 shadow-lg">
     <span class="text-sm" data-select-summary aria-live="polite"></span>

@@ -11,8 +11,7 @@ import (
 )
 
 type Chrome struct {
-	Workspace      string
-	LiveAgents     int
+	Running        int
 	Observe        Age
 	ObserveStale   bool
 	LastError      option.Option[TickError]

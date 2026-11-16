@@ -27,6 +27,7 @@
   {{- if .NoMatch}}
   <p class="rail-empty">Nothing matches “{{.Query}}”.</p>
   {{- else}}
+  {{- if .NeedsYou}}
   <section class="rail-group" data-group="needs-you" aria-label="Needs you">
     <h2 class="rail-heading">Needs you</h2>
     {{- range .NeedsYou}}
@@ -40,10 +41,9 @@
       <p class="rail-reason{{if .Reply}} rail-question{{end}}"><b>{{.Label}}.</b>{{with or .Last .Detail}} {{.}}{{end}}</p>
       {{if .Reply}}{{template "railReply" .}}{{else if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
-    {{- else}}
-    <p class="rail-empty">{{if $.Query}}No match.{{else}}Nothing needs you.{{end}}</p>
     {{- end}}
   </section>
+  {{- end}}
   <section class="rail-group" data-group="in-flight" aria-label="In flight">
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
@@ -72,17 +72,17 @@
   </section>
   {{end}}{{end}}
   {{- end}}
-  <footer class="rail-footer">
-    {{- range .Gauges}}
-    <span class="rail-gauge"><span>{{.Label}}</span><span class="meter"{{if .Stale}} data-stale{{end}}><span class="meter-fill" style="width: {{.Pct}}%"></span></span><span class="rail-pct">{{if .NoReading}}no reading{{else}}{{.Pct}}%{{if .Stale}} · {{.ReadAgo}}{{end}}{{end}}</span></span>
-    {{- end}}
-    {{- with .Health}}
-    {{- if .Error.IsSome}}
-    <p class="rail-health banner ribbon" data-glyph="failed" role="status">tick failed {{template "age" .Error.Unwrap.Age}}: {{.Error.Unwrap.Message}}</p>
-    {{- else}}
-    <p class="rail-health">{{.Live}} live · {{if .Stale}}last good observe:{{else}}observed{{end}} {{template "age" .Observe}}</p>
-    {{- end}}
-    {{- end}}
-  </footer>
 </div>
+<footer class="rail-footer" id="rail-footer" hx-swap-oob="true">
+  {{- range .Gauges}}
+  <span class="rail-gauge"><span>{{.Label}}</span><span class="meter"{{if .Stale}} data-stale{{end}}><span class="meter-fill" style="width: {{.Pct}}%"></span></span><span class="rail-pct">{{if .NoReading}}no reading{{else}}{{.Pct}}%{{if .Stale}} · {{.ReadAgo}}{{end}}{{end}}</span></span>
+  {{- end}}
+  {{- with .Health}}
+  {{- if .Error.IsSome}}
+  <p class="rail-health banner ribbon" data-glyph="failed" role="status">tick failed {{template "age" .Error.Unwrap.Age}}: {{.Error.Unwrap.Message}}</p>
+  {{- else if .Stale}}
+  <p class="rail-health banner ribbon" data-glyph="attention" role="status">last good observe: {{template "age" .Observe}}</p>
+  {{- end}}
+  {{- end}}
+</footer>
 {{end}}

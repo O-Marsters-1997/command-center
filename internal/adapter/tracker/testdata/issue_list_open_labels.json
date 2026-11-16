@@ -1,0 +1,6 @@
+[
+  { "labels": [{ "name": "project:repo-and-ticket-model" }, { "name": "status:ready" }] },
+  { "labels": [{ "name": "project:fleet-view" }] },
+  { "labels": [{ "name": "project:fleet-view" }, { "name": "bug" }] },
+  { "labels": [{ "name": "bug" }] }
+]

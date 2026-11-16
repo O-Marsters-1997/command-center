@@ -77,6 +77,7 @@ type RepoRow struct {
 	Glyph         plan.GlyphWord
 	Status        string
 	OpenTickets   int
+	Badge         string
 	Steps         []CheckStep
 	Offers        []FeatureOffer
 }
@@ -108,6 +109,7 @@ type ProjectsPane struct {
 }
 
 type RepoSearch struct {
+	Query       string
 	Rows        []RepoRow
 	SearchError string
 }
@@ -139,11 +141,30 @@ func RepoPath(fullName string) string {
 func trackedRow(r store.Repo, open int) RepoRow {
 	state := bannerState(r)
 	glyph, _ := bannerWords(state, r)
-	steps := checkSteps(state, r.RefusalKind)
+	steps := checkSteps(state, r)
 	return RepoRow{
 		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name), Project: r.Project,
-		Glyph: glyph, Status: repoStatus(state, steps), OpenTickets: open, Steps: steps,
+		Glyph: glyph, Status: repoStatus(state, steps), OpenTickets: open, Badge: repoBadge(state),
 	}
+}
+
+func repoBadge(state BannerState) string {
+	switch state {
+	case BannerReady:
+		return "Ready"
+	case BannerRefused:
+		return "Refused"
+	case BannerUnknown, BannerUntracked, BannerCloning:
+	}
+	return "Checking"
+}
+
+func (r *Reader) SearchHit(ctx context.Context, repo string) (RepoRow, error) {
+	b, err := r.Banner(ctx, repo)
+	if err != nil {
+		return RepoRow{}, fmt.Errorf("load banner: %w", err)
+	}
+	return RepoRow{FullName: b.Repo, Tracked: true, Path: RepoPath(b.Repo), Glyph: b.Glyph, Badge: repoBadge(b.State)}, nil
 }
 
 func repoStatus(state BannerState, steps []CheckStep) string {
@@ -203,14 +224,6 @@ func (r *Reader) Repos(ctx context.Context, now time.Time, offers map[string][]I
 	return ReposPage{Chrome: chrome, ProjectsPane: pane, LastImportError: importErr}, nil
 }
 
-func (r *Reader) RepoGroups(ctx context.Context, now time.Time, offers map[string][]ImportOffer) (ProjectsPane, error) {
-	f, err := r.loadFrame(ctx, now, Params{})
-	if err != nil {
-		return ProjectsPane{}, fmt.Errorf("load repo groups: %w", err)
-	}
-	return r.projectsPane(ctx, f, offers)
-}
-
 func (r *Reader) projectsPane(ctx context.Context, f frame, offers map[string][]ImportOffer) (ProjectsPane, error) {
 	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbImport)
 	if err != nil {
@@ -262,6 +275,8 @@ func repoGroups(f frame, intents []store.VerbIntent, offers map[string][]ImportO
 	}
 	return groups
 }
+
+const maxSearchHits = 6
 
 func featureOffers(
 	f frame, repo store.Repo, all map[string][]ImportOffer, intents []store.VerbIntent,
@@ -323,7 +338,8 @@ func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.Re
 		untracked = append(untracked, row)
 	}
 	slices.SortFunc(untracked, func(a, b RepoRow) int { return strings.Compare(a.FullName, b.FullName) })
-	return append(rows, untracked...), nil
+	rows = append(rows, untracked...)
+	return rows[:min(len(rows), maxSearchHits)], nil
 }
 
 func tracks(tracked []store.Repo, p gh.RepoSummary) bool {

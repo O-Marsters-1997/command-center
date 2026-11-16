@@ -2,21 +2,29 @@
 {{with .SearchError}}
 <p class="banner ribbon mb-2" data-glyph="failed" role="status">gh search failed: {{.}}</p>
 {{end}}
+{{if .Query}}
 <div class="track-results" aria-label="repos found">
-  {{range .Rows}}
-  <div class="track-hit">
-    <a class="font-mono" href="{{.Path}}">{{.FullName}}</a>
-    {{if .Tracked}}{{template "checks" .Steps}}
-    {{else}}<span class="text-muted text-xs">not tracked{{with .RefusedBranch}} <span class="glyph glyph-failed text-s-failed">will be refused: default branch is <code>{{.}}</code></span>{{end}}</span>
-    <a href="{{.Path}}">track &rarr;</a>{{end}}
-  </div>
+  {{range .Rows}}{{template "repoHit" .}}
   {{else}}
-  <p class="text-muted p-2">no repos match.</p>
+  <p class="text-muted text-sm p-2">No repos on GitHub match &ldquo;{{.Query}}&rdquo;.</p>
   {{end}}
 </div>
+{{end}}
 {{- end}}
 
-{{define "checks" -}}<ul class="checks" aria-label="checks">{{range .}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>{{- end}}
+{{define "repoHit" -}}
+<div class="track-hit">
+  {{template "icon" "repo"}}
+  <a class="font-mono" href="{{.Path}}">{{.FullName}}</a>
+  {{if .Tracked}}<span class="badge" data-glyph="{{.Glyph}}"><span class="glyph glyph-{{.Glyph}}">{{.Badge}}</span></span>
+  {{else if .RefusedBranch}}<span class="badge" data-glyph="failed" title="Default branch is {{.RefusedBranch}}, not main"><span class="glyph glyph-failed">Refused: {{.RefusedBranch}}</span></span>
+  {{else}}<form method="post" action="/repos/track" hx-post="/repos/track" hx-target="closest .track-hit" hx-swap="outerHTML" hx-disabled-elt="find button">
+    <input type="hidden" name="repo" value="{{.FullName}}">
+    <input type="hidden" name="hit" value="1">
+    <button type="submit" class="btn btn-sm">Track</button>
+  </form>{{end}}
+</div>
+{{- end}}
 
 {{define "swatches" -}}
 <fieldset class="flex flex-wrap items-center gap-2">
@@ -117,11 +125,16 @@
 <h1>Projects</h1>
 <p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file. Import a feature from the repo that carries its label, then launch it.</p>
 {{if .LastImportError.IsSome}}{{template "importRefusal" .LastImportError.Unwrap}}{{end}}
+<div class="relative">
 <form method="get" action="/repos" role="search">
   <input type="search" name="q" value="{{.Query}}" placeholder="Track a repo: search owner/name" autocomplete="off"
     aria-label="search repos" class="block w-full"
     hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
 </form>
+<div id="repo-results" class="track-menu">
+{{with .Search}}{{template "repoResults" .}}{{end}}
+</div>
+</div>
 <p class="text-muted text-xs mt-1 mb-3">Search runs as this machine's <code>gh</code> identity.</p>
 <div class="grid gap-6 md:grid-cols-[14rem_minmax(0,1fr)]">
   <nav aria-label="projects" class="flex flex-col gap-1 md:sticky md:top-2 md:self-start">
@@ -135,9 +148,7 @@
     <a class="px-2 py-1" href="#new-project">New project</a>
   </nav>
   <div>
-    <div id="repo-results">
-    {{if .Search}}{{template "repoResults" .Search}}{{else}}{{template "repoGroups" .}}{{end}}
-    </div>
+    {{template "repoGroups" .}}
     <section class="module mt-6" id="new-project" aria-labelledby="new-project-h">
       <h2 id="new-project-h">New project</h2>
       <form method="post" action="/projects" class="flex flex-col gap-3">
