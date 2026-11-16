@@ -144,10 +144,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	ApplyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
 	applyViewState(rows, params)
-	groups := FilterGroupsByFeature(FilterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
-	if f.project.Name != "" {
-		groups = FilterGroupsByProject(groups, f.project.Repos)
-	}
+	groups := scopeGroups(rows, params, f.project)
 	chrome := f.chrome
 	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
 	scoped := rowsIn(groups)
@@ -186,6 +183,14 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		BoardPath:        params.BoardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
 	}, nil
+}
+
+func scopeGroups(rows []Row, params Params, project store.Project) []Group {
+	groups := FilterGroupsByFeature(FilterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
+	if project.Name != "" {
+		groups = FilterGroupsByProject(groups, project.Repos)
+	}
+	return groups
 }
 
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
