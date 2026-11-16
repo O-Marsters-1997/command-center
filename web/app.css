@@ -264,6 +264,14 @@
     color: var(--glyph);
   }
 
+  .banner.note {
+    border: 0;
+    box-shadow: none;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    color: var(--color-fg-2);
+  }
+
   .ribbon,
   .meter,
   .banner,

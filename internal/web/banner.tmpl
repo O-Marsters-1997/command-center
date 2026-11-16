@@ -1,7 +1,7 @@
 {{define "repoBanner" -}}
-<section id="repo-banner" class="banner ribbon mb-3" data-glyph="{{.Glyph}}" data-state="{{.State}}" role="status"
+<section id="repo-banner" class="banner ribbon mb-3{{if .Defaults}} note{{end}}" data-glyph="{{.Glyph}}" data-state="{{.State}}" role="status"
   {{- if .Polling}} hx-get="/repos/banner?repo={{.Repo | queryEscape}}&amp;seen={{.State}}" hx-trigger="every 2s" hx-sync="this:drop" hx-swap="outerHTML"{{end}}>
-  <p>{{.Text}}</p>
+  <p>{{.Text}}{{if .Defaults}} <a href="https://github.com/O-Marsters-1997/command-center/blob/main/docs/configuration.md">See the settings reference</a>{{end}}</p>
   {{if .CanTrack -}}
   <form class="mt-1" hx-post="/repos/track" hx-disabled-elt="find button" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
     <input type="hidden" name="repo" value="{{.Repo}}">

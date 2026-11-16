@@ -46,7 +46,7 @@
     {{- end}}
   </section>
   {{- else}}
-  <p class="px-2 py-3 text-sm text-muted">No tickets match this view.</p>
+  <p class="px-2 py-3 text-sm text-muted">{{if and (not .TicketCount) .RepoScope}}No tickets in this repo yet{{else}}No tickets match this view.{{end}}</p>
   {{- end}}
 </div>
 {{- end}}
