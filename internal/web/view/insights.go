@@ -117,10 +117,13 @@ func buildMergedRows(points []InsightsPoint, timezone string) []MergedRow {
 }
 
 type Limit struct {
-	Label    string
-	Pct      int
-	ResetsIn string
-	ResetsAt string
+	Label     string
+	Pct       int
+	NoReading bool
+	Stale     bool
+	ReadAgo   string
+	ResetsIn  string
+	ResetsAt  string
 }
 
 type SpendSplit struct {
@@ -136,7 +139,7 @@ type SplitRow struct {
 func buildLimits(gauges []Gauge, now time.Time) []Limit {
 	limits := make([]Limit, len(gauges))
 	for i, g := range gauges {
-		limits[i] = Limit{Label: g.Label, Pct: g.Pct}
+		limits[i] = Limit{Label: g.Label, Pct: g.Pct, NoReading: g.NoReading, Stale: g.Stale, ReadAgo: g.ReadAgo}
 		if g.ResetsAt.IsZero() {
 			continue
 		}

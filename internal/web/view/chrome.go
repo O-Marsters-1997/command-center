@@ -116,24 +116,36 @@ type Gauge struct {
 	Calibrating bool
 	CCPct       int
 	ResetsAt    time.Time
+	NoReading   bool
+	Stale       bool
+	ReadAgo     string
 }
+
+const staleReadingAge = time.Hour
 
 type windowSplit struct {
 	Fit   spend.Result
 	CCUSD float64
 }
 
-func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit) []Gauge {
+func deriveGauges(
+	gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit, now time.Time,
+) []Gauge {
 	return []Gauge{
-		deriveGauge("five-hour", agentlog.FiveHour, gauges, split),
-		deriveGauge("weekly", agentlog.SevenDay, gauges, split),
+		deriveGauge("five-hour", agentlog.FiveHour, gauges, split, now),
+		deriveGauge("weekly", agentlog.SevenDay, gauges, split, now),
 	}
 }
 
 func deriveGauge(
 	label string, window agentlog.Window, gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit,
+	now time.Time,
 ) Gauge {
-	view := Gauge{Label: label, Pct: spend.Pct(gauges[window].Utilization), ResetsAt: gauges[window].ResetsAt}
+	reading, ok := gauges[window]
+	view := Gauge{Label: label, Pct: spend.Pct(reading.Utilization), ResetsAt: reading.ResetsAt, NoReading: !ok}
+	if age := now.Sub(reading.At); ok && age > staleReadingAge {
+		view.Stale, view.ReadAgo = true, "read "+shortAge(age)+" ago"
+	}
 	w := split[window]
 	view.CCPct, view.Calibrating = spend.Share(view.Pct, w.Fit, w.CCUSD)
 	return view

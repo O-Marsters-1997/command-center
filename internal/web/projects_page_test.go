@@ -138,9 +138,7 @@ func testLooseRepo(t *testing.T) {
 	if avatars := loose.Find("[data-hue]"); len(avatars) != 0 {
 		t.Errorf("loose repo has a project square: %s", avatars[0].HTML())
 	}
-	if forms := root.Find("form[action^='/projects'], form[action$='/project']"); len(forms) != 0 {
-		t.Errorf("repos page manages projects: %s", forms[0].HTML())
-	}
+	loose.One(t, `form[action="/repos/acme/solo/project"]`)
 }
 
 func testNewProjectFormHue(t *testing.T) {
@@ -160,7 +158,7 @@ func testNewProjectFormHue(t *testing.T) {
 		})
 	}
 
-	page := htmltest.Parse(t, renderPath(t, server, "/repos/acme/solo")).One(t, `form[action="/projects"]`)
+	page := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, `form[action="/projects"]`)
 	page.One(t, `input[name="hue"][value="3"][checked]`)
 	if first := page.Find(`input[name="hue"][value="1"][checked]`); len(first) != 0 {
 		t.Errorf("hue 1 still preselected: %s", first[0].HTML())
@@ -261,7 +259,7 @@ func testRepoSelectMoves(t *testing.T) {
 	}
 	group := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, `main#main [data-scope="project"]`)
 	group.One(t, `a[href="/repos/acme/solo"]`)
-	root := htmltest.Parse(t, renderPath(t, server, "/repos/acme/solo")).One(t, "main#main")
+	root := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
 	root.One(t, `form[action="/repos/acme/solo/project"] option[value="acme"][selected]`)
 
 	loosen := url.Values{"project": {""}}
@@ -269,7 +267,7 @@ func testRepoSelectMoves(t *testing.T) {
 	if loosenRec.Code != http.StatusSeeOther {
 		t.Fatalf("loosen = %d, want 303", loosenRec.Code)
 	}
-	root = htmltest.Parse(t, renderPath(t, server, "/repos/acme/solo")).One(t, "main#main")
+	root = htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
 	selection := root.One(t, `form[action="/repos/acme/solo/project"]`)
 	selection.One(t, `option[value="acme"]`)
 	if selected := selection.Find(`option[value="acme"][selected]`); len(selected) != 0 {

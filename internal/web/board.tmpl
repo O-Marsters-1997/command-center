@@ -21,9 +21,22 @@
 <div id="board" hx-get="{{.BoardPath}}" hx-trigger="every {{.BoardPollSeconds}}s" hx-sync="this:drop" hx-swap="outerHTML">
   {{- range $section := .Sections}}
   <section data-section="{{$section.Key}}" aria-labelledby="section-{{$section.Key}}">
-    <h2 id="section-{{$section.Key}}" class="flex h-[34px] items-center gap-2 border-b border-border-soft px-2 text-sm font-medium text-fg-2">{{$section.Title}} <span class="section-count">{{len $section.Rows}}</span></h2>
+    <h2 id="section-{{$section.Key}}" class="flex h-[34px] items-center gap-2 border-b border-border-soft px-2 text-sm font-medium text-fg-2">{{$section.Title}} <span class="section-count">{{len $section.Rows}}</span>
+      {{- if or (eq $section.Key "ready") (eq $section.Key "blocked")}}
+      <span class="ml-auto flex gap-2 text-xs font-normal">
+        <button type="button" class="btn btn-sm" data-select-all>Select all</button>
+        <button type="button" class="btn btn-sm" data-select-clear>Clear</button>
+      </span>
+      {{- end}}
+    </h2>
     {{- range $section.Rows}}
-    <a class="grid min-h-[46px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border-soft px-2 py-1 text-inherit no-underline hover:bg-surface-2 md:grid-cols-[auto_4rem_minmax(0,1fr)_9rem_3.5rem_3.5rem_7rem]" href="{{.SessionPath}}" data-ref="{{.Ticket}}" {{template "nav" .SessionPath}}>
+    <div class="flex items-stretch hover:bg-surface-2 data-[cursor]:shadow-[inset_2px_0_0_var(--color-accent)] data-[selected]:bg-accent-soft" data-row>
+    {{- if .Selectable}}
+    <label class="flex w-8 shrink-0 cursor-pointer items-center justify-center border-b border-border-soft">
+      <input type="checkbox" data-select value="{{.URL}}" data-feature="{{.Feature}}"{{if .WillArm}} data-armed{{end}} aria-label="select {{.Ticket}}">
+    </label>
+    {{- else}}<span class="w-8 shrink-0 border-b border-border-soft" aria-hidden="true"></span>{{end}}
+    <a class="min-w-0 flex-1 grid min-h-[46px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border-soft px-2 py-1 text-inherit no-underline hover:bg-surface-2 md:grid-cols-[auto_4rem_minmax(0,1fr)_9rem_3.5rem_3.5rem_7rem]" href="{{.SessionPath}}" data-ref="{{.Ticket}}" {{template "nav" .SessionPath}}>
       <span class="glyph{{if .Alive}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" title="{{.Label}}"></span>
       <span class="hidden font-mono text-xs text-meta md:inline">{{.Ticket}}</span>
       <span class="grid min-w-0">
@@ -43,10 +56,16 @@
         {{- else}}—{{end -}}
       </span>
     </a>
+    </div>
     {{- end}}
   </section>
   {{- else}}
   <p class="px-2 py-3 text-sm text-muted">No tickets match this view.</p>
   {{- end}}
+  <div id="select-bar" role="region" aria-label="selection" hidden class="fixed inset-x-0 bottom-4 z-20 mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lg border border-accent-line bg-surface px-4 py-2 shadow-lg">
+    <span class="text-sm" data-select-summary aria-live="polite"></span>
+    <button type="button" class="btn btn-sm" data-select-reset>Clear</button>
+    <a class="btn btn-sm btn-primary" href="/launch" data-select-launch></a>
+  </div>
 </div>
 {{- end}}

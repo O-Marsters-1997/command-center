@@ -70,6 +70,30 @@ func TestFeatures(t *testing.T) {
 		}
 	})
 
+	t.Run("handle import feature carries the repo and returns to projects", func(t *testing.T) {
+		t.Parallel()
+
+		store := openStore(t)
+		form := url.Values{"repo": {"acme/alpha"}, "return": {"/repos"}}
+		result := do(t, newServer(store, testNow), http.MethodPost, "/features/"+url.PathEscape("project:x")+"/import",
+			req{Form: form})
+		if result.Code != http.StatusSeeOther || result.Location != "/repos" {
+			t.Errorf("POST import = %d %q, want 303 to /repos", result.Code, result.Location)
+		}
+		pending, err := store.PendingVerbIntents(t.Context(), "import")
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(import): %v", err)
+		}
+		if len(pending) != 1 || pending[0].Payload != "acme/alpha" {
+			t.Errorf("pending import intents = %+v, want one scoped to acme/alpha", pending)
+		}
+		malformed := req{Form: url.Values{"repo": {"nope"}}}
+		bad := do(t, newServer(store, testNow), http.MethodPost, "/features/x/import", malformed)
+		if bad.Code != http.StatusBadRequest {
+			t.Errorf("POST import with a malformed repo = %d, want 400", bad.Code)
+		}
+	})
+
 	t.Run("handle import feature redirects without htmx", func(t *testing.T) {
 		t.Parallel()
 

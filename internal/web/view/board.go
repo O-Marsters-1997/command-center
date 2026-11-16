@@ -86,6 +86,12 @@ type Check struct {
 
 func (r Row) Ticket() string { return ticketRef(r.URL) }
 
+func (r Row) Selectable() bool {
+	return r.Launchable && !slices.Contains(r.PendingVerbs, plan.VerbLaunch)
+}
+
+func (r Row) WillArm() bool { return r.Glyph == plan.GlyphBlocked }
+
 func ticketRef(url string) string { return "#" + path.Base(url) }
 
 var (

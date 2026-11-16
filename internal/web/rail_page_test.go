@@ -163,6 +163,8 @@ func TestRail(t *testing.T) {
 	t.Run("narrows to the project in the current URL", testRailProjectScope)
 	t.Run("renders the latest stored reading", testRailLatestReading)
 	t.Run("gauges survive a repeated poll", testRailGaugesStable)
+	t.Run("a stale reading shows its age", testRailStaleReading)
+	t.Run("insights limits say no reading", testInsightsNoReading)
 
 	t.Run("the observe chip reads stale at twenty seconds", func(t *testing.T) {
 		t.Parallel()

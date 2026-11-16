@@ -655,7 +655,8 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
-	page, err := s.view.Repos(r.Context(), s.clock.Now())
+	offers := s.importOffers(r.Context())
+	page, err := s.view.Repos(r.Context(), s.clock.Now(), offers)
 	if err != nil {
 		return fmt.Errorf("load repos: %w", err)
 	}
@@ -676,22 +677,7 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 	if !validRepo(scope) {
 		return errorf(http.StatusNotFound, "repo %q is not owner/name", scope)
 	}
-	repo, known, err := s.view.KnownRepo(ctx, scope)
-	if err != nil {
-		return fmt.Errorf("load known repo: %w", err)
-	}
-	var offered []string
-	if known && repo.Phase == plan.RepoReady {
-		obs, _, err := s.store.LastObservation(ctx)
-		if err != nil {
-			return fmt.Errorf("load last observation: %w", err)
-		}
-		if offered, err = importFeatures(ctx, []store.Repo{repo}, obs.Settings, s.trackerFor); err != nil {
-			return fmt.Errorf("import features: %w", err)
-		}
-	}
-	req := view.RepoPageRequest{Scope: scope, Offered: offered}
-	page, err := s.view.RepoPage(ctx, s.clock.Now(), req)
+	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope)
 	if err != nil {
 		return fmt.Errorf("load repo page: %w", err)
 	}
@@ -765,7 +751,7 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 	query := r.URL.Query().Get("q")
 	host := "/repos?q=" + url.QueryEscape(query)
 	if strings.TrimSpace(query) == "" {
-		groups, err := s.view.RepoGroups(r.Context(), s.clock.Now())
+		groups, err := s.view.RepoGroups(r.Context(), s.clock.Now(), s.importOffers(r.Context()))
 		if err != nil {
 			return fmt.Errorf("load repo groups: %w", err)
 		}
@@ -802,14 +788,49 @@ func ticketByURL(tickets []store.Ticket, ticketURL string) (store.Ticket, bool) 
 }
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
-	feature := r.PathValue("feature")
+	if err := r.ParseForm(); err != nil {
+		return errorf(http.StatusBadRequest, "malformed form: %w", err)
+	}
+	feature, repo := r.PathValue("feature"), strings.TrimSpace(r.PostForm.Get("repo"))
+	if repo != "" && !validRepo(repo) {
+		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	}
 	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
-		Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
+		Ticket: feature, Verb: plan.VerbImport, Payload: repo, At: s.clock.Now(),
 	}); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	s.nudge()
+	if repo != "" {
+		seeOther(w, r, returnPath(r.PostForm.Get("return"), "/repos", "/repos"))
+		return nil
+	}
 	return s.redirectOrSwap(w, r)
+}
+
+func (s *Server) importOffers(ctx context.Context) map[string][]view.ImportOffer {
+	offers, err := s.loadImportOffers(ctx)
+	if err != nil {
+		s.logger.WarnContext(ctx, "list import offers", "err", err)
+	}
+	return offers
+}
+
+func (s *Server) loadImportOffers(ctx context.Context) (map[string][]view.ImportOffer, error) {
+	repos, err := s.store.Repos(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load repos: %w", err)
+	}
+	repos = slices.DeleteFunc(repos, func(r store.Repo) bool { return r.Phase != plan.RepoReady })
+	obs, _, err := s.store.LastObservation(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load last observation: %w", err)
+	}
+	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load tickets: %w", err)
+	}
+	return importOffers(ctx, repos, obs.Settings, s.trackerFor, tickets)
 }
 
 func randomGroup() (string, error) {
