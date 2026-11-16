@@ -295,11 +295,11 @@ func (l *Loop) Run(ctx context.Context) error {
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
 	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) error {
-		return l.importFeature(ctx, string(intent.Ticket))
+		return l.importFeature(ctx, string(intent.Ticket), intent.Payload)
 	})
 }
 
-func (l *Loop) importFeature(ctx context.Context, feature string) error {
+func (l *Loop) importFeature(ctx context.Context, feature, onlyRepo string) error {
 	lastObs, _, err := l.store.LastObservation(ctx)
 	if err != nil {
 		return fmt.Errorf("last observation: %w", err)
@@ -310,6 +310,9 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	}
 	var matched []store.ImportedTicket
 	for _, repo := range repos {
+		if onlyRepo != "" && repo.Name != onlyRepo {
+			continue
+		}
 		trackerKind := config.DefaultRepoSettings().Tracker
 		if settings, ok := lastObs.Settings[repo.Name]; ok {
 			trackerKind = settings.Tracker
@@ -331,7 +334,7 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 		}
 	}
 
-	err = l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
+	err = l.store.ImportRepoTickets(ctx, feature, onlyRepo, matched, l.clock.Now())
 	var conflict *store.FeatureConflictError
 	var closure *store.FeatureClosureError
 	switch {

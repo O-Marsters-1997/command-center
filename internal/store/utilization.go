@@ -35,6 +35,7 @@ type readingRow struct {
 type Gauge struct {
 	Utilization float64
 	ResetsAt    time.Time
+	At          time.Time
 }
 
 // LatestReadings omits windows with no reading.
@@ -45,7 +46,7 @@ func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, 
 	}
 	gauges := make(map[agentlog.Window]Gauge, len(readings))
 	for window, r := range readings {
-		gauges[window] = Gauge{Utilization: r.Utilization, ResetsAt: r.ResetsAt}
+		gauges[window] = Gauge{Utilization: r.Utilization, ResetsAt: r.ResetsAt, At: r.At}
 	}
 	return gauges, nil
 }

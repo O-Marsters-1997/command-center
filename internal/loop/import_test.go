@@ -1,9 +1,12 @@
 package loop_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
@@ -94,6 +97,51 @@ func TestImport(t *testing.T) {
 		}
 		if !failed || lastErr.Feature != "project:x" || !strings.Contains(lastErr.Message, outsider) {
 			t.Errorf("LastImportError() = %+v, %v, want project:x naming %s", lastErr, failed, outsider)
+		}
+	})
+
+	t.Run("an intent naming a repo imports only that repo and keeps the others", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		store := openStore(t)
+		trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+		trackRepo(t, store, "beta", "git@github.com:acme/beta.git")
+		alphaIssue := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}
+		betaIssue := tracker.Ticket{URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "Add y"}
+		resolve := trackertest.ByRemote(map[string]tracker.Source{
+			"github.com/acme/alpha": &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:x": {alphaIssue}}},
+			"github.com/acme/beta":  &trackertest.Source{ByFeature: map[string][]tracker.Ticket{"project:x": {betaIssue}}},
+		})
+		lp := newLoopWithDeps(loop.Deps{
+			Store: store, Observe: noOpObserve, Clock: fixedClock(testAt), Config: config.Config{},
+			Workspace: config.Workspace{}, Runner: runner.ProcessRunner{}, Tracker: resolve,
+		})
+		importRepo := func(repo string) []string {
+			t.Helper()
+			intent := storepkg.VerbRequest{Ticket: "project:x", Verb: "import", Payload: repo, At: testAt}
+			if err := store.QueueVerbIntent(ctx, intent); err != nil {
+				t.Fatalf("QueueVerbIntent(import, %s): %v", repo, err)
+			}
+			if err := lp.RunOnce(ctx); err != nil {
+				t.Fatalf("RunOnce() error = %v", err)
+			}
+			tickets, err := store.Tickets(ctx)
+			if err != nil {
+				t.Fatalf("Tickets(): %v", err)
+			}
+			var repos []string
+			for _, tk := range tickets {
+				repos = append(repos, tk.Repo)
+			}
+			slices.Sort(repos)
+			return repos
+		}
+
+		if diff := cmp.Diff([]string{"alpha"}, importRepo("alpha")); diff != "" {
+			t.Errorf("repos after importing alpha mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"alpha", "beta"}, importRepo("beta")); diff != "" {
+			t.Errorf("repos after importing beta mismatch (-want +got):\n%s", diff)
 		}
 	})
 

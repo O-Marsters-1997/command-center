@@ -226,7 +226,7 @@ func (r *Reader) buildChrome(f frame) Chrome {
 	c := Chrome{
 		Observe:      Age{Age: "never"},
 		ObserveStale: true,
-		Gauges:       deriveGauges(gauges, split),
+		Gauges:       deriveGauges(gauges, split, now),
 		PageTitle:    appTitle,
 		Keymap:       Keymap,
 		RepoScope:    params.Repo,
@@ -238,7 +238,7 @@ func (r *Reader) buildChrome(f frame) Chrome {
 				Label: "Insights", Key: keyInsights, Icon: "chart",
 				Path: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.Query()),
 			},
-			{Label: "Repos", Path: params.withScope("/repos"), Key: keyRepos, Icon: "repo"},
+			{Label: "Projects", Path: params.withScope("/repos"), Key: keyRepos, Icon: "repo"},
 		},
 	}
 	c.setCurrent(keyTickets)

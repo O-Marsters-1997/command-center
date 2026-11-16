@@ -26,21 +26,84 @@
 </div>
 {{- end}}
 
+{{define "swatches" -}}
+<fieldset class="flex flex-wrap items-center gap-2">
+  <legend class="sr-only">hue</legend>
+  {{- $checked := .Checked}}
+  {{- range .Hues}}
+  <label class="cursor-pointer rounded-full has-[:checked]:ring-2 has-[:checked]:ring-accent has-[:focus-visible]:ring-2">
+    <input type="radio" name="hue" value="{{.}}" class="sr-only"{{if eq . $checked}} checked{{end}}>
+    <span class="avatar" data-hue="{{.}}" aria-label="hue {{.}}">A</span>
+  </label>
+  {{- end}}
+</fieldset>
+{{- end}}
+
+{{define "offerRow" -}}
+<li id="{{.ID}}" class="flex flex-wrap items-center gap-2"{{if eq .State "running"}} hx-get="/repos" hx-trigger="every 3s" hx-select="#{{.ID}}" hx-swap="outerHTML" hx-sync="this:drop"{{end}}>
+  <a href="/f/{{.Feature | pathEscape}}" {{template "nav" (printf "/f/%s" (.Feature | pathEscape))}}>{{.Feature}}</a>
+  {{if .OtherRepos}}<span class="text-muted text-xs">also labelled in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
+  <span class="ml-auto flex items-center gap-2">
+  {{if eq .State "running"}}
+    <span class="text-xs text-muted animate-pulse" role="status">Importing from {{.Repo}}…</span>
+  {{else if eq .State "done"}}
+    <span class="text-xs text-muted">Imported</span>
+    {{if .Ready}}<a class="btn btn-sm btn-primary" href="{{.LaunchPath}}" {{template "nav" .LaunchPath}}>Launch {{.Ready}} ready</a>{{end}}
+  {{else}}
+    <form method="post" action="/features/{{.Feature | pathEscape}}/import">
+      <input type="hidden" name="repo" value="{{.Repo}}">
+      <input type="hidden" name="return" value="/repos">
+      <button type="submit" class="btn btn-sm">Import {{.Tickets}} ticket{{if ne .Tickets 1}}s{{end}}</button>
+    </form>
+  {{end}}
+  </span>
+</li>
+{{- end}}
+
 {{define "repoGroups" -}}
-{{range .}}
-<section class="repo-group" data-scope="{{.Scope.Kind}}">
+{{range .Groups}}
+<section class="repo-group" data-scope="{{.Scope.Kind}}" id="{{.Anchor}}">
   <h2 class="repo-group-head">
     <span class="avatar"{{if .Scope.Initial}} data-hue="{{.Scope.Hue}}"{{end}} aria-hidden="true">{{.Scope.Initial}}</span>
     {{.Scope.Label}}
     <span class="text-muted">{{.Count}} repo{{if ne .Count 1}}s{{end}}</span>
   </h2>
+  {{if eq .Scope.Kind "project"}}
+  <details class="mb-2">
+    <summary>Edit project</summary>
+    <form method="post" action="/projects/{{.Scope.Value | pathEscape}}" class="mt-2 flex flex-wrap items-center gap-2">
+      <input type="text" name="name" required maxlength="40" value="{{.Scope.Value}}" autocomplete="off" aria-label="name of {{.Scope.Value}}">
+      {{template "swatches" .Swatches}}
+      <button type="submit" class="btn btn-sm">Save</button>
+    </form>
+    <form method="post" action="/projects/{{.Scope.Value | pathEscape}}/delete" class="mt-2">
+      <button type="submit" class="btn btn-sm">Delete project</button>
+    </form>
+  </details>
+  {{end}}
   {{range .Rows}}
+  <div class="repo-card mb-2">
+  {{$current := .Project}}
   <a class="repo-row" href="{{.Path}}" {{template "nav" .Path}}>
     <span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Status}}</span></span>
     <span class="repo-main"><b class="font-mono">{{.FullName}}</b><span{{if eq .Glyph "failed"}} class="repo-why"{{end}}>{{.Status}}</span></span>
     <span class="repo-count">{{if eq .Glyph "done"}}{{if .OpenTickets}}{{.OpenTickets}} open{{else}}No open tickets{{end}}{{else if eq .Glyph "failed"}}Refused{{else}}Checking{{end}}</span>
     {{template "icon" "chev"}}
   </a>
+  <form method="post" action="/repos/{{.FullName}}/project" class="flex items-center gap-2 px-2 py-1">
+    <input type="hidden" name="return" value="/repos">
+    <select name="project" aria-label="project of {{.FullName}}" class="select">
+      <option value="">No project</option>
+      {{range $.Projects}}<option value="{{.Name}}"{{if eq .Name $current}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    <button type="submit" class="btn btn-sm">Move</button>
+  </form>
+  {{if .Offers}}
+  <ul class="checklist" aria-label="features of {{.FullName}}">
+    {{range .Offers}}{{template "offerRow" .}}{{end}}
+  </ul>
+  {{end}}
+  </div>
   {{end}}
 </section>
 {{else}}
@@ -58,9 +121,9 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<div class="page-narrow">
-<h1>Repos</h1>
-<p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file.</p>
+<div class="mx-auto max-w-5xl">
+<h1>Projects</h1>
+<p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file. Import a feature from the repo that carries its label, then launch it.</p>
 {{if .LastImportError.IsSome}}{{template "importRefusal" .LastImportError.Unwrap}}{{end}}
 <div class="relative">
 <form method="get" action="/repos" role="search">
@@ -73,6 +136,33 @@
 </div>
 </div>
 <p class="text-muted text-xs mt-1 mb-3">Search runs as this machine's <code>gh</code> identity.</p>
-{{template "repoGroups" .Groups}}
+<div class="grid gap-6 md:grid-cols-[14rem_minmax(0,1fr)]">
+  <nav aria-label="projects" class="flex flex-col gap-1 md:sticky md:top-2 md:self-start">
+    {{range .Groups}}
+    <a class="flex items-center gap-2 px-2 py-1" href="#{{.Anchor}}">
+      <span class="avatar"{{if .Scope.Initial}} data-hue="{{.Scope.Hue}}"{{end}} aria-hidden="true">{{.Scope.Initial}}</span>
+      <span class="truncate">{{.Scope.Label}}</span>
+      <span class="ml-auto text-muted text-xs">{{.Count}}</span>
+    </a>
+    {{end}}
+    <a class="px-2 py-1" href="#new-project">New project</a>
+  </nav>
+  <div>
+    {{template "repoGroups" .}}
+    <section class="module mt-6" id="new-project" aria-labelledby="new-project-h">
+      <h2 id="new-project-h">New project</h2>
+      <form method="post" action="/projects" class="flex flex-col gap-3">
+        <input type="hidden" name="return" value="/repos">
+        <input type="text" name="name" required maxlength="40" placeholder="project name" autocomplete="off" aria-label="project name">
+        {{template "swatches" .NewProject.Swatches}}
+        <fieldset class="flex flex-col gap-1">
+          <legend class="text-muted text-xs">repos</legend>
+          {{range .NewProject.Repos}}<label class="flex items-center gap-2"><input type="checkbox" name="repo" value="{{.}}"><span class="font-mono">{{.}}</span></label>{{end}}
+        </fieldset>
+        <button type="submit" class="btn btn-primary self-start">Create project</button>
+      </form>
+    </section>
+  </div>
+</div>
 </div>
 {{template "shellEnd" .}}

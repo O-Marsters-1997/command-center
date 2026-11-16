@@ -255,6 +255,12 @@ func (e *FeatureConflictError) refusedTicket() string { return e.URL }
 func (s *Store) ImportTickets(
 	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
 ) error {
+	return s.ImportRepoTickets(ctx, feature, "", tickets, now)
+}
+
+func (s *Store) ImportRepoTickets(
+	ctx context.Context, feature, repo string, tickets []ImportedTicket, now time.Time,
+) error {
 	return s.inTx(ctx, func(qtx *ccdb.Queries) (err error) {
 		syncedAt := now.UTC()
 		returned := make(map[string]bool, len(tickets))
@@ -336,7 +342,7 @@ func (s *Store) ImportTickets(
 
 		dropped := []string{}
 		for _, t := range previous {
-			if !returned[t.URL] {
+			if !returned[t.URL] && (repo == "" || t.Repo == repo) {
 				dropped = append(dropped, t.URL)
 			}
 		}

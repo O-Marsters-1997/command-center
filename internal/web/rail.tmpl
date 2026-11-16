@@ -75,7 +75,7 @@
 </div>
 <footer class="rail-footer" id="rail-footer" hx-swap-oob="true">
   {{- range .Gauges}}
-  <span class="rail-gauge"><span>{{.Label}}</span><span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span><span class="rail-pct">{{.Pct}}%</span></span>
+  <span class="rail-gauge"><span>{{.Label}}</span><span class="meter"{{if .Stale}} data-stale{{end}}><span class="meter-fill" style="width: {{.Pct}}%"></span></span><span class="rail-pct">{{if .NoReading}}no reading{{else}}{{.Pct}}%{{if .Stale}} · {{.ReadAgo}}{{end}}{{end}}</span></span>
   {{- end}}
   {{- with .Health}}
   {{- if .Error.IsSome}}

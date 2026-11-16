@@ -42,7 +42,7 @@ func testRailLatestReading(t *testing.T) {
 	}
 	for i, want := range []struct{ label, pct, width string }{
 		{label: "five-hour", pct: "42%", width: "width: 42%"},
-		{label: "weekly", pct: "0%", width: "width: 0%"},
+		{label: "weekly", pct: "no reading", width: "width: 0%"},
 	} {
 		gauge := gauges[i]
 		if got := gauge.Find("span")[0].Text(); got != want.label {
@@ -55,6 +55,43 @@ func testRailLatestReading(t *testing.T) {
 		if got, _ := fill.Attr("style"); got != want.width {
 			t.Errorf("%s gauge fill width = %q, want %q in %s", want.label, got, want.width, gauge.HTML())
 		}
+	}
+}
+
+func testRailStaleReading(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, testNow)
+	reading := agentlog.Reading{
+		Window: agentlog.FiveHour, Utilization: 0.42,
+		ResetsAt: testNow.Add(time.Hour), At: testNow.Add(-3 * time.Hour),
+	}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+		t.Fatalf("RecordReadings: %v", err)
+	}
+
+	server := newServer(store, testNow)
+	gauge := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, "footer.rail-footer").Find("span.rail-gauge")[0]
+	if got := gauge.One(t, "span.rail-pct").Text(); got != "42% · read 3h ago" {
+		t.Errorf("stale gauge text = %q, want %q in %s", got, "42% · read 3h ago", gauge.HTML())
+	}
+	if _, stale := gauge.One(t, "span.meter").Attr("data-stale"); !stale {
+		t.Errorf("stale gauge meter lacks data-stale in %s", gauge.HTML())
+	}
+}
+
+func testInsightsNoReading(t *testing.T) {
+	t.Parallel()
+
+	server := newServer(seededStore(t, testNow), testNow)
+	limits := htmltest.Parse(t, renderPath(t, server, "/insights")).One(t, "ul.limits").Text()
+	for _, want := range []string{"No reading", "reset unknown"} {
+		if !strings.Contains(limits, want) {
+			t.Errorf("GET /insights limits = %q, want it to contain %q", limits, want)
+		}
+	}
+	if strings.Contains(limits, "0%") {
+		t.Errorf("GET /insights limits = %q, want no 0%% without a reading", limits)
 	}
 }
 

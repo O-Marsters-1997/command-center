@@ -26,54 +26,9 @@
 <h2 id="tickets-h">Tickets</h2>
 {{template "board" .Tickets}}
 </section>
-{{if .Unimported}}
-<section class="module" aria-labelledby="unimported-h">
-<h2 id="unimported-h">Unimported features</h2>
-<ul class="checklist">
-  {{range .Unimported}}
-  <li>
-    <a href="/f/{{.Feature | pathEscape}}">{{.Feature}}</a>
-    {{if .OtherRepos}}<span class="text-muted text-xs">also in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
-    <form class="ml-auto" method="post" action="/features/{{.Feature | pathEscape}}/import">
-      <input type="hidden" name="return" value="{{$.Path}}">
-      <button type="submit" class="btn btn-sm">Import</button>
-    </form>
-  </li>
-  {{end}}
-</ul>
-</section>
-{{end}}
 {{end}}
 {{if .Known}}
-<section class="module" aria-labelledby="project-h">
-<h2 id="project-h">Project</h2>
-<p class="module-sub">A project groups repos. Assign this repo to one, or start a new project with it.</p>
-<form method="post" action="/repos/{{.Title}}/project" class="flex items-center gap-2 mb-3">
-  <input type="hidden" name="return" value="{{.Path}}">
-  <select name="project" aria-label="project of {{.Title}}" class="select">
-    <option value="">No project</option>
-    {{range .Projects}}<option value="{{.Name}}"{{if eq .Name $.Project.Name}} selected{{end}}>{{.Name}}</option>{{end}}
-  </select>
-  <button type="submit" class="btn btn-sm">Assign</button>
-</form>
-<details>
-  <summary>New project</summary>
-  <form method="post" action="/projects" class="flex flex-col gap-2 mt-2">
-    <input type="hidden" name="return" value="{{.Path}}">
-    {{range .NewProject.Repos}}<input type="hidden" name="repo" value="{{.}}">{{end}}
-    <input type="text" name="name" required maxlength="40" placeholder="project name"
-      autocomplete="off" aria-label="project name">
-    <fieldset class="flex items-center gap-3">
-      <legend class="text-muted">hue</legend>
-      {{range .NewProject.Hues}}
-      <label class="flex items-center gap-1"><input type="radio" name="hue" value="{{.}}"{{if eq . $.NewProject.DefaultHue}} checked{{end}}>
-        <span class="avatar" data-hue="{{.}}" aria-label="hue {{.}}">A</span></label>
-      {{end}}
-    </fieldset>
-    <button type="submit" class="btn btn-primary self-start">Create project</button>
-  </form>
-</details>
-</section>
+<p class="text-xs"><a href="/repos" {{template "nav" "/repos"}}>Project and imports</a></p>
 {{end}}
 </div>
 {{template "shellEnd" .}}

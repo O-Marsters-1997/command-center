@@ -68,8 +68,12 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, env confi
 }
 
 func importFeature(ctx context.Context, configPath string, env config.Env, args []string) (err error) {
-	if len(args) != 1 {
-		return errors.New("usage: cc import <feature>")
+	if len(args) < 1 || len(args) > 2 {
+		return errors.New("usage: cc import <feature> [owner/name]")
+	}
+	var repo string
+	if len(args) == 2 {
+		repo = args[1]
 	}
 
 	cfg, err := config.Load(configPath, env)
@@ -83,7 +87,7 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 	defer func() { err = errors.Join(err, st.Close()) }()
 
 	if err := st.QueueVerbIntent(ctx, store.VerbRequest{
-		Ticket: args[0], Verb: plan.VerbImport, At: time.Now(),
+		Ticket: args[0], Verb: plan.VerbImport, Payload: repo, At: time.Now(),
 	}); err != nil {
 		return fmt.Errorf("queue import for %s: %w", args[0], err)
 	}

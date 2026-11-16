@@ -508,6 +508,10 @@
     background: var(--glyph);
   }
 
+  .meter[data-stale] .meter-fill {
+    opacity: 0.45;
+  }
+
   .segbar-segment {
     display: block;
     min-width: 2px;

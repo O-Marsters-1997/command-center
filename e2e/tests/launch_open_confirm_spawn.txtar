@@ -8,7 +8,7 @@ cc-fake-gh no-prs
 
 exec cc tick --count 1
 
-exec cc request GET /repos/sandbox-org/two-tasks
+exec cc request GET /repos
 stdout 'action="/features/project:two-tasks/import"'
 
 exec cc request -hx -form 'feature=project:two-tasks' POST /launch/open
