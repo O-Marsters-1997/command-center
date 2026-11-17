@@ -62,6 +62,7 @@ type Push struct {
 	BaseBranch    string
 	BaseSHAAtPush string
 	PushedAt      time.Time
+	Protected     json.RawMessage
 }
 
 type Repo struct {

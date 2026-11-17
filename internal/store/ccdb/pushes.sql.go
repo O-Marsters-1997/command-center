@@ -13,7 +13,7 @@ import (
 )
 
 const listLatestPushes = `-- name: ListLatestPushes :many
-SELECT DISTINCT ON (ticket_id) ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at
+SELECT DISTINCT ON (ticket_id) ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at, protected
 FROM pushes
 ORDER BY ticket_id, id DESC
 `
@@ -24,6 +24,7 @@ type ListLatestPushesRow struct {
 	BaseBranch    string
 	BaseSHAAtPush string
 	PushedAt      time.Time
+	Protected     json.RawMessage
 }
 
 func (q *Queries) ListLatestPushes(ctx context.Context) ([]ListLatestPushesRow, error) {
@@ -41,6 +42,7 @@ func (q *Queries) ListLatestPushes(ctx context.Context) ([]ListLatestPushesRow, 
 			&i.BaseBranch,
 			&i.BaseSHAAtPush,
 			&i.PushedAt,
+			&i.Protected,
 		); err != nil {
 			return nil, err
 		}
@@ -97,8 +99,8 @@ func (q *Queries) ListPushFacts(ctx context.Context, kinds json.RawMessage) ([]L
 }
 
 const recordPush = `-- name: RecordPush :exec
-INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at, protected)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type RecordPushParams struct {
@@ -107,6 +109,7 @@ type RecordPushParams struct {
 	BaseBranch    string
 	BaseSHAAtPush string
 	PushedAt      time.Time
+	Protected     json.RawMessage
 }
 
 func (q *Queries) RecordPush(ctx context.Context, arg RecordPushParams) error {
@@ -116,6 +119,7 @@ func (q *Queries) RecordPush(ctx context.Context, arg RecordPushParams) error {
 		arg.BaseBranch,
 		arg.BaseSHAAtPush,
 		arg.PushedAt,
+		arg.Protected,
 	)
 	return err
 }
