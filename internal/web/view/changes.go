@@ -199,7 +199,9 @@ type CommentAnchor struct {
 	Hunk   string
 }
 
-func (r *Reader) CommentAnchor(ctx context.Context, now time.Time, ref SessionRef, dataDir, path string, side plan.Side, line int) (CommentAnchor, error) {
+func (r *Reader) CommentAnchor(
+	ctx context.Context, now time.Time, ref SessionRef, dataDir, path string, side plan.Side, line int,
+) (CommentAnchor, error) {
 	cs, err := r.loadChanges(ctx, now, ref, dataDir)
 	if err != nil {
 		return CommentAnchor{}, err
@@ -230,6 +232,8 @@ func linePrefix(k git.LineKind) string {
 		return "+"
 	case git.LineDeleted:
 		return "-"
+	case git.LineContext:
+		return " "
 	}
 	return " "
 }

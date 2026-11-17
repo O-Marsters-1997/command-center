@@ -16,7 +16,8 @@ func commentTarget(r *http.Request) (path string, side plan.Side, line int, err 
 	side = plan.Side(r.FormValue("side"))
 	line, _ = strconv.Atoi(r.FormValue("line"))
 	if path == "" || line < 1 || (side != plan.SideOld && side != plan.SideNew) {
-		return "", "", 0, errorf(http.StatusBadRequest, "comment target %q %q %q is not a diff line", path, side, r.FormValue("line"))
+		return "", "", 0, errorf(http.StatusBadRequest,
+			"comment target %q %q %q is not a diff line", path, side, r.FormValue("line"))
 	}
 	return path, side, line, nil
 }
@@ -46,7 +47,9 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 		return fmt.Errorf("anchor comment: %w", err)
 	}
 	c := plan.ReviewComment{Tip: anchor.Tip, Path: path, Line: line, Side: side, Hunk: anchor.Hunk, Body: body}
-	c.ID, err = s.store.AddReviewComment(r.Context(), store.NewReviewComment{Ticket: anchor.Ticket, ReviewComment: c, At: now})
+	c.ID, err = s.store.AddReviewComment(r.Context(), store.NewReviewComment{
+		Ticket: anchor.Ticket, ReviewComment: c, At: now,
+	})
 	if err != nil {
 		return fmt.Errorf("add comment: %w", err)
 	}
@@ -68,7 +71,9 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) err
 	return s.renderThread(w, r, ticket, view.ReviewThread{}, "reviewDeleted")
 }
 
-func (s *Server) renderThread(w http.ResponseWriter, r *http.Request, ticket plan.TicketURL, t view.ReviewThread, name string) error {
+func (s *Server) renderThread(
+	w http.ResponseWriter, r *http.Request, ticket plan.TicketURL, t view.ReviewThread, name string,
+) error {
 	comments, err := s.store.ReviewComments(r.Context(), ticket)
 	if err != nil {
 		return fmt.Errorf("count comments: %w", err)

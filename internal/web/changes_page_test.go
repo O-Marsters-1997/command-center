@@ -100,7 +100,8 @@ func TestChangesPage(t *testing.T) {
 
 		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
 		threads := page.Find(".review-thread")
-		if len(threads) != 1 || !strings.Contains(threads[0].Text(), "rename this") || !strings.Contains(threads[0].Text(), "Pending") {
+		if len(threads) != 1 || !strings.Contains(threads[0].Text(), "rename this") ||
+			!strings.Contains(threads[0].Text(), "Pending") {
 			t.Fatalf("GET changes threads = %d, want one Pending thread reading %q", len(threads), "rename this")
 		}
 		if got := page.One(t, "#review-changes").Text(); got != "Review changes (1)" {
@@ -108,10 +109,12 @@ func TestChangesPage(t *testing.T) {
 		}
 
 		comments, err := st.ReviewComments(t.Context(), sessionTicket)
-		if err != nil || len(comments) != 1 || !strings.HasPrefix(comments[0].Hunk, "@@") || !strings.HasSuffix(comments[0].Hunk, "+package a") {
+		if err != nil || len(comments) != 1 || !strings.HasPrefix(comments[0].Hunk, "@@") ||
+			!strings.HasSuffix(comments[0].Hunk, "+package a") {
 			t.Fatalf("ReviewComments = %+v, %v, want one with the hunk through the line", comments, err)
 		}
-		deleted := do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments/"+strconv.FormatInt(comments[0].ID, 10)+"/delete", req{})
+		deletePath := "/s/acme/web/1/changes/comments/" + strconv.FormatInt(comments[0].ID, 10) + "/delete"
+		deleted := do(t, server, http.MethodPost, deletePath, req{})
 		if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body, ">Review changes<") {
 			t.Fatalf("POST delete = %d %q, want 200 with no count", deleted.Code, deleted.Body)
 		}
@@ -125,7 +128,8 @@ func TestChangesPage(t *testing.T) {
 		t.Parallel()
 		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
 		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"99"}, "body": {"x"}}
-		rec := do(t, openServer(st, fixedClock(testNow), dataDir), http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+		server := openServer(st, fixedClock(testNow), dataDir)
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("POST comment on line 99 = %d, want %d", rec.Code, http.StatusBadRequest)
 		}
