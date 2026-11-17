@@ -16,7 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
-var ErrNoLocalTip =errors.New("view: ticket has no local tip")
+var ErrNoLocalTip = errors.New("view: ticket has no local tip")
 
 type ChangedFile struct {
 	git.FileDiff
