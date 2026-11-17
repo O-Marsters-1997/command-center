@@ -40,7 +40,7 @@ cc-fake-gh root-open-cc1
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=2 'run_launched'
-grep -count=2 'new cc-' $WORK/tp.log
+grep -count=2 'cut cc-' $WORK/cut.log
 
 cc-wait agent-done.log 'commits.sh repo-cc-2-x'
 
@@ -50,7 +50,7 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2-x
 grep -count=2 'pr create' $WORK/gh.log
 
 # Exactly two spawns, ever -- one implement run per ticket -- the fake agent log is
-# independent of both tp.log's cuts and events' own count.
+# independent of both cut.log's cuts and events' own count.
 grep -count=2 'commits.sh' $WORK/agent.log
 
 # Nothing was cd-ed into and ps was never run: the whole run is driven by cc request and cc

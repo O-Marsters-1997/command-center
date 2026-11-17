@@ -28,4 +28,4 @@ exec cc request POST '/verb?verb=retry-push&ticket=https://github.com/sandbox-or
 exec cc tick --count 1
 
 grep -count=2 'pr create' $WORK/gh.log
-grep -count=1 'new cc-1-x' $WORK/tp.log
+grep -count=1 'cut cc-1-x' $WORK/cut.log

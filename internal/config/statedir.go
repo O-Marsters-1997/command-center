@@ -9,7 +9,7 @@ import (
 )
 
 // Workspace is the tree under the data directory: state/ for everything the app owns and
-// repos/ for the checkouts, with the worktrees tp cuts beside them.
+// repos/ for the checkouts, with the worktrees treepad cuts beside them.
 type Workspace struct {
 	DataDir          string
 	StateDir         string

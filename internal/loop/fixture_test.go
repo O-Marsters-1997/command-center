@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -50,21 +50,20 @@ func newLoopWithDeps(deps loop.Deps, opts ...loop.Option) *loop.Loop {
 }
 
 type loopFixture struct {
-	Store     *storepkg.Store
-	Loop      *loop.Loop
-	Fake      *runnertest.Runner
-	Forge     *ghtest.Forge
-	Worktrees *tptest.Worktrees
-	Cfg       config.Config
-	WS        config.Workspace
-	Root      string
-	Tickets   []storepkg.Ticket
+	Store   *storepkg.Store
+	Loop    *loop.Loop
+	Fake    *runnertest.Runner
+	Forge   *ghtest.Forge
+	Cfg     config.Config
+	WS      config.Workspace
+	Root    string
+	Tickets []storepkg.Ticket
 }
 
 type fixtureConfig struct {
 	maxAgents  int
 	spendLimit int
-	tpFails    bool
+	cutFails   bool
 	tickets    []storepkg.Ticket
 	extraRepo  string
 }
@@ -77,7 +76,7 @@ func withSpendLimit5h(limit int) fixtureOption {
 	return func(c *fixtureConfig) { c.spendLimit = limit }
 }
 
-func withFailingTp() fixtureOption { return func(c *fixtureConfig) { c.tpFails = true } }
+func withFailingCut() fixtureOption { return func(c *fixtureConfig) { c.cutFails = true } }
 
 func withExtraRepo(name string) fixtureOption { return func(c *fixtureConfig) { c.extraRepo = name } }
 
@@ -111,21 +110,19 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	}
 	fake := &runnertest.Runner{}
 	forge := &ghtest.Forge{}
-	worktrees := &tptest.Worktrees{}
-	cut := loop.WithWorktrees(worktrees)
-	if fc.tpFails {
-		cut = loop.WithWorktrees(failingCut{worktrees})
+	cut := loop.WithWorktrees(git.Library{})
+	if fc.cutFails {
+		cut = loop.WithWorktrees(failingCut{})
 	}
 	return &loopFixture{
-		Store:     store,
-		Loop:      newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake, loop.WithForge(forge), cut),
-		Fake:      fake,
-		Forge:     forge,
-		Worktrees: worktrees,
-		Cfg:       cfg,
-		WS:        ws,
-		Root:      root,
-		Tickets:   fc.tickets,
+		Store:   store,
+		Loop:    newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake, loop.WithForge(forge), cut),
+		Fake:    fake,
+		Forge:   forge,
+		Cfg:     cfg,
+		WS:      ws,
+		Root:    root,
+		Tickets: fc.tickets,
 	}
 }
 

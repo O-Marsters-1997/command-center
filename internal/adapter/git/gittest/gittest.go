@@ -2,6 +2,7 @@ package gittest
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,6 +79,24 @@ func HasRef(tb testing.TB, dir, ref string) bool {
 		tb.Fatalf("resolve ref %q in %s: %v: %s", ref, dir, err, stderr.String())
 	}
 	return true
+}
+
+func RunMain(m *testing.M) int {
+	home, err := os.MkdirTemp("", "cc-home-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create home: %v\n", err)
+		return 1
+	}
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			fmt.Fprintf(os.Stderr, "remove home: %v\n", err)
+		}
+	}()
+	if err := os.Setenv("HOME", home); err != nil {
+		fmt.Fprintf(os.Stderr, "set HOME: %v\n", err)
+		return 1
+	}
+	return m.Run()
 }
 
 func identity(tb testing.TB, dir string) {

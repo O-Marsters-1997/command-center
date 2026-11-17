@@ -31,6 +31,10 @@ var testdataDir string
 
 var agentsDir string
 
+const cutHooks = `[[hooks.pre_new]]
+command = 'echo "cut {{.Branch}}" >> "$CC_CUT_LOG" && test -z "$CC_CUT_FAIL"'
+`
+
 func TestMain(m *testing.M) {
 	os.Exit(runScripts(m))
 }
@@ -60,7 +64,6 @@ func runScripts(m *testing.M) (code int) {
 	if err := errors.Join(
 		build(bin, "cc", "./cmd/cc", "-tags=e2e"),
 		build(bin, "gh", "./e2e/fakegh"),
-		build(bin, "tp", "./e2e/faketp"),
 	); err != nil {
 		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
 		return 1
@@ -172,7 +175,8 @@ func ccInitRepo(ts *testscript.TestScript, neg bool, args []string) {
 
 	ts.Check(ts.Exec("git", "init", "-q", "-b", "main", repo))
 	ts.Check(os.WriteFile(filepath.Join(repo, "README.md"), []byte("e2e\n"), 0o600))
-	ts.Check(ts.Exec("git", "-C", repo, "add", "README.md"))
+	ts.Check(os.WriteFile(filepath.Join(repo, ".treepad.toml"), []byte(cutHooks), 0o600))
+	ts.Check(ts.Exec("git", "-C", repo, "add", "README.md", ".treepad.toml"))
 	ts.Check(ts.Exec("git", "-C", repo, "commit", "-q", "-m", "initial commit"))
 	ts.Check(ts.Exec("git", "init", "-q", "--bare", remote))
 	ts.Check(ts.Exec("git", "-C", repo, "remote", "add", "origin", remote))
@@ -359,7 +363,7 @@ func scriptEnv(work, databaseURL string) []string {
 		"CC_DATABASE_URL=" + databaseURL,
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
-		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),
+		"CC_CUT_LOG=" + filepath.Join(work, "cut.log"),
 		"CC_AGENT_LOG=" + filepath.Join(work, "agent.log"),
 	}
 }

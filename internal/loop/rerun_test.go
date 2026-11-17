@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
@@ -34,14 +32,15 @@ func TestReRun(t *testing.T) {
 				gittest.Run(t, f.Repo, "worktree", "remove", "--force", f.Worktree)
 				delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
 			},
-			wantPath: func(f *pushFixture) string { return filepath.Join(filepath.Dir(f.Repo), "wt-"+f.Ticket.Branch) },
+			wantPath: func(f *pushFixture) string {
+				return filepath.Join(filepath.Dir(f.Repo), filepath.Base(f.Repo)+"-"+f.Ticket.Branch)
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			worktrees := &tptest.Worktrees{}
-			f := newPushFixture(t, loop.WithWorktrees(worktrees))
+			f := newPushFixture(t)
 			firstRunID, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 				Ticket: f.Ticket.URL, Kind: "agent", PromptHash: "hash-1",
 			})
@@ -65,7 +64,7 @@ func TestReRun(t *testing.T) {
 			}
 			tt.prepare(t, f)
 			fake := &runnertest.Runner{}
-			f.reset(testAt.Add(time.Second), fake, loop.WithWorktrees(worktrees))
+			f.reset(testAt.Add(time.Second), fake)
 			f.tick(t)
 
 			spawns := fake.Spawns()

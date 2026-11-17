@@ -1,8 +1,8 @@
-# tp new fails: the row derives cut_failed, and it derives it once. `cut failed` is a terminal
+# The cut fails: the row derives cut_failed, and it derives it once. `cut failed` is a terminal
 # state with no worktree and no pgid, ever (docs/prd-command-centre.md § The states), so the
-# assertion this script exists for is the *count* -- exactly one tp new attempt across four
+# assertion this script exists for is the *count* -- exactly one cut attempt across four
 # ticks. A cut that retried every tick would still show the same state on the page while
-# hammering tp forever, which is the failure a state-only assertion cannot see.
+# hammering the repo forever, which is the failure a state-only assertion cannot see.
 
 cc-init-repo
 cc-config single-task-commits
@@ -11,21 +11,22 @@ cc-fake-gh no-prs
 exec cc import project:single-task
 exec cc tick --count 1
 
-# faketp logs its argv before it reads CC_TP_FAIL, so a failed cut is still a logged attempt.
-env CC_TP_FAIL=1
+# The repo's pre_new hook logs the attempt before it reads CC_CUT_FAIL and exits 1, so a failed
+# cut is still a logged attempt.
+env CC_CUT_FAIL=1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 exec cc tick --count 1
 
 exec cc request GET /tickets
 stdout -count=1 'title="Cut failed"'
-stdout 'tp new failed to cut a worktree'
-grep -count=1 'new cc-1-x' $WORK/tp.log
+stdout 'cutting the worktree failed'
+grep -count=1 'cut cc-1-x' $WORK/cut.log
 
 # The cut-failed run counts as this task's prior run, so job 3 never picks it up again: three
 # more ticks, still one attempt.
 exec cc tick --count 3
-grep -count=1 'new cc-1-x' $WORK/tp.log
+grep -count=1 'cut cc-1-x' $WORK/cut.log
 exec cc request GET /tickets
 stdout -count=1 'title="Cut failed"'
 

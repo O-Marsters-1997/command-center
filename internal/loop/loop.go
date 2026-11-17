@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/O-Marsters-1997/treepad"
+
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
@@ -728,7 +730,12 @@ func (l *Loop) cutAndSpawn(
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
 
-	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
+	err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch)
+	if errors.Is(err, treepad.ErrPostHook) {
+		l.logger.Warn("post hook failed after cutting worktree", "branch", branch, "err", err)
+		err = nil
+	}
+	if err != nil {
 		failed := store.RunSkeleton{
 			Ticket: ticket.URL, PromptHash: promptHash,
 			Step: begin.step.Name, Workflow: begin.workflow.Name, WorkflowHash: begin.workflow.Hash,
@@ -753,7 +760,7 @@ func (l *Loop) cutAndSpawn(
 	}
 	worktreePath, ok := worktrees[branch]
 	if !ok {
-		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
+		return fmt.Errorf("cut of %s reported success but git worktree list does not show it", branch)
 	}
 
 	if err := l.spawnRun(ctx, t, spawnSpec{

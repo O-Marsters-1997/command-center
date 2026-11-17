@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
+
+const longTimeout = 10 * time.Minute
 
 var ErrOriginMismatch = errors.New("checkout origin differs from the configured remote")
 
@@ -76,7 +78,7 @@ func seed(ctx context.Context, name, remote, seedPath, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	if err := command.RunWithin(ctx, tp.LongTimeout, "", "git", "clone", "--local", seedPath, checkout); err != nil {
+	if err := command.RunWithin(ctx, longTimeout, "", "git", "clone", "--local", seedPath, checkout); err != nil {
 		return fmt.Errorf("repo %s: copy %s: %w", name, seedPath, err)
 	}
 	if _, err := git(ctx, checkout, "remote", "set-url", "origin", remote); err != nil {
@@ -89,7 +91,7 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	if err := command.RunWithin(ctx, tp.LongTimeout, "", "git", "clone", remote, checkout); err != nil {
+	if err := command.RunWithin(ctx, longTimeout, "", "git", "clone", remote, checkout); err != nil {
 		return fmt.Errorf("repo %s: clone %s: %w", name, remote, err)
 	}
 	return nil

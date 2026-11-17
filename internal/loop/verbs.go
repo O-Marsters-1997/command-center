@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/O-Marsters-1997/treepad"
+
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -237,18 +238,10 @@ func (l *Loop) removeWorktreeOne(
 	merged := obs.PRs[ticket.Ref()].State == plan.Merged
 
 	repoPath := l.checkout(ticket.Repo)
-	worktreePath, worktreePresent := obs.Worktrees[ticket.Ref()]
+	_, worktreePresent := obs.Worktrees[ticket.Ref()]
 
-	mode := tp.RemoveMerged
+	forced := false
 	if worktreePresent {
-		dirty, err := git.Dirty(ctx, worktreePath)
-		if err != nil {
-			return fmt.Errorf("check worktree dirty for %s: %w", url, err)
-		}
-		if dirty {
-			return refuse("worktree is dirty")
-		}
-
 		provenTips := make([]string, len(removal.ProvenTips))
 		for i, tip := range removal.ProvenTips {
 			provenTips[i] = string(tip)
@@ -260,14 +253,20 @@ func (l *Loop) removeWorktreeOne(
 		switch state {
 		case git.RemovableByMerged:
 		case git.RemovableByForce:
-			mode = tp.RemoveForced
+			forced = true
 		case git.NotRemovable:
 			return refuse("worktree holds unpushed commits")
 		case git.RemovalUnknown:
 			return fmt.Errorf("check unpushed commits for %s: removal state is unknown", url)
 		}
 
-		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
+		err = l.worktrees.Remove(ctx, repoPath, ticket.Branch)
+		switch {
+		case errors.Is(err, treepad.ErrPostHook):
+			l.logger.Warn("post hook failed after removing worktree", "ticket", url, "err", err)
+		case errors.Is(err, treepad.ErrDirty):
+			return refuse("worktree is dirty")
+		case err != nil:
 			return refuse(err.Error())
 		}
 	}
@@ -277,7 +276,7 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	var detail string
-	if mode == tp.RemoveForced {
+	if forced {
 		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
 	if err := l.event(ctx, url, store.EventWorktreeRemoved, detail); err != nil {

@@ -110,44 +110,6 @@ func TestRemovalStateFor(t *testing.T) {
 	})
 }
 
-func TestDirty(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		mutate func(t *testing.T, dir string)
-		want   bool
-	}{
-		{name: "a clean worktree", mutate: func(*testing.T, string) {}, want: false},
-		{
-			name: "an uncommitted change",
-			mutate: func(t *testing.T, dir string) {
-				t.Helper()
-				if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("x\n"), 0o600); err != nil {
-					t.Fatalf("WriteFile(scratch.txt): %v", err)
-				}
-			},
-			want: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			dir := gittest.Init(t)
-			tt.mutate(t, dir)
-			got, err := git.Dirty(t.Context(), dir)
-			if err != nil {
-				t.Fatalf("Dirty(%s) error = %v", tt.name, err)
-			}
-			if got != tt.want {
-				t.Errorf("Dirty(%s) = %v, want %v", tt.name, got, tt.want)
-			}
-		})
-	}
-}
-
 func pruneRemoteTrackingRef(t *testing.T, repoPath, branch string) {
 	t.Helper()
 	gittest.Run(t, repoPath, "update-ref", "-d", "refs/remotes/origin/"+branch)

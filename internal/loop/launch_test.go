@@ -126,8 +126,8 @@ func TestLaunch(t *testing.T) {
 			t.Fatalf("spawns = %d, want 1", len(spawns))
 		}
 		spawned := spawns[0]
-		if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
-			t.Errorf("spawn worktree = %q, want it to end in wt-cc-1", spawned.WorktreePath)
+		if got := gittest.Run(t, spawned.WorktreePath, "branch", "--show-current"); got != "cc-1" {
+			t.Errorf("spawn worktree %q is on branch %q, want cc-1", spawned.WorktreePath, got)
 		}
 		want := [2]string{f.WS.SettingsPath, f.WS.SystemPromptPath}
 		if got := [2]string{spawned.SettingsPath, spawned.SystemPromptPath}; got != want {
@@ -255,7 +255,7 @@ func TestLaunch(t *testing.T) {
 
 	t.Run("a failed cut is recorded with its cause and claims no pgid", func(t *testing.T) {
 		t.Parallel()
-		f := newLoopFixture(t, withFailingTp())
+		f := newLoopFixture(t, withFailingCut())
 		f.AuthoriseAll(t)
 		f.Tick(t)
 
@@ -271,11 +271,29 @@ func TestLaunch(t *testing.T) {
 		}
 	})
 
+	t.Run("a failed post hook still spawns and records no cut failure", func(t *testing.T) {
+		t.Parallel()
+		f := newLoopFixture(t)
+		lp := newLoop(f.Store, noOpObserve, fixedClock(testAt), f.Cfg, f.WS, f.Fake,
+			loop.WithForge(f.Forge), loop.WithWorktrees(postHookWorktrees{}))
+		f.AuthoriseAll(t)
+		if err := lp.RunOnce(t.Context()); err != nil {
+			t.Fatalf("RunOnce() error = %v", err)
+		}
+
+		if got := len(f.Fake.Spawns()); got != 1 {
+			t.Errorf("spawns = %d, want 1", got)
+		}
+		if ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventCutFailed, "") {
+			t.Errorf("Events() has a %s event, want none", storepkg.EventCutFailed)
+		}
+	})
+
 	t.Run("a failed spawn is recorded with its cause", func(t *testing.T) {
 		t.Parallel()
 		f := newLoopFixture(t)
 		lp := newLoop(f.Store, noOpObserve, fixedClock(testAt), f.Cfg, f.WS, failingSpawn{f.Fake},
-			loop.WithForge(f.Forge), loop.WithWorktrees(f.Worktrees))
+			loop.WithForge(f.Forge))
 		f.AuthoriseAll(t)
 		if err := lp.RunOnce(t.Context()); err != nil {
 			t.Fatalf("RunOnce() error = %v", err)

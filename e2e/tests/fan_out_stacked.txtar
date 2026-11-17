@@ -1,7 +1,7 @@
 # One authorisation of a 1+4 stacked fan-out opens five PRs with no human action between the
 # root's PR opening and the four dependents' launches: job 3 alone, on the tick that sees the
 # root's PR open, cuts and spawns every dependent off the root's own branch (issue #33; plan.
-# Unlocked's stacked arm, tp new --base and plan.PRBody's "Merge after #N").
+# Unlocked's stacked arm, the cut's base and plan.PRBody's "Merge after #N").
 
 cc-init-repo
 cc-config fan-out-stacked
@@ -36,10 +36,10 @@ cc-fake-gh root-open-fanout
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=5 'run_launched'
-grep -count=1 'new cc-2-x --base origin/cc-1-x' $WORK/tp.log
-grep -count=1 'new cc-3-x --base origin/cc-1-x' $WORK/tp.log
-grep -count=1 'new cc-4-x --base origin/cc-1-x' $WORK/tp.log
-grep -count=1 'new cc-5-x --base origin/cc-1-x' $WORK/tp.log
+grep -count=1 'cut cc-2-x' $WORK/cut.log
+grep -count=1 'cut cc-3-x' $WORK/cut.log
+grep -count=1 'cut cc-4-x' $WORK/cut.log
+grep -count=1 'cut cc-5-x' $WORK/cut.log
 
 cc-wait agent-done.log 'commits.sh repo-cc-[2-5]-x' 4
 
@@ -56,7 +56,7 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-5-x
 grep -count=4 'pr create --base cc-1-x --fill --label keep-open --body Merge after #42' $WORK/gh.log
 
 # Five spawns, ever -- one implement run per ticket -- the fake agent log is independent
-# of both tp.log's cuts and events' count.
+# of both cut.log's cuts and events' count.
 grep -count=5 'commits.sh' $WORK/agent.log
 
 exec cc request GET /tickets

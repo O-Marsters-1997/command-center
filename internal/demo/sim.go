@@ -186,7 +186,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 			Logger: logger, Store: st, Clock: clock, Runner: agent, Observe: loop.NewObserver(st, forge, cfg),
 			Config: cfg, Workspace: ws, Tracker: resolve,
 		},
-		loop.WithForge(forge), loop.WithWorktrees(Worktrees{}),
+		loop.WithForge(forge),
 	)
 	server := web.NewServer(
 		web.Deps{Logger: logger, Store: st, Clock: clock, DataDir: ws.DataDir, BoardPollSeconds: 1},

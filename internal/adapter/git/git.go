@@ -162,7 +162,7 @@ func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string,
 }
 
 func Push(ctx context.Context, repoPath, branch string) error {
-	_, err := git(ctx, repoPath, "push", "origin", branch)
+	_, err := git(ctx, repoPath, "push", "-u", "origin", branch)
 	if err != nil {
 		return fmt.Errorf("push branch %s: %w", branch, err)
 	}
@@ -173,7 +173,7 @@ func Push(ctx context.Context, repoPath, branch string) error {
 // recorded push are not discarded.
 func PushRestacked(ctx context.Context, repoPath, branch, expectedRemote string) error {
 	lease := "--force-with-lease=" + branch + ":" + expectedRemote
-	_, err := git(ctx, repoPath, "push", lease, "origin", branch)
+	_, err := git(ctx, repoPath, "push", "-u", lease, "origin", branch)
 	if err != nil {
 		return fmt.Errorf("push restacked branch %s: %w", branch, err)
 	}
@@ -220,14 +220,6 @@ func RemovalStateFor(ctx context.Context, repoPath, branch string, provenTips ..
 		return NotRemovable, nil
 	}
 	return RemovableByForce, nil
-}
-
-func Dirty(ctx context.Context, worktreePath string) (bool, error) {
-	out, err := git(ctx, worktreePath, "status", "--porcelain")
-	if err != nil {
-		return false, fmt.Errorf("check worktree status: %w", err)
-	}
-	return len(strings.TrimSpace(string(out))) > 0, nil
 }
 
 // MergeFFOnly preserves head branches pushed by reviewer suggestions or Mergify's

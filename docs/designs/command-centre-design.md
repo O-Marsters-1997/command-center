@@ -36,17 +36,17 @@ started.
 | `to-plan` → `to-tickets` | Above-ticket knowledge: which repos, which **edges** (`blocked_by[]`) | Execute anything, or express chain semantics |
 | **User** | Which work exists, which slice to authorise, review, merge | — |
 | **App** | Launching agents *inside an authorised slice*, liveness, pushing, PR draft state, CI reading, retargeting a child PR when its parent merges, one status page | Merge, run tests, choose work, hold tracker or domain knowledge |
-| `tp` (treepad) | Cutting and removing one repo's worktrees | Know that a workspace or a second repo exists |
+| treepad (Go library) | Cutting, removing and listing one repo's worktrees | Know that a workspace or a second repo exists |
 | Mergify's merge queue | Integrating at merge time — merges `main` into the branch (`update_method: merge`, both repos) and re-runs CI. **Only PRs based on `main` enter it** (`base=main` is the first `common_checks` condition in both files), which is why the app owns the retarget step above |
 | CI | Whether the work is sound | — |
 | GitHub | Review, merge, deleting a merged branch (`deleteBranchOnMerge: true`, both repos — verified via API) | — |
 
-**treepad's surface is two commands** — `tp new <branch> --base <ref>` and
-`tp remove --force` — and never `tp batch sync`, `gh stack link`, or `restack`. Stacking
-needs a `--base` on the worktree and a `--base` on `gh pr create`; it does not need batch
-machinery. **The app learns worktree paths from `git worktree list --porcelain`**, never by
-reimplementing treepad's path derivation — that keeps the contract surface at the two
-commands.
+**treepad is a library dependency, and its surface is three calls** — `treepad.New` (a branch
+off a `Base` ref), `treepad.Remove` (always `Force: true`) and `treepad.List` — and never
+`tp batch sync`, `gh stack link`, or `restack`. The app does not shell out to `tp`. Stacking
+needs a `Base` on the worktree and a `--base` on `gh pr create`; it does not need batch
+machinery. **The app learns worktree paths from the worktree list**, never by
+reimplementing treepad's path derivation.
 
 The app never imports treepad's `batch/` package. This is **a rule, not a structure** —
 `batch/` is exported and importable across repos — and it holds because `unlock` is a
@@ -81,7 +81,7 @@ DECIDE    unlock(edges, PRs) → {unlocked, base_branch, reason}   (pure)
           push plan · verdicts · draft state · launch plan        (pure)
   ▼
 ACT       push + gh pr create --base <branch> --fill --label keep-open
-          tp new <branch> --base origin/<base_branch> · spawn agent
+          treepad.New(Branch, Base: origin/<base_branch>) · spawn agent
           gh pr edit --base main when a parent merged
   │  agent runs /implement → runs the repo's tests → commits → exits
   ▼
@@ -173,7 +173,7 @@ open-blocker dependent to `blocked` in one tick.
     row and cascade its dependents.
 12. Retargets: for each child whose parent merged, `gh pr edit --base main` (idempotent if
     GitHub's own retarget-on-branch-delete already did it) — §4a.
-13. Cuts and spawns per the launch plan: `tp new <branch> --base origin/<base_branch>`,
+13. Cuts and spawns per the launch plan: `treepad.New` with `Base: origin/<base_branch>`,
     spawn. Intent is recorded before each outward effect (invariant 20), and worktree
     existence is re-read from git, not inferred from run rows — so a crash between cut and
     record is also a non-event.
@@ -207,7 +207,7 @@ unlock(task, prs) → { unlocked, base_branch, reason }
 ```
 
 `base_branch` is a **branch name**. The two consumers need different forms and one value
-cannot serve both: `tp new` takes a ref and gets `origin/<base_branch>` (a bare parent name
+cannot serve both: `treepad.New` takes a ref and gets `origin/<base_branch>` (a bare parent name
 may not resolve locally — verified); `gh pr create --base` takes the branch name.
 
 **Open is enough**, and this is the load-bearing decision. A descendant stacks on unlanded
@@ -401,7 +401,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
 | `needs you` | a gating check red (other than the compat one), a refused push, or a refused fast-forward | re-run, kill, close PR |
 | `failed` | dead run, no commits since its baseline | re-run |
-| `cut failed` | `tp new` failed (hooks, disk, base unresolvable) | re-run |
+| `cut failed` | `treepad.New` failed (hooks, disk, base unresolvable) | re-run |
 | `push failed` | push or `gh pr create` failed | **retry push** (no agent), re-run |
 | `base gone` | this row ran, and its parent's PR was closed unmerged — the work it built on is withdrawn | re-run, remove worktree |
 | `pr closed unmerged` | someone closed this row's PR | re-run, remove |
@@ -426,7 +426,7 @@ relaunching an agent to retry a network operation spends the wall for nothing) �
 (**`gh run rerun <id>`** on the compat check's run, id parsed from the rollup's
 `detailsUrl` — no gating workflow in either repo declares `workflow_dispatch`) · `close PR`
 (`gh pr close` — the app can open a PR; it needs a sanctioned way to unopen one) · `cancel` ·
-`kill` (`-pgid` SIGTERM → SIGKILL) · `remove worktree` (`tp remove --force`, only with MERGED
+`kill` (`-pgid` SIGTERM → SIGKILL) · `remove worktree` (`treepad.Remove` with `Force`, only with MERGED
 PR state or on a `base gone`/`cancelled` row the user clears). Worktree path, pgid, base and
 elapsed time render as plain text so a terminal session is a copy-paste away.
 
@@ -575,9 +575,9 @@ Numbered so each can become a test.
 3. The app never deletes a worktree that is dirty or holds unpushed commits.
 4. The app never performs a git write (merge, reset, branch move) in a worktree with a live
    run or an unresolved merge.
-5. The app's treepad surface is `tp new --base` and `tp remove --force`; it never calls
-   `tp batch sync`, `gh stack init/add/submit/modify/rebase/sync`, or any rebase; worktree
-   paths come from `git worktree list --porcelain`, never from a reimplemented derivation.
+5. The app's treepad surface is `treepad.New`, `treepad.Remove` and `treepad.List`; it never
+   calls `tp batch sync`, `gh stack init/add/submit/modify/rebase/sync`, or any rebase;
+   worktree paths come from the worktree list, never from a reimplemented derivation.
 6. Liveness is `ps -o stat=,etime= -p <pgid>` plus a start-time identity check, not
    `kill(-pgid, 0)`: on Darwin, `kill(-pgid, 0)` against a process
    group whose leader has become a zombie returns `EPERM`, not `ESRCH` — exactly the moment
@@ -627,12 +627,10 @@ Numbered so each can become a test.
 
 ## 10 · Required upstream and workspace changes
 
-**treepad — one, small.** Expose `tp remove --force`. The plumbing exists —
-`lifecycle.go:242-247` builds `git worktree remove --force` and `git branch -D` behind an
-internal `force` bool, and the TUI already passes it — but `internal/commands/remove.go`
-registers no flags. ~5 lines. Needed because `merge_method: squash` means `git branch -d`
-refuses *every* merged ticket. The app passes `--force` only when it holds MERGED PR state
-for the branch, or when the user clears a `base gone`/`cancelled` row.
+**treepad — landed in v0.6.0.** The library exposes `New`, `Remove` and `List`. `Remove`'s
+`Force` skips only the ancestor check, which `merge_method: squash` fails for *every* merged
+ticket; `ErrDirty` and `ErrUnpushed` still refuse. The app always passes `Force`, and decides
+beforehand whether the branch is proven removed (ADR 7).
 
 **Workspace config (plain, private gitignored files) — two one-liners, take them now:**
 
@@ -658,11 +656,12 @@ Verified 2026-08-22 against source, config, live PRs and the GitHub API.
 
 **treepad**
 
-- `tp new` accepts `--base`, "Ref to branch the new worktree from" (`docs/commands.md:74`);
-  the value is passed verbatim to `git worktree add --no-checkout -b <branch> <path> <base>`
-  (`lifecycle/lifecycle.go:69`) — no validation, no fetch, and **a bare parent-branch name
-  resolves only if a local branch exists**, hence `origin/<base_branch>` always (§4).
-- `tp remove` takes no flags; the force plumbing exists unexposed (§10).
+- `treepad.New` takes `Base`, the ref to branch the new worktree from; it resolves it with
+  `git rev-parse`, does no fetch, and **a bare parent-branch name resolves only if a local
+  branch exists**, hence `origin/<base_branch>` always (§4). A branch cut from `origin/<base>`
+  tracks it as its upstream.
+- `treepad.Remove` with `Force` skips the ancestor check only; `ErrDirty` and `ErrUnpushed`
+  still refuse (§10).
 - treepad never fetches before cutting; its only `git fetch` is
   `internal/treepad/restack.go:87` (a member's own branch). Hence observe step 1.
 - `RestackDecision` (`batch/restack.go:26`) compares a branch against its own upstream,
@@ -749,7 +748,7 @@ Verified 2026-08-22 against source, config, live PRs and the GitHub API.
    the row has a verb, and automating the distinction is priced in §12.
 6. **Squash-merge is server-enforced**, which is what makes merge-don't-rebase free (§4a).
 7. **`tp prune` is unusable for this workflow** (unfiltered, ancestry-based); the app uses
-   `tp remove --force` with PR-state evidence instead.
+   `treepad.Remove` with `Force` and PR-state evidence instead.
 8. **Merge order lives in the PR body, not GitHub's stack UI** — `gh pr create --base`
    makes ordinary PRs, and real Stacks exist only via the `gh stack` CLI, which stays out
    (§12).

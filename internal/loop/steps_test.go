@@ -31,7 +31,7 @@ func TestWorkflowPass(t *testing.T) {
 		Worktrees: map[plan.BranchRef]string{},
 	}
 	lp := newLoop(f.Store, observing(obs), fixedClock(testAt), f.Cfg, f.WS, f.Fake,
-		loop.WithForge(f.Forge), loop.WithWorktrees(f.Worktrees))
+		loop.WithForge(f.Forge))
 	tick := func(t *testing.T) {
 		t.Helper()
 		if err := lp.RunOnce(t.Context()); err != nil {
