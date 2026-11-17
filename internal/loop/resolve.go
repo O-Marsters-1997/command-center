@@ -66,6 +66,7 @@ func (l *Loop) resolveOne(
 	for _, peer := range byURL {
 		if peer.Repo == ticket.Repo && peer.Branch == base {
 			brief.BaseTitle = peer.Title
+			break
 		}
 	}
 
