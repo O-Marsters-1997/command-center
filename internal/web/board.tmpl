@@ -40,8 +40,8 @@
       <span class="glyph{{if .Alive}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" title="{{.Label}}"></span>
       <span class="hidden font-mono text-xs text-meta md:inline">{{.Ticket}}</span>
       <span class="grid min-w-0">
-        <b class="truncate text-sm font-medium">{{if .Title}}{{.Title}}{{else}}untitled{{end}}{{if .Protected}}<span class="flag flag-warning">protected</span>{{end}}</b>
-        <span class="truncate text-xs text-muted">{{.Detail}}</span>
+        <b class="truncate text-sm font-medium">{{if .Title}}{{.Title}}{{else}}untitled{{end}}</b>
+        <span class="truncate text-xs text-muted">{{if .Protected}}<span class="flag flag-warning ml-0 mr-1">protected</span>{{end}}{{.Detail}}</span>
       </span>
       <span class="hidden truncate text-xs text-fg-2 md:block">
         {{- if eq $.Context "feature"}}<span class="chip max-w-full border-border-soft text-muted">{{template "mark" .Mark}}<span class="truncate">{{.FeatureTitle}}</span></span>
