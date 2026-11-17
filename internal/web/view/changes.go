@@ -35,6 +35,8 @@ type Changes struct {
 	Deleted int
 
 	Comments map[string][]plan.ReviewComment // by path
+
+	CanFollowUp bool
 }
 
 func (c Changes) Pending() int {
@@ -56,6 +58,7 @@ type ChangesPage struct {
 	SessionPath string
 	ViewedKey   string
 	Folders     []ChangeFolder
+	Reason      plan.Reason
 }
 
 func (p ChangesPage) FileID(f ChangedFile) string {
@@ -122,7 +125,8 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef, dat
 	matches := plan.Classify(paths, plan.Policy{Deny: settings.Deny, Protect: settings.Protect})
 	changes := Changes{
 		Ticket: plan.TicketURL(row.URL), Base: base, Tip: tip, State: entry.State, PR: option.None[string](),
-		Comments: map[string][]plan.ReviewComment{},
+		Comments:    map[string][]plan.ReviewComment{},
+		CanFollowUp: slices.Contains(plan.Verbs(entry.State), plan.VerbFollowUp),
 	}
 	for _, c := range pending {
 		changes.Comments[c.Path] = append(changes.Comments[c.Path], c)
@@ -153,6 +157,7 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef, dat
 		SessionPath: self,
 		ViewedKey:   "cc:viewed:" + row.URL + ":" + string(tip),
 		Folders:     groupByFolder(changes.Files),
+		Reason:      entry.Reason,
 	}, nil
 }
 

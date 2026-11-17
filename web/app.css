@@ -2972,6 +2972,15 @@
     font-family: var(--font-sans);
   }
 
+  .review-popover:not(:popover-open) {
+    display: none;
+  }
+
+  .review-popover:popover-open {
+    min-width: 20rem;
+    padding: var(--space-3);
+  }
+
   .diff-added {
     background: var(--color-s-done-soft);
   }

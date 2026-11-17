@@ -124,6 +124,66 @@ func TestChangesPage(t *testing.T) {
 		}
 	})
 
+	t.Run("request changes queues one follow-up quoting the comments and clears them", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+
+		note := url.Values{"note": {"mind the API"}}
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: note})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("POST request = %d, want %d", rec.Code, http.StatusSeeOther)
+		}
+		comments, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(comments) != 0 {
+			t.Errorf("ReviewComments after request = %v, %v, want none", comments, err)
+		}
+		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
+		if err != nil || len(intents) != 1 {
+			t.Fatalf("PendingVerbIntents(follow-up) = %v, %v, want one", intents, err)
+		}
+		message := storepkg.DecodeFollowUpPayload(intents[0].Payload).Message
+		for _, want := range []string{"mind the API", "src/a.go", "line 1", "@@", "+package a", "rename this"} {
+			if !strings.Contains(message, want) {
+				t.Errorf("follow-up message = %q, want it to contain %q", message, want)
+			}
+		}
+	})
+
+	t.Run("request changes is refused with the reason where follow-up is not offered", func(t *testing.T) {
+		t.Parallel()
+		var sha string
+		st, dataDir := changesFixture(t, func(repo string) string {
+			sha = gittest.Run(t, repo, "rev-parse", "cc-1")
+			return sha
+		})
+		obs := plan.Observation{
+			ObservedAt: testNow,
+			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {}},
+			LocalTips:  map[plan.BranchRef]plan.SHA{branchRef("acme/web", "cc-1"): plan.SHA(sha)},
+			PRs:        map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): {Number: 7, State: plan.Merged}},
+		}
+		if err := st.SaveObservation(t.Context(), obs); err != nil {
+			t.Fatalf("SaveObservation: %v", err)
+		}
+		server := openServer(st, fixedClock(testNow), dataDir)
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		if _, disabled := page.One(t, "#review-popover button[type=submit]").Attr("disabled"); !disabled {
+			t.Error("GET changes Request changes button is enabled, want disabled")
+		}
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: url.Values{"note": {"x"}}})
+		if rec.Code != http.StatusConflict {
+			t.Errorf("POST request = %d, want %d", rec.Code, http.StatusConflict)
+		}
+		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
+		if err != nil || len(intents) != 0 {
+			t.Errorf("PendingVerbIntents(follow-up) = %v, %v, want none", intents, err)
+		}
+	})
+
 	t.Run("a comment on a line outside the diff is refused", func(t *testing.T) {
 		t.Parallel()
 		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })

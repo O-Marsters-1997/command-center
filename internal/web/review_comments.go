@@ -71,6 +71,40 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) err
 	return s.renderThread(w, r, ticket, view.ReviewThread{}, "reviewDeleted")
 }
 
+func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	ref := sessionRef(r)
+	now := s.clock.Now()
+	ticket, err := s.view.SessionTicket(ctx, now, ref)
+	if err != nil {
+		return fmt.Errorf("resolve ticket: %w", err)
+	}
+	snap, err := s.view.Snapshot(ctx, now)
+	if err != nil {
+		return fmt.Errorf("load snapshot: %w", err)
+	}
+	if !snap.Offers(ticket, plan.VerbFollowUp) {
+		entry, _ := snap.Entry(ticket)
+		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s",
+			ticket, entry.State, plan.VerbFollowUp, entry.Reason)
+	}
+	comments, err := s.store.ReviewComments(ctx, ticket)
+	if err != nil {
+		return fmt.Errorf("load comments: %w", err)
+	}
+	note := strings.TrimSpace(r.FormValue("note"))
+	if note == "" && len(comments) == 0 {
+		return errorf(http.StatusBadRequest, "add a comment or a note before requesting changes")
+	}
+	payload := store.FollowUpPayload{Message: plan.ComposeReview(note, comments)}
+	if err := s.store.RequestChanges(ctx, ticket, payload, now); err != nil {
+		return fmt.Errorf("request changes: %w", err)
+	}
+	s.nudge()
+	seeOther(w, r, ref.Path())
+	return nil
+}
+
 func (s *Server) renderThread(
 	w http.ResponseWriter, r *http.Request, ticket plan.TicketURL, t view.ReviewThread, name string,
 ) error {
