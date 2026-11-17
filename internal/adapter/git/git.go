@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/O-Marsters-1997/treepad"
+
 	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 )
 
@@ -26,61 +28,21 @@ func Fetch(ctx context.Context, repoPath string) error {
 
 // WorktreePaths reads the branch-to-path map, including worktrees mid-rebase.
 func WorktreePaths(ctx context.Context, repoPath string) (map[string]string, error) {
-	out, err := git(ctx, repoPath, "worktree", "list", "--porcelain")
+	repoDir, err := filepath.Abs(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve repo path %s: %w", repoPath, err)
+	}
+	listed, err := treepad.List(ctx, treepad.ListOptions{RepoDir: repoDir})
 	if err != nil {
 		return nil, fmt.Errorf("list worktrees: %w", err)
 	}
-	worktrees, detached := parseWorktrees(out)
-	for _, path := range detached {
-		branch, err := rebasingBranch(ctx, path)
-		if err != nil {
-			return nil, fmt.Errorf("read rebasing branch: %w", err)
-		}
-		if branch != "" {
-			worktrees[branch] = path
+	worktrees := make(map[string]string, len(listed))
+	for _, w := range listed {
+		if w.Branch != "" {
+			worktrees[w.Branch] = w.Path
 		}
 	}
 	return worktrees, nil
-}
-
-func parseWorktrees(out []byte) (worktrees map[string]string, detached []string) {
-	worktrees = map[string]string{}
-	var path string
-	for line := range strings.Lines(string(out)) {
-		field, value, _ := strings.Cut(strings.TrimSpace(line), " ")
-		switch field {
-		case "worktree":
-			path = value
-		case "branch":
-			worktrees[strings.TrimPrefix(value, "refs/heads/")] = path
-		case "detached":
-			detached = append(detached, path)
-		}
-	}
-	return worktrees, detached
-}
-
-// Git lists a rebasing worktree as detached; its branch comes from the rebase state.
-func rebasingBranch(ctx context.Context, worktreePath string) (string, error) {
-	for _, dir := range rebaseDirs {
-		headName, err := gitPath(ctx, worktreePath, dir+"/head-name")
-		if err != nil {
-			return "", fmt.Errorf("resolve rebase head: %w", err)
-		}
-		ref, err := os.ReadFile(headName)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return "", fmt.Errorf("read %s for %s: %w", headName, worktreePath, err)
-		}
-		name := strings.TrimSpace(string(ref))
-		if !strings.HasPrefix(name, "refs/heads/") {
-			return "", nil
-		}
-		return strings.TrimPrefix(name, "refs/heads/"), nil
-	}
-	return "", nil
 }
 
 var rebaseDirs = []string{"rebase-merge", "rebase-apply"}
