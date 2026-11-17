@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 	"github.com/O-Marsters-1997/treepad"
+
+	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 )
 
 // Fetch updates remote-tracking refs. GitHub deletes merged branches, so --prune
