@@ -250,7 +250,7 @@ func TestRemoveWorktree(t *testing.T) {
 		}
 	})
 
-	t.Run("succeeds for a base_gone row", func(t *testing.T) {
+	t.Run("succeeds for a withdrawn row", func(t *testing.T) {
 		t.Parallel()
 		f := newRemoveWorktreeFixture(t, "cc-2")
 		blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -268,7 +268,7 @@ func TestRemoveWorktree(t *testing.T) {
 			t.Fatalf("RunOnce: %v", err)
 		}
 		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
-			t.Error("a base_gone row must be removable too")
+			t.Error("a withdrawn row must be removable too")
 		}
 
 		tickets, err := f.store.Tickets(t.Context())

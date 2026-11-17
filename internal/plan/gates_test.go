@@ -74,6 +74,14 @@ func TestSnapshot_Removal(t *testing.T) {
 			want: plan.Removal{ProvenTips: []plan.SHA{"pushed"}},
 		},
 		{
+			name: "own pull request closed unmerged is removable",
+			in: plan.Input{
+				Obs:  plan.Observation{PRs: map[plan.BranchRef]plan.PR{key(child.Branch): {State: plan.Closed}}},
+				Runs: ran,
+			},
+			want: plan.Removal{},
+		},
+		{
 			name: "neither merged nor base gone",
 			in:   plan.Input{Obs: plan.Observation{PRs: openPRs(blocker, child)}, Runs: ran},
 			want: plan.Removal{Refusal: "neither merged nor base gone"},

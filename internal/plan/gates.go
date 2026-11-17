@@ -46,7 +46,7 @@ func removalFor(e Entry, pr PR) Removal {
 	switch {
 	case e.HoldsWorktree():
 		refusal = HeldWorktreeRefusal
-	case !merged && (e.Run.IsNone() || !e.Unlock.BlockerClosed):
+	case !merged && (e.Run.IsNone() || !e.Unlock.BlockerClosed && pr.State != Closed):
 		refusal = "neither merged nor base gone"
 	}
 	var tips []SHA
