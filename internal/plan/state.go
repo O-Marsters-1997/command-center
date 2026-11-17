@@ -78,6 +78,10 @@ var stateInfo = map[State]stateSpec{
 		name: "awaiting_input", label: "Asked you a question", glyph: GlyphAttention,
 		verbs: []Verb{VerbFollowUp, VerbReRun},
 	},
+	PushRefused: {
+		name: "push_refused", label: "Push refused", glyph: GlyphAttention,
+		verbs: []Verb{VerbRetryPush, VerbReRun, VerbFollowUp},
+	},
 }
 
 func (s State) String() string {

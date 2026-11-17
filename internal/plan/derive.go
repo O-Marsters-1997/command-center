@@ -47,9 +47,9 @@ type PushRow struct {
 }
 
 type PushFact struct {
-	Refused     bool
-	RefusedPath string
-	Failed      bool
+	Refused bool
+	Denied  []PathMatch
+	Failed  bool
 }
 
 type RefreshFact struct {
@@ -391,7 +391,7 @@ func (r Rules) runFor(
 		if summary.Outcome.Unwrap() == OutcomePush {
 			pf := in.Pushes[t.URL]
 			fact.PushRefused = pf.Refused
-			fact.PushRefusedPath = pf.RefusedPath
+			fact.PushDenied = pf.Denied
 			fact.PushFailed = pf.Failed
 			rf := in.Refreshes[t.URL]
 			fact.RefreshRefused = rf.Refused

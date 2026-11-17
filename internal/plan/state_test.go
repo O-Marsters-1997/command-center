@@ -57,6 +57,7 @@ var stateDecisions = []struct {
 	{state: plan.ConflictsWithMain, verbs: []plan.Verb{plan.VerbRefresh}},
 	{state: plan.VerificationFailed, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
 	{state: plan.WaitingOnProducerDeploy, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}},
+	{state: plan.PushRefused, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
 }
 
 func TestVerbs(t *testing.T) {
@@ -105,7 +106,7 @@ func TestState_Label(t *testing.T) {
 		plan.Blocked: "Blocked", plan.Ready: "Ready to launch", plan.Queued: "Queued",
 		plan.Running: "Agent running", plan.Failed: "Failed", plan.CutFailed: "Cut failed",
 		plan.PushPending: "Waiting to push", plan.Checking: "Waiting on checks", plan.NeedsYou: "Needs you",
-		plan.PushFailed: "Push failed", plan.AwaitingInput: "Asked you a question",
+		plan.PushFailed: "Push failed", plan.PushRefused: "Push refused", plan.AwaitingInput: "Asked you a question",
 		plan.ReviewMe: "Ready for review", plan.PRMerged: "Merged", plan.PRClosedUnmerged: "PR closed",
 		plan.BaseGone: "Base gone", plan.Cancelled: "Cancelled", plan.BaseMoved: "Base moved",
 		plan.CIFailed: "Checks failing", plan.RefreshConflicted: "Refresh conflicted",
