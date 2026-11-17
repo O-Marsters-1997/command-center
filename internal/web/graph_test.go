@@ -121,7 +121,7 @@ func TestGraphJSON(t *testing.T) {
 		}
 		wantKeys := []string{
 			"after", "alive", "blocking", "checks_passed", "checks_total", "detail", "elapsed", "glyph", "label",
-			"pr_number", "reason", "ref", "session_path", "state", "title", "url",
+			"pr_number", "protected", "reason", "ref", "session_path", "state", "title", "url",
 		}
 		for _, row := range rows {
 			keys := make([]string, 0, len(row))
