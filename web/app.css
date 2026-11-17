@@ -2838,3 +2838,123 @@
     display: none;
   }
 }
+
+@layer components {
+  .changes-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-canvas);
+  }
+
+  .changes-toolbar [data-viewed-progress] {
+    margin-left: auto;
+  }
+
+  .changes-body {
+    display: grid;
+    grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: start;
+    margin-top: var(--space-3);
+  }
+
+  .changes-tree {
+    position: sticky;
+    top: 3.5rem;
+    max-height: calc(100vh - 5rem);
+    overflow: auto;
+  }
+
+  .changes-tree ul {
+    margin: 0;
+    padding-left: var(--space-3);
+    list-style: none;
+  }
+
+  .changes-files {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .diff-file {
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-surface);
+    overflow-x: auto;
+  }
+
+  .diff-head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface-2);
+    cursor: pointer;
+  }
+
+  .diff-head label {
+    margin-left: auto;
+  }
+
+  .diff-added-count {
+    color: var(--color-s-done);
+  }
+
+  .diff-deleted-count {
+    color: var(--color-s-failed);
+  }
+
+  .diff-hunk {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .diff-hunk caption {
+    padding: var(--space-1) var(--space-3);
+    text-align: left;
+  }
+
+  .diff-no {
+    width: 3.5rem;
+    padding: 0 var(--space-2);
+    color: var(--color-meta);
+    text-align: right;
+    user-select: none;
+  }
+
+  .diff-text pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .diff-added {
+    background: var(--color-s-done-soft);
+  }
+
+  .diff-deleted {
+    background: var(--color-s-failed-soft);
+  }
+
+  @media (max-width: 760px) {
+    .changes-body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .changes-tree {
+      position: static;
+      max-height: none;
+    }
+  }
+}
