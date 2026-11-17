@@ -146,6 +146,7 @@ const (
 	VerificationFailed
 	WaitingOnProducerDeploy
 	AwaitingInput
+	PushRefused
 )
 
 type RunFact struct {
@@ -153,7 +154,7 @@ type RunFact struct {
 	Outcome                  option.Option[Outcome]
 	LogPath                  string
 	PushRefused              bool
-	PushRefusedPath          string
+	PushDenied               []PathMatch
 	PushFailed               bool
 	PROpen                   bool
 	PRMerged                 bool
@@ -277,7 +278,7 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 	case run.VerificationFailed:
 		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:
-		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
+		return PushRefused, refusedReason(run.PushDenied)
 	case run.PushFailed:
 		return PushFailed, "push or pull request creation failed"
 	case run.RefreshRefused:
@@ -296,6 +297,17 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}
+}
+
+func refusedReason(denied []PathMatch) Reason {
+	parts := make([]string, len(denied))
+	for i, m := range denied {
+		parts[i] = m.Path
+		if m.Rule != "" {
+			parts[i] += " (" + m.Rule + ")"
+		}
+	}
+	return Reason("push refused: " + strings.Join(parts, ", "))
 }
 
 func stateOfVerdict(r verdict.Result) State {

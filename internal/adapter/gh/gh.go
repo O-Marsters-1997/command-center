@@ -114,7 +114,7 @@ func (c CLI) List(ctx context.Context, repoPath string, tracked []string) (Snaps
 type Forge interface {
 	List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error)
 	IssueTitles(ctx context.Context, repoPath string) (map[string]string, error)
-	Create(ctx context.Context, repoPath, base, body string, draft bool) error
+	Create(ctx context.Context, repoPath, base, body string, draft bool, labels []string) error
 	Ready(ctx context.Context, repoPath, branch string) error
 	Edit(ctx context.Context, repoPath, branch, base string) error
 	Comment(ctx context.Context, repoPath, branch, body string) error
@@ -123,8 +123,14 @@ type Forge interface {
 
 // Create opens a pull request with the keep-open label to avoid GitHub's
 // configured 14-day auto-close; a non-empty body overrides --fill.
-func (c CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) error {
+func (c CLI) Create(ctx context.Context, repoPath, base, body string, draft bool, labels []string) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
+	for _, label := range labels {
+		if _, err := c.Run(ctx, repoPath, "label", "create", label, "--force"); err != nil {
+			return fmt.Errorf("create label %s: %w", label, err)
+		}
+		args = append(args, "--label", label)
+	}
 	if body != "" {
 		args = append(args, "--body", body)
 	}

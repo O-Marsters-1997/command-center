@@ -445,8 +445,8 @@ ticket filters. No underline tabs.
   flight and a collapsed Settled, with the 5h/Week meters and Shortcuts in the footer.
 - **Card** (Needs you only): a 10px panel holding the glyph and title with the age since the
   ticket's latest event ("2m") in mono `meta` at the top right, then avatar · feature · mono ref in
-  `muted`, then "Label. Last line" (the run's final agent message from `runs.last_message`, else
-  the reason) clamped to two lines with the label in medium weight
+  `muted`, then "Label. Reason Last line" (the reason, then the run's final agent message from
+  `runs.last_message` when there is one) clamped to two lines with the label in medium weight
   (tinted `accent` or `s-failed` by glyph), then one inline `btn-sm` verb (Reply for an agent's
   question). The label is the state's sentence-case word and the detail is the reason with ticket
   URLs shortened to refs; the raw state name and log paths never render. The selected card takes

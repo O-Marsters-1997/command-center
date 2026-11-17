@@ -321,6 +321,44 @@ func TestCLI_IssueTitles(t *testing.T) {
 	})
 }
 
+func TestCLI_Create(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates each label before passing it", func(t *testing.T) {
+		t.Parallel()
+		var calls [][]string
+		cli := fakeGH(func(args []string) ([]byte, error) {
+			calls = append(calls, args)
+			return nil, nil
+		})
+
+		if err := cli.Create(t.Context(), "/wt", "main", "", false, []string{"cc-protected"}); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		want := [][]string{
+			{"label", "create", "cc-protected", "--force"},
+			{"pr", "create", "--base", "main", "--fill", "--label", "keep-open", "--label", "cc-protected"},
+		}
+		if diff := cmp.Diff(want, calls); diff != "" {
+			t.Errorf("gh calls mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a failed label create stops before the pull request", func(t *testing.T) {
+		t.Parallel()
+		cli := fakeGH(func(args []string) ([]byte, error) {
+			if args[0] == "pr" {
+				t.Error("gh pr create ran after the label create failed")
+			}
+			return nil, errGH
+		})
+
+		if err := cli.Create(t.Context(), "/wt", "main", "", false, []string{"cc-protected"}); !errors.Is(err, errGH) {
+			t.Errorf("Create() error = %v, want %v", err, errGH)
+		}
+	})
+}
+
 func TestPRState_String(t *testing.T) {
 	t.Parallel()
 

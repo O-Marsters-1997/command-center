@@ -10,6 +10,7 @@ type RepoSettings struct {
 	CompatCheck   string            `toml:"compat_check"`
 	MergifySHA    string            `toml:"mergify_sha"`
 	Deny          []string          `toml:"deny"`
+	Protect       []string          `toml:"protect"`
 	Checks        verdict.Predicate `toml:"checks"`
 	VerifyCommand []string          `toml:"verify_command"`
 }

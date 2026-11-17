@@ -27,6 +27,7 @@ type Push struct {
 	BaseSHA    plan.SHA
 	BaseBranch string
 	At         time.Time
+	Protected  []plan.PathMatch
 }
 
 type SpendQuery struct {

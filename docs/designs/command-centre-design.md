@@ -475,8 +475,14 @@ every required check, with a live secret in env — install-time execution is th
 from an agent diff to a credential, which is why the config surface is listed, not just the
 workflow directory.
 
-**No diff touching a policy path is ever pushed.** That row goes `needs you` with the
-offending paths listed, and the refusal lands in `events`.
+**The policy has two tiers** ([ADR 23](../adr/0023-protected-paths-push-and-are-shown-loudly.md)).
+A diff touching a **denied** path (`.command-centre.toml`, `.mergify.yml`, `.env*`, `.npmrc`) is
+never pushed: that row goes `push refused` with every offending path listed, and the refusal lands in
+`events`. A diff touching a **protected** path (`.github/**`, `CODEOWNERS`, `**/package.json`,
+lockfiles, `pnpm-workspace.yaml`) pushes normally, and its PR is labelled `cc-protected`. The
+paths are recorded on the push and flagged on the board, the session page and the PR body. A repo adds to
+either list, moves a default from deny to protect with `protect`, or keeps the stricter behaviour
+by listing protected defaults in `deny`.
 
 **The predicate copy gets a staleness detector.** The app records `sha256(.mergify.yml)`
 beside each repo's predicate; when the file's hash no longer matches, green verdicts are

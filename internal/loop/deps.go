@@ -17,9 +17,10 @@ import (
 type forge interface {
 	List(ctx context.Context, repoPath string, tracked []string) (gh.Snapshot, error)
 	IssueTitles(ctx context.Context, repoPath string) (map[string]string, error)
-	Create(ctx context.Context, repoPath, base, body string, draft bool) error
+	Create(ctx context.Context, repoPath, base, body string, draft bool, labels []string) error
 	Ready(ctx context.Context, repoPath, branch string) error
 	Edit(ctx context.Context, repoPath, branch, base string) error
+	Comment(ctx context.Context, repoPath, branch, body string) error
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 }
 

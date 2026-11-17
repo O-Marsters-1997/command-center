@@ -2,10 +2,14 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -36,6 +40,22 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, ob
 	})
 }
 
+func sameProtectedPaths(now []plan.PathMatch, last option.Option[plan.PushRow]) bool {
+	var before []plan.PathMatch
+	if last.IsSome() {
+		before = last.Unwrap().Protected
+	}
+	paths := func(ms []plan.PathMatch) []string {
+		out := make([]string, len(ms))
+		for i, m := range ms {
+			out[i] = m.Path
+		}
+		slices.Sort(out)
+		return out
+	}
+	return slices.Equal(paths(now), paths(before))
+}
+
 func pushBranch(ctx context.Context, repoPath, branch string, tip plan.SHA, restacked bool) error {
 	recordedTip := string(tip)
 	if !restacked || recordedTip == "" {
@@ -57,12 +77,25 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	base := e.Unlock.BaseBranch
 	repoPath := l.checkout(t.Repo)
 
-	changed, err := git.ChangedPaths(ctx, repoPath, "origin/"+base, t.Branch)
+	stats, err := git.DiffStat(ctx, repoPath, "origin/"+base, t.Branch)
 	if err != nil {
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
-	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: obs.Settings[t.Repo].Deny}); refused {
-		return l.event(ctx, url, store.EventPushRefused, path)
+	changed := make([]string, len(stats))
+	counts := make(map[string]git.FileStat, len(stats))
+	for i, s := range stats {
+		changed[i] = s.Path
+		counts[s.Path] = s
+	}
+	settings := obs.Settings[t.Repo]
+	policy := plan.Policy{Deny: settings.Deny, Protect: settings.Protect}
+	matches := plan.Classify(changed, policy)
+	if denied := plan.Denied(matches); len(denied) > 0 {
+		detail, err := json.Marshal(denied)
+		if err != nil {
+			return fmt.Errorf("encode denied paths: %w", err)
+		}
+		return l.event(ctx, url, store.EventPushRefused, string(detail))
 	}
 
 	var lastPushed plan.SHA
@@ -73,9 +106,25 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 		return l.event(ctx, url, store.EventPushFailed, err.Error())
 	}
 
+	protected := plan.Protected(matches)
+	for i, m := range protected {
+		protected[i].Added, protected[i].Deleted = counts[m.Path].Added, counts[m.Path].Deleted
+	}
+	section := plan.ProtectedSection(protected)
+
 	if obs.PRs[t.Ref()].State != plan.Open {
+		body := l.prBody(ctx, t.URL, p.Body)
+		var labels []string
+		if section != "" {
+			body = strings.TrimSpace(body + "\n\n" + section)
+			labels = []string{plan.ProtectedLabel}
+		}
 		worktree := obs.Worktrees[t.Ref()]
-		if err := l.forge.Create(ctx, worktree, base, l.prBody(ctx, t.URL, p.Body), p.OpensAsDraft); err != nil {
+		if err := l.forge.Create(ctx, worktree, base, body, p.OpensAsDraft, labels); err != nil {
+			return l.event(ctx, url, store.EventPushFailed, err.Error())
+		}
+	} else if section != "" && !sameProtectedPaths(protected, e.LastPush) {
+		if err := l.forge.Comment(ctx, repoPath, t.Branch, section); err != nil {
 			return l.event(ctx, url, store.EventPushFailed, err.Error())
 		}
 	}
@@ -86,6 +135,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	}
 	push := store.Push{
 		Ticket: plan.TicketURL(url), Tip: p.LocalTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
+		Protected: protected,
 	}
 	if err := l.store.RecordPush(ctx, push); err != nil {
 		return fmt.Errorf("record push of %s: %w", t.Branch, err)

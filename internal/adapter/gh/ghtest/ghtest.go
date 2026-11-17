@@ -12,6 +12,7 @@ import (
 type Call struct {
 	Method, Repo, Branch, Base, Body, Issue string
 	Draft                                   bool
+	Labels                                  []string
 }
 
 type Forge struct {
@@ -71,8 +72,8 @@ func (f *Forge) IssueTitles(_ context.Context, repo string) (map[string]string, 
 	return titles, nil
 }
 
-func (f *Forge) Create(_ context.Context, repo, base, body string, draft bool) error {
-	f.Record(Call{Method: "Create", Repo: repo, Base: base, Body: body, Draft: draft})
+func (f *Forge) Create(_ context.Context, repo, base, body string, draft bool, labels []string) error {
+	f.Record(Call{Method: "Create", Repo: repo, Base: base, Body: body, Draft: draft, Labels: labels})
 	return nil
 }
 

@@ -70,8 +70,8 @@ var errForge = errors.New("forge refused")
 
 type failingCreate struct{ *ghtest.Forge }
 
-func (f failingCreate) Create(_ context.Context, repo, base, body string, draft bool) error {
-	f.Record(ghtest.Call{Method: "Create", Repo: repo, Base: base, Body: body, Draft: draft})
+func (f failingCreate) Create(_ context.Context, repo, base, body string, draft bool, labels []string) error {
+	f.Record(ghtest.Call{Method: "Create", Repo: repo, Base: base, Body: body, Draft: draft, Labels: labels})
 	return errForge
 }
 

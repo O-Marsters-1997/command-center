@@ -3,58 +3,97 @@ package plan_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func TestPushRefused(t *testing.T) {
+func TestClassify(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		paths    []string
-		policy   plan.Policy
-		refused  bool
-		wantPath string
+		name       string
+		paths      []string
+		policy     plan.Policy
+		want       []plan.PathMatch
+		wantPushed bool
 	}{
 		{
-			name: "workflow file", paths: []string{".github/workflows/ci.yml"},
-			refused: true, wantPath: ".github/workflows/ci.yml",
-		},
-		{name: "root mergify config", paths: []string{".mergify.yml"}, refused: true, wantPath: ".mergify.yml"},
-		{name: "the repo settings file", paths: []string{plan.SettingsFile}, refused: true, wantPath: plan.SettingsFile},
-		{
-			name: "the repo settings file whatever the deny list says", paths: []string{plan.SettingsFile},
-			policy: plan.Policy{Deny: []string{"nothing/**"}}, refused: true, wantPath: plan.SettingsFile,
+			name: "workflow file is protected by default", paths: []string{".github/workflows/x.yaml"},
+			want:       []plan.PathMatch{{Path: ".github/workflows/x.yaml", Rule: ".github/**", Tier: plan.TierProtected}},
+			wantPushed: true,
 		},
 		{
-			name: "nested package.json", paths: []string{"packages/foo/package.json"},
-			refused: true, wantPath: "packages/foo/package.json",
-		},
-		{name: "pnpm lockfile", paths: []string{"pnpm-lock.yaml"}, refused: true, wantPath: "pnpm-lock.yaml"},
-		{name: "bun lockfile", paths: []string{"web/bun.lock"}, refused: true, wantPath: "web/bun.lock"},
-		{name: "npmrc", paths: []string{".npmrc"}, refused: true, wantPath: ".npmrc"},
-		{
-			name: "local env file", paths: []string{".env.development.local"},
-			refused: true, wantPath: ".env.development.local",
+			name: "protect list naming a default changes nothing", paths: []string{".github/workflows/x.yaml"},
+			policy:     plan.Policy{Protect: []string{".github/**"}},
+			want:       []plan.PathMatch{{Path: ".github/workflows/x.yaml", Rule: ".github/**", Tier: plan.TierProtected}},
+			wantPushed: true,
 		},
 		{
-			name: "per-repo deny addition", paths: []string{"scripts/gen.sh"},
-			policy: plan.Policy{Deny: []string{"scripts/gen.sh"}}, refused: true, wantPath: "scripts/gen.sh",
+			name: "mergify config is denied", paths: []string{".mergify.yml"},
+			want: []plan.PathMatch{{Path: ".mergify.yml", Rule: ".mergify.yml", Tier: plan.TierDenied}},
 		},
 		{
-			name: "the first hit among several paths", paths: []string{"internal/app/handler.go", ".mergify.yml", "CODEOWNERS"},
-			refused: true, wantPath: ".mergify.yml",
+			name: "env file is denied", paths: []string{".env.local"},
+			want: []plan.PathMatch{{Path: ".env.local", Rule: ".env*", Tier: plan.TierDenied}},
 		},
-		{name: "application-only diff clears", paths: []string{"internal/app/handler.go"}},
+		{
+			name: "protect moves a default deny to protected", paths: []string{".npmrc"},
+			policy:     plan.Policy{Protect: []string{".npmrc"}},
+			want:       []plan.PathMatch{{Path: ".npmrc", Rule: ".npmrc", Tier: plan.TierProtected}},
+			wantPushed: true,
+		},
+		{
+			name: "the settings file stays denied whatever protect says", paths: []string{plan.SettingsFile},
+			policy: plan.Policy{Protect: []string{plan.SettingsFile}},
+			want:   []plan.PathMatch{{Path: plan.SettingsFile, Rule: plan.SettingsFile, Tier: plan.TierDenied}},
+		},
+		{
+			name: "a path in both lists is denied", paths: []string{"packages/foo/package.json"},
+			policy: plan.Policy{Deny: []string{"packages/foo/package.json"}},
+			want: []plan.PathMatch{
+				{Path: "packages/foo/package.json", Rule: "packages/foo/package.json", Tier: plan.TierDenied},
+			},
+		},
+		{
+			name: "matches keep input order", paths: []string{"a.go", "bun.lock", ".npmrc", "CODEOWNERS"},
+			want: []plan.PathMatch{
+				{Path: "bun.lock", Rule: "**/bun.lock", Tier: plan.TierProtected},
+				{Path: ".npmrc", Rule: ".npmrc", Tier: plan.TierDenied},
+				{Path: "CODEOWNERS", Rule: "CODEOWNERS", Tier: plan.TierProtected},
+			},
+		},
+		{name: "application-only diff matches nothing", paths: []string{"internal/app/handler.go"}, wantPushed: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			refused, path := plan.PushRefused(tt.paths, tt.policy)
-			if refused != tt.refused || (refused && path != tt.wantPath) {
-				t.Errorf("PushRefused(%q) = %t, %q, want %t, %q", tt.paths, refused, path, tt.refused, tt.wantPath)
+			got := plan.Classify(tt.paths, tt.policy)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Classify(%q) mismatch (-want +got):\n%s", tt.paths, diff)
+			}
+			if pushed := len(plan.Denied(got)) == 0; pushed != tt.wantPushed {
+				t.Errorf("Classify(%q) pushes = %t, want %t", tt.paths, pushed, tt.wantPushed)
+			}
+			if n := len(plan.Denied(got)) + len(plan.Protected(got)); n != len(got) {
+				t.Errorf("Denied + Protected of %v = %d matches, want %d", got, n, len(got))
 			}
 		})
+	}
+}
+
+func TestProtectedSection(t *testing.T) {
+	t.Parallel()
+
+	if got := plan.ProtectedSection(nil); got != "" {
+		t.Errorf("ProtectedSection(nil) = %q, want empty", got)
+	}
+	got := plan.ProtectedSection([]plan.PathMatch{
+		{Path: ".github/workflows/ci.yaml", Rule: ".github/**", Added: 3, Deleted: 1},
+	})
+	want := "## Protected paths\n\n- `.github/workflows/ci.yaml` (rule `.github/**`) +3 −1"
+	if got != want {
+		t.Errorf("ProtectedSection() = %q, want %q", got, want)
 	}
 }
 

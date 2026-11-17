@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,6 +29,8 @@ type sessionRunOpts struct {
 	KeepPrompt bool
 	Alive      bool
 	Outcome    plan.Outcome
+
+	LastMessage option.Option[string]
 }
 
 func sessionStore(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
@@ -75,7 +78,7 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 	if !opts.Alive {
 		if err := st.RecordDisposition(ctx, storepkg.Disposition{
 			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(0),
-			Cost: option.None[float64](), EndedAt: testNow,
+			Cost: option.None[float64](), EndedAt: testNow, LastMessage: opts.LastMessage,
 		}); err != nil {
 			t.Fatalf("RecordDisposition(%d): %v", runID, err)
 		}
@@ -144,6 +147,76 @@ func writeLog(t *testing.T, n int) string {
 
 func sessionPagePath(ticketURL string) string { return view.SessionPath(ticketURL) }
 
+func protectedPushStore(t *testing.T, matches []plan.PathMatch) *storepkg.Store {
+	t.Helper()
+	st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", Outcome: plan.OutcomeFailed})
+	if err := st.RecordPush(t.Context(), storepkg.Push{
+		Ticket: sessionTicket, Tip: "tip", BaseSHA: "base", BaseBranch: "main", At: testNow, Protected: matches,
+	}); err != nil {
+		t.Fatalf("RecordPush(%q): %v", sessionTicket, err)
+	}
+	obs := plan.Observation{
+		ObservedAt: testNow,
+		PRs:        map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): {Number: 7, State: plan.Open}},
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {}},
+	}
+	if err := st.SaveObservation(t.Context(), obs); err != nil {
+		t.Fatalf("SaveObservation: %v", err)
+	}
+	return st
+}
+
+func TestProtectedChanges(t *testing.T) {
+	t.Parallel()
+
+	matches := []plan.PathMatch{{
+		Path: ".github/ci.yml", Rule: ".github/**", Tier: plan.TierProtected, Added: 3, Deleted: 1,
+	}}
+
+	t.Run("flags the board and rail and lists paths on the session page", func(t *testing.T) {
+		t.Parallel()
+		st := protectedPushStore(t, matches)
+		server := newServer(st, testNow)
+
+		board := htmltest.Parse(t, renderPath(t, server, "/tickets"))
+		if got := board.One(t, "a[data-ref] .flag-warning").Text(); got != "protected" {
+			t.Errorf("GET /tickets flag = %q, want %q", got, "protected")
+		}
+		rail := htmltest.Parse(t, renderPath(t, server, "/rail"))
+		if got := rail.One(t, ".rail-link .flag-warning").Text(); got != "protected" {
+			t.Errorf("GET /rail flag = %q, want %q", got, "protected")
+		}
+
+		item := sessionMain(t, st, "/s/acme/web/1").One(t, ".session-protected li")
+		sum := sha256.Sum256([]byte(".github/ci.yml"))
+		wantHref := fmt.Sprintf("https://github.com/acme/web/pull/7/files#diff-%x", sum)
+		if got, _ := item.One(t, "a").Attr("href"); got != wantHref {
+			t.Errorf("GET /s/acme/web/1 protected link = %q, want %q", got, wantHref)
+		}
+		for _, want := range []string{".github/ci.yml", ".github/**", "+3", "−1"} {
+			if !strings.Contains(item.Text(), want) {
+				t.Errorf("GET /s/acme/web/1 protected item = %q, want it to contain %q", item.Text(), want)
+			}
+		}
+	})
+
+	t.Run("shows nothing when the push touched no protected path", func(t *testing.T) {
+		t.Parallel()
+		st := protectedPushStore(t, nil)
+		server := newServer(st, testNow)
+
+		if got := htmltest.Parse(t, renderPath(t, server, "/tickets")).Find(".flag-warning"); len(got) != 0 {
+			t.Errorf("GET /tickets shows %d flags, want none", len(got))
+		}
+		if got := htmltest.Parse(t, renderPath(t, server, "/rail")).Find(".flag-warning"); len(got) != 0 {
+			t.Errorf("GET /rail shows %d flags, want none", len(got))
+		}
+		if got := sessionMain(t, st, "/s/acme/web/1").Find(".session-protected"); len(got) != 0 {
+			t.Errorf("GET /s/acme/web/1 lists protected changes, want none")
+		}
+	})
+}
+
 func sessionMain(t *testing.T, st *storepkg.Store, path string) htmltest.Node {
 	t.Helper()
 	return htmltest.Parse(t, renderPath(t, newServer(st, testNow), path)).One(t, "main#main")
@@ -209,6 +282,21 @@ func TestSessionPage(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a failed session shows its reason and a running one does not", func(t *testing.T) {
+		t.Parallel()
+		failed, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+		})
+		if got := sessionMain(t, failed, "/s/acme/web/1").One(t, ".session-reason").Text(); strings.TrimSpace(got) == "" {
+			t.Errorf("failed GET /s/acme/web/1 reason is empty, want the row's reason")
+		}
+
+		running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+		if reason := sessionMain(t, running, "/s/acme/web/1").Find(".session-reason"); len(reason) != 0 {
+			t.Errorf("running GET /s/acme/web/1 shows a reason: %s", reason[0].HTML())
+		}
+	})
 
 	t.Run("says when the prompt was not kept", func(t *testing.T) {
 		t.Parallel()

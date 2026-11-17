@@ -42,10 +42,15 @@ func TestStore_PushFacts(t *testing.T) {
 	t.Parallel()
 	st := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	storetest.Tickets(t, st, ticket)
+	other := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"}
+	storetest.Tickets(t, st, ticket, other)
 	appendEvents(t, st,
 		storepkg.Event{At: testNow, Kind: storepkg.EventPushRefused, Detail: "no ticket"},
 		storepkg.Event{At: testNow, TicketURL: ticket.URL, Kind: storepkg.EventPushRefused, Detail: "policy hit"},
+		storepkg.Event{
+			At: testNow, TicketURL: other.URL, Kind: storepkg.EventPushRefused,
+			Detail: `[{"path":".env.local","rule":".env*","tier":"denied"},{"path":".npmrc","rule":".npmrc","tier":"denied"}]`,
+		},
 	)
 
 	facts, err := st.PushFacts(t.Context())
@@ -55,7 +60,15 @@ func TestStore_PushFacts(t *testing.T) {
 	if _, ok := facts[""]; ok {
 		t.Errorf("PushFacts() = %+v, want no ticketless entry", facts)
 	}
-	if got := facts[plan.TicketURL(ticket.URL)]; !got.Refused || got.RefusedPath != "policy hit" {
-		t.Errorf("PushFacts()[CC-1] = %+v, want refused with path %q", got, "policy hit")
+	want := plan.PushFact{Refused: true, Denied: []plan.PathMatch{{Path: "policy hit"}}}
+	if diff := cmp.Diff(want, facts[plan.TicketURL(ticket.URL)]); diff != "" {
+		t.Errorf("PushFacts()[CC-1] mismatch (-want +got):\n%s", diff)
+	}
+	wantJSON := plan.PushFact{Refused: true, Denied: []plan.PathMatch{
+		{Path: ".env.local", Rule: ".env*", Tier: plan.TierDenied},
+		{Path: ".npmrc", Rule: ".npmrc", Tier: plan.TierDenied},
+	}}
+	if diff := cmp.Diff(wantJSON, facts[plan.TicketURL(other.URL)]); diff != "" {
+		t.Errorf("PushFacts()[CC-2] mismatch (-want +got):\n%s", diff)
 	}
 }

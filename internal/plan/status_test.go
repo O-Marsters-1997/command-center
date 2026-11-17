@@ -197,13 +197,22 @@ func statusWithLatestRun(t *testing.T) {
 			wantState: plan.CutFailed,
 		},
 		{
-			name: "a refused push derives needs you, naming the path",
+			name: "a refused push derives push refused, naming every denied path and rule",
 			latestRun: option.Some(plan.RunFact{
-				Alive: false, Outcome: option.Some(plan.OutcomePush),
-				PushRefused: true, PushRefusedPath: ".github/workflows/ci.yml",
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PushRefused: true,
+				PushDenied: []plan.PathMatch{{Path: ".env.local", Rule: ".env*"}, {Path: ".npmrc", Rule: ".npmrc"}},
 			}),
-			wantState: plan.NeedsYou,
-			reasonHas: ".github/workflows/ci.yml",
+			wantState: plan.PushRefused,
+			reasonHas: "push refused: .env.local (.env*), .npmrc (.npmrc)",
+		},
+		{
+			name: "a refused push recorded as a bare path derives a reason without a rule",
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PushRefused: true,
+				PushDenied: []plan.PathMatch{{Path: ".mergify.yml"}},
+			}),
+			wantState: plan.PushRefused,
+			reasonHas: "push refused: .mergify.yml",
 		},
 		{
 			name: "a push or PR-create failure derives push failed",

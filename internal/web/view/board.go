@@ -26,48 +26,49 @@ type Row struct {
 	Project    string `json:"-"`
 	ProjectHue int    `json:"-"`
 	// GitHub's issue list caps reads at 100 rows, leaving titles beyond the limit empty.
-	Title           string         `json:"title"`
-	State           string         `json:"state"`
-	Reason          string         `json:"reason"`
-	Label           string         `json:"label"`
-	Detail          string         `json:"detail"`
-	Updated         Age            `json:"-"`
-	Last            string         `json:"-"`
-	Question        string         `json:"-"`
-	Glyph           plan.GlyphWord `json:"glyph"`
-	Alive           bool           `json:"alive"`
-	Verbs           []plan.Verb    `json:"-"`
-	Branch          string         `json:"-"`
-	BlockedBy       []string       `json:"-"`
-	PendingVerbs    []plan.Verb    `json:"-"`
-	Base            string         `json:"-"`
-	BaseVerdict     string         `json:"-"`
-	StackDepth      int            `json:"-"`
-	MergeOrder      int            `json:"-"`
-	Warning         string         `json:"-"`
-	Blocking        []string       `json:"blocking"`
-	After           []string       `json:"after"`
-	Unlocks         []string       `json:"-"`
-	Worktree        string         `json:"-"`
-	PRNumber        int            `json:"pr_number"`
-	PRState         string         `json:"-"`
-	Pgid            string         `json:"-"`
-	Elapsed         string         `json:"elapsed"`
-	ElapsedSeconds  int            `json:"-"`
-	ElapsedPercent  int            `json:"-"`
-	LogPath         string         `json:"-"`
-	CancelCount     int            `json:"-"`
-	SpendTokens     int            `json:"-"`
-	ChecksPassed    int            `json:"checks_passed"`
-	ChecksTotal     int            `json:"checks_total"`
-	Checks          []Check        `json:"-"`
-	RedChecks       []Check        `json:"-"`
-	Draft           bool           `json:"-"`
-	DraftReason     string         `json:"-"`
-	AgentPctWeek    float64        `json:"-"`
-	FollowUpPctWeek float64        `json:"-"`
-	SpendPctWeek    float64        `json:"-"`
-	TicketOpen      bool           `json:"-"`
+	Title           string           `json:"title"`
+	State           string           `json:"state"`
+	Reason          string           `json:"reason"`
+	Label           string           `json:"label"`
+	Detail          string           `json:"detail"`
+	Updated         Age              `json:"-"`
+	Last            string           `json:"-"`
+	Question        string           `json:"-"`
+	Glyph           plan.GlyphWord   `json:"glyph"`
+	Alive           bool             `json:"alive"`
+	Verbs           []plan.Verb      `json:"-"`
+	Branch          string           `json:"-"`
+	BlockedBy       []string         `json:"-"`
+	PendingVerbs    []plan.Verb      `json:"-"`
+	Base            string           `json:"-"`
+	BaseVerdict     string           `json:"-"`
+	StackDepth      int              `json:"-"`
+	MergeOrder      int              `json:"-"`
+	Warning         string           `json:"-"`
+	Blocking        []string         `json:"blocking"`
+	After           []string         `json:"after"`
+	Unlocks         []string         `json:"-"`
+	Worktree        string           `json:"-"`
+	PRNumber        int              `json:"pr_number"`
+	PRState         string           `json:"-"`
+	Pgid            string           `json:"-"`
+	Elapsed         string           `json:"elapsed"`
+	ElapsedSeconds  int              `json:"-"`
+	ElapsedPercent  int              `json:"-"`
+	LogPath         string           `json:"-"`
+	CancelCount     int              `json:"-"`
+	SpendTokens     int              `json:"-"`
+	ChecksPassed    int              `json:"checks_passed"`
+	ChecksTotal     int              `json:"checks_total"`
+	Checks          []Check          `json:"-"`
+	RedChecks       []Check          `json:"-"`
+	Draft           bool             `json:"-"`
+	DraftReason     string           `json:"-"`
+	AgentPctWeek    float64          `json:"-"`
+	FollowUpPctWeek float64          `json:"-"`
+	SpendPctWeek    float64          `json:"-"`
+	TicketOpen      bool             `json:"-"`
+	Protected       []plan.PathMatch `json:"protected"`
 
 	Launchable  bool         `json:"-"`
 	Buttons     []VerbButton `json:"-"`
@@ -102,6 +103,23 @@ var (
 func detailOf(reason string) string {
 	reason = reasonLogPath.ReplaceAllString(reason, "")
 	return reasonURL.ReplaceAllStringFunc(reason, ticketRef)
+}
+
+type ProtectedLink struct {
+	plan.PathMatch
+	Href string
+}
+
+func (r Row) ProtectedLinks() []ProtectedLink {
+	links := make([]ProtectedLink, len(r.Protected))
+	for i, m := range r.Protected {
+		links[i] = ProtectedLink{PathMatch: m}
+		if r.PRNumber > 0 {
+			sum := sha256.Sum256([]byte(m.Path))
+			links[i].Href = fmt.Sprintf("https://github.com/%s/pull/%d/files#diff-%x", r.Repo, r.PRNumber, sum)
+		}
+	}
+	return links
 }
 
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
@@ -194,6 +212,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Blocking:       urlStrings(e.Unlock.Blocking),
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
+			Protected:      e.LastPush.UnwrapOr(plan.PushRow{}).Protected,
 		})
 	}
 

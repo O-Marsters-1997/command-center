@@ -54,22 +54,23 @@ func (r Rail) NoMatch() bool {
 }
 
 type RailItem struct {
-	URL      string
-	Ref      string
-	Title    string
-	Repo     string
-	Feature  string
-	Project  ProjectMark
-	Glyph    plan.GlyphWord
-	Label    string
-	Detail   string
-	Verb     plan.Verb
-	Reply    bool
-	Path     string
-	Selected bool
-	Started  string
-	Updated  Age
-	Last     string
+	URL       string
+	Ref       string
+	Title     string
+	Repo      string
+	Feature   string
+	Project   ProjectMark
+	Glyph     plan.GlyphWord
+	Label     string
+	Detail    string
+	Verb      plan.Verb
+	Reply     bool
+	Path      string
+	Selected  bool
+	Started   string
+	Updated   Age
+	Last      string
+	Protected bool
 }
 
 type RailFeature struct {
@@ -178,7 +179,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
 			Project: r.Mark(), Label: r.Label,
 			Detail: r.Detail, Path: scope.withScope(cmp.Or(SessionPath(r.URL), ticketsPath)),
-			Updated: r.Updated, Last: r.Last,
+			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0,
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Detail != ""

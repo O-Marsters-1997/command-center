@@ -71,7 +71,7 @@ func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) 
 		ctx := t.Context()
 
 		for name, err := range map[string]error{
-			"Create":     forge.Create(ctx, "/wt", "main", "body", true),
+			"Create":     forge.Create(ctx, "/wt", "main", "body", true, []string{"cc-protected"}),
 			"Ready":      forge.Ready(ctx, "/repo", "cc-1-first"),
 			"Edit":       forge.Edit(ctx, "/repo", "cc-1-first", "main"),
 			"Comment":    forge.Comment(ctx, "/repo", "cc-1-first", "hello"),

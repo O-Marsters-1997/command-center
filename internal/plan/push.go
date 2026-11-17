@@ -3,42 +3,87 @@ package plan
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
+type Tier string
+
+const (
+	TierUnknown   Tier = ""
+	TierDenied    Tier = "denied"
+	TierProtected Tier = "protected"
+)
+
+type PathMatch struct {
+	Path    string `json:"path"`
+	Rule    string `json:"rule"`
+	Tier    Tier   `json:"tier"`
+	Added   int    `json:"added"`
+	Deleted int    `json:"deleted"`
+}
+
 type Policy struct {
-	Deny []string
+	Deny    []string
+	Protect []string
 }
 
-var defaultDeny = []string{
-	".github/**",
-	SettingsFile,
-	".mergify.yml",
-	"CODEOWNERS",
-	"**/package.json",
-	"**/package-lock.json",
-	"**/pnpm-lock.yaml",
-	"**/yarn.lock",
-	"**/bun.lock",
-	"**/bun.lockb",
-	"pnpm-workspace.yaml",
-	".npmrc",
-	".env*",
+var defaultDeny = []string{SettingsFile, ".mergify.yml", ".env*", ".npmrc"}
+
+var defaultProtect = []string{
+	".github/**", "CODEOWNERS", "**/package.json", "**/package-lock.json", "**/pnpm-lock.yaml",
+	"**/yarn.lock", "**/bun.lock", "**/bun.lockb", "pnpm-workspace.yaml",
 }
 
-func PushRefused(changedPaths []string, policy Policy) (bool, string) {
-	patterns := make([]string, 0, len(defaultDeny)+len(policy.Deny))
-	patterns = append(patterns, defaultDeny...)
-	patterns = append(patterns, policy.Deny...)
-
-	for _, path := range changedPaths {
-		for _, pattern := range patterns {
-			if denyMatch(pattern, path) {
-				return true, path
-			}
+func Classify(changed []string, p Policy) []PathMatch {
+	deny := slices.Clone(p.Deny)
+	for _, pattern := range defaultDeny {
+		if pattern == SettingsFile || !slices.Contains(p.Protect, pattern) {
+			deny = append(deny, pattern)
 		}
 	}
-	return false, ""
+	protect := append(slices.Clone(defaultProtect), p.Protect...)
+
+	var matches []PathMatch
+	for _, path := range changed {
+		if rule, ok := firstMatch(deny, path); ok {
+			matches = append(matches, PathMatch{Path: path, Rule: rule, Tier: TierDenied})
+		} else if rule, ok := firstMatch(protect, path); ok {
+			matches = append(matches, PathMatch{Path: path, Rule: rule, Tier: TierProtected})
+		}
+	}
+	return matches
+}
+
+const ProtectedLabel = "cc-protected"
+
+func ProtectedSection(matches []PathMatch) string {
+	if len(matches) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Protected paths\n")
+	for _, m := range matches {
+		fmt.Fprintf(&b, "\n- `%s` (rule `%s`) +%d −%d", m.Path, m.Rule, m.Added, m.Deleted)
+	}
+	return b.String()
+}
+
+func Denied(matches []PathMatch) []PathMatch { return inTier(matches, TierDenied) }
+
+func Protected(matches []PathMatch) []PathMatch { return inTier(matches, TierProtected) }
+
+func inTier(matches []PathMatch, tier Tier) []PathMatch {
+	return slices.DeleteFunc(slices.Clone(matches), func(m PathMatch) bool { return m.Tier != tier })
+}
+
+func firstMatch(patterns []string, path string) (string, bool) {
+	for _, pattern := range patterns {
+		if denyMatch(pattern, path) {
+			return pattern, true
+		}
+	}
+	return "", false
 }
 
 func denyMatch(pattern, path string) bool {

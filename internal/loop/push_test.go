@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
@@ -81,7 +83,7 @@ func TestPush(t *testing.T) {
 	t.Run("refuses a policy hit, never pushes and never retries", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, ".github/workflows/x.yml", "name: x\n")
+		gittest.Commit(t, f.Worktree, ".mergify.yml", "name: x\n")
 		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 		f.tick(t)
 
@@ -92,12 +94,113 @@ func TestPush(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PushFacts: %v", err)
 		}
-		if fact := facts[plan.TicketURL(f.Ticket.URL)]; !fact.Refused || fact.RefusedPath != ".github/workflows/x.yml" {
-			t.Errorf("PushFacts() = %+v, want refused at .github/workflows/x.yml", fact)
+		fact := facts[plan.TicketURL(f.Ticket.URL)]
+		if !fact.Refused || len(fact.Denied) != 1 || fact.Denied[0].Path != ".mergify.yml" {
+			t.Errorf("PushFacts() = %+v, want refused at .mergify.yml", fact)
 		}
 		f.tick(t)
 		if got := f.events(t, "push_refused"); len(got) != 1 || got[0].TicketURL != f.Ticket.URL {
 			t.Errorf("push_refused events after two ticks = %+v, want one for %s", got, f.Ticket.URL)
+		}
+	})
+
+	t.Run("pushes a protected path", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, ".github/workflows/x.yml", "name: x\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
+			t.Error("origin has no cc-1, want a protected-path diff pushed")
+		}
+	})
+
+	t.Run("records the protected paths with their line counts", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "package.json", "{\n\"a\": 1,\n\"b\": 2\n}\n")
+		gittest.Commit(t, f.Worktree, "package.json", "{\n\"a\": 1,\n\"c\": 3\n}\n")
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		pushes, err := f.Store.LatestPushes(t.Context())
+		if err != nil {
+			t.Fatalf("LatestPushes: %v", err)
+		}
+		want := []plan.PathMatch{{Path: "package.json", Rule: "**/package.json", Tier: plan.TierProtected, Added: 4}}
+		if diff := cmp.Diff(want, pushes[plan.TicketURL(f.Ticket.URL)].Protected); diff != "" {
+			t.Errorf("LatestPushes().Protected mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("opens a protected PR with the label and section", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, ".github/workflows/ci.yaml", "name: x\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		calls := f.Forge.Calls("Create")
+		if len(calls) != 1 {
+			t.Fatalf("Create calls = %d, want 1", len(calls))
+		}
+		if diff := cmp.Diff([]string{plan.ProtectedLabel}, calls[0].Labels); diff != "" {
+			t.Errorf("Create labels mismatch (-want +got):\n%s", diff)
+		}
+		if want := ".github/workflows/ci.yaml` (rule `.github/**`) +1 −0"; !strings.Contains(calls[0].Body, want) {
+			t.Errorf("Create body = %q, want it to contain %q", calls[0].Body, want)
+		}
+	})
+
+	t.Run("opens an ordinary PR with no label", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		calls := f.Forge.Calls("Create")
+		if len(calls) != 1 || len(calls[0].Labels) != 0 || strings.Contains(calls[0].Body, "Protected paths") {
+			t.Errorf("Create calls = %+v, want one with no labels and no protected section", calls)
+		}
+	})
+
+	t.Run("comments the section once when an open PR gains a protected path", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Open}
+		gittest.Commit(t, f.Worktree, ".github/workflows/ci.yaml", "name: x\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		comments := f.Forge.Calls("Comment")
+		if len(comments) != 1 || !strings.Contains(comments[0].Body, "## Protected paths") {
+			t.Fatalf("Comment calls = %+v, want one protected-paths section", comments)
+		}
+
+		gittest.Commit(t, f.Worktree, "agent.txt", "more\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt.Add(time.Minute))
+		f.tick(t)
+		if got := len(f.Forge.Calls("Comment")); got != 1 {
+			t.Errorf("Comment calls after a push with the same set = %d, want 1", got)
+		}
+	})
+
+	t.Run("records no protected paths for an ordinary push", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		pushes, err := f.Store.LatestPushes(t.Context())
+		if err != nil {
+			t.Fatalf("LatestPushes: %v", err)
+		}
+		if got := pushes[plan.TicketURL(f.Ticket.URL)].Protected; len(got) != 0 {
+			t.Errorf("LatestPushes().Protected = %+v, want none", got)
 		}
 	})
 
