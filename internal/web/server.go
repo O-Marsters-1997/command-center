@@ -106,6 +106,9 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
+	mux.Handle("GET /s/{owner}/{name}/{n}/changes/comment", s.handle(s.handleCommentForm))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments", s.handle(s.handleAddComment))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments/{id}/delete", s.handle(s.handleDeleteComment))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
 	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
@@ -220,6 +223,7 @@ var statusMap = []struct {
 	{store.ErrInvalidProject, http.StatusBadRequest},
 	{view.ErrSessionNotFound, http.StatusNotFound},
 	{view.ErrNoLocalTip, http.StatusNotFound},
+	{view.ErrNoSuchLine, http.StatusBadRequest},
 }
 
 func statusOf(err error) int {

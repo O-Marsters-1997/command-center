@@ -10,7 +10,7 @@
     <span class="text-muted text-sm">against <code>origin/{{.Base}}</code></span>
     {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
     <span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span>
-    <button class="btn" type="button" disabled>Review changes</button>
+    {{template "reviewButton" .Pending}}
   </header>
   {{- if not .Files}}
   <p class="text-muted">Nothing differs from <code>origin/{{.Base}}</code>.</p>
@@ -29,7 +29,7 @@
       {{- end}}
     </nav>
     <div class="changes-files">
-      {{- range .Files}}
+      {{- range .Files}}{{$file := .}}
       <details class="diff-file" id="{{$.FileID .}}" data-file="{{.Path}}" open>
         <summary class="diff-head">
           <span class="font-mono text-sm">{{if .OldPath}}{{.OldPath}} → {{end}}{{.Path}}</span>
@@ -47,7 +47,9 @@
           <caption class="text-muted">{{.Header}}</caption>
           <tbody>
             {{- range .Lines}}
-            <tr class="diff-{{.Kind}}"><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre>{{.Text}}</pre></td></tr>
+            {{- $side := "new"}}{{$n := .NewLine}}{{if eq .Kind "deleted"}}{{$side = "old"}}{{$n = .OldLine}}{{end}}
+            <tr class="diff-line diff-{{.Kind}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre>{{.Text}}</pre></td></tr>
+            {{- range $.At $file.Path .}}{{template "reviewThread" $.Thread .}}{{end}}
             {{- end}}
           </tbody>
         </table>
@@ -59,3 +61,28 @@
   {{- end}}
 </article>
 {{template "shellEnd" .}}
+
+{{define "reviewButton"}}<button id="review-changes" class="btn" type="button" disabled>Review changes{{if .}} ({{.}}){{end}}</button>{{end}}
+
+{{define "reviewThread"}}<tr class="review-thread"><td colspan="4">
+  <div class="review-comment">
+    <span class="flag flag-warning">Pending</span>
+    <p>{{.Comment.Body}}</p>
+    <button type="button" class="btn" hx-post="{{.SessionPath}}/changes/comments/{{.Comment.ID}}/delete" hx-target="closest tr" hx-swap="outerHTML">Delete</button>
+  </div>
+</td></tr>{{end}}
+
+{{define "reviewForm"}}<tr class="review-thread"><td colspan="4">
+  <form class="review-comment" hx-post="{{.SessionPath}}/changes/comments" hx-target="closest tr" hx-swap="outerHTML">
+    <input type="hidden" name="path" value="{{.Path}}">
+    <input type="hidden" name="side" value="{{.Side}}">
+    <input type="hidden" name="line" value="{{.Line}}">
+    <textarea name="body" required rows="3" aria-label="Comment" autofocus></textarea>
+    <button class="btn" type="submit">Comment</button>
+    <button class="btn" type="button" hx-on:click="this.closest('tr').remove()">Cancel</button>
+  </form>
+</td></tr>{{end}}
+
+{{define "reviewPosted"}}{{template "reviewThread" .}}<button id="review-changes" class="btn" type="button" disabled hx-swap-oob="true">Review changes ({{.Pending}})</button>{{end}}
+
+{{define "reviewDeleted"}}<button id="review-changes" class="btn" type="button" disabled hx-swap-oob="true">Review changes{{if .Pending}} ({{.Pending}}){{end}}</button>{{end}}

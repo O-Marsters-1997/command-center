@@ -2,8 +2,10 @@ package web_test
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -82,6 +84,54 @@ func TestChangesPage(t *testing.T) {
 		last := tabs[len(tabs)-1]
 		if href, _ := last.Attr("href"); last.Text() != "Changes" || href != "/s/acme/web/1/changes" {
 			t.Errorf("GET /s/acme/web/1 last tab = %q -> %q, want Changes -> /s/acme/web/1/changes", last.Text(), href)
+		}
+	})
+
+	t.Run("a comment persists on its line and deleting it updates the count", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		posted := do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+		if posted.Code != http.StatusOK || !strings.Contains(posted.Body, "Review changes (1)") {
+			t.Fatalf("POST comment = %d %q, want 200 with a count of 1", posted.Code, posted.Body)
+		}
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		threads := page.Find(".review-thread")
+		if len(threads) != 1 || !strings.Contains(threads[0].Text(), "rename this") ||
+			!strings.Contains(threads[0].Text(), "Pending") {
+			t.Fatalf("GET changes threads = %d, want one Pending thread reading %q", len(threads), "rename this")
+		}
+		if got := page.One(t, "#review-changes").Text(); got != "Review changes (1)" {
+			t.Errorf("GET changes review button = %q, want %q", got, "Review changes (1)")
+		}
+
+		comments, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(comments) != 1 || !strings.HasPrefix(comments[0].Hunk, "@@") ||
+			!strings.HasSuffix(comments[0].Hunk, "+package a") {
+			t.Fatalf("ReviewComments = %+v, %v, want one with the hunk through the line", comments, err)
+		}
+		deletePath := "/s/acme/web/1/changes/comments/" + strconv.FormatInt(comments[0].ID, 10) + "/delete"
+		deleted := do(t, server, http.MethodPost, deletePath, req{})
+		if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body, ">Review changes<") {
+			t.Fatalf("POST delete = %d %q, want 200 with no count", deleted.Code, deleted.Body)
+		}
+		page = htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		if got := len(page.Find(".review-thread")); got != 0 {
+			t.Errorf("GET changes threads after delete = %d, want 0", got)
+		}
+	})
+
+	t.Run("a comment on a line outside the diff is refused", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"99"}, "body": {"x"}}
+		server := openServer(st, fixedClock(testNow), dataDir)
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("POST comment on line 99 = %d, want %d", rec.Code, http.StatusBadRequest)
 		}
 	})
 
