@@ -69,7 +69,7 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 // List reads tracked branches' pull requests, including merged and closed PRs
 // omitted by GitHub's open-only bulk listing.
 func (c CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
-	out, err := c.Run(ctx, repoPath, "pr", "list", "--state", "open",
+	out, err := c.Read(ctx, repoPath, "pr", "list", "--state", "open",
 		"--limit", strconv.Itoa(ListLimit), "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("list open pull requests: %w", err)
@@ -91,7 +91,7 @@ func (c CLI) List(ctx context.Context, repoPath string, tracked []string) (Snaps
 		if _, ok := byBranch[branch]; ok {
 			continue
 		}
-		out, err := c.Run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
+		out, err := c.Read(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
 			"--limit", "1", "--json", fallbackFields)
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("list pull requests for %s: %w", branch, err)
@@ -173,7 +173,7 @@ func (c CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 }
 
 func (c CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
-	out, err := c.Run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(ListLimit))
+	out, err := c.Read(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(ListLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list issue titles: %w", err)
 	}
