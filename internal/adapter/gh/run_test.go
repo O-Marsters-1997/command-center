@@ -43,6 +43,27 @@ func TestCLI_Retry(t *testing.T) {
 		}
 	})
 
+	t.Run("read stops retrying when the context is cancelled", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		calls := 0
+		exec := command.ExecutorFunc(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
+			calls++
+			cancel()
+			return nil, timeout
+		})
+
+		_, err := gh.CLI{Exec: exec, Backoff: time.Hour}.IssueTitles(ctx, "/repo")
+
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("IssueTitles() error = %v, want context.Canceled", err)
+		}
+		if calls != 1 {
+			t.Errorf("gh calls = %d, want 1", calls)
+		}
+	})
+
 	failing := []struct {
 		name      string
 		failure   error
