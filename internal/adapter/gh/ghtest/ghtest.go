@@ -2,6 +2,7 @@ package ghtest
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -20,6 +21,7 @@ type Forge struct {
 	calls    []Call
 	Snapshot gh.Snapshot
 	Titles   map[string]string
+	Logs     map[string]string
 }
 
 var _ gh.Forge = (*Forge)(nil)
@@ -70,6 +72,20 @@ func (f *Forge) IssueTitles(_ context.Context, repo string) (map[string]string, 
 		titles = map[string]string{}
 	}
 	return titles, nil
+}
+
+func (f *Forge) FailedLog(_ context.Context, repo, detailsURL string) (string, error) {
+	f.Record(Call{Method: "FailedLog", Repo: repo, Body: detailsURL})
+	if _, err := gh.RunID(detailsURL); err != nil {
+		return "", fmt.Errorf("read failed log: %w", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	log, ok := f.Logs[detailsURL]
+	if !ok {
+		return "", fmt.Errorf("no failed log for %s", detailsURL)
+	}
+	return log, nil
 }
 
 func (f *Forge) Create(_ context.Context, repo, base, body string, draft bool, labels []string) error {

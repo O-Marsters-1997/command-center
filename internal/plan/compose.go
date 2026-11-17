@@ -63,6 +63,20 @@ func ComposeFollowUp(text string) string {
 			"Your instruction:\n\n%s", text)
 }
 
+const ciLogLines = 200
+
+func ComposeCILog(check, log string) string {
+	lines := strings.Split(strings.TrimRight(log, "\n"), "\n")
+	lines = lines[max(0, len(lines)-ciLogLines):]
+	return fmt.Sprintf("## Failed CI log: %s\n\nLast %d lines of the failed log:\n\n```\n%s\n```",
+		check, ciLogLines, strings.Join(lines, "\n"))
+}
+
+func ComposeCILogUnavailable(check string) string {
+	return fmt.Sprintf("## Failed CI log: %s\n\n"+
+		"The failed log could not be retrieved. Treat the CI failure as unverified: you have not seen the log.", check)
+}
+
 func ComposeAsking(questionPath string) string {
 	return fmt.Sprintf(
 		"\n\n## Asking the owner\n\n"+

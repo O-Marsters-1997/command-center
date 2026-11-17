@@ -128,6 +128,13 @@ func TestCLI(t *testing.T) {
 			case args[0] == "pr" && args[1] == "list":
 				open := slices.DeleteFunc(slices.Clone(seed.PRs), func(pr gh.PR) bool { return pr.State != gh.Open })
 				out = recordedOutput(t, open)
+			case args[0] == "run" && args[1] == "view":
+				for url, log := range seed.Logs {
+					if strings.Contains(url, "/runs/"+args[3]+"/") {
+						return []byte(log), nil
+					}
+				}
+				return nil, errGH
 			default:
 				return nil, nil
 			}
