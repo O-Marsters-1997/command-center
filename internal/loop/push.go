@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -35,6 +38,22 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, ob
 		}
 		return nil
 	})
+}
+
+func sameProtectedPaths(now []plan.PathMatch, last option.Option[plan.PushRow]) bool {
+	var before []plan.PathMatch
+	if last.IsSome() {
+		before = last.Unwrap().Protected
+	}
+	paths := func(ms []plan.PathMatch) []string {
+		out := make([]string, len(ms))
+		for i, m := range ms {
+			out[i] = m.Path
+		}
+		slices.Sort(out)
+		return out
+	}
+	return slices.Equal(paths(now), paths(before))
 }
 
 func pushBranch(ctx context.Context, repoPath, branch string, tip plan.SHA, restacked bool) error {
@@ -87,9 +106,25 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 		return l.event(ctx, url, store.EventPushFailed, err.Error())
 	}
 
+	protected := plan.Protected(matches)
+	for i, m := range protected {
+		protected[i].Added, protected[i].Deleted = counts[m.Path].Added, counts[m.Path].Deleted
+	}
+	section := plan.ProtectedSection(protected)
+
 	if obs.PRs[t.Ref()].State != plan.Open {
+		body := l.prBody(ctx, t.URL, p.Body)
+		var labels []string
+		if section != "" {
+			body = strings.TrimSpace(body + "\n\n" + section)
+			labels = []string{plan.ProtectedLabel}
+		}
 		worktree := obs.Worktrees[t.Ref()]
-		if err := l.forge.Create(ctx, worktree, base, l.prBody(ctx, t.URL, p.Body), p.OpensAsDraft); err != nil {
+		if err := l.forge.Create(ctx, worktree, base, body, p.OpensAsDraft, labels); err != nil {
+			return l.event(ctx, url, store.EventPushFailed, err.Error())
+		}
+	} else if section != "" && !sameProtectedPaths(protected, e.LastPush) {
+		if err := l.forge.Comment(ctx, repoPath, t.Branch, section); err != nil {
 			return l.event(ctx, url, store.EventPushFailed, err.Error())
 		}
 	}
@@ -97,10 +132,6 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	baseSHA, err := git.RevParse(ctx, repoPath, "origin/"+base)
 	if err != nil {
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
-	}
-	protected := plan.Protected(matches)
-	for i, m := range protected {
-		protected[i].Added, protected[i].Deleted = counts[m.Path].Added, counts[m.Path].Deleted
 	}
 	push := store.Push{
 		Ticket: plan.TicketURL(url), Tip: p.LocalTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),

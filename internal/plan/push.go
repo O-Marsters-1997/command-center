@@ -55,6 +55,20 @@ func Classify(changed []string, p Policy) []PathMatch {
 	return matches
 }
 
+const ProtectedLabel = "cc-protected"
+
+func ProtectedSection(matches []PathMatch) string {
+	if len(matches) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Protected paths\n")
+	for _, m := range matches {
+		fmt.Fprintf(&b, "\n- `%s` (rule `%s`) +%d −%d", m.Path, m.Rule, m.Added, m.Deleted)
+	}
+	return b.String()
+}
+
 func Denied(matches []PathMatch) []PathMatch { return inTier(matches, TierDenied) }
 
 func Protected(matches []PathMatch) []PathMatch { return inTier(matches, TierProtected) }
