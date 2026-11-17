@@ -34,6 +34,7 @@ type StepRun struct {
 	Alive   bool
 	Outcome option.Option[Outcome]
 	Handoff option.Option[string]
+	Session string
 }
 
 type NextKind int
@@ -132,9 +133,14 @@ func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
 	return park(last.Step, outcome)
 }
 
-func Resumable(pass []StepRun) option.Option[StepRun] {
+func (s Step) CanEdit() bool {
+	return !s.Command && (len(s.Tools) == 0 || slices.Contains(s.Tools, "Edit") || slices.Contains(s.Tools, "Write"))
+}
+
+func (w Workflow) Resumable(pass []StepRun) option.Option[StepRun] {
 	for i := len(pass) - 1; i >= 0; i-- {
-		if !pass[i].Command {
+		j := slices.IndexFunc(w.Steps, func(s Step) bool { return s.Name == pass[i].Step })
+		if j >= 0 && w.Steps[j].CanEdit() {
 			return option.Some(pass[i])
 		}
 	}

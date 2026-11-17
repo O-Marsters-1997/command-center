@@ -146,9 +146,16 @@ func TestSnapshot_Session(t *testing.T) {
 	t.Parallel()
 	first := ticket("1", "cc-1-first")
 	second := ticket("2", "cc-2-second")
-	snap := derive(plan.Rules{}, plan.Input{
-		Tickets:  []plan.Ticket{first, second},
-		Sessions: map[plan.TicketURL]string{first.URL: "abc"},
+	v1 := plan.Workflow{Name: "v1", Hash: "h1", Steps: []plan.Step{
+		{Name: "implement", Tools: []string{"Edit"}}, {Name: "pr", Tools: []string{"Read"}},
+	}}
+	rules := plan.Rules{Workflows: map[string]plan.Workflow{"v1": v1}}
+	snap := derive(rules, plan.Input{
+		Tickets: []plan.Ticket{first, second},
+		Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {WorkflowHash: "h1"}},
+		Passes: map[plan.TicketURL][]plan.StepRun{first.URL: {
+			{ID: 1, Step: "implement", Session: "abc"}, {ID: 2, Step: "pr", Session: "pr-session"},
+		}},
 	})
 
 	if got, ok := snap.Session(first.URL); !ok || got != "abc" {

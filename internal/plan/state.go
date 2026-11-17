@@ -41,7 +41,9 @@ var stateInfo = map[State]stateSpec{
 		name: "push_failed", label: "Push failed", glyph: GlyphFailed,
 		verbs: []Verb{VerbRetryPush, VerbReRun, VerbFollowUp},
 	},
-	ReviewMe: {name: "review_me", label: "Ready for review", glyph: GlyphAttention},
+	ReviewMe: {
+		name: "review_me", label: "Ready for review", glyph: GlyphAttention, verbs: []Verb{VerbFollowUp},
+	},
 	PRMerged: {name: "merged", label: "Merged", glyph: GlyphDone, verbs: []Verb{VerbRemoveWorktree}},
 	PRClosedUnmerged: {
 		name: "pr_closed_unmerged", label: "PR closed", glyph: GlyphFailed,
