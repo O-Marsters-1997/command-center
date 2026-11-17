@@ -44,6 +44,7 @@ type PushRow struct {
 	BaseBranch    string
 	BaseSHAAtPush SHA
 	PushedAt      time.Time
+	Protected     []PathMatch
 }
 
 type PushFact struct {

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
@@ -111,6 +113,41 @@ func TestPush(t *testing.T) {
 
 		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 			t.Error("origin has no cc-1, want a protected-path diff pushed")
+		}
+	})
+
+	t.Run("records the protected paths with their line counts", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "package.json", "{\n\"a\": 1,\n\"b\": 2\n}\n")
+		gittest.Commit(t, f.Worktree, "package.json", "{\n\"a\": 1,\n\"c\": 3\n}\n")
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		pushes, err := f.Store.LatestPushes(t.Context())
+		if err != nil {
+			t.Fatalf("LatestPushes: %v", err)
+		}
+		want := []plan.PathMatch{{Path: "package.json", Rule: "**/package.json", Tier: plan.TierProtected, Added: 4}}
+		if diff := cmp.Diff(want, pushes[plan.TicketURL(f.Ticket.URL)].Protected); diff != "" {
+			t.Errorf("LatestPushes().Protected mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("records no protected paths for an ordinary push", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		pushes, err := f.Store.LatestPushes(t.Context())
+		if err != nil {
+			t.Fatalf("LatestPushes: %v", err)
+		}
+		if got := pushes[plan.TicketURL(f.Ticket.URL)].Protected; len(got) != 0 {
+			t.Errorf("LatestPushes().Protected = %+v, want none", got)
 		}
 	})
 

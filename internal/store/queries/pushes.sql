@@ -1,6 +1,6 @@
 -- name: RecordPush :exec
-INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at)
-VALUES (sqlc.arg(ticket_id), sqlc.arg(pushed_tip), sqlc.arg(base_branch), sqlc.arg(base_sha_at_push), sqlc.arg(pushed_at));
+INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at, protected)
+VALUES (sqlc.arg(ticket_id), sqlc.arg(pushed_tip), sqlc.arg(base_branch), sqlc.arg(base_sha_at_push), sqlc.arg(pushed_at), sqlc.arg(protected));
 
 -- name: RestackedSinceLastPush :many
 SELECT DISTINCT e.ticket_id
@@ -11,7 +11,7 @@ LEFT JOIN (
 WHERE e.kind = sqlc.arg(kind) AND (p.pushed_at IS NULL OR e.at >= p.pushed_at);
 
 -- name: ListLatestPushes :many
-SELECT DISTINCT ON (ticket_id) ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at
+SELECT DISTINCT ON (ticket_id) ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at, protected
 FROM pushes
 ORDER BY ticket_id, id DESC;
 

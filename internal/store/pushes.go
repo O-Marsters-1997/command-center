@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -10,7 +11,16 @@ import (
 
 // RecordPush persists the tip against which later ticks suppress duplicate pushes and PR creation.
 func (s *Store) RecordPush(ctx context.Context, p Push) error {
-	err := s.q.RecordPush(ctx, ccdb.RecordPushParams{
+	matches := p.Protected
+	if matches == nil {
+		matches = []plan.PathMatch{}
+	}
+	protected, err := encodeJSON("push protected paths", matches)
+	if err != nil {
+		return err
+	}
+	err = s.q.RecordPush(ctx, ccdb.RecordPushParams{
+		Protected:     protected,
 		TicketID:      string(p.Ticket),
 		PushedTip:     string(p.Tip),
 		BaseBranch:    p.BaseBranch,
@@ -66,11 +76,16 @@ func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushR
 
 	pushes := map[plan.TicketURL]plan.PushRow{}
 	for _, r := range rows {
+		var protected []plan.PathMatch
+		if err := json.Unmarshal(r.Protected, &protected); err != nil {
+			return nil, fmt.Errorf("read pushes.protected for %s: %w", r.TicketID, err)
+		}
 		pushes[plan.TicketURL(r.TicketID)] = plan.PushRow{
 			PushedTip:     plan.SHA(r.PushedTip),
 			BaseBranch:    r.BaseBranch,
 			BaseSHAAtPush: plan.SHA(r.BaseSHAAtPush),
 			PushedAt:      r.PushedAt,
+			Protected:     protected,
 		}
 	}
 	return pushes, nil

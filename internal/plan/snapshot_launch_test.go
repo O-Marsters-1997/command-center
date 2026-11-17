@@ -192,8 +192,11 @@ func TestSnapshot_Entry(t *testing.T) {
 	if got.PromptHash != member.PromptHash {
 		t.Errorf("Entry(%s).PromptHash = %q, want %q", root.URL, got.PromptHash, member.PromptHash)
 	}
-	if got.LastPush != option.Some(row) {
-		t.Errorf("Entry(%s).LastPush = %v, want %v", root.URL, got.LastPush, row)
+	if !got.LastPush.IsSome() {
+		t.Fatalf("Entry(%s).LastPush = none, want %v", root.URL, row)
+	}
+	if diff := cmp.Diff(row, got.LastPush.Unwrap()); diff != "" {
+		t.Errorf("Entry(%s).LastPush mismatch (-want +got):\n%s", root.URL, diff)
 	}
 
 	t.Run("an unknown ticket", func(t *testing.T) {
