@@ -264,9 +264,13 @@ unconditional comparison would make `base moved` the steady state of every root 
    "commit suggestion" clicks and Mergify's own `update_method: merge` push to the app's
    head branches. Not a fast-forward → `needs you`; the app never rewrites history.
 3. `git merge origin/<base_branch>`. **Conflict → `refresh conflicted`**: the worktree is
-   left mid-merge for a human, verbs `abort` (`git merge --abort`) and the worktree path as
-   copy-paste text. The resolution is never handed to an agent — an agent resolving a merge
-   is the app merging by proxy.
+   left mid-merge, verbs `resolve` and `abort` (`git merge --abort`), and the worktree path as
+   copy-paste text. `resolve` is manual only: it launches an agent in that worktree with a
+   prompt `plan` composes from the conflicted paths, both tips from the conflict event and both
+   sides' ticket titles. It runs once per `(branchTip, baseTip)` pair; a second attempt on the
+   same pair is refused. The agent commits with a `resolve:` subject and still cannot push or
+   run `gh`. When it ends with a commit, `verify_command` runs before the push step sees the
+   tip (item 5).
 4. On success the local tip differs from the pushed tip, so **the push step delivers it**
    (§3.8).
 5. **A clean merge or restack is not proof the result compiles** (issue #110): two chain-mates
@@ -391,7 +395,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `checking` | pushed, PR open, CI running or not yet reporting | re-run, close PR |
 | `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
-| `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge for a human | abort, (shell — path on the row) |
+| `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge | resolve, abort, (shell — path on the row) |
 | `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 3) | **refresh**, close PR |
 | `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |

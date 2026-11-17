@@ -53,7 +53,7 @@ var stateDecisions = []struct {
 	{state: plan.Cancelled, verbs: []plan.Verb{plan.VerbLaunch}},
 	{state: plan.BaseMoved, verbs: []plan.Verb{plan.VerbRefresh, plan.VerbReRun, plan.VerbFollowUp}, unattended: true},
 	{state: plan.CIFailed, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}},
-	{state: plan.RefreshConflicted, verbs: []plan.Verb{plan.VerbAbort}},
+	{state: plan.RefreshConflicted, verbs: []plan.Verb{plan.VerbResolve, plan.VerbAbort}},
 	{state: plan.ConflictsWithMain, verbs: []plan.Verb{plan.VerbRefresh}},
 	{state: plan.VerificationFailed, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
 	{state: plan.WaitingOnProducerDeploy, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}},

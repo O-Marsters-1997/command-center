@@ -80,6 +80,12 @@ SELECT EXISTS (
     SELECT 1 FROM events WHERE ticket_id = sqlc.arg(ticket_id) AND kind = sqlc.arg(kind)
 ) AS found;
 
+-- name: HasEventDetail :one
+SELECT EXISTS (
+    SELECT 1 FROM events
+    WHERE ticket_id = sqlc.arg(ticket_id) AND kind = sqlc.arg(kind) AND detail = sqlc.arg(detail)
+) AS found;
+
 -- name: PutMeta :exec
 INSERT INTO meta (key, value) VALUES (sqlc.arg(key), sqlc.arg(value))
 ON CONFLICT (key) DO UPDATE SET value = excluded.value;

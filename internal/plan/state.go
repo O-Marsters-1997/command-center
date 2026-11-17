@@ -60,7 +60,8 @@ var stateInfo = map[State]stateSpec{
 		name: "ci_failed", label: "Checks failing", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp},
 	},
 	RefreshConflicted: {
-		name: "refresh_conflicted", label: "Refresh conflicted", glyph: GlyphFailed, verbs: []Verb{VerbAbort},
+		name: "refresh_conflicted", label: "Refresh conflicted", glyph: GlyphFailed,
+		verbs: []Verb{VerbResolve, VerbAbort},
 	},
 	ConflictsWithMain: {
 		name: "conflicts_with_main", label: "Conflicts with main", glyph: GlyphFailed, verbs: []Verb{VerbRefresh},

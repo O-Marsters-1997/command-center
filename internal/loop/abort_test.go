@@ -44,6 +44,13 @@ type conflictFixture struct {
 
 func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) conflictFixture {
 	t.Helper()
+	return newConflictFixtureWith(t, root, repoPath, at, runner.ProcessRunner{}, nil)
+}
+
+func newConflictFixtureWith(
+	t *testing.T, root, repoPath string, at time.Time, rn runner.Runner, verify []string,
+) conflictFixture {
+	t.Helper()
 	store := openStore(t)
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
@@ -58,7 +65,10 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: plan.SHA(childTip),
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
-		obs.Settings["repo"] = config.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}
+		obs.BranchTips[branchRef("repo", "child")] = plan.SHA(childTip)
+		obs.Settings["repo"] = config.RepoSettings{
+			Stacking: true, Checks: verdict.Predicate{Success: "CI"}, VerifyCommand: verify,
+		}
 		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
@@ -70,7 +80,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	clock := fixedClock(at.Add(time.Minute))
 	return conflictFixture{
 		f: f, aliveRuns: aliveRuns, store: store,
-		loop:   newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
+		loop:   newLoop(store, observe, clock, cfg, ws, rn),
 		server: openServer(store, clock, ""),
 	}
 }

@@ -661,6 +661,18 @@ func (s *Store) HasEvent(ctx context.Context, ticketURL string, kind EventKind) 
 	return found, nil
 }
 
+func (s *Store) HasEventDetail(ctx context.Context, ticketURL string, kind EventKind, detail string) (bool, error) {
+	found, err := s.q.HasEventDetail(ctx, ccdb.HasEventDetailParams{
+		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
+		Kind:     string(kind),
+		Detail:   detail,
+	})
+	if err != nil {
+		return false, fmt.Errorf("has event %s for %s: %w", kind, ticketURL, err)
+	}
+	return found, nil
+}
+
 const maxEvents = 5000
 
 func (s *Store) Events(ctx context.Context) ([]Event, error) {

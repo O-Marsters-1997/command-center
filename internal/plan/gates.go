@@ -27,6 +27,10 @@ type ConflictAt struct {
 	BaseTip   SHA
 }
 
+func (s Snapshot) Conflict(url TicketURL) option.Option[ConflictAt] {
+	return s.refreshes[url].Conflict
+}
+
 func (s Snapshot) Removal(url TicketURL) Removal {
 	return s.removals[url]
 }

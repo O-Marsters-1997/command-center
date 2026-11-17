@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
@@ -81,6 +82,28 @@ func ComposeMessage(text string, after Outcome) string {
 	case OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomePassed:
 	}
 	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
+}
+
+type ResolveBrief struct {
+	Title, BaseTitle, BaseBranch string
+	At                           ConflictAt
+	Paths                        []string
+}
+
+const ResolveCommitPrefix = "resolve:"
+
+func ComposeResolve(b ResolveBrief) string {
+	paths := "- " + strings.Join(b.Paths, "\n- ")
+	return fmt.Sprintf(
+		"A refresh merged `origin/%[3]s` into this branch and left the worktree mid-merge with conflicts. "+
+			"Finish that merge.\n\n"+
+			"This branch carries the ticket %[1]q at %[4]s. The base carries %[2]q at %[5]s.\n\n"+
+			"Conflicted paths:\n%[6]s\n\n"+
+			"Resolve each path so both sides' intent survives, run the checks the repo defines for what you "+
+			"touched, stage the result and run `git commit`. Start the commit subject with %[7]q. "+
+			"Do not abort the merge, rebase or force anything, and do not push: the daemon that spawned you "+
+			"verifies the commit and pushes it. Your settings deny `git push` and `gh`.",
+		b.Title, b.BaseTitle, b.BaseBranch, b.At.BranchTip, b.At.BaseTip, paths, ResolveCommitPrefix+" ")
 }
 
 func Hash(composed string) string {

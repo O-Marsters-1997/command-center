@@ -55,9 +55,10 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
 	childTip0 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 
-	parent := storepkg.Ticket{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"}
+	parent := storepkg.Ticket{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent", Title: "Rewrite the frontdoor"}
 	child := storepkg.Ticket{
 		URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"},
+		Title: "Add the lobby",
 	}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{parent, child}); err != nil {
 		t.Fatalf("UpsertTickets(parent, child): %v", err)
