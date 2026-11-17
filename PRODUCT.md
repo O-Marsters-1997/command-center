@@ -69,7 +69,7 @@ merge, and show a whole feature's wave progress across repos.
 ## Evidence on Hand
 
 - The live data is the owner's own tracked repos and tickets. `internal/demo` simulates a fleet
-  for screenshots, and `e2e/` drives the binary against a fake `gh` and `tp`.
+  for screenshots, and `e2e/` drives the binary against a fake `gh`.
 - The running app is the reference for what is built. Where it differs from `DESIGN.md`, the
   app wins and `DESIGN.md` is corrected; the "Not built yet" items are specified only by
   `DESIGN.md`.

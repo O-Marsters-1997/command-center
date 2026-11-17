@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -25,7 +25,7 @@ type forge interface {
 
 type worktrees interface {
 	New(ctx context.Context, repoPath, branch, baseRef string) error
-	Remove(ctx context.Context, repoPath, branch string, mode tp.RemoveMode) error
+	Remove(ctx context.Context, repoPath, branch string) error
 }
 
 type Deps struct {
@@ -52,7 +52,7 @@ func New(d Deps, opts ...Option) *Loop {
 		logger: d.Logger, store: d.Store, observe: d.Observe, clock: d.Clock, runner: d.Runner,
 		cfg: d.Config, ws: d.Workspace,
 		forge:      gh.CLI{},
-		worktrees:  tp.CLI{},
+		worktrees:  git.Library{},
 		validate:   ValidateRepo,
 		remoteOf:   gh.CLI{}.RepoRemote,
 		trackerFor: tracker.Resolve(gh.CLI{}),

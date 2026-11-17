@@ -1,8 +1,8 @@
 # A squash-merged PR's branch is gone from GitHub before a human ever presses remove-worktree
 # (docs/adr/0007-cc-proves-what-tp-cannot.md): both repos this app drives delete the head branch
-# on merge, and this app's own fetch --prune then drops the remote-tracking ref tp remove
-# --merged would otherwise check unpushed commits against. cc proves the same fact itself --
-# the branch sits exactly where it last pushed it -- and forces past tp's own check instead of
+# on merge, and this app's own fetch --prune then drops the remote-tracking ref the library's
+# unpushed-commits check would otherwise compare against. cc proves the same fact itself --
+# the branch sits exactly where it last pushed it -- and records the removal as forced instead of
 # refusing forever on a ref GitHub already deleted.
 
 cc-init-repo
@@ -29,8 +29,6 @@ exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandb
 exec cc tick --count 1
 
 ! exists $WORK/repo-cc-1-x
-grep -count=1 'remove --force cc-1-x' $WORK/tp.log
-! grep 'remove --merged cc-1-x' $WORK/tp.log
 exec cc request GET /events
 stdout '"TicketURL":"https://github.com/sandbox-org/single-task/issues/CC-1","Kind":"worktree_removed","Detail":"forced.*proven tip"'
 exec cc request GET /tickets

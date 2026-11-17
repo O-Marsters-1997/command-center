@@ -13,7 +13,6 @@ stops at reviewable and a human merges it. It runs on a laptop or an always-on h
 - Go 1.26.6, [`just`](https://github.com/casey/just) and [`bun`](https://bun.sh)
 - Docker, for the Postgres the store runs on
 - [`gh`](https://cli.github.com), authenticated, for every PR read and write
-- `tp` (treepad), which cuts and removes the per-ticket worktrees
 - The [`claude`](https://docs.claude.com/en/docs/claude-code) CLI, which every agent runs as
 
 Every tracked repo must be squash-merge only. Startup refuses a repo that allows merge commits or
@@ -75,7 +74,7 @@ in front of it for TLS. See [docs/deployment.md](docs/deployment.md).
 
 - A feature is a GitHub label, and its tickets are the open issues carrying it. GitHub's "blocked
   by" links make them a DAG, and a ticket unlocks once its blockers have open or merged PRs.
-- Each ticket gets its own worktree, cut by `tp`, and its agent works there.
+- Each ticket gets its own worktree, cut by treepad, and its agent works there.
 - Every 15 seconds the loop observes git and GitHub. It pushes finished work, opens PRs, derives a
   CI verdict, and restacks children onto `main` after a parent squash-merges.
 - The page only queues intents. A button writes one row and the next tick acts on it, so the loop
@@ -87,7 +86,7 @@ invariants.
 
 ## Limitations
 
-- Agents are Claude Code, PRs are GitHub and worktrees are `tp`. None of them is pluggable yet.
+- Agents are Claude Code, PRs are GitHub and worktrees are treepad. None of them is pluggable yet.
 - Tracked repos must be squash-merge only.
 - It never merges, by design.
 
@@ -95,7 +94,7 @@ invariants.
 
 ```sh
 just test       # Go unit tests and the web tests
-just test-e2e   # the real binary against a fake gh and tp
+just test-e2e   # the real binary against a fake gh
 just lint       # golangci-lint in Docker
 just ci         # everything CI runs
 ```

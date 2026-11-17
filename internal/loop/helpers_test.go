@@ -16,12 +16,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/treepad"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -96,20 +96,29 @@ func (f failingEdit) Edit(_ context.Context, repo, branch, base string) error {
 	return errForge
 }
 
-type failingCut struct{ *tptest.Worktrees }
+type failingCut struct{ git.Library }
 
 func (failingCut) New(context.Context, string, string, string) error { return errForge }
 
-type refusingRemove struct {
-	*tptest.Worktrees
-	err error
+type postHookWorktrees struct{ git.Library }
+
+func (w postHookWorktrees) New(ctx context.Context, repoPath, branch, baseRef string) error {
+	if err := w.Library.New(ctx, repoPath, branch, baseRef); err != nil {
+		return err
+	}
+	return fmt.Errorf("run post hook: %w", treepad.ErrPostHook)
 }
 
-func (r refusingRemove) Remove(context.Context, string, string, tp.RemoveMode) error { return r.err }
+func (w postHookWorktrees) Remove(ctx context.Context, repoPath, branch string) error {
+	if err := w.Library.Remove(ctx, repoPath, branch); err != nil {
+		return err
+	}
+	return fmt.Errorf("run post hook: %w", treepad.ErrPostHook)
+}
 
-type failingRemove struct{ *tptest.Worktrees }
+type failingRemove struct{ git.Library }
 
-func (failingRemove) Remove(context.Context, string, string, tp.RemoveMode) error { return errForge }
+func (failingRemove) Remove(context.Context, string, string) error { return errForge }
 
 func testConfigAndWorkspace(
 	t *testing.T, root string, maxAgents int, agentCommand []string,
