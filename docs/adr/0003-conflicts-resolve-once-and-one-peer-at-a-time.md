@@ -26,5 +26,10 @@ blocker edge, so nothing else compares them, and the second merge fights the fir
 ## Consequences
 
 Conflicts still stop the loop: `rerere` removes the thinking, not the stop. The gate refuses and does
-not fix; the owner resolves in the worktree, or refreshes. Only one of a conflicting pair shows
+not fix; the owner resolves in the worktree, or refreshes. A conflict `rerere` cannot replay (a
+semantic one) is resolved by the owner's `resolve` verb on a `refresh conflicted` ticket. It launches an
+agent in the mid-merge worktree with a prompt `plan` composes from facts: the conflicted paths, both
+tips and both tickets' titles. It is never automatic and runs once per `(branchTip, baseTip)` pair.
+The agent commits but cannot push or run `gh`, and the loop runs the repo's `verify_command` before
+the push. Only one of a conflicting pair shows
 `review_me`, so the second is resolved once, not at a surprise merge.

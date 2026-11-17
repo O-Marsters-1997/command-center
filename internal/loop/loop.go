@@ -191,6 +191,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyFollowUpIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("follow-up: %w", err)
 	}
+	if err := l.applyResolveIntents(ctx, snap, t, byURL); err != nil {
+		return fmt.Errorf("resolve: %w", err)
+	}
 	if err := l.applyAbortIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("abort: %w", err)
 	}
@@ -498,6 +501,9 @@ func (l *Loop) disposeRun(
 	if err := l.event(ctx, ticket.URL, store.EventRunDisposed, outcome.String()); err != nil {
 		return fmt.Errorf("append run disposed event: %w", err)
 	}
+	if run.Kind == plan.RunKindResolve && outcome == plan.OutcomePush {
+		return l.verifyResolved(ctx, ticket, obs)
+	}
 	return nil
 }
 
@@ -783,7 +789,7 @@ func (spec spawnSpec) session() store.RunSession {
 	switch {
 	case spec.resumeSessionID != "":
 		return store.RunSession{JoinID: spec.resumeSessionID, Message: spec.message}
-	case spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp:
+	case spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp || spec.kind == plan.RunKindResolve:
 		return store.RunSession{StartNew: true, Message: spec.message}
 	default:
 		return store.RunSession{}
@@ -856,7 +862,7 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		Resume:       spec.resumeSessionID != "",
 		LogFile:      logFile,
 	}
-	if spec.kind == plan.RunKindAgent {
+	if spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindResolve {
 		spawnCfg.SystemPromptPath = systemPromptPath
 	}
 	if step.Command {

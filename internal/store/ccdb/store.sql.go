@@ -73,6 +73,26 @@ func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error
 	return found, err
 }
 
+const hasEventDetail = `-- name: HasEventDetail :one
+SELECT EXISTS (
+    SELECT 1 FROM events
+    WHERE ticket_id = $1 AND kind = $2 AND detail = $3
+) AS found
+`
+
+type HasEventDetailParams struct {
+	TicketID sql.NullString
+	Kind     string
+	Detail   string
+}
+
+func (q *Queries) HasEventDetail(ctx context.Context, arg HasEventDetailParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasEventDetail, arg.TicketID, arg.Kind, arg.Detail)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}
+
 const importTickets = `-- name: ImportTickets :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
 SELECT t.url, t.repo, t.source, t.feature, t.title, t.body, t.status, t.synced_at, t.branch, t.blocked_by

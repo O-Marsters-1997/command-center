@@ -277,6 +277,14 @@ func MergeAbort(ctx context.Context, worktreePath string) error {
 	return nil
 }
 
+func ConflictedPaths(ctx context.Context, worktreePath string) ([]string, error) {
+	out, err := git(ctx, worktreePath, "diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return nil, fmt.Errorf("list conflicted paths: %w", err)
+	}
+	return strings.Fields(string(out)), nil
+}
+
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	merging, err := refExists(ctx, worktreePath, "MERGE_HEAD")
 	if err != nil || merging {

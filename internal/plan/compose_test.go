@@ -61,6 +61,24 @@ func TestComposeFollowUp(t *testing.T) {
 	}
 }
 
+func TestComposeResolve(t *testing.T) {
+	t.Parallel()
+
+	got := plan.ComposeResolve(plan.ResolveBrief{
+		Title: "Add the frontdoor", BaseTitle: "Rewrite the frontdoor", BaseBranch: "pla-1",
+		At:    plan.ConflictAt{BranchTip: "aaa111", BaseTip: "bbb222"},
+		Paths: []string{"web/frontdoor.go", "web/routes.go"},
+	})
+	for _, want := range []string{
+		"Add the frontdoor", "Rewrite the frontdoor", "origin/pla-1", "aaa111", "bbb222",
+		"- web/frontdoor.go\n- web/routes.go", `"resolve: "`, "do not push",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ComposeResolve(brief) = %q, want it to mention %q", got, want)
+		}
+	}
+}
+
 func TestComposeMessage(t *testing.T) {
 	t.Parallel()
 

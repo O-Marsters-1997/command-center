@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -215,6 +216,31 @@ func TestMidMerge(t *testing.T) {
 		mid, err := git.MidMerge(t.Context(), worktree)
 		if err != nil || mid {
 			t.Errorf("MidMerge(resolved) = %v, %v, want false, nil", mid, err)
+		}
+	})
+}
+
+func TestConflictedPaths(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a worktree stopped on a conflict", func(t *testing.T) {
+		t.Parallel()
+		_, worktree := repoWithAConflictedRebase(t)
+
+		got, err := git.ConflictedPaths(t.Context(), worktree)
+		if want := []string{"shared.txt"}; err != nil || !slices.Equal(got, want) {
+			t.Errorf("ConflictedPaths(conflicted) = %v, %v, want %v, nil", got, err, want)
+		}
+	})
+
+	t.Run("a resolved worktree", func(t *testing.T) {
+		t.Parallel()
+		_, worktree := repoWithAConflictedRebase(t)
+		resolveRebase(t, worktree)
+
+		got, err := git.ConflictedPaths(t.Context(), worktree)
+		if err != nil || len(got) != 0 {
+			t.Errorf("ConflictedPaths(resolved) = %v, %v, want none, nil", got, err)
 		}
 	})
 }
