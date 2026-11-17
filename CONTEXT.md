@@ -70,6 +70,12 @@ _Avoid_: Action, command, operation
 **Intent**:
 A queued verb that the loop has not yet consumed.
 
+**Raise**:
+The verb that consents to a ticket's reviewed commit becoming a pull request. It binds to the commit
+you reviewed, so any later commit voids it. In a repo that gates on it, a finished ticket waits in
+`awaiting PR` until you give it.
+_Avoid_: Approve (GitHub's word for a review on an open PR), publish, ship
+
 **Tick**:
 One pass of the reconcile loop: observe, derive, act.
 

@@ -30,7 +30,7 @@ what the page and the PR show.
   `.command-centre.toml` itself, which stays denied. A path that matches both lists is denied.
 - The loop classifies each changed path at push time and records the protected ones, with each
   one's rule and line counts, on the push row. `plan` derives the highlight from the latest push,
-  so `internal/web` runs no git.
+  so `internal/web` runs read-only git at most, never a write.
 - A ticket whose latest push has protected paths shows a `protected` flag on its board row and in
   the rail. The session page lists each path with its rule and counts, linked to the PR's diff. The
   PR body gets a "Protected paths" section and a `cc-protected` label.
