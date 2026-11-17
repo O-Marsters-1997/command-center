@@ -55,6 +55,7 @@ type Server struct {
 	nudger     Nudger
 	pushable   pushableCache
 	agentCmd   []string
+	dataDir    string
 }
 
 const pushableTTL = time.Minute
@@ -85,7 +86,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 		d.BoardPollSeconds = config.DefaultBoardPollSeconds
 	}
 	s := &Server{
-		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand,
+		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand, dataDir: d.DataDir,
 		trackerFor: tracker.Resolve(gh.CLI{}),
 		pushable:   pushableCache{list: gh.CLI{}.PushableRepos},
 	}
@@ -104,6 +105,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /rail", s.handle(s.handleRail))
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
+	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
 	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
@@ -217,6 +219,7 @@ var statusMap = []struct {
 	{store.ErrNotFound, http.StatusNotFound},
 	{store.ErrInvalidProject, http.StatusBadRequest},
 	{view.ErrSessionNotFound, http.StatusNotFound},
+	{view.ErrNoLocalTip, http.StatusNotFound},
 }
 
 func statusOf(err error) int {

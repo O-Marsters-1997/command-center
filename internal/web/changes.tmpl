@@ -1,0 +1,61 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<article class="changes" data-changes data-viewed-key="{{.ViewedKey}}" data-total="{{len .Files}}">
+  <header class="changes-toolbar">
+    <a class="pill-tab" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>&lsaquo; Session</a>
+    <span class="font-mono text-sm">{{len .Files}} {{if eq (len .Files) 1}}file{{else}}files{{end}}
+      <span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
+    <span class="text-muted text-sm">against <code>origin/{{.Base}}</code></span>
+    {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
+    <span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span>
+    <button class="btn" type="button" disabled>Review changes</button>
+  </header>
+  {{- if not .Files}}
+  <p class="text-muted">Nothing differs from <code>origin/{{.Base}}</code>.</p>
+  {{- else}}
+  <div class="changes-body">
+    <nav class="changes-tree" aria-label="changed files">
+      {{- range .Folders}}
+      <details open>
+        <summary class="font-mono text-xs">{{.Dir}}</summary>
+        <ul>
+          {{- range .Files}}
+          <li><a class="font-mono text-xs" href="#{{$.FileID .}}">{{.Path}}</a>{{if .Protected.IsSome}} <span class="flag flag-warning">protected</span>{{end}}</li>
+          {{- end}}
+        </ul>
+      </details>
+      {{- end}}
+    </nav>
+    <div class="changes-files">
+      {{- range .Files}}
+      <details class="diff-file" id="{{$.FileID .}}" data-file="{{.Path}}" open>
+        <summary class="diff-head">
+          <span class="font-mono text-sm">{{if .OldPath}}{{.OldPath}} → {{end}}{{.Path}}</span>
+          {{- if .Protected.IsSome}} <span class="flag flag-warning" title="rule {{.Protected.Unwrap.Rule}}">protected</span>{{end}}
+          <span class="font-mono text-xs"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
+          <label class="text-xs"><input type="checkbox" data-viewed> Viewed</label>
+        </summary>
+        {{- if .Binary}}
+        <p class="text-muted text-sm">Binary file not shown.</p>
+        {{- else if not .Hunks}}
+        <p class="text-muted text-sm">No content changes.</p>
+        {{- end}}
+        {{- range .Hunks}}
+        <table class="diff-hunk font-mono text-xs">
+          <caption class="text-muted">{{.Header}}</caption>
+          <tbody>
+            {{- range .Lines}}
+            <tr class="diff-{{.Kind}}"><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre>{{.Text}}</pre></td></tr>
+            {{- end}}
+          </tbody>
+        </table>
+        {{- end}}
+      </details>
+      {{- end}}
+    </div>
+  </div>
+  {{- end}}
+</article>
+{{template "shellEnd" .}}
