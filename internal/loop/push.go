@@ -61,8 +61,10 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	if err != nil {
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
-	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: obs.Settings[t.Repo].Deny}); refused {
-		return l.event(ctx, url, store.EventPushRefused, path)
+	settings := obs.Settings[t.Repo]
+	policy := plan.Policy{Deny: settings.Deny, Protect: settings.Protect}
+	if denied := plan.Denied(plan.Classify(changed, policy)); len(denied) > 0 {
+		return l.event(ctx, url, store.EventPushRefused, denied[0].Path)
 	}
 
 	var lastPushed plan.SHA
