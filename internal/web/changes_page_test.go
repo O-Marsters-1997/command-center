@@ -174,6 +174,9 @@ func TestChangesPage(t *testing.T) {
 		if _, disabled := page.One(t, "#review-popover button[type=submit]").Attr("disabled"); !disabled {
 			t.Error("GET changes Request changes button is enabled, want disabled")
 		}
+		if got := page.One(t, "#review-popover").Text(); !strings.Contains(got, "merged") {
+			t.Errorf("GET changes popover = %q, want the state's reason", got)
+		}
 		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: url.Values{"note": {"x"}}})
 		if rec.Code != http.StatusConflict {
 			t.Errorf("POST request = %d, want %d", rec.Code, http.StatusConflict)
