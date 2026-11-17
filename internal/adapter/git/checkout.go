@@ -32,8 +32,8 @@ func EnsureCheckout(ctx context.Context, name, remote, seedPath, checkout string
 		if err := populate(); err != nil {
 			return fmt.Errorf("clone repo %s: %w", name, err)
 		}
-		if err := enableRerere(ctx, checkout); err != nil {
-			return fmt.Errorf("configure rerere for %s: %w", checkout, err)
+		if err := configure(ctx, checkout); err != nil {
+			return fmt.Errorf("configure %s: %w", checkout, err)
 		}
 		return nil
 	case err != nil:
@@ -48,8 +48,8 @@ func EnsureCheckout(ctx context.Context, name, remote, seedPath, checkout string
 		return fmt.Errorf("repo %s: %s has origin %s, but the config says %s: %w",
 			name, checkout, origin, remote, ErrOriginMismatch)
 	}
-	if err := enableRerere(ctx, checkout); err != nil {
-		return fmt.Errorf("configure rerere for %s: %w", checkout, err)
+	if err := configure(ctx, checkout); err != nil {
+		return fmt.Errorf("configure %s: %w", checkout, err)
 	}
 	if err := Fetch(ctx, checkout); err != nil {
 		return fmt.Errorf("fetch checkout %s: %w", checkout, err)
@@ -57,11 +57,29 @@ func EnsureCheckout(ctx context.Context, name, remote, seedPath, checkout string
 	return nil
 }
 
-func enableRerere(ctx context.Context, repoPath string) error {
+func configure(ctx context.Context, repoPath string) error {
 	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
 		if _, err := git(ctx, repoPath, "config", key, "true"); err != nil {
 			return fmt.Errorf("enable %s in %s: %w", key, repoPath, err)
 		}
+	}
+	return markOriginPromisorWhenPacksArePromised(ctx, repoPath)
+}
+
+func markOriginPromisorWhenPacksArePromised(ctx context.Context, repoPath string) error {
+	out, err := git(ctx, repoPath, "rev-parse", "--path-format=absolute", "--git-path", "objects/pack")
+	if err != nil {
+		return fmt.Errorf("locate pack directory: %w", err)
+	}
+	promisors, err := filepath.Glob(filepath.Join(strings.TrimSpace(string(out)), "*.promisor"))
+	if err != nil {
+		return fmt.Errorf("list promisor packs: %w", err)
+	}
+	if len(promisors) == 0 {
+		return nil
+	}
+	if _, err := git(ctx, repoPath, "config", "remote.origin.promisor", "true"); err != nil {
+		return fmt.Errorf("mark origin as promisor in %s: %w", repoPath, err)
 	}
 	return nil
 }

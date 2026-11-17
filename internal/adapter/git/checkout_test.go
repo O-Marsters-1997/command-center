@@ -48,6 +48,18 @@ func rerere(t *testing.T, checkout string) []string {
 	}
 }
 
+func partialSeed(t *testing.T) (seedPath, remote string) {
+	t.Helper()
+	repo, origin := gittest.WithOrigin(t)
+	gittest.Commit(t, repo, "README.md", "second\n")
+	gittest.Run(t, repo, "push", "-q", "origin", "main")
+	gittest.Run(t, origin, "config", "uploadpack.allowFilter", "true")
+	remote = "file://" + origin
+	seedPath = filepath.Join(t.TempDir(), "seed")
+	gittest.Run(t, ".", "clone", "-q", "--filter=blob:none", remote, seedPath)
+	return seedPath, remote
+}
+
 func TestEnsureCheckout(t *testing.T) {
 	t.Parallel()
 
@@ -137,6 +149,22 @@ func TestEnsureCheckout(t *testing.T) {
 		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
 			t.Errorf("EnsureCheckout(first fetch after seed) error = %v", err)
 		}
+	})
+
+	t.Run("seeded from a partial clone, the checkout can repack, and reuse repairs one that cannot", func(t *testing.T) {
+		t.Parallel()
+		seedPath, remote := partialSeed(t)
+		checkout := filepath.Join(t.TempDir(), "repos", "r")
+		if err := git.EnsureCheckout(t.Context(), "r", remote, seedPath, checkout); err != nil {
+			t.Fatalf("EnsureCheckout(seed) error = %v", err)
+		}
+		gittest.Run(t, checkout, "repack", "-a", "-d", "-q")
+
+		gittest.Run(t, checkout, "config", "--unset", "remote.origin.promisor")
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
+			t.Fatalf("EnsureCheckout(reuse) error = %v", err)
+		}
+		gittest.Run(t, checkout, "repack", "-a", "-d", "-q")
 	})
 
 	t.Run("refuses a seed that is not a repo or has another origin, leaving no directory", func(t *testing.T) {
