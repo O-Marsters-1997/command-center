@@ -300,15 +300,18 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 }
 
 const listPassRuns = `-- name: ListPassRuns :many
-SELECT id, ticket_id::text AS ticket_id, step, outcome FROM runs
+SELECT id, ticket_id::text AS ticket_id, step, outcome,
+  CASE WHEN kind IN ('agent', 'follow_up') THEN COALESCE(session_id::text, '') ELSE '' END::text AS session_id
+FROM runs
 WHERE ticket_id IS NOT NULL ORDER BY id
 `
 
 type ListPassRunsRow struct {
-	ID       int64
-	TicketID string
-	Step     string
-	Outcome  sql.NullString
+	ID        int64
+	TicketID  string
+	Step      string
+	Outcome   sql.NullString
+	SessionID string
 }
 
 func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
@@ -325,6 +328,7 @@ func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
 			&i.TicketID,
 			&i.Step,
 			&i.Outcome,
+			&i.SessionID,
 		); err != nil {
 			return nil, err
 		}

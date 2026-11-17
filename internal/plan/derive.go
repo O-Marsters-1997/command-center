@@ -85,7 +85,6 @@ type Input struct {
 	Pushes       map[TicketURL]PushFact
 	Refreshes    map[TicketURL]RefreshFact
 	Restacked    map[TicketURL]bool
-	Sessions     map[TicketURL]string
 	Recorded     map[TicketURL]Recorded
 	LastVerdicts map[TicketURL]string
 	Verdict      VerdictFacts
@@ -204,7 +203,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
-		sessions:    in.Sessions,
+		sessions:    make(map[TicketURL]string, len(in.Tickets)),
 		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
 		repos:       in.Repos,
 		obs:         in.Obs,
@@ -225,6 +224,9 @@ func (r Rules) Derive(in Input) Snapshot {
 			conflictedBase = base
 		}
 		workflow, next := r.nextFor(t, in, membership.Workflow)
+		if session := sessionOf(workflow, in.Passes[t.URL], r.Verify[t.Repo]); session != "" {
+			snap.sessions[t.URL] = session
+		}
 		if run.IsSome() && len(workflow.Steps) != 1 {
 			fact := run.Unwrap()
 			fact.Next = option.Some(next)
@@ -273,6 +275,21 @@ func (r Rules) Derive(in Input) Snapshot {
 	}
 	snap.transitions, snap.verdicts = r.transitions(in)
 	return snap
+}
+
+func sessionOf(w Workflow, runs []StepRun, hasVerify bool) string {
+	if pass := w.Pass(runs, hasVerify); len(pass) > 0 {
+		if r := w.Resumable(pass); r.IsSome() {
+			return r.Unwrap().Session
+		}
+		return ""
+	}
+	for i := len(runs) - 1; i >= 0; i-- {
+		if runs[i].Session != "" {
+			return runs[i].Session
+		}
+	}
+	return ""
 }
 
 func (r Rules) nextFor(t Ticket, in Input, launchWorkflow string) (Workflow, Next) {

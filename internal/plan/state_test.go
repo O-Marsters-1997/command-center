@@ -46,7 +46,7 @@ var stateDecisions = []struct {
 	{state: plan.Checking, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}, unattended: true},
 	{state: plan.NeedsYou, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp, plan.VerbKill}},
 	{state: plan.PushFailed, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
-	{state: plan.ReviewMe},
+	{state: plan.ReviewMe, verbs: []plan.Verb{plan.VerbFollowUp}},
 	{state: plan.PRMerged, verbs: []plan.Verb{plan.VerbRemoveWorktree}},
 	{state: plan.PRClosedUnmerged, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp, plan.VerbRemoveWorktree}},
 	{state: plan.BaseGone, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp, plan.VerbRemoveWorktree}},

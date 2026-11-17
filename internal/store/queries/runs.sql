@@ -44,7 +44,9 @@ SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path, step,
 WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: ListPassRuns :many
-SELECT id, ticket_id::text AS ticket_id, step, outcome FROM runs
+SELECT id, ticket_id::text AS ticket_id, step, outcome,
+  CASE WHEN kind IN ('agent', 'follow_up') THEN COALESCE(session_id::text, '') ELSE '' END::text AS session_id
+FROM runs
 WHERE ticket_id IS NOT NULL ORDER BY id;
 
 -- name: RunBaseline :one

@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -88,21 +87,11 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	}
 
 	planTickets := make([]plan.Ticket, len(tickets))
-	sessions := make(map[plan.TicketURL]string, len(runs))
 	recorded := make(map[plan.TicketURL]plan.Recorded, len(tickets))
 	verdicts := make(map[plan.TicketURL]string, len(lastVerdicts))
 	for i, t := range tickets {
 		planTickets[i] = t.Plan()
 		url := plan.TicketURL(t.URL)
-		if _, ok := runs[url]; ok {
-			session, err := s.LatestSessionID(ctx, t.URL)
-			if err != nil && !errors.Is(err, ErrNotFound) {
-				return plan.Input{}, fmt.Errorf("read latest session: %w", err)
-			}
-			if err == nil {
-				sessions[url] = session
-			}
-		}
 		var rec plan.Recorded
 		if rec.Opened, err = s.HasEvent(ctx, t.URL, EventPROpened); err != nil {
 			return plan.Input{}, fmt.Errorf("read pr_opened event: %w", err)
@@ -118,7 +107,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	return plan.Input{
 		Observed: observed, Tickets: planTickets, Obs: obs, Repos: repos,
 		Memberships: memberships, Runs: runs, Pushes: pushes, Refreshes: refreshes,
-		Restacked: restacked, Sessions: sessions, Recorded: recorded, LastVerdicts: verdicts,
+		Restacked: restacked, Recorded: recorded, LastVerdicts: verdicts,
 		Verdict: verdictFacts, Intents: intents, Removals: removals,
 		FiveHour: gauges[agentlog.FiveHour].Utilization,
 		Passes:   passes,

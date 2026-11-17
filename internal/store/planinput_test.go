@@ -65,11 +65,11 @@ func TestStore_PlanInput(t *testing.T) {
 		}
 	})
 
-	t.Run("Sessions carry the latest session of a ticket with a run", func(t *testing.T) {
+	t.Run("Passes carry the session of an agent run", func(t *testing.T) {
 		t.Parallel()
 		st := newStore(t)
-		if got := read(t, st).Sessions; len(got) != 0 {
-			t.Fatalf("PlanInput().Sessions with no runs = %v, want none", got)
+		if got := read(t, st).Passes; len(got) != 0 {
+			t.Fatalf("PlanInput().Passes with no runs = %v, want none", got)
 		}
 		_, session, err := st.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: ticket.URL, Kind: plan.RunKindAgent, Session: storepkg.RunSession{StartNew: true},
@@ -77,8 +77,9 @@ func TestStore_PlanInput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("InsertSessionRunSkeleton: %v", err)
 		}
-		if diff := cmp.Diff(map[plan.TicketURL]string{url: session}, read(t, st).Sessions); diff != "" {
-			t.Errorf("PlanInput().Sessions mismatch (-want +got):\n%s", diff)
+		runs := read(t, st).Passes[url]
+		if len(runs) != 1 || runs[0].Session != session {
+			t.Errorf("PlanInput().Passes[%s] = %+v, want one run in session %q", url, runs, session)
 		}
 	})
 

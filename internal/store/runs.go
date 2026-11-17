@@ -176,7 +176,8 @@ func (s *Store) PassRuns(ctx context.Context) (map[plan.TicketURL][]plan.StepRun
 	}
 	passes := map[plan.TicketURL][]plan.StepRun{}
 	for _, row := range rows {
-		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid}
+		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid,
+			Session: row.SessionID}
 		if row.Outcome.Valid {
 			outcome, err := plan.ParseOutcome(row.Outcome.String)
 			if err != nil {
