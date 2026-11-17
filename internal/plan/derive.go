@@ -113,6 +113,7 @@ type Entry struct {
 	Restacked      bool
 	Next           Next
 	Workflow       string
+	Raise          RaiseMode
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -232,12 +233,21 @@ func (r Rules) Derive(in Input) Snapshot {
 			fact.Next = option.Some(next)
 			run = option.Some(fact)
 		}
+		lastPush := option.None[PushRow]()
+		if row, ok := in.Verdict.PushRows[t.URL]; ok {
+			lastPush = option.Some(row)
+		}
+		raise := r.Raise[t.Repo]
+		if lastPush.IsSome() {
+			raise = RaiseAuto
+		}
 		state, reason := Status(Facts{
 			Unlock:          unlock,
 			Authorised:      authorised,
 			LatestRun:       run,
 			CancelledMember: membership.Cancelled,
 			ConflictedBase:  conflictedBase,
+			Raise:           raise,
 		})
 		snap.launch = append(snap.launch, LaunchCandidate{
 			URL:               t.URL,
@@ -256,10 +266,6 @@ func (r Rules) Derive(in Input) Snapshot {
 		pr := in.Obs.PRs[t.Ref()]
 		gating := GatingBlockers(t, byURL)
 		draftWhy, readyToUndraft := draftReason(pr, gating, prs, run)
-		lastPush := option.None[PushRow]()
-		if row, ok := in.Verdict.PushRows[t.URL]; ok {
-			lastPush = option.Some(row)
-		}
 		snap.byURL[t.URL] = len(snap.Entries)
 		entry := Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
@@ -268,7 +274,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
-			Next: next, Workflow: membership.Workflow,
+			Next: next, Workflow: membership.Workflow, Raise: raise,
 		}
 		snap.Entries = append(snap.Entries, entry)
 		snap.removals[t.URL] = removalFor(entry, pr)

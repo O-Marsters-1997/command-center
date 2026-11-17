@@ -2,7 +2,7 @@ export type Glyph =
   | "failed" | "attention" | "running" | "pending" | "checking" | "ready" | "blocked" | "done";
 
 export type State =
-  | "blocked" | "ready" | "queued" | "running" | "failed" | "cut_failed" | "push_pending"
+  | "blocked" | "ready" | "queued" | "running" | "failed" | "cut_failed" | "push_pending" | "awaiting_pr"
   | "checking" | "needs_you" | "push_failed" | "review_me" | "merged" | "pr_closed_unmerged"
   | "base_gone" | "cancelled" | "base_moved" | "ci_failed" | "refresh_conflicted"
   | "conflicts_with_main" | "verification_failed" | "waiting_on_producer_deploy" | "awaiting_input" | "push_refused";

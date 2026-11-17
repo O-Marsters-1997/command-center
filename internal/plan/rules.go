@@ -1,8 +1,19 @@
 package plan
 
-import "github.com/O-Marsters-1997/command-center/internal/plan/verdict"
+import (
+	"cmp"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
+)
 
 const SettingsFile = ".command-centre.toml"
+
+type RaiseMode string
+
+const (
+	RaiseAuto   RaiseMode = "auto"
+	RaiseManual RaiseMode = "manual"
+)
 
 type RepoSettings struct {
 	Tracker       string            `toml:"tracker"`
@@ -13,6 +24,7 @@ type RepoSettings struct {
 	Protect       []string          `toml:"protect"`
 	Checks        verdict.Predicate `toml:"checks"`
 	VerifyCommand []string          `toml:"verify_command"`
+	Raise         RaiseMode         `toml:"raise"`
 }
 
 type Rules struct {
@@ -22,6 +34,7 @@ type Rules struct {
 	MergifySHA   map[string]string
 	CompatCheck  map[string]string
 	Verify       map[string]bool
+	Raise        map[string]RaiseMode
 	Workflows    map[string]Workflow
 	MaxAgents    int
 	SpendLimit5h int
@@ -42,6 +55,7 @@ func RulesFor(daemon Daemon, obs Observation) Rules {
 		MergifySHA:   make(map[string]string, n),
 		CompatCheck:  make(map[string]string, n),
 		Verify:       make(map[string]bool, n),
+		Raise:        make(map[string]RaiseMode, n),
 		Workflows:    daemon.Workflows,
 		MaxAgents:    daemon.MaxAgents,
 		SpendLimit5h: daemon.SpendLimit5h,
@@ -53,6 +67,7 @@ func RulesFor(daemon Daemon, obs Observation) Rules {
 		rules.MergifySHA[name] = s.MergifySHA
 		rules.CompatCheck[name] = s.CompatCheck
 		rules.Verify[name] = len(s.VerifyCommand) > 0
+		rules.Raise[name] = cmp.Or(s.Raise, RaiseAuto)
 	}
 	for name := range obs.SettingsErrors {
 		add(name, RepoSettings{})
