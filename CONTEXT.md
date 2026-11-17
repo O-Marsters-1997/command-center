@@ -79,6 +79,11 @@ compat check, deny lists, `max_agents`, `spend_limit_5h`. Built once from Config
 `cfg.PlanRules()` into a `plan.Rules`; Config stays the only source.
 _Avoid_: Policy (reserved for `plan.Policy`, push refusal), settings
 
+**Protected path**:
+A path the push policy lets through but records on the push and flags loudly on the board, session
+page and PR; a **denied** path refuses the push instead.
+_Avoid_: held, gated, restricted
+
 **Snapshot**:
 What `plan` derives for every ticket in one pass from the Observation and the Rules: its state,
 reason, verbs and base, plus the tick's launch, push and draft decisions. Never stored.
