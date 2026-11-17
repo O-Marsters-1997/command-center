@@ -7,7 +7,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -191,7 +190,7 @@ func TestPush(t *testing.T) {
 
 	t.Run("an unreadable settings file skips the repo and records the error", func(t *testing.T) {
 		t.Parallel()
-		f := newPushFixture(t, loop.WithWorktrees(&tptest.Worktrees{}))
+		f := newPushFixture(t)
 		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 		f.Obs.SettingsErrors = map[string]string{"repo": "line 2: unknown key \"stackin\""}

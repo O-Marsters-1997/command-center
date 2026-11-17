@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,9 +11,9 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -31,20 +30,18 @@ type removeWorktreeFixture struct {
 	runID                        int64
 	at                           time.Time
 	forge                        *ghtest.Forge
-	worktrees                    *tptest.Worktrees
 	forgeOption                  loop.Option
 	failRemove                   bool
-	removeErr                    error
+	postHook                     bool
 }
 
 func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture {
 	t.Helper()
 	root, repoPath := repoWithOrigin(t)
 	forge := &ghtest.Forge{}
-	worktrees := &tptest.Worktrees{}
 	worktreePath := cutWorktree(t, repoPath, branch)
 	gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
-	gittest.Run(t, repoPath, "push", "-q", "origin", branch)
+	gittest.Run(t, worktreePath, "push", "-q", "-u", "origin", branch)
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
@@ -78,7 +75,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	return removeWorktreeFixture{
 		root: root, repoPath: repoPath, worktreePath: worktreePath,
 		store: store, ws: ws, cfg: cfg, ticket: ticket, runID: runID, at: at,
-		forge: forge, worktrees: worktrees, forgeOption: loop.WithForge(forge),
+		forge: forge, forgeOption: loop.WithForge(forge),
 	}
 }
 
@@ -110,12 +107,12 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 		t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	worktreeOption := loop.WithWorktrees(f.worktrees)
+	worktreeOption := loop.WithWorktrees(git.Library{})
 	switch {
 	case f.failRemove:
-		worktreeOption = loop.WithWorktrees(failingRemove{f.worktrees})
-	case f.removeErr != nil:
-		worktreeOption = loop.WithWorktrees(refusingRemove{f.worktrees, f.removeErr})
+		worktreeOption = loop.WithWorktrees(failingRemove{})
+	case f.postHook:
+		worktreeOption = loop.WithWorktrees(postHookWorktrees{})
 	}
 	lp := newLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{},
 		f.forgeOption, worktreeOption)
@@ -164,6 +161,28 @@ func TestRemoveWorktree(t *testing.T) {
 		}
 		if len(tickets) != 0 {
 			t.Errorf("tickets = %+v, want the merged ticket's row dropped from the fleet", tickets)
+		}
+	})
+
+	t.Run("a failed post hook still counts as removed", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoveWorktreeFixture(t, "cc-1")
+		f.postHook = true
+		obs := plan.Observation{
+			Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+		}
+
+		if err := f.requestRemoveWorktree(t, obs); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+
+		events, err := f.store.Events(t.Context())
+		if err != nil {
+			t.Fatalf("Events(): %v", err)
+		}
+		if !hasEvent(events, "worktree_removed", "") || hasEvent(events, "remove_worktree_refused", "") {
+			t.Errorf("events = %+v, want worktree_removed and no refusal", events)
 		}
 	})
 
@@ -416,11 +435,10 @@ func TestRemoveWorktree(t *testing.T) {
 	t.Run("refusals", func(t *testing.T) {
 		t.Parallel()
 		tests := []struct {
-			name      string
-			pr        plan.PRState
-			setup     func(t *testing.T, f removeWorktreeFixture)
-			reason    string
-			removeErr error
+			name   string
+			pr     plan.PRState
+			setup  func(t *testing.T, f removeWorktreeFixture)
+			reason string
 		}{
 			{
 				name: "dirty worktree", pr: plan.Merged, reason: "dirty",
@@ -437,7 +455,6 @@ func TestRemoveWorktree(t *testing.T) {
 					t.Helper()
 					gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
 				},
-				removeErr: errors.New("branch has unpushed commits"),
 			},
 			{
 				name: "pruned ref and a tip that moved past the last push", pr: plan.Merged, reason: "unpushed",
@@ -472,7 +489,6 @@ func TestRemoveWorktree(t *testing.T) {
 				t.Parallel()
 				f := newRemoveWorktreeFixture(t, "cc-1")
 				tt.setup(t, f)
-				f.removeErr = tt.removeErr
 				obs := plan.Observation{
 					Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
 					PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: tt.pr}},

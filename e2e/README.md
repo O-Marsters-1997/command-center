@@ -2,8 +2,8 @@
 
 Twenty
 [testscript](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript)
-scripts drive the real `cc` binary against a real git repository, a fake `gh`
-and a fake `tp`. Each one asserts a behaviour the unit tests cannot reach,
+scripts drive the real `cc` binary against a real git repository, and a fake `gh`.
+Worktrees are cut by the real treepad library. Each one asserts a behaviour the unit tests cannot reach,
 because it needs the binary, the filesystem, the database and the process
 runner all at once.
 
@@ -17,14 +17,13 @@ the fake agent scripts directly.
 
 ## How the substitution works
 
-`TestMain` builds three binaries into one temp directory and puts it first on
+`TestMain` builds two binaries into one temp directory and puts it first on
 `PATH`:
 
 | Built from | Installed as |
 |---|---|
 | `./cmd/cc` with `-tags=e2e` | `cc` |
 | `./e2e/fakegh` | `gh` |
-| `./e2e/faketp` | `tp` |
 
 That is the whole mechanism. Production code never learns it is under test, and
 no test-only environment variable exists in `internal/loop`. Even the state dir
@@ -38,7 +37,6 @@ tests/*.txtar             one script per behaviour
 testdata/config/*.toml    the config a script installs with cc-config
 testdata/gh/*.json        the fixture the fake gh answers from
 fakegh/                   the fake gh: fixture in, stdout and exit code out
-faketp/                   the fake tp: delegates to real git
 register/                 the e2e-only cc subcommands
 ../testdata/agents/*.sh   the fake agents a config's agent_command points at
 ```
@@ -85,13 +83,10 @@ all optional. Every call is appended to `$CC_GH_LOG` before the fixture is
 consulted, so an unanswerable call still shows in the log, and `grep -count=`
 against that log is how most scripts assert on side effects.
 
-`faketp` implements `new` and `remove` by delegating to real git, so worktree
-layout and branch-deletion refusals are genuine rather than simulated. It places
-worktrees where treepad does, as siblings of the repo named
-`<repo-slug>-<branch-slug>`. It removes the worktree before deleting the branch,
-which is the order real tp uses and the reason a non-forced remove of a
-squash-merged branch leaves the branch behind. Calls are logged to `$CC_TP_LOG`.
-Setting `CC_TP_FAIL` makes every call fail after logging.
+There is no fake for worktrees. `cc-init-repo` commits a `.treepad.toml` whose
+`pre_new` hook appends `cut <branch>` to `$CC_CUT_LOG`, and exits 1 while
+`CC_CUT_FAIL` is set, so a script counts cut attempts and forces a real cut
+failure.
 
 ## The fake agents
 
@@ -108,7 +103,7 @@ prompt file.
 
 Every script but `commits_ci.sh` appends its own invocation to `$CC_AGENT_LOG`.
 That is a script's proof of how many times an agent actually ran, which is a
-different fact from tp.log's cuts or the `events` table's `run_launched` rows.
+different fact from cut.log's cuts or the `events` table's `run_launched` rows.
 
 ## Environment
 
@@ -119,7 +114,7 @@ Every script, and everything it starts, runs with:
 | `HOME=$WORK` | Redirects the state dir, since `os.UserConfigDir` honours it. |
 | `GIT_CONFIG_NOSYSTEM`, `GIT_AUTHOR_*`, `GIT_COMMITTER_*` | So `cc-init-repo` can commit on a CI runner with no gitconfig at all. |
 | `CC_GH_FIXTURE`, `CC_GH_LOG` | The fake gh's input and log. |
-| `CC_TP_LOG` | The fake tp's log. |
+| `CC_CUT_LOG`, `CC_CUT_FAIL` | The cut hook's log, and the switch that makes it fail. |
 | `CC_AGENT_LOG` | The fake agents' log. |
 
 ## Adding a script

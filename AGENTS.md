@@ -34,7 +34,7 @@ One binary, `cmd/cc`, wired together in `internal/app`.
   marker `SELECT 'irreversible: <why>'::int;` inside `-- +goose StatementBegin`/`StatementEnd`.
 - `internal/web`: handlers and `html/template` pages. It derives per render through `plan` and
   caches nothing.
-- `internal/adapter`: the edges to the outside world, `command`, `gh`, `git`, `tp`, `tracker` and
+- `internal/adapter`: the edges to the outside world, `command`, `gh`, `git`, `tracker` and
   `runner`, with each test double beside its adapter (`gh/ghtest`, `git/gittest` and so on).
 - `internal/config` and `internal/demo` sit beside `internal/app`, which composes the tiers.
 
@@ -88,7 +88,7 @@ lives in pure `.ts` under `bun test`.
   older than five minutes and its container stops after five idle minutes. Set `CC_TEST_DATABASE_URL`
   to use an existing Postgres server instead of Docker; run `just test-db-down` to remove the
   container explicitly.
-- `e2e/` drives the real `cc` binary against a fake `gh` and `tp`, under the `e2e` build tag.
+- `e2e/` drives the real `cc` binary against a fake `gh`, under the `e2e` build tag.
 
 ## Boundaries: never hand-edit
 

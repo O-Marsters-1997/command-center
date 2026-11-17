@@ -35,7 +35,7 @@ cc-config fan-out-stacked-capped-sleeps
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=3 'run_launched'
-grep -count=2 '\-\-base origin/cc-1-x' $WORK/tp.log
+grep -count=3 '^cut cc-' $WORK/cut.log
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it running (spawn_and_dispose.txtar's own invariant) -- one more tick to observe it.
@@ -52,7 +52,7 @@ exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=4 'run_launched'
-grep -count=3 '\-\-base origin/cc-1-x' $WORK/tp.log
+grep -count=4 '^cut cc-' $WORK/cut.log
 
 exec cc tick --count 1
 exec cc request GET /tickets
@@ -65,7 +65,7 @@ exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=5 'run_launched'
-grep -count=4 '\-\-base origin/cc-1-x' $WORK/tp.log
+grep -count=5 '^cut cc-' $WORK/cut.log
 
 exec cc tick --count 1
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4'

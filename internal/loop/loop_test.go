@@ -25,7 +25,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker/trackertest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -293,7 +292,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 		fake := &runnertest.Runner{}
 		lp := newLoop(store, observing(obs), fixedClock(testAt.Add(time.Minute)), cfg, ws, fake,
-			loop.WithForge(&ghtest.Forge{}), loop.WithWorktrees(&tptest.Worktrees{}))
+			loop.WithForge(&ghtest.Forge{}))
 		if err := lp.RunOnce(t.Context()); err != nil {
 			t.Fatalf("RunOnce() error = %v", err)
 		}
@@ -444,12 +443,11 @@ func TestLoop_RunOnce(t *testing.T) {
 		trackRepo(t, store, "repo", "git@github.com:acme/repo.git")
 		at := testAt.AddDate(0, 2, -15)
 		forge := &ghtest.Forge{}
-		worktrees := &tptest.Worktrees{}
 		fake := &runnertest.Runner{}
 		lp := newLoopWithDeps(loop.Deps{
 			Store: store, Observe: loop.NewObserver(store, forge, cfg), Clock: fixedClock(at), Config: cfg, Workspace: ws,
 			Runner: fake, Tracker: resolve,
-		}, loop.WithForge(forge), loop.WithWorktrees(worktrees))
+		}, loop.WithForge(forge))
 		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: "project:x", Verb: plan.VerbImport, At: at,
 		}); err != nil {
@@ -473,11 +471,11 @@ func TestLoop_RunOnce(t *testing.T) {
 		gittest.Commit(t, spawns[0].WorktreePath, "x.go", "package x\n")
 		fake.Exit(1, 0)
 		tick(4)
-		cut := worktrees.Cut()
-		if len(forge.Calls("Create")) != 1 || len(cut) != 1 {
-			t.Fatalf("Create calls = %+v, cut = %v, want one of each", forge.Calls("Create"), cut)
+		creates := forge.Calls("Create")
+		if len(creates) != 1 {
+			t.Fatalf("Create calls = %+v, want one", creates)
 		}
-		branch := cut[0]
+		branch := gittest.Run(t, spawns[0].WorktreePath, "branch", "--show-current")
 		forge.SetSnapshot(gh.Snapshot{ByBranch: map[string]gh.PR{branch: {
 			Number: 1, HeadRef: branch, State: gh.Open,
 			HeadOid: gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/"+branch),

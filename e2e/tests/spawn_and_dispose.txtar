@@ -75,7 +75,7 @@ exec cc request GET /tickets
 ! stdout 'title="Agent running"'
 stdout -count=2 'title="Failed"'
 
-# Three tasks, three agents, three spawns -- the agent log is independent of both tp.log's cuts
+# Three tasks, three agents, three spawns -- the agent log is independent of both cut.log's cuts
 # and events' own count.
 grep -count=1 'commits.sh' $WORK/agent.log
 grep -count=1 'empty.sh' $WORK/agent.log

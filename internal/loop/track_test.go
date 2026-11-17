@@ -12,7 +12,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tp/tptest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -213,7 +212,7 @@ func TestTrack(t *testing.T) {
 		upsertRepoAs(t, st, "repo", plan.RepoRefused)
 		forge := &ghtest.Forge{}
 		runOnce(t, newLoop(st, loop.NewObserver(st, forge, cfg), fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
-			loop.WithForge(forge), loop.WithWorktrees(&tptest.Worktrees{})))
+			loop.WithForge(forge)))
 
 		if got := repoByName(t, st, "repo"); got.Phase != plan.RepoRefused || got.RefusalKind != plan.RefusalMergeSettings {
 			t.Errorf("repo = %+v, want still refused(merge_settings)", got)
@@ -232,7 +231,7 @@ func TestTrack(t *testing.T) {
 		}
 		forge := &ghtest.Forge{}
 		lp := newLoop(st, loop.NewObserver(st, forge, cfg), fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
-			loop.WithForge(forge), loop.WithWorktrees(&tptest.Worktrees{}))
+			loop.WithForge(forge))
 		tick := func() storepkg.Repo {
 			t.Helper()
 			runOnce(t, lp)

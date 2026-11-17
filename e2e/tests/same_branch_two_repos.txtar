@@ -16,7 +16,7 @@ exec cc tick --count 1
 
 # Both cut and spawn this tick, onto the identical branch name in their own separate checkouts.
 exec cc tick --count 1
-grep -count=2 'new cc-1-x --base origin/main' $WORK/tp.log
+grep -count=2 'cut cc-1-x' $WORK/cut.log
 
 cc-wait agent-done.log 'commits.sh' 2
 
