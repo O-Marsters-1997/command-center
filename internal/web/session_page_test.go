@@ -169,7 +169,9 @@ func protectedPushStore(t *testing.T, matches []plan.PathMatch) *storepkg.Store 
 func TestProtectedChanges(t *testing.T) {
 	t.Parallel()
 
-	matches := []plan.PathMatch{{Path: ".github/ci.yml", Rule: ".github/**", Tier: plan.TierProtected, Added: 3, Deleted: 1}}
+	matches := []plan.PathMatch{{
+		Path: ".github/ci.yml", Rule: ".github/**", Tier: plan.TierProtected, Added: 3, Deleted: 1,
+	}}
 
 	t.Run("flags the board and rail and lists paths on the session page", func(t *testing.T) {
 		t.Parallel()
