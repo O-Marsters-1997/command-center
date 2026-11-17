@@ -102,7 +102,7 @@ prompt file.
 | Script | What it does |
 |---|---|
 | `commits.sh` | Commits one file and exits 0. The ordinary happy path. |
-| `commits_ci.sh` | Commits under `.github/workflows`, so the push policy refuses it. |
+| `commits_ci.sh` | Commits `.npmrc`, a denied path, so the push policy refuses it. |
 | `empty.sh` | Does nothing, leaving HEAD where it was. |
 | `sleeps.sh` | Backgrounds a long sleep and waits for a signal, so kill and pgid reaping are testable. Writes its own `$$` to `<worktree>/pgid`, which `Setpgid` makes the pgid the app records too, so a script can check the page against the OS rather than against the app's own bookkeeping. |
 
