@@ -82,9 +82,9 @@ func TestSnapshot_Removal(t *testing.T) {
 			want: plan.Removal{},
 		},
 		{
-			name: "neither merged nor base gone",
+			name: "neither merged nor withdrawn",
 			in:   plan.Input{Obs: plan.Observation{PRs: openPRs(blocker, child)}, Runs: ran},
-			want: plan.Removal{Refusal: "neither merged nor base gone"},
+			want: plan.Removal{Refusal: "neither merged nor withdrawn"},
 		},
 		{
 			name: "agent awaiting an answer holds its worktree even when merged",

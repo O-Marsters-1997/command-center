@@ -21,8 +21,8 @@ func TestStatus(t *testing.T) {
 	t.Run("failed without a merged PR", statusFailedWithoutAMergedPR)
 	t.Run("an undisposed run is not failed", statusUndisposedRunNotFailed)
 	t.Run("no latest run", statusNoLatestRun)
-	t.Run("base gone outranks anything once it has run", statusBaseGoneOnceRun)
-	t.Run("never base gone without a prior run", statusNeverBaseGoneWithoutARun)
+	t.Run("withdrawn outranks anything once it has run", statusWithdrawnOnceRun)
+	t.Run("never withdrawn without a prior run", statusNeverWithdrawnWithoutARun)
 	t.Run("blocks on a conflicted base", statusBlocksOnAConflictedBase)
 	t.Run("a run outranks a conflicted base", statusRunOverAConflictedBase)
 }
@@ -499,7 +499,7 @@ func statusNoLatestRun(t *testing.T) {
 	}
 }
 
-func statusBaseGoneOnceRun(t *testing.T) {
+func statusWithdrawnOnceRun(t *testing.T) {
 	t.Parallel()
 
 	blockerClosed := plan.Unlock{
@@ -534,7 +534,7 @@ func statusBaseGoneOnceRun(t *testing.T) {
 	}
 }
 
-func statusNeverBaseGoneWithoutARun(t *testing.T) {
+func statusNeverWithdrawnWithoutARun(t *testing.T) {
 	t.Parallel()
 
 	blockerClosed := plan.Unlock{

@@ -333,8 +333,8 @@ When two open main-based branches conflict, only one is ready at a time. The hig
 has its push held (`push_pending`) and its reason names the peer. Nothing here stops a merge conflicting a
 peer, which is git rather than policy; what it stops is the peer being offered as ready
 before its turn, which is what makes a resolution get thrown away by the next merge. The
-hold still offers `launch`, and merging the held PR yourself re-derives on the next tick, so
-nothing deadlocks.
+hold offers no verb: the loop releases it on a later tick once the lower-ref peer merges or
+closes, so nothing deadlocks.
 
 **Observe compares peer tips with the call it already makes.** Every tick, `MergesCleanly`
 runs `git merge-tree --write-tree --name-only` per open branch against `origin/main`. The

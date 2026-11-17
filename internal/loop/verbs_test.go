@@ -473,7 +473,7 @@ func TestRemoveWorktree(t *testing.T) {
 				},
 			},
 			{
-				name: "open row, neither merged nor base gone", pr: plan.Open, reason: "neither merged nor base gone",
+				name: "open row, neither merged nor withdrawn", pr: plan.Open, reason: "neither merged nor withdrawn",
 				setup: func(*testing.T, removeWorktreeFixture) {},
 			},
 			{
