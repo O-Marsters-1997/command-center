@@ -27,7 +27,11 @@ func Fetch(ctx context.Context, repoPath string) error {
 
 // WorktreePaths reads the branch-to-path map, including worktrees mid-rebase.
 func WorktreePaths(ctx context.Context, repoPath string) (map[string]string, error) {
-	listed, err := treepad.List(ctx, treepad.ListOptions{RepoDir: repoPath})
+	repoDir, err := filepath.Abs(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve repo path %s: %w", repoPath, err)
+	}
+	listed, err := treepad.List(ctx, treepad.ListOptions{RepoDir: repoDir})
 	if err != nil {
 		return nil, fmt.Errorf("list worktrees: %w", err)
 	}
