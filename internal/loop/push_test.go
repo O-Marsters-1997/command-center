@@ -82,7 +82,7 @@ func TestPush(t *testing.T) {
 	t.Run("refuses a policy hit, never pushes and never retries", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, ".github/workflows/x.yml", "name: x\n")
+		gittest.Commit(t, f.Worktree, ".mergify.yml", "name: x\n")
 		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 		f.tick(t)
 
@@ -93,12 +93,24 @@ func TestPush(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PushFacts: %v", err)
 		}
-		if fact := facts[plan.TicketURL(f.Ticket.URL)]; !fact.Refused || fact.RefusedPath != ".github/workflows/x.yml" {
-			t.Errorf("PushFacts() = %+v, want refused at .github/workflows/x.yml", fact)
+		if fact := facts[plan.TicketURL(f.Ticket.URL)]; !fact.Refused || fact.RefusedPath != ".mergify.yml" {
+			t.Errorf("PushFacts() = %+v, want refused at .mergify.yml", fact)
 		}
 		f.tick(t)
 		if got := f.events(t, "push_refused"); len(got) != 1 || got[0].TicketURL != f.Ticket.URL {
 			t.Errorf("push_refused events after two ticks = %+v, want one for %s", got, f.Ticket.URL)
+		}
+	})
+
+	t.Run("pushes a protected path", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, ".github/workflows/x.yml", "name: x\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.tick(t)
+
+		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
+			t.Error("origin has no cc-1, want a protected-path diff pushed")
 		}
 	})
 
