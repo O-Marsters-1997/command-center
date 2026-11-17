@@ -164,6 +164,21 @@ func TestSnapshot_Session(t *testing.T) {
 	if got, ok := snap.Session(second.URL); ok {
 		t.Errorf("Session(%s) = %q, true, want none", second.URL, got)
 	}
+
+	t.Run("a v0 ticket resumes its single implement session", func(t *testing.T) {
+		t.Parallel()
+		v0 := plan.Workflow{Name: "v0", Hash: "h0", Steps: []plan.Step{{Name: "implement"}}}
+		snap := derive(plan.Rules{Workflows: map[string]plan.Workflow{"v0": v0}}, plan.Input{
+			Tickets: []plan.Ticket{first},
+			Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {WorkflowHash: "h0"}},
+			Passes: map[plan.TicketURL][]plan.StepRun{first.URL: {
+				{ID: 1, Step: "implement", Session: "v0-session"},
+			}},
+		})
+		if got, ok := snap.Session(first.URL); !ok || got != "v0-session" {
+			t.Errorf("Session(%s) = %q, %t, want v0-session, true", first.URL, got, ok)
+		}
+	})
 }
 
 func TestSnapshot_Pushable(t *testing.T) {

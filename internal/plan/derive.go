@@ -278,8 +278,11 @@ func (r Rules) Derive(in Input) Snapshot {
 }
 
 func sessionOf(w Workflow, runs []StepRun, hasVerify bool) string {
-	if r := w.Resumable(w.Pass(runs, hasVerify)); r.IsSome() && r.Unwrap().Session != "" {
-		return r.Unwrap().Session
+	if pass := w.Pass(runs, hasVerify); len(pass) > 0 {
+		if r := w.Resumable(pass); r.IsSome() {
+			return r.Unwrap().Session
+		}
+		return ""
 	}
 	for i := len(runs) - 1; i >= 0; i-- {
 		if runs[i].Session != "" {
