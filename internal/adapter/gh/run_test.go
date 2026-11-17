@@ -16,12 +16,12 @@ func TestCLI_Retry(t *testing.T) {
 	t.Parallel()
 	timeout := &command.Error{Cmd: "gh", Stderr: "dial tcp 140.82.112.5:443: connect: operation timed out", Err: errGH}
 	notFound := &command.Error{Cmd: "gh", Stderr: "HTTP 404: Not Found", Err: errGH}
-	readTitles := func(c gh.CLI) error {
-		_, err := c.IssueTitles(context.Background(), "/repo")
+	readTitles := func(ctx context.Context, c gh.CLI) error {
+		_, err := c.IssueTitles(ctx, "/repo")
 		return err
 	}
-	closeIssue := func(c gh.CLI) error {
-		return c.CloseIssue(context.Background(), "/repo", "https://github.com/o/r/issues/1")
+	closeIssue := func(ctx context.Context, c gh.CLI) error {
+		return c.CloseIssue(ctx, "/repo", "https://github.com/o/r/issues/1")
 	}
 
 	t.Run("read recovers after timeouts", func(t *testing.T) {
@@ -35,7 +35,7 @@ func TestCLI_Retry(t *testing.T) {
 			return []byte("[]"), nil
 		})
 
-		if err := readTitles(gh.CLI{Exec: exec, Backoff: time.Nanosecond}); err != nil {
+		if err := readTitles(t.Context(), gh.CLI{Exec: exec, Backoff: time.Nanosecond}); err != nil {
 			t.Errorf("IssueTitles() error = %v, want nil", err)
 		}
 		if calls != 3 {
@@ -45,7 +45,7 @@ func TestCLI_Retry(t *testing.T) {
 
 	t.Run("read stops retrying when the context is cancelled", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		calls := 0
 		exec := command.ExecutorFunc(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
@@ -67,7 +67,7 @@ func TestCLI_Retry(t *testing.T) {
 	failing := []struct {
 		name      string
 		failure   error
-		call      func(gh.CLI) error
+		call      func(context.Context, gh.CLI) error
 		wantCalls int
 	}{
 		{name: "read gives up after three attempts", failure: timeout, call: readTitles, wantCalls: 3},
@@ -83,7 +83,7 @@ func TestCLI_Retry(t *testing.T) {
 				return nil, tt.failure
 			})
 
-			err := tt.call(gh.CLI{Exec: exec, Backoff: time.Nanosecond})
+			err := tt.call(t.Context(), gh.CLI{Exec: exec, Backoff: time.Nanosecond})
 
 			if !errors.Is(err, errGH) {
 				t.Errorf("error = %v, want %v", err, errGH)
