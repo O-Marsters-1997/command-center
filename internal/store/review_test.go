@@ -60,6 +60,32 @@ func TestStore_ReviewComments(t *testing.T) {
 		}
 	})
 
+	t.Run("request changes clears one ticket and queues one follow-up", func(t *testing.T) {
+		t.Parallel()
+		st, comment := reviewFixture(t)
+		other := comment
+		other.Body = "elsewhere"
+		if _, err := st.AddReviewComment(t.Context(), storepkg.NewReviewComment{
+			Ticket: "sandbox://CC-2", ReviewComment: other, At: testNow,
+		}); err != nil {
+			t.Fatalf("AddReviewComment(CC-2): %v", err)
+		}
+		payload := storepkg.FollowUpPayload{Message: "fix it"}
+		if err := st.RequestChanges(t.Context(), "sandbox://CC-1", payload, testNow); err != nil {
+			t.Fatalf("RequestChanges(CC-1): %v", err)
+		}
+		if got, err := st.ReviewComments(t.Context(), "sandbox://CC-1"); err != nil || len(got) != 0 {
+			t.Errorf("CC-1 comments after request = %v, %v, want none", got, err)
+		}
+		if got, err := st.ReviewComments(t.Context(), "sandbox://CC-2"); err != nil || len(got) != 1 {
+			t.Errorf("CC-2 comments after request = %v, %v, want 1", got, err)
+		}
+		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
+		if err != nil || len(intents) != 1 || storepkg.DecodeFollowUpPayload(intents[0].Payload).Message != "fix it" {
+			t.Errorf("PendingVerbIntents(follow-up) = %v, %v, want one carrying the message", intents, err)
+		}
+	})
+
 	t.Run("delete only reaches the named ticket", func(t *testing.T) {
 		t.Parallel()
 		st, comment := reviewFixture(t)

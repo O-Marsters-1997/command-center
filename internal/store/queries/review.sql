@@ -6,6 +6,9 @@ RETURNING id;
 -- name: DeleteReviewComment :exec
 DELETE FROM review_comments WHERE ticket_id = sqlc.arg(ticket_id) AND id = sqlc.arg(id);
 
+-- name: DeleteReviewComments :exec
+DELETE FROM review_comments WHERE ticket_id = sqlc.arg(ticket_id);
+
 -- name: ListReviewComments :many
 SELECT id, tip, path, line, side, hunk, body
 FROM review_comments

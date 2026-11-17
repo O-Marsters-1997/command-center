@@ -57,6 +57,15 @@ func (q *Queries) DeleteReviewComment(ctx context.Context, arg DeleteReviewComme
 	return err
 }
 
+const deleteReviewComments = `-- name: DeleteReviewComments :exec
+DELETE FROM review_comments WHERE ticket_id = $1
+`
+
+func (q *Queries) DeleteReviewComments(ctx context.Context, ticketID string) error {
+	_, err := q.db.ExecContext(ctx, deleteReviewComments, ticketID)
+	return err
+}
+
 const listReviewComments = `-- name: ListReviewComments :many
 SELECT id, tip, path, line, side, hunk, body
 FROM review_comments

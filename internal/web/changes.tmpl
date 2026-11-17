@@ -11,6 +11,16 @@
     {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
     <span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span>
     {{template "reviewButton" .Pending}}
+    <div id="review-popover" class="review-popover" popover>
+      <form class="review-comment" method="post" action="{{.SessionPath}}/changes/request" hx-post="{{.SessionPath}}/changes/request" hx-disabled-elt="find button">
+        <textarea name="note" rows="3" aria-label="Note" placeholder="Note for the agent (optional)"></textarea>
+        <div class="flex items-center gap-2">
+          <button class="btn" type="submit" {{if not .CanFollowUp}}disabled title="{{.Reason}}"{{end}}>Request changes</button>
+          {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Open PR</a>{{end}}{{end}}
+        </div>
+        {{- if not .CanFollowUp}}<p class="text-muted text-sm">{{.Reason}}</p>{{end}}
+      </form>
+    </div>
   </header>
   {{- if not .Files}}
   <p class="text-muted">Nothing differs from <code>origin/{{.Base}}</code>.</p>
@@ -62,7 +72,7 @@
 </article>
 {{template "shellEnd" .}}
 
-{{define "reviewButton"}}<button id="review-changes" class="btn" type="button" disabled>Review changes{{if .}} ({{.}}){{end}}</button>{{end}}
+{{define "reviewButton"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover">Review changes{{if .}} ({{.}}){{end}}</button>{{end}}
 
 {{define "reviewThread"}}<tr class="review-thread"><td colspan="4">
   <div class="review-comment">
@@ -83,6 +93,6 @@
   </form>
 </td></tr>{{end}}
 
-{{define "reviewPosted"}}{{template "reviewThread" .}}<button id="review-changes" class="btn" type="button" disabled hx-swap-oob="true">Review changes ({{.Pending}})</button>{{end}}
+{{define "reviewPosted"}}{{template "reviewThread" .}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover" hx-swap-oob="true">Review changes ({{.Pending}})</button>{{end}}
 
-{{define "reviewDeleted"}}<button id="review-changes" class="btn" type="button" disabled hx-swap-oob="true">Review changes{{if .Pending}} ({{.Pending}}){{end}}</button>{{end}}
+{{define "reviewDeleted"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover" hx-swap-oob="true">Review changes{{if .Pending}} ({{.Pending}}){{end}}</button>{{end}}

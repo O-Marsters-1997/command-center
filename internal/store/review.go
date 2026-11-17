@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -35,6 +36,34 @@ func (s *Store) AddReviewComment(ctx context.Context, c NewReviewComment) (int64
 func (s *Store) DeleteReviewComment(ctx context.Context, ticket plan.TicketURL, id int64) error {
 	if err := s.q.DeleteReviewComment(ctx, ccdb.DeleteReviewCommentParams{TicketID: string(ticket), ID: id}); err != nil {
 		return fmt.Errorf("delete review comment %d on %s: %w", id, ticket, err)
+	}
+	return nil
+}
+
+func (s *Store) RequestChanges(
+	ctx context.Context, ticket plan.TicketURL, payload FollowUpPayload, at time.Time,
+) error {
+	encoded, err := payload.Encode()
+	if err != nil {
+		return fmt.Errorf("request changes on %s: %w", ticket, err)
+	}
+	raw, err := json.Marshal(encoded)
+	if err != nil {
+		return fmt.Errorf("encode follow-up intent payload for %s: %w", ticket, err)
+	}
+	err = s.inTx(ctx, func(q *ccdb.Queries) error {
+		if err := q.DeleteReviewComments(ctx, string(ticket)); err != nil {
+			return fmt.Errorf("delete review comments: %w", err)
+		}
+		if err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
+			At: at.UTC(), TicketID: string(ticket), Verb: string(plan.VerbFollowUp), Payload: raw,
+		}); err != nil {
+			return fmt.Errorf("queue follow-up intent: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("request changes on %s: %w", ticket, err)
 	}
 	return nil
 }
