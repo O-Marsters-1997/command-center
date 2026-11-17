@@ -28,6 +28,8 @@ type sessionRunOpts struct {
 	KeepPrompt bool
 	Alive      bool
 	Outcome    plan.Outcome
+
+	LastMessage option.Option[string]
 }
 
 func sessionStore(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
@@ -75,7 +77,7 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 	if !opts.Alive {
 		if err := st.RecordDisposition(ctx, storepkg.Disposition{
 			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(0),
-			Cost: option.None[float64](), EndedAt: testNow,
+			Cost: option.None[float64](), EndedAt: testNow, LastMessage: opts.LastMessage,
 		}); err != nil {
 			t.Fatalf("RecordDisposition(%d): %v", runID, err)
 		}
@@ -209,6 +211,21 @@ func TestSessionPage(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a failed session shows its reason and a running one does not", func(t *testing.T) {
+		t.Parallel()
+		failed, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+		})
+		if got := sessionMain(t, failed, "/s/acme/web/1").One(t, ".session-reason").Text(); strings.TrimSpace(got) == "" {
+			t.Errorf("failed GET /s/acme/web/1 reason is empty, want the row's reason")
+		}
+
+		running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+		if reason := sessionMain(t, running, "/s/acme/web/1").Find(".session-reason"); len(reason) != 0 {
+			t.Errorf("running GET /s/acme/web/1 shows a reason: %s", reason[0].HTML())
+		}
+	})
 
 	t.Run("says when the prompt was not kept", func(t *testing.T) {
 		t.Parallel()
