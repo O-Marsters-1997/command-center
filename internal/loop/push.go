@@ -40,6 +40,27 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, ob
 	})
 }
 
+func (l *Loop) applyRaiseIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
+	return l.eachIntent(ctx, snap, plan.VerbRaise, func(intent plan.Intent) error {
+		e, ok := snap.Entry(intent.Ticket)
+		if !ok {
+			return nil
+		}
+		url := string(intent.Ticket)
+		if e.State != plan.AwaitingPR {
+			return l.event(ctx, url, store.EventRaiseRefused, fmt.Sprintf("the ticket is %s, not awaiting PR", e.State))
+		}
+		p, ok := snap.Push(intent.Ticket, obs)
+		if !ok || string(p.LocalTip) != intent.Payload {
+			return l.event(ctx, url, store.EventRaiseRefused, "the tip has moved since you reviewed it")
+		}
+		if err := l.pushOne(ctx, e, p, obs); err != nil {
+			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
+		}
+		return nil
+	})
+}
+
 func sameProtectedPaths(now []plan.PathMatch, last option.Option[plan.PushRow]) bool {
 	var before []plan.PathMatch
 	if last.IsSome() {

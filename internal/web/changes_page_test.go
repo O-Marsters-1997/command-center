@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -16,7 +18,16 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
+var awaitingSettings = map[string]plan.RepoSettings{"acme/web": {Raise: plan.RaiseManual}}
+
 func changesFixture(t *testing.T, tip func(repo string) string) (*storepkg.Store, string) {
+	t.Helper()
+	return changesFixtureAs(t, plan.OutcomeFailed, nil, tip)
+}
+
+func changesFixtureAs(
+	t *testing.T, outcome plan.Outcome, settings map[string]plan.RepoSettings, tip func(repo string) string,
+) (*storepkg.Store, string) {
 	t.Helper()
 	repo := gittest.Init(t)
 	gittest.Run(t, repo, "update-ref", "refs/remotes/origin/main", "main")
@@ -33,9 +44,10 @@ func changesFixture(t *testing.T, tip func(repo string) string) (*storepkg.Store
 		t.Fatalf("Symlink(%q): %v", checkout, err)
 	}
 
-	st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", Outcome: plan.OutcomeFailed})
+	st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", Outcome: outcome})
 	obs := plan.Observation{
 		ObservedAt: testNow,
+		Settings:   settings,
 		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {}},
 		LocalTips:  map[plan.BranchRef]plan.SHA{},
 	}
@@ -195,6 +207,82 @@ func TestChangesPage(t *testing.T) {
 		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("POST comment on line 99 = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("raise queues the posted sha, clears comments and returns the PR link once consumed", func(t *testing.T) {
+		t.Parallel()
+		var sha string
+		st, dataDir := changesFixtureAs(t, plan.OutcomePush, awaitingSettings, func(repo string) string {
+			sha = gittest.Run(t, repo, "rev-parse", "cc-1")
+			return sha
+		})
+		server := openServer(st, fixedClock(testNow), dataDir)
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		got := page.One(t, "#review-popover").Text()
+		if !strings.Contains(got, "Raise PR") || !strings.Contains(got, "discards") {
+			t.Errorf("GET changes popover = %q, want Raise PR and the discard warning", got)
+		}
+
+		consumer := make(chan error, 1)
+		go func() {
+			poll := time.NewTicker(10 * time.Millisecond)
+			defer poll.Stop()
+			for ; t.Context().Err() == nil; <-poll.C {
+				intents, err := st.PendingVerbIntents(t.Context(), plan.VerbRaise)
+				if err != nil {
+					consumer <- err
+					return
+				}
+				if len(intents) > 0 {
+					if got := intents[0].Payload; got != sha {
+						consumer <- errors.New("raise payload = " + got + ", want " + sha)
+						return
+					}
+					push := storepkg.Push{
+						Ticket: sessionTicket, Tip: plan.SHA(sha), BaseSHA: plan.SHA(sha), BaseBranch: "main", At: testNow,
+					}
+					if err := st.RecordPush(t.Context(), push); err != nil {
+						consumer <- err
+						return
+					}
+					consumer <- st.ConsumeVerbIntent(t.Context(), intents[0].ID, testNow)
+					return
+				}
+			}
+		}()
+		hx := http.Header{"Hx-Request": {"true"}}
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/raise", req{Form: url.Values{"sha": {sha}}, Header: hx})
+		if err := <-consumer; err != nil {
+			t.Fatalf("consuming the raise intent: %v", err)
+		}
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body, "Pull request") {
+			t.Fatalf("POST raise = %d %q, want 200 with a PR link", rec.Code, rec.Body)
+		}
+		comments, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(comments) != 0 {
+			t.Errorf("ReviewComments after raise = %v, %v, want none", comments, err)
+		}
+	})
+
+	t.Run("raise is refused where the ticket is not awaiting PR", func(t *testing.T) {
+		t.Parallel()
+		var sha string
+		st, dataDir := changesFixture(t, func(repo string) string {
+			sha = gittest.Run(t, repo, "rev-parse", "cc-1")
+			return sha
+		})
+		server := openServer(st, fixedClock(testNow), dataDir)
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/raise", req{Form: url.Values{"sha": {sha}}})
+		if rec.Code != http.StatusConflict {
+			t.Errorf("POST raise = %d, want %d", rec.Code, http.StatusConflict)
+		}
+		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbRaise)
+		if err != nil || len(intents) != 0 {
+			t.Errorf("PendingVerbIntents(raise) = %v, %v, want none", intents, err)
 		}
 	})
 

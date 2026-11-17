@@ -55,7 +55,7 @@ func (s *Store) RequestChanges(
 		if err := q.DeleteReviewComments(ctx, string(ticket)); err != nil {
 			return fmt.Errorf("delete review comments: %w", err)
 		}
-		if err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
+		if _, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 			At: at.UTC(), TicketID: string(ticket), Verb: string(plan.VerbFollowUp), Payload: raw,
 		}); err != nil {
 			return fmt.Errorf("queue follow-up intent: %w", err)
@@ -66,6 +66,24 @@ func (s *Store) RequestChanges(
 		return fmt.Errorf("request changes on %s: %w", ticket, err)
 	}
 	return nil
+}
+
+func (s *Store) Raise(ctx context.Context, ticket plan.TicketURL, tip plan.SHA, at time.Time) (int64, error) {
+	var id int64
+	err := s.inTx(ctx, func(q *ccdb.Queries) error {
+		if err := q.DeleteReviewComments(ctx, string(ticket)); err != nil {
+			return fmt.Errorf("delete review comments: %w", err)
+		}
+		var err error
+		id, err = queueVerbIntent(ctx, q, VerbRequest{
+			Ticket: string(ticket), Verb: plan.VerbRaise, Payload: string(tip), At: at,
+		})
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("raise %s: %w", ticket, err)
+	}
+	return id, nil
 }
 
 func (s *Store) ReviewComments(ctx context.Context, ticket plan.TicketURL) ([]plan.ReviewComment, error) {

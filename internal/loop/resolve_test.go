@@ -16,7 +16,7 @@ import (
 
 func (c conflictFixture) queueResolve(t *testing.T) {
 	t.Helper()
-	if err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 		Ticket: c.f.child.URL, Verb: plan.VerbResolve, At: testAt.Add(time.Hour),
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent(resolve): %v", err)

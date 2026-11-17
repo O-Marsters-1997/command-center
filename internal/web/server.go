@@ -110,6 +110,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments", s.handle(s.handleAddComment))
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments/{id}/delete", s.handle(s.handleDeleteComment))
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/request", s.handle(s.handleRequestChanges))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/raise", s.handle(s.handleRaise))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
 	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
@@ -406,7 +407,7 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	}
 	feature := r.FormValue("feature")
 	if feature != "" {
-		if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+		if _, err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
 			Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
 		}); err != nil {
 			return fmt.Errorf("queue verb intent: %w", err)
@@ -592,7 +593,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, Payload: payload, At: s.clock.Now()}
-	if err := s.store.QueueVerbIntent(ctx, request); err != nil {
+	if _, err := s.store.QueueVerbIntent(ctx, request); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	if r.FormValue("from") == "rail" && hx.IsRequest(r) {
@@ -806,7 +807,7 @@ func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) err
 	if repo != "" && !validRepo(repo) {
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
-	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+	if _, err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
 		Ticket: feature, Verb: plan.VerbImport, Payload: repo, At: s.clock.Now(),
 	}); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)

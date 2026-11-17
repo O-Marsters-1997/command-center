@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"slices"
 	"strconv"
@@ -37,6 +38,7 @@ type Changes struct {
 	Comments map[string][]plan.ReviewComment // by path
 
 	CanFollowUp bool
+	CanRaise    bool
 }
 
 func (c Changes) Pending() int {
@@ -127,6 +129,7 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef, dat
 		Ticket: plan.TicketURL(row.URL), Base: base, Tip: tip, State: entry.State, PR: option.None[string](),
 		Comments:    map[string][]plan.ReviewComment{},
 		CanFollowUp: slices.Contains(plan.Verbs(entry.State), plan.VerbFollowUp),
+		CanRaise:    slices.Contains(plan.Verbs(entry.State), plan.VerbRaise),
 	}
 	for _, c := range pending {
 		changes.Comments[c.Path] = append(changes.Comments[c.Path], c)
@@ -253,6 +256,41 @@ func (r *Reader) SessionTicket(ctx context.Context, now time.Time, ref SessionRe
 		return "", ErrSessionNotFound
 	}
 	return plan.TicketURL(row.URL), nil
+}
+
+type RaiseResult struct {
+	PRURL   string
+	Problem plan.Reason
+}
+
+func (r *Reader) RaiseResult(ctx context.Context, now time.Time, ref SessionRef) (RaiseResult, error) {
+	board, err := r.Board(ctx, now, Params{})
+	if err != nil {
+		return RaiseResult{}, fmt.Errorf("load board: %w", err)
+	}
+	row, ok := board.rowFor(ref)
+	if !ok {
+		return RaiseResult{}, ErrSessionNotFound
+	}
+	snap, err := r.Snapshot(ctx, now)
+	if err != nil {
+		return RaiseResult{}, err
+	}
+	entry, ok := snap.Entry(plan.TicketURL(row.URL))
+	if !ok {
+		return RaiseResult{}, ErrSessionNotFound
+	}
+	if entry.State == plan.AwaitingPR {
+		return RaiseResult{Problem: "the tip has moved since you loaded this page; reload to see the new diff"}, nil
+	}
+	if entry.State == plan.PushFailed || entry.State == plan.PushRefused {
+		return RaiseResult{Problem: entry.Reason}, nil
+	}
+	repo := "https://github.com/" + row.Repo
+	if row.PRNumber > 0 {
+		return RaiseResult{PRURL: repo + "/pull/" + strconv.Itoa(row.PRNumber)}, nil
+	}
+	return RaiseResult{PRURL: repo + "/pulls?q=head%3A" + url.QueryEscape(entry.Ticket.Branch)}, nil
 }
 
 func groupByFolder(files []ChangedFile) []ChangeFolder {
