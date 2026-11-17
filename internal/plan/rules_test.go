@@ -18,6 +18,7 @@ func TestRulesFor(t *testing.T) {
 			"a": {
 				Stacking: true, Deny: []string{".github/**"}, CompatCheck: "compat", MergifySHA: "sha256:1",
 				Checks: verdict.Predicate{Success: "CI"}, VerifyCommand: []string{"just", "test"},
+				Raise: plan.RaiseManual,
 			},
 			"b": {},
 		},
@@ -27,12 +28,15 @@ func TestRulesFor(t *testing.T) {
 	got := plan.RulesFor(plan.Daemon{MaxAgents: 3, SpendLimit5h: 80}, obs)
 
 	want := plan.Rules{
-		Stacking:     map[string]bool{"a": true, "b": false, "c": false},
-		Deny:         map[string][]string{"a": {".github/**"}, "b": nil, "c": nil},
-		Checks:       map[string]verdict.Predicate{"a": {Success: "CI"}, "b": {}, "c": {}},
-		MergifySHA:   map[string]string{"a": "sha256:1", "b": "", "c": ""},
-		CompatCheck:  map[string]string{"a": "compat", "b": "", "c": ""},
-		Verify:       map[string]bool{"a": true, "b": false, "c": false},
+		Stacking:    map[string]bool{"a": true, "b": false, "c": false},
+		Deny:        map[string][]string{"a": {".github/**"}, "b": nil, "c": nil},
+		Checks:      map[string]verdict.Predicate{"a": {Success: "CI"}, "b": {}, "c": {}},
+		MergifySHA:  map[string]string{"a": "sha256:1", "b": "", "c": ""},
+		CompatCheck: map[string]string{"a": "compat", "b": "", "c": ""},
+		Verify:      map[string]bool{"a": true, "b": false, "c": false},
+		Raise: map[string]plan.RaiseMode{
+			"a": plan.RaiseManual, "b": plan.RaiseAuto, "c": plan.RaiseAuto,
+		},
 		MaxAgents:    3,
 		SpendLimit5h: 80,
 	}

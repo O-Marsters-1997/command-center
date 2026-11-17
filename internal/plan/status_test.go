@@ -108,6 +108,15 @@ func statusPushPendingNamesTheBlocker(t *testing.T) {
 	if state != plan.PushPending || reason != "agent finished with commits, waiting to push" {
 		t.Errorf("Status(facts) = %v, %q, want today's push pending reason", state, reason)
 	}
+
+	state, _ = plan.Status(plan.Facts{Unlock: free, LatestRun: run, Raise: plan.RaiseManual})
+	if state != plan.AwaitingPR {
+		t.Errorf("Status(manual, unlocked) = %v, want awaiting PR", state)
+	}
+	state, _ = plan.Status(plan.Facts{Unlock: untracked, LatestRun: run, Raise: plan.RaiseManual})
+	if state != plan.PushPending {
+		t.Errorf("Status(manual, locked) = %v, want push pending", state)
+	}
 }
 
 func statusCancelledWithNoRun(t *testing.T) {

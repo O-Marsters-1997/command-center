@@ -93,6 +93,7 @@ error with its line. The file's own path is always denied to agent pushes.
 |---|---|---|
 | `tracker` | `"github"` | Where features and tickets come from. GitHub issues are the only tracker. |
 | `stacking` | `false` | When a ticket's one same-repo blocker has an open PR, branch from that PR's branch instead of `main`. |
+| `raise` | `"auto"` | `"manual"` holds a finished ticket's first push: it reads `awaiting PR` and the loop opens no PR until you raise it. Later pushes are unchanged. Any other value skips the repo. |
 | `deny` | none | Path patterns added to the push policy's default refusals. |
 | `checks` | none | The predicate over CI checks that makes a PR green. |
 | `mergify_sha` | none | The `sha256` of `.mergify.yml` that `checks` was written against. On a mismatch, rows hold at `checking` rather than claim green. |

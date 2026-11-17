@@ -43,6 +43,7 @@ var stateDecisions = []struct {
 	{state: plan.CutFailed, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}},
 	{state: plan.AwaitingInput, verbs: []plan.Verb{plan.VerbFollowUp, plan.VerbReRun}},
 	{state: plan.PushPending, unattended: true},
+	{state: plan.AwaitingPR, verbs: []plan.Verb{plan.VerbFollowUp, plan.VerbReRun}},
 	{state: plan.Checking, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}, unattended: true},
 	{state: plan.NeedsYou, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp, plan.VerbKill}},
 	{state: plan.PushFailed, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
@@ -111,7 +112,7 @@ func TestState_Label(t *testing.T) {
 		plan.BaseGone: "Base gone", plan.Cancelled: "Cancelled", plan.BaseMoved: "Base moved",
 		plan.CIFailed: "Checks failing", plan.RefreshConflicted: "Refresh conflicted",
 		plan.ConflictsWithMain: "Conflicts with main", plan.VerificationFailed: "Verification failed",
-		plan.WaitingOnProducerDeploy: "Waiting on deploy",
+		plan.WaitingOnProducerDeploy: "Waiting on deploy", plan.AwaitingPR: "Awaiting PR",
 	}
 	if len(want) != len(plan.AllStates()) {
 		t.Fatalf("table covers %d states, AllStates() has %d", len(want), len(plan.AllStates()))

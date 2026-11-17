@@ -131,6 +131,7 @@ const (
 	Failed
 	CutFailed
 	PushPending
+	AwaitingPR
 	Checking
 	NeedsYou
 	PushFailed
@@ -178,6 +179,7 @@ type Facts struct {
 	LatestRun       option.Option[RunFact]
 	CancelledMember bool
 	ConflictedBase  string
+	Raise           RaiseMode
 }
 
 func Status(f Facts) (State, Reason) {
@@ -187,7 +189,7 @@ func Status(f Facts) (State, Reason) {
 	if f.LatestRun.IsSome() && f.LatestRun.Unwrap().PRMerged {
 		return PRMerged, "pull request merged"
 	}
-	if state, reason, ok := statusFromRun(f.LatestRun, f.Unlock); ok {
+	if state, reason, ok := statusFromRun(f.LatestRun, f.Unlock, f.Raise); ok {
 		return state, reason
 	}
 	switch {
@@ -206,7 +208,7 @@ func Status(f Facts) (State, Reason) {
 	}
 }
 
-func statusFromRun(latest option.Option[RunFact], unlock Unlock) (State, Reason, bool) {
+func statusFromRun(latest option.Option[RunFact], unlock Unlock, raise RaiseMode) (State, Reason, bool) {
 	if latest.IsNone() {
 		return 0, "", false
 	}
@@ -219,7 +221,7 @@ func statusFromRun(latest option.Option[RunFact], unlock Unlock) (State, Reason,
 	}
 	switch run.Outcome.Unwrap() {
 	case OutcomePush:
-		state, reason := statusFromPush(run, unlock)
+		state, reason := statusFromPush(run, unlock, raise)
 		return state, reason, true
 	case OutcomeAsked:
 		return AwaitingInput, firstLine(run.Question), true
@@ -265,7 +267,7 @@ func firstLine(s string) Reason {
 	return Reason(strings.TrimSpace(line))
 }
 
-func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
+func statusFromPush(run RunFact, unlock Unlock, raise RaiseMode) (State, Reason) {
 	switch {
 	case run.PRClosedUnmerged:
 		return PRClosedUnmerged, "pull request closed without merging"
@@ -294,6 +296,8 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", joinURLs(unlock.Blocking)))
 	case !unlock.Unlocked:
 		return PushPending, Reason("push held: " + string(unlock.Reason))
+	case raise == RaiseManual:
+		return AwaitingPR, "agent finished with commits, waiting for you to raise the PR"
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}

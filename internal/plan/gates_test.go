@@ -172,13 +172,21 @@ func TestSnapshot_Pushable(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		in    plan.Input
-		alive bool
-		noTip bool
-		want  []plan.Push
+		name   string
+		in     plan.Input
+		alive  bool
+		noTip  bool
+		manual bool
+		want   []plan.Push
 	}{
 		{name: "never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, want: []plan.Push{pushed}},
+		{name: "manual repo, never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, manual: true},
+		{
+			name:   "manual repo, tip moved past last push",
+			in:     plan.Input{Runs: run(plan.OutcomePush), Verdict: lastPush("abc")},
+			manual: true,
+			want:   []plan.Push{pushed},
+		},
 		{name: "outcome is not push", in: plan.Input{Runs: run(plan.OutcomeAsked)}},
 		{name: "no run", in: plan.Input{}},
 		{name: "agent alive", in: plan.Input{Runs: run(plan.OutcomePush)}, alive: true},
@@ -227,7 +235,11 @@ func TestSnapshot_Pushable(t *testing.T) {
 			obs.Runs[tk.URL] = plan.RunObservation{Alive: tt.alive}
 			tt.in.Tickets = []plan.Ticket{tk}
 			tt.in.Obs = obs
-			got := derive(plan.Rules{}, tt.in).Pushable(obs)
+			rules := plan.Rules{}
+			if tt.manual {
+				rules.Raise = map[string]plan.RaiseMode{tk.Repo: plan.RaiseManual}
+			}
+			got := derive(rules, tt.in).Pushable(obs)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Pushable() mismatch (-want +got):\n%s", diff)
 			}
