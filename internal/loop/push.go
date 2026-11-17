@@ -57,13 +57,20 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	base := e.Unlock.BaseBranch
 	repoPath := l.checkout(t.Repo)
 
-	changed, err := git.ChangedPaths(ctx, repoPath, "origin/"+base, t.Branch)
+	stats, err := git.DiffStat(ctx, repoPath, "origin/"+base, t.Branch)
 	if err != nil {
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
+	changed := make([]string, len(stats))
+	counts := make(map[string]git.FileStat, len(stats))
+	for i, s := range stats {
+		changed[i] = s.Path
+		counts[s.Path] = s
+	}
 	settings := obs.Settings[t.Repo]
 	policy := plan.Policy{Deny: settings.Deny, Protect: settings.Protect}
-	if denied := plan.Denied(plan.Classify(changed, policy)); len(denied) > 0 {
+	matches := plan.Classify(changed, policy)
+	if denied := plan.Denied(matches); len(denied) > 0 {
 		return l.event(ctx, url, store.EventPushRefused, denied[0].Path)
 	}
 
@@ -86,8 +93,13 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	if err != nil {
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
+	protected := plan.Protected(matches)
+	for i, m := range protected {
+		protected[i].Added, protected[i].Deleted = counts[m.Path].Added, counts[m.Path].Deleted
+	}
 	push := store.Push{
 		Ticket: plan.TicketURL(url), Tip: p.LocalTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
+		Protected: protected,
 	}
 	if err := l.store.RecordPush(ctx, push); err != nil {
 		return fmt.Errorf("record push of %s: %w", t.Branch, err)

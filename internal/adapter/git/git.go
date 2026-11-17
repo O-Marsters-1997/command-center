@@ -153,12 +153,45 @@ func HasFile(ctx context.Context, repoPath, ref, path string) (bool, error) {
 	return strings.TrimSpace(string(out)) != "", nil
 }
 
-func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string, error) {
-	out, err := git(ctx, repoPath, "diff", "--name-only", "--no-renames", base+"..."+branch)
+type FileStat struct {
+	Path    string
+	Added   int
+	Deleted int
+}
+
+func DiffStat(ctx context.Context, repoPath, base, branch string) ([]FileStat, error) {
+	out, err := git(ctx, repoPath, "diff", "--numstat", "--no-renames", base+"..."+branch)
 	if err != nil {
-		return nil, fmt.Errorf("list changed paths for %s: %w", branch, err)
+		return nil, fmt.Errorf("stat diff for %s: %w", branch, err)
 	}
-	return lines(out), nil
+	var stats []FileStat
+	for _, line := range lines(out) {
+		fields := strings.SplitN(line, "\t", 3)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("parse numstat line %q", line)
+		}
+		added, err := numstatCount(fields[0])
+		if err != nil {
+			return nil, err
+		}
+		deleted, err := numstatCount(fields[1])
+		if err != nil {
+			return nil, err
+		}
+		stats = append(stats, FileStat{Path: fields[2], Added: added, Deleted: deleted})
+	}
+	return stats, nil
+}
+
+func numstatCount(field string) (int, error) {
+	if field == "-" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(field)
+	if err != nil {
+		return 0, fmt.Errorf("parse numstat count %q: %w", field, err)
+	}
+	return n, nil
 }
 
 func Push(ctx context.Context, repoPath, branch string) error {
