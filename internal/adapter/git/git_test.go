@@ -223,9 +223,9 @@ func TestMidMerge(t *testing.T) {
 func TestDiffStat(t *testing.T) {
 	t.Parallel()
 	dir := gittest.Init(t)
-	gittest.Commit(t, dir, "base.txt", "base\n")
+	gittest.Commit(t, dir, "package.json", "a\nb\n")
 	gittest.Run(t, dir, "switch", "-q", "-c", "feature")
-	gittest.Commit(t, dir, "package.json", "a\nb\nc\nd\n")
+	gittest.Commit(t, dir, "package.json", "a\nx\n")
 	gittest.Commit(t, dir, "package.json", "a\nx\ny\nz\n")
 	gittest.Commit(t, dir, "logo.bin", "\x00\x01\x02")
 
@@ -233,7 +233,7 @@ func TestDiffStat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DiffStat: %v", err)
 	}
-	want := []git.FileStat{{Path: "logo.bin"}, {Path: "package.json", Added: 4}}
+	want := []git.FileStat{{Path: "logo.bin"}, {Path: "package.json", Added: 3, Deleted: 1}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("DiffStat() mismatch (-want +got):\n%s", diff)
 	}
