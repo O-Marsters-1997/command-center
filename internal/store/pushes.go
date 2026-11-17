@@ -91,6 +91,14 @@ func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushR
 	return pushes, nil
 }
 
+func decodeDenied(detail string) []plan.PathMatch {
+	var matches []plan.PathMatch
+	if err := json.Unmarshal([]byte(detail), &matches); err != nil || len(matches) == 0 {
+		return []plan.PathMatch{{Path: detail}}
+	}
+	return matches
+}
+
 // PushFacts blocks automatic retries after failures but not refusals.
 func (s *Store) PushFacts(ctx context.Context) (map[plan.TicketURL]plan.PushFact, error) {
 	kinds, err := encodeJSON("push fact kinds", []EventKind{EventPushRefused, EventPushFailed})
@@ -112,7 +120,7 @@ func (s *Store) PushFacts(ctx context.Context) (map[plan.TicketURL]plan.PushFact
 			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
 		if kind == EventPushRefused {
-			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Refused: true, RefusedPath: row.Detail}
+			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Refused: true, Denied: decodeDenied(row.Detail)}
 		}
 		if kind == EventPushFailed {
 			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Failed: true}

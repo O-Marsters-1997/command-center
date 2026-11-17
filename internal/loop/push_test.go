@@ -95,7 +95,8 @@ func TestPush(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PushFacts: %v", err)
 		}
-		if fact := facts[plan.TicketURL(f.Ticket.URL)]; !fact.Refused || fact.RefusedPath != ".mergify.yml" {
+		fact := facts[plan.TicketURL(f.Ticket.URL)]
+		if !fact.Refused || len(fact.Denied) != 1 || fact.Denied[0].Path != ".mergify.yml" {
 			t.Errorf("PushFacts() = %+v, want refused at .mergify.yml", fact)
 		}
 		f.tick(t)

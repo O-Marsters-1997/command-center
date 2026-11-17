@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
@@ -71,7 +72,11 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	policy := plan.Policy{Deny: settings.Deny, Protect: settings.Protect}
 	matches := plan.Classify(changed, policy)
 	if denied := plan.Denied(matches); len(denied) > 0 {
-		return l.event(ctx, url, store.EventPushRefused, denied[0].Path)
+		detail, err := json.Marshal(denied)
+		if err != nil {
+			return fmt.Errorf("encode denied paths: %w", err)
+		}
+		return l.event(ctx, url, store.EventPushRefused, string(detail))
 	}
 
 	var lastPushed plan.SHA
