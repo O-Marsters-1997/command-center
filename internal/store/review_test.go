@@ -50,14 +50,14 @@ func TestStore_ReviewComments(t *testing.T) {
 		if err := st.DeleteReviewComment(t.Context(), "sandbox://CC-2", id); err != nil {
 			t.Fatalf("DeleteReviewComment(CC-2): %v", err)
 		}
-		if got, _ := st.ReviewComments(t.Context(), "sandbox://CC-1"); len(got) != 1 {
-			t.Fatalf("comments after deleting under CC-2 = %d, want 1", len(got))
+		if got, err := st.ReviewComments(t.Context(), "sandbox://CC-1"); err != nil || len(got) != 1 {
+			t.Fatalf("comments after deleting under CC-2 = %d, %v, want 1", len(got), err)
 		}
 		if err := st.DeleteReviewComment(t.Context(), "sandbox://CC-1", id); err != nil {
 			t.Fatalf("DeleteReviewComment(CC-1): %v", err)
 		}
-		if got, _ := st.ReviewComments(t.Context(), "sandbox://CC-1"); len(got) != 0 {
-			t.Errorf("comments after delete = %d, want 0", len(got))
+		if got, err := st.ReviewComments(t.Context(), "sandbox://CC-1"); err != nil || len(got) != 0 {
+			t.Errorf("comments after delete = %d, %v, want 0", len(got), err)
 		}
 	})
 }
