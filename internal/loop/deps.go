@@ -22,6 +22,7 @@ type forge interface {
 	Edit(ctx context.Context, repoPath, branch, base string) error
 	Comment(ctx context.Context, repoPath, branch, body string) error
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
+	FailedLog(ctx context.Context, repoPath, detailsURL string) (string, error)
 }
 
 type worktrees interface {

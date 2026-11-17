@@ -27,6 +27,7 @@ var Keymap = []KeyGroup{
 		{"F", "Open the feature graph"},
 		verbKeyRow(plan.VerbRemoveWorktree, "Settle a merged session (removes its worktree)"),
 		verbKeyRow(plan.VerbReRun, "Re-run"),
+		{"I", "Fix CI: edit the prompt and send it"},
 		{"O", "Open the PR"},
 		{"Enter", "Focus the composer"},
 	}},

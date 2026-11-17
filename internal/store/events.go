@@ -40,6 +40,7 @@ const (
 	EventLaunch                EventKind = "launch"
 	EventResolveStarted        EventKind = "resolve_started"
 	EventResolveRefused        EventKind = "resolve_refused"
+	EventCILogUnavailable      EventKind = "ci_log_unavailable"
 )
 
 var allEventKinds = []EventKind{
@@ -49,7 +50,7 @@ var allEventKinds = []EventKind{
 	EventPRMerged, EventChecksLanded, EventRunLaunched, EventRunDisposed, EventCutFailed,
 	EventSpawnFailed, EventWorktreeRemoved, EventLaunchCancelled, EventMergeAborted,
 	EventMergeAbortFailed, EventFollowUpRefused, EventDraftReady, EventDraftReadyFailed, EventLaunch,
-	EventResolveStarted, EventResolveRefused,
+	EventResolveStarted, EventResolveRefused, EventCILogUnavailable,
 }
 
 func AllEventKinds() []EventKind { return slices.Clone(allEventKinds) }

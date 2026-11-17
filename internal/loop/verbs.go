@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/O-Marsters-1997/treepad"
 
@@ -117,6 +118,13 @@ func (l *Loop) followUpOne(
 		spec.prompt = plan.ComposeMessage(promptText, outcome)
 		spec.resumeSessionID = sessionID
 	}
+	if launched.State == plan.CIFailed {
+		logs, err := l.failedLogs(ctx, ticket, launched, t.obs)
+		if err != nil {
+			return err
+		}
+		spec.prompt += logs
+	}
 	if err := l.spawnRun(ctx, t, spec); err != nil {
 		return fmt.Errorf("spawn follow-up: %w", err)
 	}
@@ -124,6 +132,29 @@ func (l *Loop) followUpOne(
 		t.obs.MarkAlive(url)
 	}
 	return nil
+}
+
+func (l *Loop) failedLogs(
+	ctx context.Context, ticket store.Ticket, entry plan.Entry, obs plan.Observation,
+) (string, error) {
+	if entry.Run.IsNone() || entry.Run.Unwrap().Verdict.IsNone() {
+		return "", nil
+	}
+	checks := obs.PRs[ticket.Ref()].Checks
+	var b strings.Builder
+	for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
+		b.WriteString("\n\n")
+		log, err := l.forge.FailedLog(ctx, l.checkout(ticket.Repo), checks[name].DetailsURL)
+		if err != nil {
+			b.WriteString(plan.ComposeCILogUnavailable(name))
+			if eventErr := l.event(ctx, ticket.URL, store.EventCILogUnavailable, name+": "+err.Error()); eventErr != nil {
+				return "", eventErr
+			}
+			continue
+		}
+		b.WriteString(plan.ComposeCILog(name, log))
+	}
+	return b.String(), nil
 }
 
 func (l *Loop) resumableSession(sessionID string) (string, error) {

@@ -10,9 +10,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 )
 
+const FailedRunURL = "https://github.com/o/r/actions/runs/998877/job/2233"
+
 type Seed struct {
 	PRs    []gh.PR
 	Titles map[string]string
+	Logs   map[string]string
 }
 
 func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) {
@@ -62,6 +65,28 @@ func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) 
 		}
 		if diff := cmp.Diff(titles, got); diff != "" {
 			t.Errorf("IssueTitles() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("FailedLog reads the log of the run a details URL names", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{Logs: map[string]string{FailedRunURL: "boom\n"}})
+
+		got, err := forge.FailedLog(t.Context(), "/repo", FailedRunURL)
+		if err != nil {
+			t.Fatalf("FailedLog() error = %v", err)
+		}
+		if got != "boom\n" {
+			t.Errorf("FailedLog(%q) = %q, want %q", FailedRunURL, got, "boom\n")
+		}
+	})
+
+	t.Run("FailedLog refuses a URL that names no Actions run", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{Logs: map[string]string{FailedRunURL: "boom\n"}})
+
+		if _, err := forge.FailedLog(t.Context(), "/repo", "https://example.com/status/1"); err == nil {
+			t.Error("FailedLog(non-Actions URL) error = nil, want an error")
 		}
 	})
 

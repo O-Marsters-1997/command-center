@@ -3,6 +3,7 @@ package gh
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -119,6 +120,29 @@ type Forge interface {
 	Edit(ctx context.Context, repoPath, branch, base string) error
 	Comment(ctx context.Context, repoPath, branch, body string) error
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
+	FailedLog(ctx context.Context, repoPath, detailsURL string) (string, error)
+}
+
+var runIDPattern = regexp.MustCompile(`/actions/runs/(\d+)`)
+
+func RunID(detailsURL string) (string, error) {
+	m := runIDPattern.FindStringSubmatch(detailsURL)
+	if m == nil {
+		return "", fmt.Errorf("details url %q names no Actions run", detailsURL)
+	}
+	return m[1], nil
+}
+
+func (c CLI) FailedLog(ctx context.Context, repoPath, detailsURL string) (string, error) {
+	id, err := RunID(detailsURL)
+	if err != nil {
+		return "", err
+	}
+	out, err := c.Read(ctx, repoPath, "run", "view", "--log-failed", id)
+	if err != nil {
+		return "", fmt.Errorf("read failed log of run %s: %w", id, err)
+	}
+	return string(out), nil
 }
 
 // Create opens a pull request with the keep-open label to avoid GitHub's

@@ -14,6 +14,6 @@ func TestForge(t *testing.T) {
 		for _, pr := range seed.PRs {
 			byBranch[pr.HeadRef] = pr
 		}
-		return &ghtest.Forge{Snapshot: gh.Snapshot{ByBranch: byBranch}, Titles: seed.Titles}
+		return &ghtest.Forge{Snapshot: gh.Snapshot{ByBranch: byBranch}, Titles: seed.Titles, Logs: seed.Logs}
 	})
 }

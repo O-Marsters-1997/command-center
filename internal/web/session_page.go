@@ -25,6 +25,7 @@ func (s *Server) handleSessionActions(w http.ResponseWriter, r *http.Request) er
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
+	page.Fragment = true
 	return renderFragment(w, r, page.TranscriptPath, "sessionActions", page)
 }
 
@@ -50,5 +51,6 @@ func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticket
 	}
 	page.Toast = "Queued " + string(verb)
 	page.ResetComposer = verb == plan.VerbFollowUp
+	page.Fragment = true
 	return renderHTML(w, "sessionActions", page)
 }

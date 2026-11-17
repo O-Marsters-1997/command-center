@@ -146,6 +146,7 @@
       {{- if .Pending}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
     </form>
     {{- end}}
+    {{- if .Row.FixCI}}<button type="button" class="btn" data-key="i" data-show-modal="fix-ci-dialog">Fix CI</button>{{end}}
     {{- with .PRURL}}<a class="btn" href="{{.}}" data-key="o" target="_blank" rel="noopener">Open PR</a>{{end}}
     {{- if .Row.LogPath}}<a class="btn" href="{{.RawPath}}">Open log</a>{{end}}
   </div>
@@ -156,7 +157,48 @@
   <p class="pending-message" data-glyph="pending"><span class="text-muted">you</span> {{.}}</p>
   {{- end}}
 </div>
+{{- if .Row.FixCI}}{{template "fixCIDialog" .}}{{end}}
 {{- if .ResetComposer}}{{template "sessionComposer" .}}{{end}}{{end}}
+{{define "fixCIDialog"}}<dialog id="fix-ci-dialog" class="launch-dialog"{{if .Fragment}} hx-swap-oob="true"{{end}} aria-labelledby="fix-ci-title">
+  <form class="launch-form" method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-target="#session-actions" hx-swap="outerHTML" data-close-on-success data-reset-on-success data-submit-on-mod-enter>
+    <input type="hidden" name="ticket" value="{{.Row.URL}}">
+    <input type="hidden" name="from" value="session">
+    <input type="hidden" name="return" value="{{.TranscriptPath}}">
+    <input type="hidden" name="verb" value="follow-up">
+    <header class="launch-head">
+      <h2 id="fix-ci-title" class="launch-dialog-title">Fix CI</h2>
+      <button type="button" class="btn btn-ghost btn-sm btn-icon" data-close-modal aria-label="Close">{{template "icon" "x"}}</button>
+    </header>
+    <div class="launch-body">
+      <p class="text-muted text-sm">The failed log of each red Actions check is attached when you send.</p>
+      <ul class="launch-flight">
+        {{- range .Row.RedChecks}}
+        <li>{{if .DetailsURL}}<a href="{{.DetailsURL}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}</li>
+        {{- end}}
+      </ul>
+    </div>
+    <div class="launch-foot">
+      <div class="composer">
+        <label class="sr-only" for="fix-ci-prompt">Prompt</label>
+        <textarea id="fix-ci-prompt" name="prompt" rows="6" required>{{.Row.FixCIPrompt}}</textarea>
+        <div class="composer-bar">
+          {{- $model := .Model}}
+          <label class="picker"><span class="sr-only">Model</span><select name="model">
+            {{- range .Models}}<option value="{{.}}"{{if eq . $model}} selected{{end}}>{{.}}</option>{{end -}}
+          </select></label><span class="sep"></span>
+          <label class="picker"><span class="sr-only">Effort</span><select name="effort">
+            <option value="">Default effort</option>
+            {{- range .Efforts}}<option value="{{.}}">{{.}}</option>{{end -}}
+          </select></label>
+        </div>
+      </div>
+      <div class="launch-actions">
+        <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary">Send <kbd>⌘↵</kbd></button>
+      </div>
+    </div>
+  </form>
+</dialog>{{end}}
 {{define "sessionComposer"}}<div id="session-composer"{{if .ResetComposer}} hx-swap-oob="true"{{end}}>
   {{- if .Row.FollowUpAvailable}}
   <form class="composer" method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-target="#session-actions" hx-swap="outerHTML">

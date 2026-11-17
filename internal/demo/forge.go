@@ -262,4 +262,8 @@ func (f *Forge) update(ctx context.Context, repoPath, branch string, change func
 
 func (*Forge) CloseIssue(context.Context, string, string) error { return nil }
 
+func (*Forge) FailedLog(context.Context, string, string) (string, error) {
+	return "demo: no CI log\n", nil
+}
+
 var _ gh.Forge = (*Forge)(nil)
