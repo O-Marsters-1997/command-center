@@ -11,6 +11,16 @@
     <p class="session-reason">{{.}}</p>
     {{- end}}{{end}}
     <p class="session-meta text-muted font-mono">{{.Row.Repo}} {{.Ref}}{{with .Row.Branch}} · {{.}}{{end}}</p>
+    {{- with .Row.ProtectedLinks}}
+    <section class="session-protected" aria-label="Protected changes">
+      <h2 class="text-sm font-medium">Protected changes</h2>
+      <ul class="font-mono text-xs">
+        {{- range .}}
+        <li>{{if .Href}}<a href="{{.Href}}" target="_blank" rel="noopener">{{.Path}}</a>{{else}}{{.Path}}{{end}} <span class="text-muted">{{.Rule}}</span> +{{.Added}} −{{.Deleted}}</li>
+        {{- end}}
+      </ul>
+    </section>
+    {{- end}}
     {{- with .Row.Worktree}}
     <p class="session-worktree text-muted"><code>{{.}}</code></p>
     {{- end}}
