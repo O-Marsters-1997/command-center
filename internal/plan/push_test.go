@@ -82,6 +82,21 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+func TestProtectedSection(t *testing.T) {
+	t.Parallel()
+
+	if got := plan.ProtectedSection(nil); got != "" {
+		t.Errorf("ProtectedSection(nil) = %q, want empty", got)
+	}
+	got := plan.ProtectedSection([]plan.PathMatch{
+		{Path: ".github/workflows/ci.yaml", Rule: ".github/**", Added: 3, Deleted: 1},
+	})
+	want := "## Protected paths\n\n- `.github/workflows/ci.yaml` (rule `.github/**`) +3 −1"
+	if got != want {
+		t.Errorf("ProtectedSection() = %q, want %q", got, want)
+	}
+}
+
 func TestPRBody(t *testing.T) {
 	t.Parallel()
 

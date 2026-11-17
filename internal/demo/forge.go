@@ -206,7 +206,7 @@ func (f *Forge) IssueTitles(ctx context.Context, repoPath string) (map[string]st
 	return titles, nil
 }
 
-func (f *Forge) Create(ctx context.Context, worktreePath, base, _ string, draft bool) error {
+func (f *Forge) Create(ctx context.Context, worktreePath, base, _ string, draft bool, _ []string) error {
 	repo, err := f.sb.repoFor(ctx, worktreePath)
 	if err != nil {
 		return fmt.Errorf("find repo for %s: %w", worktreePath, err)
