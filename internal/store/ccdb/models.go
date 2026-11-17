@@ -78,6 +78,18 @@ type Repo struct {
 	SeedPath       sql.NullString
 }
 
+type ReviewComment struct {
+	ID        int64
+	TicketID  string
+	Tip       string
+	Path      string
+	Line      int32
+	Side      string
+	Hunk      string
+	Body      string
+	CreatedAt time.Time
+}
+
 type Run struct {
 	ID            int64
 	TicketID      sql.NullString
