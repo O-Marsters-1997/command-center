@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
@@ -158,6 +159,26 @@ func TestRail(t *testing.T) {
 	t.Run("shows a loop error in the footer", testRailLoopError)
 	t.Run("a query narrows and forces open without touching the cookie", testRailQuery)
 	t.Run("a query with no match anywhere says so", testRailQueryMissing)
+	t.Run("a needs-you card shows the reason before the last line", func(t *testing.T) {
+		t.Parallel()
+		failed, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+			LastMessage: option.Some("Tests are red."),
+		})
+		if err := failed.AppendEvent(t.Context(), storepkg.Event{
+			At: testNow, TicketURL: sessionTicket, Kind: storepkg.EventRunDisposed,
+		}); err != nil {
+			t.Fatalf("AppendEvent(%q): %v", sessionTicket, err)
+		}
+		rail := htmltest.Parse(t, renderPath(t, newServer(failed, testNow), "/rail"))
+		card := rail.One(t, `[data-group="needs-you"] .rail-reason`)
+		label := card.One(t, "b").Text()
+		got := strings.TrimSpace(strings.TrimPrefix(card.Text(), label))
+		reason, ok := strings.CutSuffix(got, "Tests are red.")
+		if !ok || strings.TrimSpace(reason) == "" {
+			t.Errorf("GET /rail needs-you card = %q, want a reason then %q", card.Text(), "Tests are red.")
+		}
+	})
 	t.Run("an empty needs-you section is absent", func(t *testing.T) {
 		t.Parallel()
 		now := testNow

@@ -1491,9 +1491,15 @@
 }
 
 .session-meta,
-.session-worktree {
+.session-worktree,
+.session-reason {
   margin: 0;
   font-size: var(--text-sm);
+}
+
+.session-reason {
+  flex-basis: 100%;
+  color: var(--color-fg-2);
 }
 
 .session-meta {
