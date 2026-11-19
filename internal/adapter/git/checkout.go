@@ -25,17 +25,7 @@ func EnsureCheckout(ctx context.Context, name, remote, seedPath, checkout string
 		if remote == "" {
 			return fmt.Errorf("repo %s: no checkout at %s, and no remote to clone from", name, checkout)
 		}
-		populate := func() error { return clone(ctx, name, remote, checkout) }
-		if seedPath != "" {
-			populate = func() error { return seed(ctx, name, remote, seedPath, checkout) }
-		}
-		if err := populate(); err != nil {
-			return fmt.Errorf("clone repo %s: %w", name, err)
-		}
-		if err := configure(ctx, checkout); err != nil {
-			return fmt.Errorf("configure %s: %w", checkout, err)
-		}
-		return nil
+		return populateCheckout(ctx, name, remote, seedPath, checkout)
 	case err != nil:
 		return fmt.Errorf("repo %s: stat %s: %w", name, checkout, err)
 	}
@@ -53,6 +43,33 @@ func EnsureCheckout(ctx context.Context, name, remote, seedPath, checkout string
 	}
 	if err := Fetch(ctx, checkout); err != nil {
 		return fmt.Errorf("fetch checkout %s: %w", checkout, err)
+	}
+	return nil
+}
+
+func populateCheckout(ctx context.Context, name, remote, seedPath, checkout string) (err error) {
+	tmp := checkout + ".cloning"
+	if err := os.RemoveAll(tmp); err != nil {
+		return fmt.Errorf("repo %s: remove leftover %s: %w", name, tmp, err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, os.RemoveAll(tmp))
+		}
+	}()
+
+	populate := func() error { return clone(ctx, name, remote, tmp) }
+	if seedPath != "" {
+		populate = func() error { return seed(ctx, name, remote, seedPath, tmp) }
+	}
+	if err := populate(); err != nil {
+		return fmt.Errorf("clone repo %s: %w", name, err)
+	}
+	if err := configure(ctx, tmp); err != nil {
+		return fmt.Errorf("configure %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, checkout); err != nil {
+		return fmt.Errorf("repo %s: move %s into place: %w", name, tmp, err)
 	}
 	return nil
 }
@@ -100,7 +117,7 @@ func seed(ctx context.Context, name, remote, seedPath, checkout string) error {
 		return fmt.Errorf("repo %s: copy %s: %w", name, seedPath, err)
 	}
 	if _, err := git(ctx, checkout, "remote", "set-url", "origin", remote); err != nil {
-		return errors.Join(fmt.Errorf("repo %s: point origin at %s: %w", name, remote, err), os.RemoveAll(checkout))
+		return fmt.Errorf("repo %s: point origin at %s: %w", name, remote, err)
 	}
 	return nil
 }
