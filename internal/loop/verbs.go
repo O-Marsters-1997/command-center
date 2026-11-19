@@ -180,12 +180,13 @@ func (l *Loop) resumableSession(sessionID string) (string, error) {
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
 	return l.eachPendingIntent(ctx, plan.VerbCancel, func(intent plan.Intent) error {
 		ticketID := string(intent.Ticket)
-		members, err := l.store.CancelLaunchesFor(ctx, ticketID)
-		if err != nil {
-			return fmt.Errorf("cancel launches: %w", err)
+		switch err := l.store.DisarmTicket(ctx, ticketID); {
+		case errors.Is(err, store.ErrArmedDependent):
+			return l.event(ctx, ticketID, store.EventLaunchCancelled, "disarm refused: "+err.Error())
+		case err != nil:
+			return fmt.Errorf("disarm ticket: %w", err)
 		}
-		detail := fmt.Sprintf("launch cancelled, %d member(s)", members)
-		return l.event(ctx, ticketID, store.EventLaunchCancelled, detail)
+		return l.event(ctx, ticketID, store.EventLaunchCancelled, "ticket disarmed")
 	})
 }
 

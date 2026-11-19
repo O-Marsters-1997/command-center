@@ -24,7 +24,7 @@ type verbPresentation struct {
 
 var verbTable = map[plan.Verb]verbPresentation{
 	plan.VerbCancel: {
-		label: func(r Row) string { return fmt.Sprintf("cancel launch (%d tickets)", r.CancelCount) },
+		label: func(Row) string { return "disarm" },
 	},
 	plan.VerbKill: {
 		confirm: func(r Row) string {

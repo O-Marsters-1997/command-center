@@ -178,24 +178,25 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.
 	return memberships, nil
 }
 
-// CancelLaunchesFor returns the number of memberships withdrawn across active launches.
-func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (int, error) {
-	var members int
-	err := s.inTx(ctx, func(q *ccdb.Queries) error {
-		count, err := q.ActiveLaunchMemberCount(ctx, ticketID)
-		if err != nil {
-			return fmt.Errorf("count members of active launches for %s: %w", ticketID, err)
+var ErrArmedDependent = errors.New("armed ticket depends on it")
+
+func (s *Store) DisarmTicket(ctx context.Context, ticketID string) error {
+	return s.inTx(ctx, func(q *ccdb.Queries) error {
+		dependent, err := q.ArmedDependent(ctx, ticketID)
+		if err == nil {
+			return fmt.Errorf("disarm %s: %s: %w", ticketID, dependent, ErrArmedDependent)
 		}
-		if _, err := q.CancelActiveLaunches(ctx, ticketID); err != nil {
-			return fmt.Errorf("cancel launches for %s: %w", ticketID, err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("find armed dependent of %s: %w", ticketID, err)
 		}
-		members = int(count)
+		if err := q.DisarmMember(ctx, ticketID); err != nil {
+			return fmt.Errorf("disarm %s: %w", ticketID, err)
+		}
+		if err := q.CancelEmptyLaunches(ctx); err != nil {
+			return fmt.Errorf("cancel empty launches: %w", err)
+		}
 		return nil
 	})
-	if err != nil {
-		return 0, err
-	}
-	return members, nil
 }
 
 func (s *Store) FeatureFirstLaunch(ctx context.Context, feature string) (time.Time, error) {

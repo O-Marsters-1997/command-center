@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,8 +208,8 @@ func TestStore_LaunchMemberships(t *testing.T) {
 		launchTickets(t, store, ticket)
 		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash-1", Group: "group-a", At: testNow})
 		applyLaunches(t, store, testNow.Add(time.Second))
-		if _, err := store.CancelLaunchesFor(t.Context(), ticket); err != nil {
-			t.Fatalf("CancelLaunchesFor(%s): %v", ticket, err)
+		if err := store.DisarmTicket(t.Context(), ticket); err != nil {
+			t.Fatalf("DisarmTicket(%s): %v", ticket, err)
 		}
 		queueLaunch(t, store, storepkg.LaunchRequest{
 			Ticket: ticket, PromptHash: "hash-2", Group: "group-b", At: testNow.Add(3 * time.Second),
@@ -221,36 +222,72 @@ func TestStore_LaunchMemberships(t *testing.T) {
 	})
 }
 
-func TestStore_CancelLaunchesFor(t *testing.T) {
+func TestStore_DisarmTicket(t *testing.T) {
 	t.Parallel()
 
-	t.Run("cancels every sibling in the launch and counts them", func(t *testing.T) {
-		t.Parallel()
-		store := openStore(t)
-		urls := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"}
-		launchTickets(t, store, urls...)
-		for _, ticket := range urls {
-			queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash", Group: "group-a", At: testNow})
+	arm := func(t *testing.T, store *storepkg.Store, tickets []storepkg.Ticket) {
+		t.Helper()
+		if err := store.UpsertTickets(t.Context(), tickets); err != nil {
+			t.Fatalf("UpsertTickets: %v", err)
+		}
+		for _, ticket := range tickets {
+			queueLaunch(t, store, storepkg.LaunchRequest{
+				Ticket: ticket.URL, PromptHash: "hash", Group: "group-a", At: testNow,
+			})
 		}
 		applyLaunches(t, store, testNow.Add(time.Second))
+	}
+	sandbox := func(n string, blockedBy ...string) storepkg.Ticket {
+		return storepkg.Ticket{
+			URL: "sandbox://CC-" + n, Repo: "cc-sandbox", Branch: "cc-" + n, BlockedBy: blockedBy,
+		}
+	}
 
-		members, err := store.CancelLaunchesFor(t.Context(), "sandbox://CC-2")
-		if err != nil || members != 3 {
-			t.Errorf("CancelLaunchesFor(CC-2) = %d, %v, want 3, nil", members, err)
+	t.Run("leaves the launch siblings armed and re-arms by launching again", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		arm(t, store, []storepkg.Ticket{sandbox("1"), sandbox("2"), sandbox("3")})
+
+		if err := store.DisarmTicket(t.Context(), "sandbox://CC-2"); err != nil {
+			t.Fatalf("DisarmTicket(CC-2) = %v, want nil", err)
 		}
 		memberships := readMemberships(t, store)
-		for _, ticket := range urls {
-			if !memberships[plan.TicketURL(ticket)].Cancelled {
-				t.Errorf("LaunchMemberships()[%s].Cancelled = false, want true", ticket)
+		if _, armed := memberships["sandbox://CC-2"]; armed {
+			t.Errorf("LaunchMemberships()[CC-2] = %+v, want none after disarm", memberships["sandbox://CC-2"])
+		}
+		for _, ticket := range []plan.TicketURL{"sandbox://CC-1", "sandbox://CC-3"} {
+			if got := memberships[ticket]; got.LaunchID == 0 || got.Cancelled || got.Members != 2 {
+				t.Errorf("LaunchMemberships()[%s] = %+v, want armed in a launch of 2", ticket, got)
 			}
+		}
+
+		queueLaunch(t, store, storepkg.LaunchRequest{
+			Ticket: "sandbox://CC-2", PromptHash: "hash", Group: "group-b", At: testNow.Add(2 * time.Second),
+		})
+		applyLaunches(t, store, testNow.Add(3*time.Second))
+		if got := readMemberships(t, store)["sandbox://CC-2"]; got.LaunchID == 0 {
+			t.Errorf("LaunchMemberships()[CC-2] = %+v, want armed again", got)
 		}
 	})
 
-	t.Run("an unauthorised ticket cancels nothing", func(t *testing.T) {
+	t.Run("refuses a ticket an armed ticket depends on, naming it", func(t *testing.T) {
 		t.Parallel()
-		members, err := openStore(t).CancelLaunchesFor(t.Context(), "sandbox://GHOST")
-		if err != nil || members != 0 {
-			t.Errorf("CancelLaunchesFor(GHOST) = %d, %v, want 0, nil", members, err)
+		store := openStore(t)
+		arm(t, store, []storepkg.Ticket{sandbox("1"), sandbox("2", "sandbox://CC-1")})
+
+		err := store.DisarmTicket(t.Context(), "sandbox://CC-1")
+		if !errors.Is(err, storepkg.ErrArmedDependent) || !strings.Contains(err.Error(), "sandbox://CC-2") {
+			t.Errorf("DisarmTicket(CC-1) = %v, want ErrArmedDependent naming CC-2", err)
+		}
+		if got := readMemberships(t, store)["sandbox://CC-1"]; got.LaunchID == 0 {
+			t.Errorf("LaunchMemberships()[CC-1] = %+v, want still armed", got)
+		}
+	})
+
+	t.Run("an unarmed ticket disarms nothing", func(t *testing.T) {
+		t.Parallel()
+		if err := openStore(t).DisarmTicket(t.Context(), "sandbox://GHOST"); err != nil {
+			t.Errorf("DisarmTicket(GHOST) = %v, want nil", err)
 		}
 	})
 }
