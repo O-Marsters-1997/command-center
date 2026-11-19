@@ -7,7 +7,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
+
+func runStep(command bool) plan.Next {
+	return plan.Next{Kind: plan.NextRun, Step: option.Some(plan.Step{Name: "s", Command: command})}
+}
 
 func TestLaunchPlan(t *testing.T) {
 	t.Parallel()
@@ -19,7 +24,9 @@ func TestLaunchPlan(t *testing.T) {
 		name             string
 		candidates       []plan.LaunchCandidate
 		currentlyRunning int
+		runningCommands  int
 		maxAgents        int
+		maxCommands      int
 		spendPaused      bool
 		want             []plan.TicketURL
 	}{
@@ -115,6 +122,44 @@ func TestLaunchPlan(t *testing.T) {
 			want:      []plan.TicketURL{"sandbox://CC-2"},
 		},
 		{
+			name: "one agent and one command step launch together under max_agents 1 and max_verifies 1",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(false)},
+				{URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(true)},
+			},
+			maxAgents:   1,
+			maxCommands: 1,
+			want:        []plan.TicketURL{"sandbox://CC-1", "sandbox://CC-2"},
+		},
+		{
+			name: "a command step over its cap stays queued while an agent slot is free",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(true)},
+				{URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(false)},
+			},
+			runningCommands: 1,
+			maxAgents:       1,
+			maxCommands:     1,
+			want:            []plan.TicketURL{"sandbox://CC-2"},
+		},
+		{
+			name: "a queued command step launches once a command slot frees",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(true)},
+			},
+			maxCommands: 1,
+			want:        []plan.TicketURL{"sandbox://CC-1"},
+		},
+		{
+			name: "command steps are capped at max_verifies in input order",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(true)},
+				{URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true, PromptHashMatches: true, Next: runStep(true)},
+			},
+			maxCommands: 1,
+			want:        []plan.TicketURL{"sandbox://CC-1"},
+		},
+		{
 			name: "no free slots launches nothing",
 			candidates: []plan.LaunchCandidate{
 				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
@@ -138,10 +183,12 @@ func TestLaunchPlan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := plan.LaunchPlan(tt.candidates, tt.currentlyRunning, tt.maxAgents, tt.spendPaused)
+			load := plan.Load{Agents: tt.currentlyRunning, Commands: tt.runningCommands}
+			caps := plan.Caps{Agents: tt.maxAgents, Commands: tt.maxCommands}
+			got := plan.LaunchPlan(tt.candidates, load, caps, tt.spendPaused)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("LaunchPlan(%d running, max %d, paused %t) mismatch (-want +got):\n%s",
-					tt.currentlyRunning, tt.maxAgents, tt.spendPaused, diff)
+				t.Errorf("LaunchPlan(%+v, %+v, paused %t) mismatch (-want +got):\n%s",
+					load, caps, tt.spendPaused, diff)
 			}
 		})
 	}

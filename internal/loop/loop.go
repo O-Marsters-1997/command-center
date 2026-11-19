@@ -274,7 +274,12 @@ func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 }
 
 func (l *Loop) rules(obs plan.Observation) plan.Rules {
-	daemon := plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h, Workflows: l.workflows}
+	daemon := plan.Daemon{
+		MaxAgents:    l.cfg.MaxAgents,
+		MaxVerifies:  l.cfg.MaxVerifies,
+		SpendLimit5h: l.cfg.SpendLimit5h,
+		Workflows:    l.workflows,
+	}
 	return plan.RulesFor(daemon, obs)
 }
 
@@ -695,7 +700,7 @@ func (l *Loop) commitsSinceBaseline(
 func (l *Loop) launchEligible(
 	ctx context.Context, snap plan.Snapshot, t *tick, byTicket map[plan.TicketURL]store.Ticket,
 ) error {
-	toLaunch := snap.LaunchAfter(len(t.spawned))
+	toLaunch := snap.LaunchAfter(t.spawned)
 	if len(toLaunch) == 0 {
 		return nil
 	}
