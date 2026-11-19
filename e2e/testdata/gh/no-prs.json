@@ -104,6 +104,9 @@
   "label list -R sandbox-org/two-tasks": {
     "stdout": "[{\"name\": \"project:two-tasks\"}]\n"
   },
+  "label create": {
+    "stdout": ""
+  },
   "pr create": {
     "stdout": "https://example.com/owner/repo/pull/1\n"
   },

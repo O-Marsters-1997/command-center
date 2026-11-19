@@ -26,6 +26,9 @@
   "label list -R sandbox-org/peer": {
     "stdout": "[{\"name\": \"project:same-branch\"}]\n"
   },
+  "label create": {
+    "stdout": ""
+  },
   "pr create": {
     "stdout": "https://example.com/owner/repo/pull/1\n"
   },

@@ -29,6 +29,9 @@
   "label list -R sandbox-org/two-tasks": {
     "stdout": "[{\"name\": \"project:two-tasks\"}]\n"
   },
+  "label create": {
+    "stdout": ""
+  },
   "pr create": {
     "exit": 1,
     "stderr": "fakegh: pr create failed\n"
