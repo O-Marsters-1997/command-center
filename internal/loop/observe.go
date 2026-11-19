@@ -117,8 +117,10 @@ func observeRepo(
 		return plan.Observation{}, fmt.Errorf("list pull requests: %w", err)
 	}
 	for branch, pr := range snapshot.ByBranch {
-		if pr.Checks, err = withAttempts(ctx, forge, path, pr.Checks); err != nil {
-			return plan.Observation{}, fmt.Errorf("read check attempts for %s: %w", branch, err)
+		if pr.State == gh.Open {
+			if pr.Checks, err = withAttempts(ctx, forge, path, pr.Checks); err != nil {
+				return plan.Observation{}, fmt.Errorf("read check attempts for %s: %w", branch, err)
+			}
 		}
 		obs.PRs[plan.BranchRef{Repo: name, Branch: branch}] = planPR(pr)
 	}
@@ -199,16 +201,21 @@ func withAttempts(
 	ctx context.Context, forge gh.Forge, path string, checks map[string]gh.CheckState,
 ) (map[string]gh.CheckState, error) {
 	out := maps.Clone(checks)
+	byRun := map[string]int{}
 	for name, c := range checks {
 		if plan.ToVerdictCheckState(plan.CheckState(c)) != verdict.Failure {
 			continue
 		}
-		if _, err := gh.RunID(c.DetailsURL); err != nil {
+		id, err := gh.RunID(c.DetailsURL)
+		if err != nil {
 			continue
 		}
-		attempt, err := forge.Attempt(ctx, path, c.DetailsURL)
-		if err != nil {
-			return nil, fmt.Errorf("check %s: %w", name, err)
+		attempt, read := byRun[id]
+		if !read {
+			if attempt, err = forge.Attempt(ctx, path, c.DetailsURL); err != nil {
+				return nil, fmt.Errorf("check %s: %w", name, err)
+			}
+			byRun[id] = attempt
 		}
 		c.Attempt = attempt
 		out[name] = c
