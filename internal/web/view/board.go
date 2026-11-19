@@ -57,7 +57,6 @@ type Row struct {
 	ElapsedSeconds  int              `json:"-"`
 	ElapsedPercent  int              `json:"-"`
 	LogPath         string           `json:"-"`
-	CancelCount     int              `json:"-"`
 	SpendTokens     int              `json:"-"`
 	ChecksPassed    int              `json:"checks_passed"`
 	ChecksTotal     int              `json:"checks_total"`
@@ -176,7 +175,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		if !ok {
 			continue
 		}
-		membership := in.Memberships[url]
 		latestRun := in.Runs[url]
 		verdictLabelByBranch[t.Branch] = runVerdictLabel(e.Run)
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
@@ -224,7 +222,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Elapsed:        elapsed,
 			ElapsedSeconds: elapsedSeconds,
 			LogPath:        e.LogPath,
-			CancelCount:    membership.Members,
 			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[url])),
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),

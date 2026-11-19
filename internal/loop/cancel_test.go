@@ -58,12 +58,13 @@ func TestCancel(t *testing.T) {
 		t.Fatalf("LaunchMemberships(): %v", err)
 	}
 	for _, ticket := range f.Tickets {
-		if !memberships[plan.TicketURL(ticket.URL)].Cancelled {
-			t.Errorf("LaunchMemberships()[%s].Cancelled = false, want the whole launch cancelled", ticket.URL)
+		got := memberships[plan.TicketURL(ticket.URL)]
+		if disarmed := ticket.URL == sibling; disarmed == (got.LaunchID != 0) {
+			t.Errorf("LaunchMemberships()[%s] = %+v, want only %s disarmed", ticket.URL, got, sibling)
 		}
 	}
-	if !hasEventIn(t, f.Store, "launch_cancelled", "4") {
-		t.Error("Events() has no launch_cancelled naming 4 members")
+	if !hasEventIn(t, f.Store, "launch_cancelled", "disarmed") {
+		t.Error("Events() has no launch_cancelled recording the disarm")
 	}
 }
 

@@ -28,19 +28,23 @@ WHERE l.state IN ('active', 'cancelled')
 ORDER BY (l.state = 'active') DESC, lm.launch_id DESC, lm.ticket_id
 LIMIT sqlc.arg(max_rows);
 
--- name: ActiveLaunchMemberCount :one
-SELECT COUNT(*) FROM launch_members WHERE launch_id IN (
-    SELECT lm.launch_id FROM launch_members lm
-    JOIN launches l ON l.id = lm.launch_id
-    WHERE l.state = 'active' AND lm.ticket_id = sqlc.arg(ticket_id)
-);
+-- name: ArmedDependent :one
+SELECT lm.ticket_id
+FROM launch_members lm
+JOIN launches l ON l.id = lm.launch_id
+JOIN tickets t ON t.url = lm.ticket_id
+WHERE l.state = 'active' AND t.blocked_by @> to_jsonb(sqlc.arg(ticket_id)::text)
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_id = lm.ticket_id)
+ORDER BY lm.ticket_id
+LIMIT 1;
 
--- name: CancelActiveLaunches :execrows
-UPDATE launches SET state = 'cancelled' WHERE id IN (
-    SELECT lm.launch_id FROM launch_members lm
-    JOIN launches l ON l.id = lm.launch_id
-    WHERE l.state = 'active' AND lm.ticket_id = sqlc.arg(ticket_id)
-);
+-- name: DisarmMember :exec
+DELETE FROM launch_members lm USING launches l
+WHERE l.id = lm.launch_id AND l.state = 'active' AND lm.ticket_id = sqlc.arg(ticket_id);
+
+-- name: CancelEmptyLaunches :exec
+UPDATE launches SET state = 'cancelled'
+WHERE state = 'active' AND NOT EXISTS (SELECT 1 FROM launch_members WHERE launch_id = launches.id);
 
 -- name: FeatureFirstLaunch :one
 SELECT l.created_at

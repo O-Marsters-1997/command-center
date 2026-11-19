@@ -35,7 +35,7 @@ func TestRow_VerbButtons(t *testing.T) {
 	t.Parallel()
 
 	row := view.Row{
-		URL: "sandbox://CC-1", Pgid: "123", Worktree: "/repos/cc-1", CancelCount: 3,
+		URL: "sandbox://CC-1", Pgid: "123", Worktree: "/repos/cc-1",
 		Verbs: []plan.Verb{
 			plan.VerbLaunch, plan.VerbFollowUp, plan.VerbCancel,
 			plan.VerbKill, plan.VerbReRun, plan.VerbRemoveWorktree,
@@ -43,7 +43,7 @@ func TestRow_VerbButtons(t *testing.T) {
 		PendingVerbs: []plan.Verb{plan.VerbReRun},
 	}
 	want := []view.VerbButton{
-		{Verb: plan.VerbCancel, Label: "cancel launch (3 tickets)"},
+		{Verb: plan.VerbCancel, Label: "disarm"},
 		{Verb: plan.VerbKill, Label: "kill", Confirm: "kill on sandbox://CC-1 signals the process group of " +
 			"its live agent run, stopping it where it is. It cannot be undone. pgid at risk: 123"},
 		{Verb: plan.VerbReRun, Label: "re-run", Key: "r", Pending: true},
