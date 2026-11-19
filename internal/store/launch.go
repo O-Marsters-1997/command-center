@@ -180,11 +180,19 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.
 
 var ErrArmedDependent = errors.New("armed ticket depends on it")
 
+type ArmedDependentError struct{ Ticket, Dependent string }
+
+func (e *ArmedDependentError) Error() string {
+	return fmt.Sprintf("disarm %s: %s: %v", e.Ticket, e.Dependent, ErrArmedDependent)
+}
+
+func (e *ArmedDependentError) Unwrap() error { return ErrArmedDependent }
+
 func (s *Store) DisarmTicket(ctx context.Context, ticketID string) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
 		dependent, err := q.ArmedDependent(ctx, ticketID)
 		if err == nil {
-			return fmt.Errorf("disarm %s: %s: %w", ticketID, dependent, ErrArmedDependent)
+			return &ArmedDependentError{Ticket: ticketID, Dependent: dependent}
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("find armed dependent of %s: %w", ticketID, err)

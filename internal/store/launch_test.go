@@ -2,7 +2,6 @@ package store_test
 
 import (
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -276,7 +275,7 @@ func TestStore_DisarmTicket(t *testing.T) {
 		arm(t, store, []storepkg.Ticket{sandbox("1"), sandbox("2", "sandbox://CC-1")})
 
 		err := store.DisarmTicket(t.Context(), "sandbox://CC-1")
-		if !errors.Is(err, storepkg.ErrArmedDependent) || !strings.Contains(err.Error(), "sandbox://CC-2") {
+		if dep, ok := errors.AsType[*storepkg.ArmedDependentError](err); !ok || dep.Dependent != "sandbox://CC-2" {
 			t.Errorf("DisarmTicket(CC-1) = %v, want ErrArmedDependent naming CC-2", err)
 		}
 		if got := readMemberships(t, store)["sandbox://CC-1"]; got.LaunchID == 0 {
