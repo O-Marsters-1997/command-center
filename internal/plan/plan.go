@@ -178,6 +178,7 @@ type Facts struct {
 	CancelledMember bool
 	ConflictedBase  string
 	Raise           RaiseMode
+	RedBlocker      TicketURL
 }
 
 func Status(f Facts) (State, Reason) {
@@ -195,6 +196,8 @@ func Status(f Facts) (State, Reason) {
 		return Cancelled, "authorised then cancelled before launching"
 	case f.ConflictedBase != "":
 		return Blocked, conflictedBaseReason(f.ConflictedBase)
+	case f.Unlock.Unlocked && f.Authorised && f.RedBlocker != "":
+		return Queued, Reason(fmt.Sprintf("waiting on %s's CI", f.RedBlocker))
 	case f.Unlock.Unlocked && f.Authorised:
 		return Queued, "waiting for a slot"
 	case f.Unlock.Unlocked:

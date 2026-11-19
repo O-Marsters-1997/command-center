@@ -224,6 +224,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		if r.conflictedBase(t, base, in) {
 			conflictedBase = base
 		}
+		redBlocker := r.redBlocker(t, byURL, in)
 		workflow, next := r.nextFor(t, in, membership.Workflow)
 		if session := sessionOf(workflow, in.Passes[t.URL], r.Verify[t.Repo]); session != "" {
 			snap.sessions[t.URL] = session
@@ -248,6 +249,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			CancelledMember: membership.Cancelled,
 			ConflictedBase:  conflictedBase,
 			Raise:           raise,
+			RedBlocker:      redBlocker,
 		})
 		snap.launch = append(snap.launch, LaunchCandidate{
 			URL:               t.URL,
@@ -258,6 +260,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			ConflictedBase:    conflictedBase,
 			Next:              next,
 			InFlight:          run.IsSome() && next.Kind == NextRun && next.Step.IsSome(),
+			RedBlocker:        redBlocker,
 		})
 		if in.Runs[t.URL].Pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
 			snap.running++
@@ -322,6 +325,19 @@ func (r Rules) nextFor(t Ticket, in Input, launchWorkflow string) (Workflow, Nex
 		return Workflow{}, Next{}
 	}
 	return w, w.Next(in.Passes[t.URL], r.Verify[t.Repo])
+}
+
+func (r Rules) redBlocker(t Ticket, byURL map[TicketURL]Ticket, in Input) TicketURL {
+	for _, url := range t.BlockedBy {
+		blocker, ok := byURL[url]
+		if !ok || blocker.Repo != t.Repo || in.Obs.PRs[blocker.Ref()].State != Open {
+			continue
+		}
+		if res := r.ApplyVerdict(blocker, in.Obs, in.Verdict); res.IsSome() && res.Unwrap().Kind == verdict.CIFailed {
+			return url
+		}
+	}
+	return ""
 }
 
 func (r Rules) conflictedBase(t Ticket, base string, in Input) bool {
