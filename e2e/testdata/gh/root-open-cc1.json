@@ -8,6 +8,9 @@
   "pr list --state all --head cc-2-x": {
     "stdout": "[]\n"
   },
+  "label create": {
+    "stdout": ""
+  },
   "pr create": {
     "stdout": "https://example.com/owner/repo/pull/8\n"
   },
