@@ -115,6 +115,7 @@ type Run struct {
 	Step          string
 	Workflow      string
 	WorkflowHash  string
+	Prompt        sql.NullString
 }
 
 type Ticket struct {

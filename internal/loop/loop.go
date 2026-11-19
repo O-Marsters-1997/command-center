@@ -865,6 +865,9 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 			return fmt.Errorf("write prompt for run %d: %w", runID, err)
 		}
+		if err := l.store.RecordPrompt(ctx, runID, prompt); err != nil {
+			return fmt.Errorf("store prompt for run %d: %w", runID, err)
+		}
 	}
 	systemPromptPath, err := l.systemPromptFor(runID, spec)
 	if err != nil {

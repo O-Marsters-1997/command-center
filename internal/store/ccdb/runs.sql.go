@@ -188,6 +188,7 @@ SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
   COALESCE(runs.message, '')::text AS message,
   COALESCE(runs.question, '')::text AS question,
+  COALESCE(runs.prompt, '')::text AS prompt,
   runs.step,
   COALESCE(runs.model, '')::text AS model,
   COALESCE(runs.outcome, '')::text AS outcome,
@@ -207,6 +208,7 @@ type LatestSessionRunsRow struct {
 	LogPath  string
 	Message  string
 	Question string
+	Prompt   string
 	Step     string
 	Model    string
 	Outcome  string
@@ -228,6 +230,7 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 			&i.LogPath,
 			&i.Message,
 			&i.Question,
+			&i.Prompt,
 			&i.Step,
 			&i.Model,
 			&i.Outcome,
@@ -530,6 +533,23 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.Metrics,
 		arg.ID,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const recordPrompt = `-- name: RecordPrompt :execrows
+UPDATE runs SET prompt = $1 WHERE id = $2
+`
+
+type RecordPromptParams struct {
+	Prompt sql.NullString
+	ID     int64
+}
+
+func (q *Queries) RecordPrompt(ctx context.Context, arg RecordPromptParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordPrompt, arg.Prompt, arg.ID)
 	if err != nil {
 		return 0, err
 	}
