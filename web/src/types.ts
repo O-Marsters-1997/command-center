@@ -5,7 +5,7 @@ export type State =
   | "blocked" | "ready" | "queued" | "running" | "failed" | "push_pending" | "awaiting_pr"
   | "checking" | "needs_you" | "push_failed" | "review_me" | "merged" | "withdrawn"
   | "cancelled" | "base_moved" | "ci_failed" | "refresh_conflicted"
-  | "conflicts_with_main" | "verification_failed" | "waiting_on_producer_deploy" | "awaiting_input" | "push_refused";
+  | "conflicts_with_main" | "verification_failed" | "waiting_on_producer_deploy" | "awaiting_input" | "push_refused" | "parked";
 
 export interface Row {
   url: string;

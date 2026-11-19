@@ -452,6 +452,62 @@ func TestStore_LatestSessionID(t *testing.T) {
 	}
 }
 
+func TestStore_AutoHistories(t *testing.T) {
+	t.Parallel()
+	const url = plan.TicketURL("sandbox://CC-1")
+	setup := func(t *testing.T) *storepkg.Store {
+		t.Helper()
+		store := openStore(t)
+		seedOneTicket(t, store)
+		return store
+	}
+	followUp := func(t *testing.T, store *storepkg.Store, tip string, cause plan.FollowUpCause) {
+		t.Helper()
+		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+			Ticket: string(url), Kind: plan.RunKindFollowUp, BaselineSHA: tip, PromptHash: "h", Cause: cause,
+		})
+		if err != nil {
+			t.Fatalf("InsertRunSkeleton: %v", err)
+		}
+		recordSpawn(t, store, runID)
+	}
+
+	t.Run("counts automatic rounds and reports the latest tip, ignoring operator follow-ups", func(t *testing.T) {
+		t.Parallel()
+		store := setup(t)
+		followUp(t, store, "tip-1", plan.CauseCIFailed)
+		followUp(t, store, "tip-2", plan.CauseNone)
+		followUp(t, store, "tip-3", plan.CauseCIFailed)
+		got, err := store.AutoHistories(t.Context())
+		if err != nil {
+			t.Fatalf("AutoHistories: %v", err)
+		}
+		want := map[plan.TicketURL]plan.AutoHistory{url: {Rounds: 2, LastTip: "tip-3"}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("AutoHistories() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a green verdict transition resets the rounds", func(t *testing.T) {
+		t.Parallel()
+		store := setup(t)
+		followUp(t, store, "tip-1", plan.CauseCIFailed)
+		if err := store.AppendEvent(t.Context(), storepkg.Event{
+			At: testNow.Add(time.Minute), TicketURL: string(url), Kind: storepkg.EventVerdictTransition,
+			Detail: "review_me: every required check passed",
+		}); err != nil {
+			t.Fatalf("AppendEvent: %v", err)
+		}
+		got, err := store.AutoHistories(t.Context())
+		if err != nil {
+			t.Fatalf("AutoHistories: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("AutoHistories() after green = %+v, want none", got)
+		}
+	})
+}
+
 func TestStore_SessionRunsForTicket(t *testing.T) {
 	t.Parallel()
 	const ticket = "sandbox://CC-1"

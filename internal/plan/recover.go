@@ -1,11 +1,62 @@
 package plan
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
+
+const MaxAutoRounds = 2
+
+type FollowUpCause string
+
+const (
+	CauseNone         FollowUpCause = ""
+	CauseCIFailed     FollowUpCause = "ci_failed"
+	CauseVerifyFailed FollowUpCause = "verify_failed"
+)
+
+func AllFollowUpCauses() []FollowUpCause { return []FollowUpCause{CauseCIFailed, CauseVerifyFailed} }
+
+type AutoHistory struct {
+	Rounds  int
+	LastTip SHA
+}
+
+type AutoFollowUp struct {
+	Ticket TicketURL
+	Cause  FollowUpCause
+	Tip    SHA
+}
+
+func (s Snapshot) AutoFollowUps() []AutoFollowUp {
+	var out []AutoFollowUp
+	for _, e := range s.Entries {
+		if e.State != CIFailed || e.Run.IsNone() || e.Run.Unwrap().Verdict.IsNone() || e.LastPush.IsNone() {
+			continue
+		}
+		tip, history := e.LastPush.Unwrap().PushedTip, s.auto[e.Ticket.URL]
+		if history.Rounds >= MaxAutoRounds || history.LastTip == tip || len(s.intents[e.Ticket.URL]) > 0 {
+			continue
+		}
+		red := e.Run.Unwrap().Verdict.Unwrap().RedLeaves
+		checks := s.obs.PRs[e.Ticket.Ref()].Checks
+		if len(red) == 0 || slices.ContainsFunc(red, func(name string) bool { return checks[name].Attempt <= 1 }) {
+			continue
+		}
+		out = append(out, AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseCIFailed, Tip: tip})
+	}
+	return out
+}
+
+func parkExhausted(state State, reason Reason, history AutoHistory) (State, Reason) {
+	if state != CIFailed || history.Rounds < MaxAutoRounds {
+		return state, reason
+	}
+	return Parked, Reason(fmt.Sprintf("checks still failing after %d automatic follow-ups: %s", history.Rounds, reason))
+}
 
 type Rerun struct {
 	Ticket     TicketURL

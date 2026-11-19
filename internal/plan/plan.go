@@ -146,6 +146,7 @@ const (
 	WaitingOnProducerDeploy
 	AwaitingInput
 	PushRefused
+	Parked
 )
 
 type RunFact struct {
