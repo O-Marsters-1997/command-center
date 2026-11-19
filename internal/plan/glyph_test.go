@@ -12,7 +12,7 @@ func TestState_Glyph(t *testing.T) {
 	want := map[plan.State]plan.GlyphWord{
 		plan.Failed: plan.GlyphFailed, plan.PushFailed: plan.GlyphFailed,
 		plan.CIFailed: plan.GlyphFailed, plan.ConflictsWithMain: plan.GlyphFailed,
-		plan.RefreshConflicted: plan.GlyphFailed,
+		plan.RefreshConflicted:  plan.GlyphFailed,
 		plan.VerificationFailed: plan.GlyphFailed, plan.Withdrawn: plan.GlyphFailed,
 		plan.ReviewMe: plan.GlyphAttention, plan.NeedsYou: plan.GlyphAttention,
 		plan.AwaitingInput: plan.GlyphAttention, plan.PushRefused: plan.GlyphAttention,

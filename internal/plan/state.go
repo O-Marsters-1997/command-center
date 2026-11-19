@@ -24,7 +24,7 @@ var stateInfo = map[State]stateSpec{
 		name: "running", label: "Agent running", glyph: GlyphRunning,
 		verbs: []Verb{VerbKill, VerbFollowUp}, unattended: true,
 	},
-	Failed: {name: "failed", label: "Failed", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp}},
+	Failed:      {name: "failed", label: "Failed", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp}},
 	PushPending: {name: "push_pending", label: "Waiting to push", glyph: GlyphPending, unattended: true},
 	Checking: {
 		name: "checking", label: "Waiting on checks", glyph: GlyphChecking,
