@@ -102,4 +102,6 @@ type tick struct {
 	spawned   []plan.TicketURL
 	cancelled map[int]bool
 	timing    *tickTiming
+
+	spawnedCommands int
 }

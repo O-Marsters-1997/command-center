@@ -11,7 +11,7 @@ import (
 func (l *Loop) spawnVerifies(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	for _, v := range snap.VerifyAfter(0) {
+	for _, v := range snap.VerifyAfter(t.spawnedCommands) {
 		ticket, ok := byURL[v.Ticket]
 		worktree, held := t.obs.Worktrees[ticket.Ref()]
 		argv := t.obs.Settings[ticket.Repo].VerifyCommand

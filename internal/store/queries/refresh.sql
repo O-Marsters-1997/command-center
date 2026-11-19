@@ -1,5 +1,10 @@
 -- name: ListLatestRefreshOutcomes :many
-SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail
+SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail,
+  EXISTS (
+    SELECT 1 FROM events a
+    WHERE a.ticket_id = e.ticket_id AND a.kind IN ('refreshed', 'restacked')
+      AND (p.pushed_at IS NULL OR a.at > p.pushed_at)
+  )::bool AS advanced
 FROM events e
 LEFT JOIN (
     SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id

@@ -248,9 +248,6 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 		return fmt.Errorf("derive for push: %w", err)
 	}
 	pushable := snap.Skipping(snap.SkippedRepos())
-	if err := l.spawnVerifies(ctx, pushable, t, byURL); err != nil {
-		return fmt.Errorf("verify: %w", err)
-	}
 	if err := l.timed(&t.timing.Push, func() error { return l.pushPushable(ctx, pushable, t.obs) }); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
@@ -259,6 +256,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	}
 	if err := l.timed(&t.timing.Cut, func() error { return l.launchEligible(ctx, snap, t, byURL) }); err != nil {
 		return fmt.Errorf("launch: %w", err)
+	}
+	if err := l.spawnVerifies(ctx, pushable, t, byURL); err != nil {
+		return fmt.Errorf("verify: %w", err)
 	}
 	return nil
 }
@@ -966,6 +966,9 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		return fmt.Errorf("record spawn of run %d: %w", runID, err)
 	}
 	t.spawned = append(t.spawned, plan.TicketURL(ticket.URL))
+	if spec.kind == plan.RunKindCommand || spec.kind == plan.RunKindVerify {
+		t.spawnedCommands++
+	}
 	detail := fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree)
 	if spec.baseline != "" {
 		detail += " from " + spec.baseline
