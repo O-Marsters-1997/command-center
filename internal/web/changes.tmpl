@@ -20,6 +20,15 @@
         </div>
         {{- if not .CanFollowUp}}<p class="text-muted text-sm">{{.Reason}}</p>{{end}}
       </form>
+      {{- if .CanRaise}}
+      <form class="review-comment" method="post" action="{{.SessionPath}}/changes/raise" hx-post="{{.SessionPath}}/changes/raise" hx-target="find .raise-result" hx-disabled-elt="find button">
+        <input type="hidden" name="sha" value="{{.Tip}}">
+        {{- if .Pending}}<p class="flag flag-warning">Raising discards your {{.Pending}} pending {{if eq .Pending 1}}comment{{else}}comments{{end}}.</p>{{end}}
+        <button class="btn" type="submit">Raise PR</button>
+        <span class="text-muted text-sm font-mono">{{.Tip}}</span>
+        <div class="raise-result" aria-live="polite"></div>
+      </form>
+      {{- end}}
     </div>
   </header>
   {{- if not .Files}}
@@ -73,6 +82,8 @@
 {{template "shellEnd" .}}
 
 {{define "reviewButton"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover">Review changes{{if .}} ({{.}}){{end}}</button>{{end}}
+
+{{define "raiseResult"}}{{if .Problem}}<p class="flag flag-warning">{{.Problem}}</p>{{else}}<a href="{{.PRURL}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
 
 {{define "reviewThread"}}<tr class="review-thread"><td colspan="4">
   <div class="review-comment">

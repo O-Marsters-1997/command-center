@@ -221,7 +221,7 @@ func testBannerNamesState(t *testing.T) {
 		}
 	}
 	server := openServer(st, fixedClock(testNow), "")
-	if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	if _, err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 		Ticket: "acme/queued", Verb: plan.VerbTrack, At: testNow,
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent(acme/queued): %v", err)

@@ -1,10 +1,12 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -104,6 +106,69 @@ func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) er
 	seeOther(w, r, ref.Path())
 	return nil
 }
+
+const raisePollEvery = 200 * time.Millisecond
+
+func (s *Server) handleRaise(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	ref := sessionRef(r)
+	now := s.clock.Now()
+	tip := plan.SHA(strings.TrimSpace(r.FormValue("sha")))
+	if tip == "" {
+		return errorf(http.StatusBadRequest, "sha is required to raise")
+	}
+	ticket, err := s.view.SessionTicket(ctx, now, ref)
+	if err != nil {
+		return fmt.Errorf("resolve ticket: %w", err)
+	}
+	snap, err := s.view.Snapshot(ctx, now)
+	if err != nil {
+		return fmt.Errorf("load snapshot: %w", err)
+	}
+	if !snap.Offers(ticket, plan.VerbRaise) {
+		entry, _ := snap.Entry(ticket)
+		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s",
+			ticket, entry.State, plan.VerbRaise, entry.Reason)
+	}
+	id, err := s.store.Raise(ctx, ticket, tip, now)
+	if err != nil {
+		return fmt.Errorf("raise: %w", err)
+	}
+	s.nudge()
+	if err := s.awaitConsumed(ctx, id); err != nil {
+		return err
+	}
+	result, err := s.view.RaiseResult(ctx, s.clock.Now(), ref)
+	if err != nil {
+		return fmt.Errorf("read raise result: %w", err)
+	}
+	return renderFragment(w, r, ref.Path()+"/changes", "raiseResult", result)
+}
+
+func (s *Server) awaitConsumed(ctx context.Context, id int64) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*store.TickPeriod)
+	defer cancel()
+	tick := time.NewTicker(raisePollEvery)
+	defer tick.Stop()
+	for {
+		consumed, err := s.store.IntentConsumed(ctx, id)
+		switch {
+		case err != nil && ctx.Err() != nil:
+			return errRaiseTimeout
+		case err != nil:
+			return fmt.Errorf("poll raise intent: %w", err)
+		case consumed:
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errRaiseTimeout
+		case <-tick.C:
+		}
+	}
+}
+
+var errRaiseTimeout = errorf(http.StatusGatewayTimeout, "the loop has not run the raise yet; reload to check")
 
 func (s *Server) renderThread(
 	w http.ResponseWriter, r *http.Request, ticket plan.TicketURL, t view.ReviewThread, name string,

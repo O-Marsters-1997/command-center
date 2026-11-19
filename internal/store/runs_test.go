@@ -249,7 +249,7 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 	t.Parallel()
 	queueKill := func(t *testing.T, store *storepkg.Store) storepkg.VerbIntent {
 		t.Helper()
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: "sandbox://CC-1", Verb: plan.VerbKill, At: testNow,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
@@ -300,7 +300,7 @@ func TestStore_QueueVerbIntent(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		prompt := "line one\nline \"two\""
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: "https://x/1", Verb: plan.VerbFollowUp, Payload: prompt, At: testNow,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
@@ -318,7 +318,7 @@ func TestStore_QueueVerbIntent(t *testing.T) {
 		t.Parallel()
 		dsn := cctest.DSN(t)
 		store := openStoreAt(t, dsn)
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: "https://x/1", Verb: plan.VerbKill, At: testNow,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
@@ -370,7 +370,7 @@ func TestStore_PendingIntents(t *testing.T) {
 		{"sandbox://CC-1", plan.VerbFollowUp, "go on"},
 		{"sandbox://CC-2", plan.VerbReRun, ""},
 	} {
-		if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+		if _, err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
 			Ticket: q.ticket, Verb: q.verb, Payload: q.payload, At: testNow.Add(time.Duration(i) * time.Second),
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent(%s, %s): %v", q.ticket, q.verb, err)

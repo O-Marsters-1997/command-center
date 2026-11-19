@@ -210,6 +210,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyRetryPushIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("retry push: %w", err)
 	}
+	if err := l.applyRaiseIntents(ctx, snap, t.obs); err != nil {
+		return fmt.Errorf("raise: %w", err)
+	}
 	if err := l.applyRemoveWorktreeIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}

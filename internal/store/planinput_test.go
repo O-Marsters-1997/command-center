@@ -35,7 +35,7 @@ func TestStore_PlanInput(t *testing.T) {
 	t.Run("Intents carry id, verb and payload per ticket", func(t *testing.T) {
 		t.Parallel()
 		st := newStore(t)
-		if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "go on", At: testNow,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)

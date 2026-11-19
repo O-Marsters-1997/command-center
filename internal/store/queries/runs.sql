@@ -59,9 +59,13 @@ FROM runs
 WHERE ticket_id IS NOT NULL
 ORDER BY ticket_id, id DESC;
 
--- name: QueueVerbIntent :exec
+-- name: QueueVerbIntent :one
 INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload));
+VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload))
+RETURNING id;
+
+-- name: IntentConsumed :one
+SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = sqlc.arg(id);
 
 -- name: PendingVerbIntents :many
 SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents

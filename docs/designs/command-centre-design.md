@@ -392,7 +392,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `queued` | authorised, waiting — the row says for what: its base, or a slot under `max_agents` | cancel |
 | `ready` | unlocked, unauthorised — the row a human acts on | **launch** |
 | `running` | agent process alive | kill |
-| `awaiting PR` | the repo's `raise` is `manual`, the agent finished with commits and nothing is pushed; the loop holds the first push (ADR 24) | follow up, re-run |
+| `awaiting PR` | the repo's `raise` is `manual`, the agent finished with commits and nothing is pushed; the loop holds the first push (ADR 24); **raise** carries the reviewed SHA and pushes only while the local tip still equals it, else records `raise_refused` | raise, follow up, re-run |
 | `checking` | pushed, PR open, CI running or not yet reporting | re-run, close PR |
 | `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |

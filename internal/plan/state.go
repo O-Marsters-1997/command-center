@@ -31,7 +31,7 @@ var stateInfo = map[State]stateSpec{
 	PushPending: {name: "push_pending", label: "Waiting to push", glyph: GlyphPending, unattended: true},
 	AwaitingPR: {
 		name: "awaiting_pr", label: "Awaiting PR", glyph: GlyphAttention,
-		verbs: []Verb{VerbFollowUp, VerbReRun},
+		verbs: []Verb{VerbRaise, VerbFollowUp, VerbReRun},
 	},
 	Checking: {
 		name: "checking", label: "Waiting on checks", glyph: GlyphChecking,
