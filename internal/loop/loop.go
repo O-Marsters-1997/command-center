@@ -31,6 +31,7 @@ type Loop struct {
 	clock      Clock
 	forge      forge
 	worktrees  worktrees
+	notifier   notifier
 	validate   ValidateFunc
 	remoteOf   RemoteFunc
 	runner     runner.Runner

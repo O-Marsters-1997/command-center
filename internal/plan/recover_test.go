@@ -67,6 +67,48 @@ func TestSnapshot_AutoFollowUps(t *testing.T) {
 	}
 }
 
+func TestSnapshot_ParkedLocksItsDependents(t *testing.T) {
+	t.Parallel()
+	parked, child, grandchild, merged := ticket("1", "cc-1"), ticket("2", "cc-2"), ticket("3", "cc-3"), ticket("4", "cc-4")
+	child.BlockedBy = []plan.TicketURL{parked.URL}
+	grandchild.BlockedBy = []plan.TicketURL{child.URL}
+	merged.BlockedBy = []plan.TicketURL{parked.URL}
+	obs := plan.NewObservation(time.Time{})
+	obs.PRs[key(parked.Branch)] = plan.PR{
+		Number: 1, State: plan.Open, HeadOid: "tip",
+		Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE", Attempt: 2}},
+	}
+	obs.PRs[key(merged.Branch)] = plan.PR{Number: 4, State: plan.Merged}
+	in := plan.Input{
+		Tickets: []plan.Ticket{parked, child, grandchild, merged}, Obs: obs,
+		Runs:    map[plan.TicketURL]plan.RunSummary{parked.URL: {Outcome: option.Some(plan.OutcomePush)}},
+		Verdict: plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{parked.URL: {PushedTip: "tip"}}},
+		Auto:    map[plan.TicketURL]plan.AutoHistory{parked.URL: {Rounds: plan.MaxAutoRounds, LastTip: "old"}},
+	}
+	rules := plan.Rules{Checks: map[string]verdict.Predicate{"r": {Success: "CI"}}}
+
+	snap := derive(rules, in)
+	if got := entry(t, snap, parked.URL); got.State != plan.Parked || got.LockedBehind != 2 {
+		t.Errorf("parked entry = state %s, locked %d, want parked, 2", got.State, got.LockedBehind)
+	}
+	var parkedTransitions int
+	for _, tr := range snap.Transitions() {
+		if tr.Kind == plan.TransitionParked {
+			parkedTransitions++
+		}
+	}
+	if parkedTransitions != 1 {
+		t.Errorf("parked transitions = %d, want 1", parkedTransitions)
+	}
+
+	in.Recorded = map[plan.TicketURL]plan.Recorded{parked.URL: {Parked: true}}
+	for _, tr := range derive(rules, in).Transitions() {
+		if tr.Kind == plan.TransitionParked {
+			t.Errorf("recorded park produced %v, want none", tr)
+		}
+	}
+}
+
 func TestSnapshot_Reruns(t *testing.T) {
 	t.Parallel()
 	first := ticket("1", "cc-1")
