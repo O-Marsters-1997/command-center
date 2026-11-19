@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type CheckState struct {
 	DetailsURL  string    `json:"details_url"`
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at"`
+	Attempt     int       `json:"attempt"`
 }
 
 // PR is a pull request with checks reduced to the latest completed run per name.
@@ -121,6 +123,8 @@ type Forge interface {
 	Comment(ctx context.Context, repoPath, branch, body string) error
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 	FailedLog(ctx context.Context, repoPath, detailsURL string) (string, error)
+	Attempt(ctx context.Context, repoPath, detailsURL string) (int, error)
+	Rerun(ctx context.Context, repoPath, detailsURL string) error
 }
 
 var runIDPattern = regexp.MustCompile(`/actions/runs/(\d+)`)
@@ -143,6 +147,33 @@ func (c CLI) FailedLog(ctx context.Context, repoPath, detailsURL string) (string
 		return "", fmt.Errorf("read failed log of run %s: %w", id, err)
 	}
 	return string(out), nil
+}
+
+func (c CLI) Attempt(ctx context.Context, repoPath, detailsURL string) (int, error) {
+	id, err := RunID(detailsURL)
+	if err != nil {
+		return 0, err
+	}
+	out, err := c.Read(ctx, repoPath, "api", "repos/{owner}/{repo}/actions/runs/"+id, "--jq", ".run_attempt")
+	if err != nil {
+		return 0, fmt.Errorf("read attempt of run %s: %w", id, err)
+	}
+	attempt, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("parse attempt of run %s: %w", id, err)
+	}
+	return attempt, nil
+}
+
+func (c CLI) Rerun(ctx context.Context, repoPath, detailsURL string) error {
+	id, err := RunID(detailsURL)
+	if err != nil {
+		return err
+	}
+	if _, err := c.Run(ctx, repoPath, "run", "rerun", "--failed", id); err != nil {
+		return fmt.Errorf("rerun failed jobs of run %s: %w", id, err)
+	}
+	return nil
 }
 
 // Create opens a pull request with the keep-open label to avoid GitHub's

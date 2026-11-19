@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,9 +111,15 @@ func TestCLI(t *testing.T) {
 	t.Parallel()
 	ghtest.RunContract(t, func(t *testing.T, seed ghtest.Seed) gh.Forge {
 		t.Helper()
+		attempts := map[string]int{}
 		return fakeGH(func(args []string) ([]byte, error) {
 			var out []byte
 			switch i := slices.Index(args, "--head"); {
+			case args[0] == "api":
+				return []byte(strconv.Itoa(max(attempts[path.Base(args[1])], 1)) + "\n"), nil
+			case args[0] == "run" && args[1] == "rerun":
+				attempts[args[3]] = max(attempts[args[3]], 1) + 1
+				return nil, nil
 			case args[0] == "issue" && args[1] == "list":
 				issues := []map[string]string{}
 				for url, title := range seed.Titles {

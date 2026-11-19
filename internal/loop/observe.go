@@ -14,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -116,6 +117,9 @@ func observeRepo(
 		return plan.Observation{}, fmt.Errorf("list pull requests: %w", err)
 	}
 	for branch, pr := range snapshot.ByBranch {
+		if pr.Checks, err = withAttempts(ctx, forge, path, pr.Checks); err != nil {
+			return plan.Observation{}, fmt.Errorf("read check attempts for %s: %w", branch, err)
+		}
 		obs.PRs[plan.BranchRef{Repo: name, Branch: branch}] = planPR(pr)
 	}
 	titles, err := forge.IssueTitles(ctx, path)
@@ -189,6 +193,27 @@ func observeRepo(
 		obs.MergifyHash[name] = hash
 	}
 	return obs, nil
+}
+
+func withAttempts(
+	ctx context.Context, forge gh.Forge, path string, checks map[string]gh.CheckState,
+) (map[string]gh.CheckState, error) {
+	out := maps.Clone(checks)
+	for name, c := range checks {
+		if plan.ToVerdictCheckState(plan.CheckState(c)) != verdict.Failure {
+			continue
+		}
+		if _, err := gh.RunID(c.DetailsURL); err != nil {
+			continue
+		}
+		attempt, err := forge.Attempt(ctx, path, c.DetailsURL)
+		if err != nil {
+			return nil, fmt.Errorf("check %s: %w", name, err)
+		}
+		c.Attempt = attempt
+		out[name] = c
+	}
+	return out, nil
 }
 
 func mergifyHash(ctx context.Context, repoPath string) (string, error) {
