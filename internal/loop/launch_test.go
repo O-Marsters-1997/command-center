@@ -529,3 +529,43 @@ func TestKill(t *testing.T) {
 		t.Errorf("killed run = outcome %v, exit %v, want disposed with exit 143 in the same tick", got.Outcome, got.ExitCode)
 	}
 }
+
+func TestKill_hold(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		holdFor      time.Duration
+		wantCanceled []int
+		wantPending  int
+	}{
+		{name: "an intent still held is left alone", holdFor: time.Minute, wantPending: 1},
+		{name: "an intent whose hold has passed is consumed", holdFor: 10 * time.Second, wantCanceled: []int{4242}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newRunFixture(t)
+			f.spawn(t, 4242, f.baseline, "/state/runs/1.jsonl")
+			if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+				Ticket: f.ticket.URL, Verb: "kill", At: testAt, HoldUntil: testAt.Add(tt.holdFor),
+			}); err != nil {
+				t.Fatalf("QueueVerbIntent(kill): %v", err)
+			}
+			fake := &runnertest.Runner{}
+			fake.Run(4242)
+
+			f.tick(t, f.worktreeObs(), fake)
+
+			if diff := cmp.Diff(tt.wantCanceled, fake.Canceled()); diff != "" {
+				t.Errorf("canceled mismatch (-want +got):\n%s", diff)
+			}
+			pending, err := f.store.PendingVerbIntents(t.Context(), "kill")
+			if err != nil {
+				t.Fatalf("PendingVerbIntents(kill): %v", err)
+			}
+			if len(pending) != tt.wantPending {
+				t.Errorf("PendingVerbIntents(kill) = %+v, want %d", pending, tt.wantPending)
+			}
+		})
+	}
+}

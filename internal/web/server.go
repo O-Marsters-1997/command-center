@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -133,6 +134,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("POST /launch/open", s.handle(s.handleLaunchOpen))
 	mux.Handle("POST /launch", s.handle(s.handleLaunch))
 	mux.Handle("POST /verb", s.handle(s.handleVerb))
+	mux.Handle("POST /verb/undo", s.handle(s.handleVerbUndo))
 	mux.Handle("POST /ticket", s.handle(s.handleTicket))
 	s.mux = http.NewCrossOriginProtection().Handler(mux)
 	return s
@@ -549,6 +551,8 @@ func parseAgentChoice(model, effort string) (plan.AgentChoice, error) {
 	return choice, nil
 }
 
+const undoHold = 5 * time.Second
+
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	rawVerb := r.FormValue("verb")
@@ -592,17 +596,43 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 			ticketURL, entry.State, verb, entry.Reason)
 	}
 
-	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, Payload: payload, At: s.clock.Now()}
-	if _, err := s.store.QueueVerbIntent(ctx, request); err != nil {
+	fromSession := r.FormValue("from") == "session"
+	now := s.clock.Now()
+	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, Payload: payload, At: now}
+	if fromSession {
+		request.HoldUntil = now.Add(undoHold)
+	}
+	id, err := s.store.QueueVerbIntent(ctx, request)
+	if err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	if r.FormValue("from") == "rail" && hx.IsRequest(r) {
 		return s.handleRail(w, r)
 	}
-	if r.FormValue("from") == "session" {
-		return s.afterSessionVerb(w, r, ticketURL, verb)
+	if fromSession {
+		return s.afterSessionVerb(w, r, ticketURL, verb, "Queued "+string(verb), id)
 	}
 	return s.redirectOrSwap(w, r)
+}
+
+func (s *Server) handleVerbUndo(w http.ResponseWriter, r *http.Request) error {
+	ticketURL := r.FormValue("ticket")
+	verb, err := plan.ParseVerb(r.FormValue("verb"))
+	id, idErr := strconv.ParseInt(r.FormValue("intent"), 10, 64)
+	if err != nil || idErr != nil || ticketURL == "" {
+		return errorf(http.StatusBadRequest, "ticket, verb and intent are required")
+	}
+	toast := "Undid " + string(verb)
+	switch err := s.store.WithdrawHeldIntent(r.Context(), id, s.clock.Now()); {
+	case errors.Is(err, store.ErrIntentTooLate):
+		if !hx.IsRequest(r) {
+			return errorf(http.StatusConflict, "too late to undo %s: it has already run", verb)
+		}
+		toast = "Too late to undo " + string(verb)
+	case err != nil:
+		return fmt.Errorf("withdraw verb intent: %w", err)
+	}
+	return s.afterSessionVerb(w, r, ticketURL, verb, toast, 0)
 }
 
 func (s *Server) redirectOrSwap(w http.ResponseWriter, r *http.Request) error {

@@ -333,6 +333,44 @@ func TestRefresh(t *testing.T) {
 		}
 	})
 
+	t.Run("a held refresh verb does nothing until its hold passes", func(t *testing.T) {
+		t.Parallel()
+		root, repoPath := repoWithOrigin(t)
+		store := openStore(t)
+		at := testAt
+
+		f := newStackedFixture(t, repoPath, store, at)
+		parentTip1 := advanceParent(t, repoPath, f)
+
+		obs := baseObservation(f, parentTip1)
+		obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
+		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
+
+		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at, HoldUntil: at.Add(time.Hour),
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
+		}
+
+		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+		if err := lp.RunOnce(t.Context()); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+
+		events, err := store.Events(t.Context())
+		if err != nil {
+			t.Fatalf("Events(): %v", err)
+		}
+		if hasEvent(events, "refresh_refused", "a run is alive") {
+			t.Errorf("events = %+v, want the held refresh not yet acted on", events)
+		}
+		pending, err := store.PendingVerbIntents(t.Context(), plan.VerbRefresh)
+		if err != nil || len(pending) != 1 {
+			t.Errorf("PendingVerbIntents(refresh) = %+v, %v, want the held intent still pending", pending, err)
+		}
+	})
+
 	t.Run("a refused fast-forward is not retried automatically, but the verb retries it", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)

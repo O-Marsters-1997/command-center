@@ -654,6 +654,40 @@ func testVerbFromSession(t *testing.T) {
 		}
 	})
 
+	t.Run("undo on the toast withdraws the queued verb", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+		srv := newServer(st, testNow)
+		hxHeader := http.Header{"Hx-Request": {"true"}}
+
+		queued := htmltest.Parse(t, do(t, srv, http.MethodPost, "/verb", req{
+			Form:   url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}},
+			Header: hxHeader,
+		}).Body)
+		undo := queued.One(t, `.toast form[hx-post="/verb/undo"]`)
+		form := url.Values{}
+		for _, name := range []string{"ticket", "intent", "verb"} {
+			value, _ := undo.One(t, `input[name="`+name+`"]`).Attr("value")
+			form.Set(name, value)
+		}
+
+		rec := do(t, srv, http.MethodPost, "/verb/undo", req{Form: form, Header: hxHeader})
+		if got := htmltest.Parse(t, rec.Body).One(t, `[role="status"]`).Text(); !strings.Contains(got, "Undid kill") {
+			t.Errorf("POST /verb/undo toast = %q, want it to say Undid kill", got)
+		}
+		if got := pendingVerbs(t, st, "kill"); len(got) != 0 {
+			t.Errorf("pending kill intents after undo = %v, want none", got)
+		}
+
+		again := do(t, srv, http.MethodPost, "/verb/undo", req{Form: form, Header: hxHeader})
+		if got := htmltest.Parse(t, again.Body).One(t, `[role="status"]`).Text(); !strings.Contains(got, "Too late") {
+			t.Errorf("second POST /verb/undo toast = %q, want Too late", got)
+		}
+		if plain := do(t, srv, http.MethodPost, "/verb/undo", req{Form: form}); plain.Code != http.StatusConflict {
+			t.Errorf("plain POST /verb/undo of a withdrawn intent = %d, want 409", plain.Code)
+		}
+	})
+
 	t.Run("a plain verb redirects back to the session", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
