@@ -16,7 +16,8 @@ func (c LaunchCandidate) eligible() bool {
 	if c.InFlight {
 		return true
 	}
-	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun && c.ConflictedBase == "" && c.RedBlocker == ""
+	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun &&
+		c.ConflictedBase == "" && c.RedBlocker == ""
 }
 
 func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []TicketURL {
