@@ -36,7 +36,9 @@ func sessionRef(r *http.Request) view.SessionRef {
 	}
 }
 
-func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL string, verb plan.Verb) error {
+func (s *Server) afterSessionVerb(
+	w http.ResponseWriter, r *http.Request, ticketURL string, verb plan.Verb, toast string, undoID int64,
+) error {
 	ref, err := view.ParseSessionRef(plan.TicketURL(ticketURL))
 	if err != nil {
 		return errorf(http.StatusBadRequest, "%q has no session page", ticketURL)
@@ -49,8 +51,9 @@ func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticket
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
-	page.Toast = "Queued " + string(verb)
-	page.ResetComposer = verb == plan.VerbFollowUp
+	page.Toast = toast
+	page.UndoID, page.UndoVerb = undoID, verb
+	page.ResetComposer = undoID != 0 && verb == plan.VerbFollowUp
 	page.Fragment = true
 	return renderHTML(w, "sessionActions", page)
 }

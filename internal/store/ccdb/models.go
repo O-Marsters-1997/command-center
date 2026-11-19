@@ -25,6 +25,7 @@ type Intent struct {
 	Verb       string
 	Payload    json.RawMessage
 	ConsumedAt sql.NullTime
+	HoldUntil  sql.NullTime
 }
 
 type Launch struct {

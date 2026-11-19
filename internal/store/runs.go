@@ -270,6 +270,8 @@ type VerbIntent struct {
 	ID       int64
 	TicketID string
 	Payload  string
+
+	HoldUntil time.Time
 }
 
 func (s *Store) QueueVerbIntent(ctx context.Context, v VerbRequest) (int64, error) {
@@ -285,11 +287,16 @@ func queueVerbIntent(ctx context.Context, q *ccdb.Queries, v VerbRequest) (int64
 			return 0, fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
 		}
 	}
+	var holdUntil sql.NullTime
+	if !v.HoldUntil.IsZero() {
+		holdUntil = notNullTime(v.HoldUntil.UTC())
+	}
 	id, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
-		At:       v.At.UTC(),
-		TicketID: v.Ticket,
-		Verb:     string(v.Verb),
-		Payload:  encoded,
+		At:        v.At.UTC(),
+		TicketID:  v.Ticket,
+		Verb:      string(v.Verb),
+		Payload:   encoded,
+		HoldUntil: holdUntil,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
@@ -320,7 +327,9 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 		} else if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("decode %s intent payload for %s: %w", verb, row.TicketID, err)
 		}
-		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: payload})
+		intents = append(intents, VerbIntent{
+			ID: row.ID, TicketID: row.TicketID, Payload: payload, HoldUntil: row.HoldUntil.Time,
+		})
 	}
 	return intents, nil
 }
@@ -334,13 +343,28 @@ func (s *Store) PendingIntents(ctx context.Context) (map[plan.TicketURL][]plan.I
 		}
 		for _, p := range pending {
 			url := plan.TicketURL(p.TicketID)
-			byTicket[url] = append(byTicket[url], plan.Intent{ID: p.ID, Ticket: url, Verb: verb, Payload: p.Payload})
+			byTicket[url] = append(byTicket[url], plan.Intent{
+				ID: p.ID, Ticket: url, Verb: verb, Payload: p.Payload, HoldUntil: p.HoldUntil,
+			})
 		}
 	}
 	for _, intents := range byTicket {
 		slices.SortFunc(intents, func(a, b plan.Intent) int { return cmp.Compare(a.ID, b.ID) })
 	}
 	return byTicket, nil
+}
+
+var ErrIntentTooLate = errors.New("store: intent past its hold")
+
+func (s *Store) WithdrawHeldIntent(ctx context.Context, id int64, now time.Time) error {
+	n, err := s.q.WithdrawHeldIntent(ctx, ccdb.WithdrawHeldIntentParams{ID: id, Now: notNullTime(now.UTC())})
+	if err != nil {
+		return fmt.Errorf("withdraw intent %d: %w", id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("withdraw intent %d: %w", id, ErrIntentTooLate)
+	}
+	return nil
 }
 
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
