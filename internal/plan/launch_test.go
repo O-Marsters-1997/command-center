@@ -187,8 +187,8 @@ func TestLaunchPlan(t *testing.T) {
 			caps := plan.Caps{Agents: tt.maxAgents, Commands: tt.maxCommands}
 			got := plan.LaunchPlan(tt.candidates, load, caps, tt.spendPaused)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("LaunchPlan(%d running, max %d, paused %t) mismatch (-want +got):\n%s",
-					tt.currentlyRunning, tt.maxAgents, tt.spendPaused, diff)
+				t.Errorf("LaunchPlan(%+v, %+v, paused %t) mismatch (-want +got):\n%s",
+					load, caps, tt.spendPaused, diff)
 			}
 		})
 	}
