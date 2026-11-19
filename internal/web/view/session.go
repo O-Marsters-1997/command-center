@@ -43,6 +43,7 @@ type SessionPage struct {
 	PRURL          string
 	Toast          string
 	ResetComposer  bool
+	Fragment       bool
 
 	PendingMessages []string
 	Model           string

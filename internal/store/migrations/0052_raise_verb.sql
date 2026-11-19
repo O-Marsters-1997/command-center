@@ -13,7 +13,7 @@ ALTER TABLE events ADD CONSTRAINT events_kind_check
         'pr_merged', 'checks_landed', 'run_launched', 'run_disposed', 'cut_failed',
         'spawn_failed', 'worktree_removed', 'launch_cancelled', 'merge_aborted',
         'merge_abort_failed', 'follow_up_refused', 'draft_ready', 'draft_ready_failed', 'launch',
-        'resolve_started', 'resolve_refused', 'raise_refused')) NOT VALID;
+        'resolve_started', 'resolve_refused', 'ci_log_unavailable', 'raise_refused')) NOT VALID;
 ALTER TABLE events VALIDATE CONSTRAINT events_kind_check;
 
 -- +goose Down
@@ -26,7 +26,7 @@ ALTER TABLE events ADD CONSTRAINT events_kind_check
         'pr_merged', 'checks_landed', 'run_launched', 'run_disposed', 'cut_failed',
         'spawn_failed', 'worktree_removed', 'launch_cancelled', 'merge_aborted',
         'merge_abort_failed', 'follow_up_refused', 'draft_ready', 'draft_ready_failed', 'launch',
-        'resolve_started', 'resolve_refused')) NOT VALID;
+        'resolve_started', 'resolve_refused', 'ci_log_unavailable')) NOT VALID;
 ALTER TABLE intents DROP CONSTRAINT intents_verb_check;
 ALTER TABLE intents ADD CONSTRAINT intents_verb_check
     CHECK (verb IN ('launch', 'kill', 're-run', 'retry-push', 'remove-worktree', 'cancel',

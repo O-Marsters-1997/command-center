@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -59,6 +60,37 @@ func TestComposeFollowUp(t *testing.T) {
 	if strings.Contains(got, "/implement") {
 		t.Errorf("ComposeFollowUp(text) = %q, want no implement instruction", got)
 	}
+}
+
+func TestComposeCILog(t *testing.T) {
+	t.Parallel()
+
+	t.Run("keeps the last 200 lines under the check's name", func(t *testing.T) {
+		t.Parallel()
+		var lines []string
+		for i := 1; i <= 250; i++ {
+			lines = append(lines, fmt.Sprintf("line%d", i))
+		}
+		got := plan.ComposeCILog("Tests", strings.Join(lines, "\n")+"\n")
+		for _, want := range []string{"Tests", "line51\n", "line250\n```"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("ComposeCILog(Tests, log) = %q, want it to mention %q", got, want)
+			}
+		}
+		if strings.Contains(got, "line50\n") {
+			t.Errorf("ComposeCILog(Tests, log) keeps line50, want only the last 200 lines")
+		}
+	})
+
+	t.Run("says the log was unavailable", func(t *testing.T) {
+		t.Parallel()
+		got := plan.ComposeCILogUnavailable("Tests")
+		for _, want := range []string{"Tests", "could not be retrieved", "unverified"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("ComposeCILogUnavailable(Tests) = %q, want it to mention %q", got, want)
+			}
+		}
+	})
 }
 
 func TestComposeResolve(t *testing.T) {

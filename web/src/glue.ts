@@ -183,12 +183,28 @@ function initGlue(): void {
     el.removeAttribute("aria-busy");
     const detail = e instanceof CustomEvent ? e.detail : undefined;
     if (detail?.successful && el.hasAttribute("data-reset-on-success")) el.reset();
+    if (detail?.successful && el.hasAttribute("data-close-on-success")) el.closest("dialog")?.close();
+  });
+
+  document.addEventListener("htmx:oobBeforeSwap", (e) => {
+    const target = e instanceof CustomEvent ? e.detail?.target : undefined;
+    if (target instanceof HTMLDialogElement && target.open) e.preventDefault();
   });
 
   document.addEventListener("click", (e) => {
     const trigger = eventElement(e)?.closest("[data-show-modal]");
     const dialog = trigger && document.getElementById(trigger.getAttribute("data-show-modal") ?? "");
     if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
+    eventElement(e)?.closest("[data-close-modal]")?.closest("dialog")?.close();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
+    const form = eventElement(e)?.closest("form[data-submit-on-mod-enter]");
+    if (form instanceof HTMLFormElement) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
   });
 
   document.addEventListener(
