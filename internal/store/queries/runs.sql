@@ -15,6 +15,9 @@ WHERE ticket_id = sqlc.arg(ticket_id) AND kind IN ('agent', 'follow_up') AND ses
 UPDATE runs SET pgid = sqlc.arg(pgid), proc_started_at = sqlc.arg(proc_started_at), log_path = sqlc.arg(log_path)
 WHERE id = sqlc.arg(id);
 
+-- name: RecordPrompt :execrows
+UPDATE runs SET prompt = sqlc.arg(prompt) WHERE id = sqlc.arg(id);
+
 -- name: RecordDisposition :execrows
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
     cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message),
@@ -93,6 +96,7 @@ SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
   COALESCE(runs.message, '')::text AS message,
   COALESCE(runs.question, '')::text AS question,
+  COALESCE(runs.prompt, '')::text AS prompt,
   runs.step,
   COALESCE(runs.model, '')::text AS model,
   COALESCE(runs.outcome, '')::text AS outcome,
