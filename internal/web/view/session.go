@@ -42,6 +42,8 @@ type SessionPage struct {
 	Callout        bool
 	PRURL          string
 	Toast          string
+	UndoID         int64
+	UndoVerb       plan.Verb
 	ResetComposer  bool
 	Fragment       bool
 

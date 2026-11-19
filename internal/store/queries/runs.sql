@@ -60,15 +60,18 @@ WHERE ticket_id IS NOT NULL
 ORDER BY ticket_id, id DESC;
 
 -- name: QueueVerbIntent :one
-INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload))
+INSERT INTO intents (at, ticket_id, verb, payload, hold_until)
+VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload), sqlc.narg(hold_until))
 RETURNING id;
+
+-- name: WithdrawHeldIntent :execrows
+DELETE FROM intents WHERE id = sqlc.arg(id) AND consumed_at IS NULL AND hold_until > sqlc.arg(now);
 
 -- name: IntentConsumed :one
 SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = sqlc.arg(id);
 
 -- name: PendingVerbIntents :many
-SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload, hold_until FROM intents
 WHERE verb = sqlc.arg(verb) AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many

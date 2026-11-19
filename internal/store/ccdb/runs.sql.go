@@ -437,14 +437,15 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 }
 
 const pendingVerbIntents = `-- name: PendingVerbIntents :many
-SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload, hold_until FROM intents
 WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
 `
 
 type PendingVerbIntentsRow struct {
-	ID       int64
-	TicketID string
-	Payload  json.RawMessage
+	ID        int64
+	TicketID  string
+	Payload   json.RawMessage
+	HoldUntil sql.NullTime
 }
 
 func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]PendingVerbIntentsRow, error) {
@@ -456,7 +457,12 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 	var items []PendingVerbIntentsRow
 	for rows.Next() {
 		var i PendingVerbIntentsRow
-		if err := rows.Scan(&i.ID, &i.TicketID, &i.Payload); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Payload,
+			&i.HoldUntil,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -471,16 +477,17 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 }
 
 const queueVerbIntent = `-- name: QueueVerbIntent :one
-INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES ($1, $2, $3, $4)
+INSERT INTO intents (at, ticket_id, verb, payload, hold_until)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id
 `
 
 type QueueVerbIntentParams struct {
-	At       time.Time
-	TicketID string
-	Verb     string
-	Payload  json.RawMessage
+	At        time.Time
+	TicketID  string
+	Verb      string
+	Payload   json.RawMessage
+	HoldUntil sql.NullTime
 }
 
 func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) (int64, error) {
@@ -489,6 +496,7 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 		arg.TicketID,
 		arg.Verb,
 		arg.Payload,
+		arg.HoldUntil,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -666,4 +674,21 @@ func (q *Queries) TicketActivities(ctx context.Context) ([]TicketActivitiesRow, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const withdrawHeldIntent = `-- name: WithdrawHeldIntent :execrows
+DELETE FROM intents WHERE id = $1 AND consumed_at IS NULL AND hold_until > $2
+`
+
+type WithdrawHeldIntentParams struct {
+	ID  int64
+	Now sql.NullTime
+}
+
+func (q *Queries) WithdrawHeldIntent(ctx context.Context, arg WithdrawHeldIntentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, withdrawHeldIntent, arg.ID, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
