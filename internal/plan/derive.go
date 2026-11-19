@@ -66,6 +66,7 @@ type RefreshFact struct {
 type Recorded struct {
 	Opened bool
 	Merged bool
+	Parked bool
 }
 
 type VerdictFacts struct {
@@ -116,6 +117,7 @@ type Entry struct {
 	Next           Next
 	Workflow       string
 	Raise          RaiseMode
+	LockedBehind   int
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -214,6 +216,8 @@ func (r Rules) Derive(in Input) Snapshot {
 		refreshes:   in.Refreshes,
 		auto:        in.Auto,
 	}
+	unlocks := Unlocks(in.Tickets)
+	var parked []Transition
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
 		base := unlock.BaseBranch
@@ -284,11 +288,41 @@ func (r Rules) Derive(in Input) Snapshot {
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
 			Next: next, Workflow: membership.Workflow, Raise: raise,
 		}
+		if state == Parked {
+			entry.LockedBehind = lockedBehind(t.URL, unlocks, byURL, prs)
+		}
 		snap.Entries = append(snap.Entries, entry)
 		snap.removals[t.URL] = removalFor(entry, pr)
+		if state == Parked && !in.Recorded[t.URL].Parked {
+			parked = append(parked, Transition{Ticket: t.URL, Kind: TransitionParked, At: in.Now, Detail: string(reason)})
+		}
 	}
 	snap.transitions, snap.verdicts = r.transitions(in)
+	snap.transitions = append(snap.transitions, parked...)
 	return snap
+}
+
+func lockedBehind(
+	root TicketURL, unlocks map[TicketURL][]TicketURL, byURL map[TicketURL]Ticket, prs map[string]PRState,
+) int {
+	seen := map[TicketURL]bool{root: true}
+	queue := []TicketURL{root}
+	locked := 0
+	for len(queue) > 0 {
+		next := unlocks[queue[0]]
+		queue = queue[1:]
+		for _, url := range next {
+			if seen[url] {
+				continue
+			}
+			seen[url] = true
+			queue = append(queue, url)
+			if prs[byURL[url].Branch] != Merged {
+				locked++
+			}
+		}
+	}
+	return locked
 }
 
 func sessionOf(w Workflow, runs []StepRun, hasVerify bool) string {

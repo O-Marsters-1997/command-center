@@ -24,6 +24,7 @@ var transitionEvents = map[plan.TransitionKind]store.EventKind{
 	plan.TransitionMerged:       store.EventPRMerged,
 	plan.TransitionChecksLanded: store.EventChecksLanded,
 	plan.TransitionVerdict:      store.EventVerdictTransition,
+	plan.TransitionParked:       store.EventParked,
 }
 
 func (l *Loop) recordTransitions(ctx context.Context, snap plan.Snapshot) error {
@@ -38,6 +39,11 @@ func (l *Loop) recordTransitions(ctx context.Context, snap plan.Snapshot) error 
 			return fmt.Errorf("record %s for %s: %w", kind, tr.Ticket, err)
 		}
 		verdictChanged = verdictChanged || tr.Kind == plan.TransitionVerdict
+		if tr.Kind == plan.TransitionParked && l.notifier != nil {
+			if err := l.notifier.Notify(ctx, "Ticket parked", string(tr.Ticket)+": "+tr.Detail); err != nil {
+				l.logger.Warn("notify parked ticket", "ticket", tr.Ticket, "err", err)
+			}
+		}
 	}
 	if !verdictChanged {
 		return nil

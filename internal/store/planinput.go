@@ -116,6 +116,9 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		if rec.Merged, err = s.HasEvent(ctx, t.URL, EventPRMerged); err != nil {
 			return plan.Input{}, fmt.Errorf("read pr_merged event: %w", err)
 		}
+		if rec.Parked, err = s.HasEvent(ctx, t.URL, EventParked); err != nil {
+			return plan.Input{}, fmt.Errorf("read parked event: %w", err)
+		}
 		recorded[url] = rec
 	}
 	for url, v := range lastVerdicts {

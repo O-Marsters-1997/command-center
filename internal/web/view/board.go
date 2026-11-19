@@ -46,6 +46,7 @@ type Row struct {
 	MergeOrder      int              `json:"-"`
 	Warning         string           `json:"-"`
 	Blocking        []string         `json:"blocking"`
+	LockedBehind    int              `json:"-"`
 	After           []string         `json:"after"`
 	Unlocks         []string         `json:"-"`
 	Worktree        string           `json:"-"`
@@ -220,6 +221,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
 			Blocking:       urlStrings(e.Unlock.Blocking),
+			LockedBehind:   e.LockedBehind,
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
 			Protected:      e.LastPush.UnwrapOr(plan.PushRow{}).Protected,

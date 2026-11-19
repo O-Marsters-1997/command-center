@@ -1,15 +1,24 @@
 package loop_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
+
+type recordingNotifier struct{ titles []string }
+
+func (n *recordingNotifier) Notify(_ context.Context, title, _ string) error {
+	n.titles = append(n.titles, title)
+	return nil
+}
 
 func (f *pushFixture) seedAutoCIFailed(t *testing.T, autoRounds int) {
 	t.Helper()
@@ -61,6 +70,25 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 		}
 		if got := histories[plan.TicketURL(f.Ticket.URL)]; got.Rounds != 1 || got.LastTip == "" {
 			t.Errorf("auto history = %+v, want one round with a tip", got)
+		}
+	})
+
+	t.Run("notifies once on parking, across ticks and a restart", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		f.seedAutoCIFailed(t, plan.MaxAutoRounds)
+		notes := &recordingNotifier{}
+		f.reset(testAt, &runnertest.Runner{}, loop.WithNotifier(notes))
+		f.tick(t)
+		f.tick(t)
+		f.reset(testAt, &runnertest.Runner{}, loop.WithNotifier(notes))
+		f.tick(t)
+
+		if len(notes.titles) != 1 {
+			t.Errorf("notifications = %v, want exactly one", notes.titles)
+		}
+		if got := len(f.events(t, storepkg.EventParked)); got != 1 {
+			t.Errorf("parked events = %d, want 1", got)
 		}
 	})
 

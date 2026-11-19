@@ -32,6 +32,10 @@ type worktrees interface {
 	Remove(ctx context.Context, repoPath, branch string) error
 }
 
+type notifier interface {
+	Notify(ctx context.Context, title, body string) error
+}
+
 type Deps struct {
 	Logger    *slog.Logger
 	Store     *store.Store
@@ -50,6 +54,8 @@ type Option func(*Loop)
 func WithForge(f forge) Option { return func(l *Loop) { l.forge = f } }
 
 func WithWorktrees(w worktrees) Option { return func(l *Loop) { l.worktrees = w } }
+
+func WithNotifier(n notifier) Option { return func(l *Loop) { l.notifier = n } }
 
 func New(d Deps, opts ...Option) *Loop {
 	l := &Loop{
