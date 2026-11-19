@@ -294,7 +294,7 @@ const listLatestRunsByTicket = `-- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
        outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause
 FROM runs
-WHERE ticket_id IS NOT NULL
+WHERE ticket_id IS NOT NULL AND kind <> 'verify'
 ORDER BY ticket_id, id DESC
 `
 
@@ -355,11 +355,59 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 	return items, nil
 }
 
+const listLatestVerifyRuns = `-- name: ListLatestVerifyRuns :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path, outcome
+FROM runs
+WHERE ticket_id IS NOT NULL AND kind = 'verify' AND (pgid IS NOT NULL OR outcome IS NOT NULL)
+ORDER BY ticket_id, id DESC
+`
+
+type ListLatestVerifyRunsRow struct {
+	ID            int64
+	TicketID      string
+	Pgid          sql.NullInt64
+	ProcStartedAt sql.NullTime
+	BaselineSHA   sql.NullString
+	LogPath       sql.NullString
+	Outcome       sql.NullString
+}
+
+func (q *Queries) ListLatestVerifyRuns(ctx context.Context) ([]ListLatestVerifyRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestVerifyRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestVerifyRunsRow
+	for rows.Next() {
+		var i ListLatestVerifyRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Pgid,
+			&i.ProcStartedAt,
+			&i.BaselineSHA,
+			&i.LogPath,
+			&i.Outcome,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPassRuns = `-- name: ListPassRuns :many
 SELECT id, ticket_id::text AS ticket_id, step, outcome,
   CASE WHEN kind IN ('agent', 'follow_up') THEN COALESCE(session_id::text, '') ELSE '' END::text AS session_id
 FROM runs
-WHERE ticket_id IS NOT NULL ORDER BY id
+WHERE ticket_id IS NOT NULL AND kind <> 'verify' ORDER BY id
 `
 
 type ListPassRunsRow struct {

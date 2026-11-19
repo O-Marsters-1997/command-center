@@ -147,6 +147,8 @@ const (
 	AwaitingInput
 	PushRefused
 	Parked
+	Verifying
+	WaitingToVerify
 )
 
 type RunFact struct {
@@ -166,7 +168,7 @@ type RunFact struct {
 	ConflictsWithMain        bool
 	ConflictsWithMainReason  Reason
 	ConflictingPeer          string
-	VerificationFailed       bool
+	Verify                   VerifyPhase
 	VerificationFailedReason Reason
 	Question                 string
 	Next                     option.Option[Next]
@@ -279,7 +281,11 @@ func statusFromPush(run RunFact, unlock Unlock, raise RaiseMode) (State, Reason)
 		return ConflictsWithMain, run.ConflictsWithMainReason
 	case run.ConflictingPeer != "":
 		return PushPending, conflictingPeerReason(run.ConflictingPeer)
-	case run.VerificationFailed:
+	case run.Verify == VerifyRunning:
+		return Verifying, "verify command running"
+	case run.Verify == VerifyWaiting:
+		return WaitingToVerify, "verify command waiting for a slot"
+	case run.Verify == VerifyFailed:
 		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:
 		return PushRefused, refusedReason(run.PushDenied)

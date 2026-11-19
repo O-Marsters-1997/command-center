@@ -248,6 +248,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 		return fmt.Errorf("derive for push: %w", err)
 	}
 	pushable := snap.Skipping(snap.SkippedRepos())
+	if err := l.spawnVerifies(ctx, pushable, t, byURL); err != nil {
+		return fmt.Errorf("verify: %w", err)
+	}
 	if err := l.timed(&t.timing.Push, func() error { return l.pushPushable(ctx, pushable, t.obs) }); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
@@ -563,9 +566,6 @@ func (l *Loop) disposeRun(
 	if err := l.event(ctx, ticket.URL, store.EventRunDisposed, outcome.String()); err != nil {
 		return fmt.Errorf("append run disposed event: %w", err)
 	}
-	if run.Kind == plan.RunKindResolve && outcome == plan.OutcomePush {
-		return l.verifyResolved(ctx, ticket, obs)
-	}
 	return nil
 }
 
@@ -573,6 +573,12 @@ func (l *Loop) outcomeFor(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 	exitCode option.Option[int], lastMessage option.Option[string],
 ) (plan.Outcome, error) {
+	if run.Kind == plan.RunKindVerify {
+		if exitCode == option.Some(0) {
+			return plan.OutcomePassed, nil
+		}
+		return plan.OutcomeFailed, nil
+	}
 	if run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp {
 		queued, err := l.followUpQueued(ctx, run.TicketID)
 		if err != nil {
@@ -868,13 +874,17 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	ticket := spec.ticket
 	if spec.workflow.Name == "" {
 		spec.workflow = l.workflows[config.DefaultWorkflow]
-		spec.step = spec.workflow.Steps[0]
+		if spec.step.Name == "" {
+			spec.step = spec.workflow.Steps[0]
+		}
 	}
 	step := spec.step
 	choice := spec.choice
 	switch {
 	case step.Command:
-		spec.kind = plan.RunKindCommand
+		if spec.kind != plan.RunKindVerify {
+			spec.kind = plan.RunKindCommand
+		}
 		choice = plan.AgentChoice{}
 	case step.Model != "":
 		choice = plan.AgentChoice{Model: step.Model}

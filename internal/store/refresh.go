@@ -21,9 +21,7 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[plan.TicketURL]plan.Refre
 		if o.Kind == EventRefreshRefused {
 			fact.Refused, fact.Reason = true, o.Detail
 		}
-		if o.Kind == EventVerificationFailed {
-			fact.VerificationFailed, fact.VerificationFailedDetail = true, o.Detail
-		}
+		fact.Advanced = o.Kind == EventRefreshed || o.Kind == EventRestacked
 		if at, ok := parseConflictDetail(o.Detail); ok && o.Kind == EventRefreshConflicted {
 			fact.Conflict = option.Some(at)
 		}
@@ -49,7 +47,7 @@ type RefreshOutcome struct {
 // LatestRefreshOutcomes excludes events before the ticket's last recorded push.
 func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
 	kinds, err := encodeJSON("refresh outcome kinds", []EventKind{
-		EventRefreshRefused, EventRefreshConflicted, EventVerificationFailed, EventRefreshed, EventRestacked,
+		EventRefreshRefused, EventRefreshConflicted, EventRefreshed, EventRestacked,
 	})
 	if err != nil {
 		return nil, err

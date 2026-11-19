@@ -70,3 +70,119 @@ func TestSnapshot_Overdue(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshot_VerifyAfter(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	first, second := ticket("1", "cc-1-first"), ticket("2", "cc-2-second")
+	pushRun := map[plan.TicketURL]plan.RunSummary{
+		first.URL:  {Outcome: option.Some(plan.OutcomePush)},
+		second.URL: {Outcome: option.Some(plan.OutcomePush)},
+	}
+	advanced := map[plan.TicketURL]plan.RefreshFact{first.URL: {Advanced: true}, second.URL: {Advanced: true}}
+	obs := plan.NewObservation(now)
+	obs.LocalTips[key(first.Branch)], obs.LocalTips[key(second.Branch)] = "t1", "t2"
+
+	tests := []struct {
+		name     string
+		verifies map[plan.TicketURL]plan.VerifyFact
+		spawned  int
+		want     []plan.Verify
+	}{
+		{
+			name:    "both fit under a cap of two",
+			spawned: 0,
+			want:    []plan.Verify{{Ticket: first.URL, Tip: "t1"}, {Ticket: second.URL, Tip: "t2"}},
+		},
+		{
+			name:    "a command spawned this tick takes a slot",
+			spawned: 1,
+			want:    []plan.Verify{{Ticket: first.URL, Tip: "t1"}},
+		},
+		{
+			name:     "a live verify takes a slot and its ticket is not pending",
+			verifies: map[plan.TicketURL]plan.VerifyFact{first.URL: {Tip: "t1", Alive: true, StartedAt: now}},
+			want:     []plan.Verify{{Ticket: second.URL, Tip: "t2"}},
+		},
+		{
+			name: "a passed verify for the tip is not pending",
+			verifies: map[plan.TicketURL]plan.VerifyFact{
+				first.URL: {Tip: "t1", Outcome: option.Some(plan.OutcomePassed)},
+			},
+			want: []plan.Verify{{Ticket: second.URL, Tip: "t2"}},
+		},
+		{
+			name: "a verify for an older tip is pending again",
+			verifies: map[plan.TicketURL]plan.VerifyFact{
+				first.URL: {Tip: "old", Outcome: option.Some(plan.OutcomePassed)},
+			},
+			want: []plan.Verify{{Ticket: first.URL, Tip: "t1"}, {Ticket: second.URL, Tip: "t2"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rules := plan.Rules{Verify: map[string]bool{"r": true}, MaxVerifies: 2}
+			snap := derive(rules, plan.Input{
+				Now: now, Tickets: []plan.Ticket{first, second}, Obs: obs, Runs: pushRun,
+				Refreshes: advanced, Verifies: tt.verifies,
+			})
+			if diff := cmp.Diff(tt.want, snap.VerifyAfter(tt.spawned)); diff != "" {
+				t.Errorf("VerifyAfter(%d) mismatch (-want +got):\n%s", tt.spawned, diff)
+			}
+		})
+	}
+}
+
+func TestRules_Derive_VerifyState(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	tk := ticket("1", "cc-1-first")
+	obs := plan.NewObservation(now)
+	obs.LocalTips[key(tk.Branch)] = "t1"
+	obs.Runs[tk.URL] = plan.RunObservation{Alive: true}
+	pending := map[plan.TicketURL]plan.RefreshFact{tk.URL: {Advanced: true}}
+	tests := []struct {
+		name string
+		fact plan.VerifyFact
+		want plan.State
+	}{
+		{name: "alive", fact: plan.VerifyFact{Tip: "t1", Alive: true, StartedAt: now}, want: plan.Verifying},
+		{
+			name: "alive past the deadline counts as failed",
+			fact: plan.VerifyFact{Tip: "t1", Alive: true, StartedAt: now.Add(-2 * plan.CommandDeadline)},
+			want: plan.VerificationFailed,
+		},
+		{
+			name: "failed",
+			fact: plan.VerifyFact{Tip: "t1", Outcome: option.Some(plan.OutcomeFailed)},
+			want: plan.VerificationFailed,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			snap := derive(plan.Rules{Verify: map[string]bool{"r": true}, MaxVerifies: 1}, plan.Input{
+				Now: now, Tickets: []plan.Ticket{tk}, Obs: obs, Refreshes: pending,
+				Runs:     map[plan.TicketURL]plan.RunSummary{tk.URL: {Outcome: option.Some(plan.OutcomePush)}},
+				Verifies: map[plan.TicketURL]plan.VerifyFact{tk.URL: tt.fact},
+			})
+			if got := entry(t, snap, tk.URL).State; got != tt.want {
+				t.Errorf("state = %s, want %s", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("a pending verify is waiting to verify", func(t *testing.T) {
+		t.Parallel()
+		snap := derive(plan.Rules{Verify: map[string]bool{"r": true}, MaxVerifies: 1}, plan.Input{
+			Now: now, Tickets: []plan.Ticket{tk}, Obs: obs, Refreshes: pending,
+			Runs: map[plan.TicketURL]plan.RunSummary{tk.URL: {Outcome: option.Some(plan.OutcomePush)}},
+		})
+		if got := entry(t, snap, tk.URL).State; got != plan.WaitingToVerify {
+			t.Errorf("state = %s, want %s", got, plan.WaitingToVerify)
+		}
+	})
+}
