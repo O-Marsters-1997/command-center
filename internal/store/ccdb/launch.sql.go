@@ -12,35 +12,32 @@ import (
 	"time"
 )
 
-const activeLaunchMemberCount = `-- name: ActiveLaunchMemberCount :one
-SELECT COUNT(*) FROM launch_members WHERE launch_id IN (
-    SELECT lm.launch_id FROM launch_members lm
-    JOIN launches l ON l.id = lm.launch_id
-    WHERE l.state = 'active' AND lm.ticket_id = $1
-)
+const armedDependent = `-- name: ArmedDependent :one
+SELECT lm.ticket_id
+FROM launch_members lm
+JOIN launches l ON l.id = lm.launch_id
+JOIN tickets t ON t.url = lm.ticket_id
+WHERE l.state = 'active' AND t.blocked_by @> to_jsonb($1::text)
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_id = lm.ticket_id)
+ORDER BY lm.ticket_id
+LIMIT 1
 `
 
-func (q *Queries) ActiveLaunchMemberCount(ctx context.Context, ticketID string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, activeLaunchMemberCount, ticketID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+func (q *Queries) ArmedDependent(ctx context.Context, ticketID string) (string, error) {
+	row := q.db.QueryRowContext(ctx, armedDependent, ticketID)
+	var ticket_id string
+	err := row.Scan(&ticket_id)
+	return ticket_id, err
 }
 
-const cancelActiveLaunches = `-- name: CancelActiveLaunches :execrows
-UPDATE launches SET state = 'cancelled' WHERE id IN (
-    SELECT lm.launch_id FROM launch_members lm
-    JOIN launches l ON l.id = lm.launch_id
-    WHERE l.state = 'active' AND lm.ticket_id = $1
-)
+const cancelEmptyLaunches = `-- name: CancelEmptyLaunches :exec
+UPDATE launches SET state = 'cancelled'
+WHERE state = 'active' AND NOT EXISTS (SELECT 1 FROM launch_members WHERE launch_id = launches.id)
 `
 
-func (q *Queries) CancelActiveLaunches(ctx context.Context, ticketID string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, cancelActiveLaunches, ticketID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+func (q *Queries) CancelEmptyLaunches(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, cancelEmptyLaunches)
+	return err
 }
 
 const claimLaunchIntents = `-- name: ClaimLaunchIntents :many
@@ -76,6 +73,16 @@ func (q *Queries) ClaimLaunchIntents(ctx context.Context, at sql.NullTime) ([]Cl
 		return nil, err
 	}
 	return items, nil
+}
+
+const disarmMember = `-- name: DisarmMember :exec
+DELETE FROM launch_members lm USING launches l
+WHERE l.id = lm.launch_id AND l.state = 'active' AND lm.ticket_id = $1
+`
+
+func (q *Queries) DisarmMember(ctx context.Context, ticketID string) error {
+	_, err := q.db.ExecContext(ctx, disarmMember, ticketID)
+	return err
 }
 
 const featureFirstLaunch = `-- name: FeatureFirstLaunch :one
