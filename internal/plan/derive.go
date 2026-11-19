@@ -126,8 +126,8 @@ type Snapshot struct {
 	Entries     []Entry
 	byURL       map[TicketURL]int
 	launch      []LaunchCandidate
-	running     int
-	maxAgents   int
+	load        Load
+	caps        Caps
 	spendPaused bool
 	intents     map[TicketURL][]Intent
 	sessions    map[TicketURL]string
@@ -140,8 +140,14 @@ type Snapshot struct {
 	auto        map[TicketURL]AutoHistory
 }
 
-func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
-	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
+func (s Snapshot) LaunchAfter(spawned []TicketURL) []TicketURL {
+	load := s.load
+	for _, c := range s.launch {
+		if slices.Contains(spawned, c.URL) {
+			load = load.charge(c.command())
+		}
+	}
+	return LaunchPlan(s.launch, load, s.caps, s.spendPaused)
 }
 
 func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
@@ -204,7 +210,7 @@ func (r Rules) Derive(in Input) Snapshot {
 	snap := Snapshot{
 		Entries:     make([]Entry, 0, len(in.Tickets)),
 		byURL:       make(map[TicketURL]int, len(in.Tickets)),
-		maxAgents:   r.MaxAgents,
+		caps:        Caps{Agents: r.MaxAgents, Commands: r.MaxVerifies},
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
 		sessions:    make(map[TicketURL]string, len(in.Tickets)),
@@ -268,7 +274,9 @@ func (r Rules) Derive(in Input) Snapshot {
 			RedBlocker:        redBlocker,
 		})
 		if in.Runs[t.URL].Pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
-			snap.running++
+			snap.load = snap.load.charge(slices.ContainsFunc(in.Passes[t.URL], func(r StepRun) bool {
+				return r.Alive && r.Command
+			}))
 		}
 
 		pr := in.Obs.PRs[t.Ref()]

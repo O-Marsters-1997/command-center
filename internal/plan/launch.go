@@ -20,24 +20,23 @@ func (c LaunchCandidate) eligible() bool {
 		c.ConflictedBase == "" && c.RedBlocker == ""
 }
 
-func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []TicketURL {
+func (c LaunchCandidate) command() bool {
+	return c.Next.Kind == NextRun && c.Next.Step.IsSome() && c.Next.Step.Unwrap().Command
+}
+
+func LaunchPlan(candidates []LaunchCandidate, load Load, caps Caps, spendPaused bool) []TicketURL {
 	if spendPaused {
-		return nil
-	}
-	free := maxAgents - currentlyRunning
-	if free <= 0 {
 		return nil
 	}
 
 	var selected []TicketURL
 	for _, inFlight := range []bool{true, false} {
 		for _, c := range candidates {
-			if len(selected) >= free {
-				return selected
+			if c.InFlight != inFlight || !c.eligible() || !load.fits(c.command(), caps) {
+				continue
 			}
-			if c.InFlight == inFlight && c.eligible() {
-				selected = append(selected, c.URL)
-			}
+			selected = append(selected, c.URL)
+			load = load.charge(c.command())
 		}
 	}
 	return selected

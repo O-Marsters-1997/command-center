@@ -99,8 +99,8 @@ func TestSnapshot_LaunchAfter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if diff := cmp.Diff(tt.want, derive(tt.rules, tt.in).LaunchAfter(0), cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(tt.want, derive(tt.rules, tt.in).LaunchAfter(nil), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("LaunchAfter(nil) mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -113,11 +113,11 @@ func TestSnapshot_LaunchAfter(t *testing.T) {
 		}
 		snap := plan.Rules{MaxAgents: 1}.Derive(in)
 
-		if diff := cmp.Diff([]plan.TicketURL{first.URL}, snap.LaunchAfter(0)); diff != "" {
-			t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
+		if diff := cmp.Diff([]plan.TicketURL{first.URL}, snap.LaunchAfter(nil)); diff != "" {
+			t.Errorf("LaunchAfter(nil) mismatch (-want +got):\n%s", diff)
 		}
-		if got := snap.LaunchAfter(1); len(got) != 0 {
-			t.Errorf("LaunchAfter(1) = %v, want none", got)
+		if got := snap.LaunchAfter([]plan.TicketURL{first.URL}); len(got) != 0 {
+			t.Errorf("LaunchAfter(spawned first) = %v, want none", got)
 		}
 	})
 }
@@ -163,8 +163,8 @@ func TestSnapshot_RedBlocker(t *testing.T) {
 		t.Parallel()
 		snap := derive(rules, input("FAILURE", false))
 
-		if got := snap.LaunchAfter(0); len(got) != 0 {
-			t.Errorf("LaunchAfter(0) = %v, want none", got)
+		if got := snap.LaunchAfter(nil); len(got) != 0 {
+			t.Errorf("LaunchAfter(nil) = %v, want none", got)
 		}
 		got := entry(t, snap, child.URL)
 		if want := plan.Reason("waiting on " + string(parent.URL) + "'s CI"); got.State != plan.Queued || got.Reason != want {
@@ -174,10 +174,10 @@ func TestSnapshot_RedBlocker(t *testing.T) {
 
 	t.Run("the child launches once the blocker's CI is green", func(t *testing.T) {
 		t.Parallel()
-		got := derive(rules, input("SUCCESS", false)).LaunchAfter(0)
+		got := derive(rules, input("SUCCESS", false)).LaunchAfter(nil)
 
 		if diff := cmp.Diff([]plan.TicketURL{child.URL}, got); diff != "" {
-			t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
+			t.Errorf("LaunchAfter(nil) mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -209,8 +209,8 @@ func TestSnapshot_LaunchContext(t *testing.T) {
 			Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: member},
 		})
 
-		if diff := cmp.Diff([]plan.TicketURL{first.URL}, snap.LaunchAfter(0)); diff != "" {
-			t.Errorf("LaunchAfter(0) mismatch (-want +got):\n%s", diff)
+		if diff := cmp.Diff([]plan.TicketURL{first.URL}, snap.LaunchAfter(nil)); diff != "" {
+			t.Errorf("LaunchAfter(nil) mismatch (-want +got):\n%s", diff)
 		}
 		got := entry(t, snap, first.URL).Ticket
 		if got.LaunchContext != withContext.LaunchContext || got.Choice != choice {
@@ -228,8 +228,8 @@ func TestSnapshot_LaunchContext(t *testing.T) {
 			Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: member},
 		})
 
-		if got := snap.LaunchAfter(0); len(got) != 0 {
-			t.Errorf("LaunchAfter(0) = %v, want none", got)
+		if got := snap.LaunchAfter(nil); len(got) != 0 {
+			t.Errorf("LaunchAfter(nil) = %v, want none", got)
 		}
 	})
 

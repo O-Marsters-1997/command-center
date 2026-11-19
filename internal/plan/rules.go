@@ -37,11 +37,13 @@ type Rules struct {
 	Raise        map[string]RaiseMode
 	Workflows    map[string]Workflow
 	MaxAgents    int
+	MaxVerifies  int
 	SpendLimit5h int
 }
 
 type Daemon struct {
 	MaxAgents    int
+	MaxVerifies  int
 	SpendLimit5h int
 	Workflows    map[string]Workflow
 }
@@ -58,6 +60,7 @@ func RulesFor(daemon Daemon, obs Observation) Rules {
 		Raise:        make(map[string]RaiseMode, n),
 		Workflows:    daemon.Workflows,
 		MaxAgents:    daemon.MaxAgents,
+		MaxVerifies:  daemon.MaxVerifies,
 		SpendLimit5h: daemon.SpendLimit5h,
 	}
 	add := func(name string, s RepoSettings) {
