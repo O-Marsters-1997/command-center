@@ -205,6 +205,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.recordTransitions(ctx, snap); err != nil {
 		return fmt.Errorf("transitions: %w", err)
 	}
+	l.rerunFailedChecks(ctx, snap, byURL)
 	if err := l.applyReRunIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("re-run: %w", err)
 	}

@@ -90,6 +90,37 @@ func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) 
 		}
 	})
 
+	t.Run("Attempt of a run never rerun is 1, and Rerun makes it 2", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{})
+		ctx := t.Context()
+
+		got, err := forge.Attempt(ctx, "/repo", FailedRunURL)
+		if err != nil || got != 1 {
+			t.Fatalf("Attempt() = %d, %v, want 1, nil", got, err)
+		}
+		if err := forge.Rerun(ctx, "/repo", FailedRunURL); err != nil {
+			t.Fatalf("Rerun() error = %v", err)
+		}
+		got, err = forge.Attempt(ctx, "/repo", FailedRunURL)
+		if err != nil || got != 2 {
+			t.Errorf("Attempt() after Rerun = %d, %v, want 2, nil", got, err)
+		}
+	})
+
+	t.Run("Attempt and Rerun refuse a URL that names no Actions run", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{})
+		const url = "https://example.com/status/1"
+
+		if _, err := forge.Attempt(t.Context(), "/repo", url); err == nil {
+			t.Error("Attempt(non-Actions URL) error = nil, want an error")
+		}
+		if err := forge.Rerun(t.Context(), "/repo", url); err == nil {
+			t.Error("Rerun(non-Actions URL) error = nil, want an error")
+		}
+	})
+
 	t.Run("writes succeed", func(t *testing.T) {
 		t.Parallel()
 		forge := newForge(t, Seed{PRs: []gh.PR{open}})

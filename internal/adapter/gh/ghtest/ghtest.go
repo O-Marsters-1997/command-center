@@ -22,6 +22,7 @@ type Forge struct {
 	Snapshot gh.Snapshot
 	Titles   map[string]string
 	Logs     map[string]string
+	Attempts map[string]int
 }
 
 var _ gh.Forge = (*Forge)(nil)
@@ -86,6 +87,32 @@ func (f *Forge) FailedLog(_ context.Context, repo, detailsURL string) (string, e
 		return "", fmt.Errorf("no failed log for %s", detailsURL)
 	}
 	return log, nil
+}
+
+func (f *Forge) Attempt(_ context.Context, repo, detailsURL string) (int, error) {
+	f.Record(Call{Method: "Attempt", Repo: repo, Body: detailsURL})
+	id, err := gh.RunID(detailsURL)
+	if err != nil {
+		return 0, fmt.Errorf("read attempt: %w", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return max(f.Attempts[id], 1), nil
+}
+
+func (f *Forge) Rerun(_ context.Context, repo, detailsURL string) error {
+	f.Record(Call{Method: "Rerun", Repo: repo, Body: detailsURL})
+	id, err := gh.RunID(detailsURL)
+	if err != nil {
+		return fmt.Errorf("rerun: %w", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Attempts == nil {
+		f.Attempts = map[string]int{}
+	}
+	f.Attempts[id] = max(f.Attempts[id], 1) + 1
+	return nil
 }
 
 func (f *Forge) Create(_ context.Context, repo, base, body string, draft bool, labels []string) error {

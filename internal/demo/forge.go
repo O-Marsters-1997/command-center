@@ -266,4 +266,8 @@ func (*Forge) FailedLog(context.Context, string, string) (string, error) {
 	return "demo: no CI log\n", nil
 }
 
+func (*Forge) Attempt(context.Context, string, string) (int, error) { return 2, nil }
+
+func (*Forge) Rerun(context.Context, string, string) error { return nil }
+
 var _ gh.Forge = (*Forge)(nil)
