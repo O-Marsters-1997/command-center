@@ -73,6 +73,7 @@ func (s *Store) InsertSessionRunSkeleton(
 		NewSession:   r.Session.StartNew,
 		SessionID:    nullIfEmpty(r.Session.JoinID),
 		Message:      nullIfEmpty(r.Session.Message),
+		Cause:        nullIfEmpty(string(r.Cause)),
 	})
 	if err != nil {
 		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
@@ -260,6 +261,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		summary.PromptHash = row.PromptHash.String
 		summary.Question = row.Question.String
 		summary.Step, summary.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
+		summary.Cause = plan.FollowUpCause(row.Cause.String)
 		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil

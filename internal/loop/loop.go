@@ -212,6 +212,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyFollowUpIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("follow-up: %w", err)
 	}
+	if err := l.applyAutoFollowUps(ctx, snap, t, byURL); err != nil {
+		return fmt.Errorf("auto follow-up: %w", err)
+	}
 	if err := l.applyResolveIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("resolve: %w", err)
 	}
@@ -814,6 +817,7 @@ type spawnSpec struct {
 	workflow                         plan.Workflow
 	step                             plan.Step
 	verify                           []string
+	cause                            plan.FollowUpCause
 }
 
 func (spec spawnSpec) session() store.RunSession {
@@ -846,7 +850,7 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	}
 	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
 		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash,
-		Choice: choice, Session: spec.session(),
+		Choice: choice, Session: spec.session(), Cause: spec.cause,
 		Step: step.Name, Workflow: spec.workflow.Name, WorkflowHash: spec.workflow.Hash,
 	})
 	if err != nil {

@@ -8,7 +8,64 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
+
+func TestSnapshot_AutoFollowUps(t *testing.T) {
+	t.Parallel()
+	first := ticket("1", "cc-1")
+	rules := plan.Rules{Checks: map[string]verdict.Predicate{"r": {Success: "CI"}}}
+	failed := func(attempt int) plan.CheckState {
+		return plan.CheckState{Status: "COMPLETED", Conclusion: "FAILURE", Attempt: attempt}
+	}
+
+	tests := []struct {
+		name      string
+		check     plan.CheckState
+		history   plan.AutoHistory
+		intents   []plan.Intent
+		want      []plan.AutoFollowUp
+		wantState plan.State
+	}{
+		{name: "failed twice", check: failed(2),
+			want:      []plan.AutoFollowUp{{Ticket: first.URL, Cause: plan.CauseCIFailed, Tip: "tip"}},
+			wantState: plan.CIFailed},
+		{name: "second round after the first", check: failed(2), history: plan.AutoHistory{Rounds: 1, LastTip: "old"},
+			want:      []plan.AutoFollowUp{{Ticket: first.URL, Cause: plan.CauseCIFailed, Tip: "tip"}},
+			wantState: plan.CIFailed},
+		{name: "failed once is still a rerun", check: failed(1), wantState: plan.CIFailed},
+		{name: "attempt unread", check: failed(0), wantState: plan.CIFailed},
+		{name: "round already run for this tip", check: failed(2),
+			history: plan.AutoHistory{Rounds: 1, LastTip: "tip"}, wantState: plan.CIFailed},
+		{name: "rounds spent park the ticket", check: failed(2),
+			history: plan.AutoHistory{Rounds: plan.MaxAutoRounds, LastTip: "old"}, wantState: plan.Parked},
+		{name: "operator intent pending", check: failed(2), wantState: plan.CIFailed,
+			intents: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbFollowUp}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			obs := plan.NewObservation(time.Time{})
+			obs.PRs[key(first.Branch)] = plan.PR{
+				Number: 1, State: plan.Open, HeadOid: "tip", Checks: map[string]plan.CheckState{"CI": tt.check},
+			}
+			snap := derive(rules, plan.Input{
+				Tickets: []plan.Ticket{first}, Obs: obs,
+				Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
+				Verdict: plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{first.URL: {PushedTip: "tip"}}},
+				Auto:    map[plan.TicketURL]plan.AutoHistory{first.URL: tt.history},
+				Intents: map[plan.TicketURL][]plan.Intent{first.URL: tt.intents},
+			})
+			if got := entry(t, snap, first.URL).State; got != tt.wantState {
+				t.Errorf("state = %s, want %s", got, tt.wantState)
+			}
+			if diff := cmp.Diff(tt.want, snap.AutoFollowUps(), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("AutoFollowUps() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestSnapshot_Reruns(t *testing.T) {
 	t.Parallel()

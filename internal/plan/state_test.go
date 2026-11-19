@@ -57,6 +57,7 @@ var stateDecisions = []struct {
 	{state: plan.VerificationFailed, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
 	{state: plan.WaitingOnProducerDeploy, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}},
 	{state: plan.PushRefused, verbs: []plan.Verb{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp}},
+	{state: plan.Parked, verbs: []plan.Verb{plan.VerbReRun, plan.VerbFollowUp}},
 }
 
 func TestVerbs(t *testing.T) {
@@ -111,6 +112,7 @@ func TestState_Label(t *testing.T) {
 		plan.CIFailed: "Checks failing", plan.RefreshConflicted: "Refresh conflicted",
 		plan.ConflictsWithMain: "Conflicts with main", plan.VerificationFailed: "Verification failed",
 		plan.WaitingOnProducerDeploy: "Waiting on deploy", plan.AwaitingPR: "Awaiting PR",
+		plan.Parked: "Parked",
 	}
 	if len(want) != len(plan.AllStates()) {
 		t.Fatalf("table covers %d states, AllStates() has %d", len(want), len(plan.AllStates()))

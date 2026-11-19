@@ -66,7 +66,8 @@ func (l *Loop) applyFollowUpIntents(
 		if !ok {
 			return nil
 		}
-		if err := l.followUpOne(ctx, snap, t, ticket, intent.Payload); err != nil {
+		picked := store.DecodeFollowUpPayload(intent.Payload)
+		if err := l.followUpOne(ctx, snap, t, ticket, picked, plan.CauseNone); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil
@@ -74,9 +75,9 @@ func (l *Loop) applyFollowUpIntents(
 }
 
 func (l *Loop) followUpOne(
-	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, payload string,
+	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket,
+	picked store.FollowUpPayload, cause plan.FollowUpCause,
 ) error {
-	picked := store.DecodeFollowUpPayload(payload)
 	promptText := picked.Message
 	url := plan.TicketURL(ticket.URL)
 	if t.obs.Runs[url].Alive {
@@ -93,7 +94,7 @@ func (l *Loop) followUpOne(
 	}
 	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
-		kind: plan.RunKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
+		kind: plan.RunKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText, cause: cause,
 	}
 
 	launched, _ := snap.Entry(url)
@@ -118,7 +119,7 @@ func (l *Loop) followUpOne(
 		spec.prompt = plan.ComposeMessage(promptText, outcome)
 		spec.resumeSessionID = sessionID
 	}
-	if launched.State == plan.CIFailed {
+	if launched.State == plan.CIFailed || launched.State == plan.Parked {
 		logs, err := l.failedLogs(ctx, ticket, launched, t.obs)
 		if err != nil {
 			return err

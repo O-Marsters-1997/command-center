@@ -37,6 +37,7 @@ type RunSummary struct {
 	Question      string
 	Step          StepName
 	WorkflowHash  string
+	Cause         FollowUpCause
 }
 
 type PushRow struct {
@@ -92,6 +93,7 @@ type Input struct {
 	Removals     map[TicketURL]string
 	FiveHour     float64
 	Passes       map[TicketURL][]StepRun
+	Auto         map[TicketURL]AutoHistory
 }
 
 type Entry struct {
@@ -135,6 +137,7 @@ type Snapshot struct {
 	repos       []RepoStatus
 	obs         Observation
 	refreshes   map[TicketURL]RefreshFact
+	auto        map[TicketURL]AutoHistory
 }
 
 func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
@@ -209,6 +212,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		repos:       in.Repos,
 		obs:         in.Obs,
 		refreshes:   in.Refreshes,
+		auto:        in.Auto,
 	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
@@ -251,6 +255,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			Raise:           raise,
 			RedBlocker:      redBlocker,
 		})
+		state, reason = parkExhausted(state, reason, in.Auto[t.URL])
 		snap.launch = append(snap.launch, LaunchCandidate{
 			URL:               t.URL,
 			Unlock:            unlock,
