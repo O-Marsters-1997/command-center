@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 type workedLine struct {
@@ -33,6 +34,13 @@ func measure(run agentlog.Run) runStats {
 		stats.turns = r.Turns
 	}
 	return stats
+}
+
+func storedStats(m option.Option[agentlog.RunMetrics]) (runStats, bool) {
+	if !m.IsSome() || !m.Unwrap().Wall.IsSome() {
+		return runStats{}, false
+	}
+	return runStats{wall: m.Unwrap().Wall.Unwrap(), turns: m.Unwrap().Turns}, true
 }
 
 func (s runStats) worked() workedLine {

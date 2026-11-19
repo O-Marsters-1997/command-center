@@ -101,6 +101,11 @@ func (s *Store) RecordSpawn(ctx context.Context, sp Spawn) error {
 	return matchedRow(n, err, fmt.Sprintf("record spawn for run %d", sp.RunID))
 }
 
+func (s *Store) RecordPrompt(ctx context.Context, runID int64, prompt string) error {
+	n, err := s.q.RecordPrompt(ctx, ccdb.RecordPromptParams{Prompt: notNull(prompt), ID: runID})
+	return matchedRow(n, err, fmt.Sprintf("record prompt for run %d", runID))
+}
+
 func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 	var exitCodeParam sql.NullInt64
 	if d.ExitCode.IsSome() {
@@ -403,6 +408,7 @@ type SessionRun struct {
 	LogPath  string
 	Message  string
 	Question string
+	Prompt   string
 	Step     plan.StepName
 	Model    string
 	Outcome  string
@@ -419,7 +425,7 @@ func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]Se
 	for i, row := range rows {
 		run := SessionRun{
 			ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question,
-			Step: plan.StepName(row.Step), Model: row.Model, Outcome: row.Outcome,
+			Prompt: row.Prompt, Step: plan.StepName(row.Step), Model: row.Model, Outcome: row.Outcome,
 			Cost: option.None[float64](), Metrics: option.None[agentlog.RunMetrics](),
 		}
 		if row.CostUsd.Valid {

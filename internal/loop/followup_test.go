@@ -124,6 +124,13 @@ func TestFollowUp(t *testing.T) {
 		if onDisk := readFile(t, filepath.Join(f.ws.RunsDir, "1.prompt")); string(onDisk) != spawned.Prompt {
 			t.Errorf("stored prompt = %q, want the spawned prompt %q", onDisk, spawned.Prompt)
 		}
+		runs, err := f.Store.SessionRunsForTicket(t.Context(), f.Ticket.URL)
+		if err != nil {
+			t.Fatalf("SessionRunsForTicket: %v", err)
+		}
+		if len(runs) == 0 || runs[len(runs)-1].Prompt != spawned.Prompt {
+			t.Errorf("SessionRunsForTicket(%q) = %+v, want the last run to keep the spawned prompt", f.Ticket.URL, runs)
+		}
 		pending, err := f.Store.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
 		if err != nil {
 			t.Fatalf("PendingVerbIntents: %v", err)
