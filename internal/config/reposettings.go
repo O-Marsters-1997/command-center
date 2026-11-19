@@ -73,6 +73,13 @@ func ParseRepoSettings(body string) (RepoSettings, error) {
 			Line: lineOfKey(body, key), Err: fmt.Errorf("unknown key %q", key.String()),
 		}
 	}
+	switch settings.Raise {
+	case "", plan.RaiseAuto, plan.RaiseManual:
+	default:
+		return RepoSettings{}, &SettingsParseError{
+			Line: lineOfKey(body, toml.Key{"raise"}), Err: fmt.Errorf("invalid raise %q: want auto or manual", settings.Raise),
+		}
+	}
 	if err := validatePredicate(settings.Checks, true); err != nil {
 		return RepoSettings{}, &SettingsParseError{
 			Line: lineOfKey(body, toml.Key{"checks"}), Err: fmt.Errorf("invalid checks: %w", err),

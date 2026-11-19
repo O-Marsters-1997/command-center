@@ -123,7 +123,7 @@ func TestAbort(t *testing.T) {
 			c.tick(t)
 			c.tick(t)
 			for _, verb := range tt.verbs {
-				if err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+				if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 					Ticket: c.f.child.URL, Verb: verb, At: testAt.Add(time.Hour),
 				}); err != nil {
 					t.Fatalf("QueueVerbIntent(%q): %v", verb, err)
@@ -169,7 +169,7 @@ func TestAbort(t *testing.T) {
 		c.tick(t)
 		c.tick(t)
 		c.aliveRuns[c.f.child.URL] = true
-		if err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: c.f.child.URL, Verb: plan.VerbAbort, At: testAt.Add(time.Hour),
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent(abort): %v", err)

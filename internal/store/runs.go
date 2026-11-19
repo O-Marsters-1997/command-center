@@ -176,7 +176,8 @@ func (s *Store) PassRuns(ctx context.Context) (map[plan.TicketURL][]plan.StepRun
 	}
 	passes := map[plan.TicketURL][]plan.StepRun{}
 	for _, row := range rows {
-		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid}
+		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid,
+			Session: row.SessionID}
 		if row.Outcome.Valid {
 			outcome, err := plan.ParseOutcome(row.Outcome.String)
 			if err != nil {
@@ -271,25 +272,37 @@ type VerbIntent struct {
 	Payload  string
 }
 
-func (s *Store) QueueVerbIntent(ctx context.Context, v VerbRequest) error {
+func (s *Store) QueueVerbIntent(ctx context.Context, v VerbRequest) (int64, error) {
+	return queueVerbIntent(ctx, s.q, v)
+}
+
+func queueVerbIntent(ctx context.Context, q *ccdb.Queries, v VerbRequest) (int64, error) {
 	var encoded []byte
 	if v.Payload != "" {
 		var err error
 		encoded, err = json.Marshal(v.Payload)
 		if err != nil {
-			return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
+			return 0, fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
 		}
 	}
-	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
+	id, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:       v.At.UTC(),
 		TicketID: v.Ticket,
 		Verb:     string(v.Verb),
 		Payload:  encoded,
 	})
 	if err != nil {
-		return fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
+		return 0, fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
 	}
-	return nil
+	return id, nil
+}
+
+func (s *Store) IntentConsumed(ctx context.Context, id int64) (bool, error) {
+	consumed, err := s.q.IntentConsumed(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("select intent %d consumed: %w", id, err)
+	}
+	return consumed, nil
 }
 
 // PendingVerbIntents returns unconsumed intents for a verb in creation order.

@@ -26,6 +26,10 @@ var stateInfo = map[State]stateSpec{
 	},
 	Failed:      {name: "failed", label: "Failed", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp}},
 	PushPending: {name: "push_pending", label: "Waiting to push", glyph: GlyphPending, unattended: true},
+	AwaitingPR: {
+		name: "awaiting_pr", label: "Awaiting PR", glyph: GlyphAttention,
+		verbs: []Verb{VerbRaise, VerbFollowUp, VerbReRun},
+	},
 	Checking: {
 		name: "checking", label: "Waiting on checks", glyph: GlyphChecking,
 		verbs: []Verb{VerbReRun, VerbFollowUp}, unattended: true,
@@ -38,7 +42,9 @@ var stateInfo = map[State]stateSpec{
 		name: "push_failed", label: "Push failed", glyph: GlyphFailed,
 		verbs: []Verb{VerbRetryPush, VerbReRun, VerbFollowUp},
 	},
-	ReviewMe: {name: "review_me", label: "Ready for review", glyph: GlyphAttention},
+	ReviewMe: {
+		name: "review_me", label: "Ready for review", glyph: GlyphAttention, verbs: []Verb{VerbFollowUp},
+	},
 	PRMerged: {name: "merged", label: "Merged", glyph: GlyphDone, verbs: []Verb{VerbRemoveWorktree}},
 	Withdrawn: {
 		name: "withdrawn", label: "PR closed", glyph: GlyphFailed,

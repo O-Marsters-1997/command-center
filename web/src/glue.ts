@@ -49,6 +49,58 @@ export function shouldHop(target: string | undefined, wide: boolean): boolean {
   return wide && target !== undefined && target !== "";
 }
 
+export function parseViewed(raw: string | null): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function withViewed(viewed: string[], file: string, on: boolean): string[] {
+  const rest = viewed.filter((f) => f !== file);
+  return on ? [...rest, file] : rest;
+}
+
+export function viewedLabel(done: number, total: number): string {
+  return `${done} of ${total} viewed`;
+}
+
+function readViewed(key: string): string[] {
+  try {
+    return parseViewed(localStorage.getItem(key));
+  } catch {
+    return [];
+  }
+}
+
+function writeViewed(key: string, viewed: string[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(viewed));
+  } catch {
+    return;
+  }
+}
+
+function applyViewed(root: HTMLElement): void {
+  const viewed = new Set(readViewed(root.dataset.viewedKey ?? ""));
+  let done = 0;
+  for (const file of root.querySelectorAll<HTMLDetailsElement>("details[data-file]")) {
+    const on = viewed.has(file.dataset.file ?? "");
+    const box = file.querySelector<HTMLInputElement>("input[data-viewed]");
+    if (box) box.checked = on;
+    file.open = !on;
+    if (on) done++;
+  }
+  const progress = root.querySelector("[data-viewed-progress]");
+  if (progress) progress.textContent = viewedLabel(done, Number(root.dataset.total));
+}
+
+function applyAllViewed(): void {
+  for (const root of document.querySelectorAll<HTMLElement>("[data-changes]")) applyViewed(root);
+}
+
 function show(text: string): void {
   const flash = document.getElementById("flash");
   if (!flash) return;
@@ -175,6 +227,17 @@ function initGlue(): void {
   }
   document.addEventListener("htmx:afterSwap", tickStarted);
   document.addEventListener("htmx:afterSettle", hop);
+  document.addEventListener("htmx:afterSettle", applyAllViewed);
+  document.addEventListener("change", (e) => {
+    const box = eventElement(e);
+    const root = box?.closest<HTMLElement>("[data-changes]");
+    const file = box?.closest<HTMLElement>("[data-file]");
+    if (!(box instanceof HTMLInputElement) || !box.hasAttribute("data-viewed") || !root || !file) return;
+    const key = root.dataset.viewedKey ?? "";
+    writeViewed(key, withViewed(readViewed(key), file.dataset.file ?? "", box.checked));
+    applyViewed(root);
+  });
+  applyAllViewed();
 
   setInterval(tickTimes, 1000);
   setInterval(tickStarted, 1000);

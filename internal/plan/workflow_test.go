@@ -140,6 +140,16 @@ func TestWorkflow_Next(t *testing.T) {
 func TestResumable(t *testing.T) {
 	t.Parallel()
 
+	w := plan.Workflow{Steps: []plan.Step{
+		{Name: "read", Tools: []string{"Read"}},
+		{Name: "implement", Tools: []string{"Read", "Edit"}},
+		{Name: "check", Command: true},
+		{Name: "fix", Tools: []string{"Bash", "Write"}, OnFail: true},
+		{Name: "pr", Tools: []string{"Read"}},
+		{Name: "open"},
+	}}
+	read := plan.StepRun{ID: 5, Step: "read"}
+	pr := plan.StepRun{ID: 6, Step: "pr"}
 	implement := plan.StepRun{ID: 1, Step: "implement"}
 	check := plan.StepRun{ID: 2, Step: "check", Command: true}
 	fix := plan.StepRun{ID: 3, Step: "fix"}
@@ -151,6 +161,9 @@ func TestResumable(t *testing.T) {
 	}{
 		{name: "empty pass"},
 		{name: "only a command run", pass: []plan.StepRun{check}},
+		{name: "skips read-only steps after implement", pass: []plan.StepRun{implement, read, pr}, want: 1},
+		{name: "a step outside the workflow is skipped", pass: []plan.StepRun{implement, {ID: 7, Step: "gone"}}, want: 1},
+		{name: "a step with no tool list can edit", pass: []plan.StepRun{implement, {ID: 8, Step: "open"}}, want: 8},
 		{name: "skips the command run after implement", pass: []plan.StepRun{implement, check}, want: 1},
 		{name: "prefers the later fix", pass: []plan.StepRun{implement, check, fix, check}, want: 3},
 		{name: "ignores liveness and outcome", pass: []plan.StepRun{
@@ -161,7 +174,7 @@ func TestResumable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var got plan.RunID
-			if r := plan.Resumable(tt.pass); r.IsSome() {
+			if r := w.Resumable(tt.pass); r.IsSome() {
 				got = r.Unwrap().ID
 			}
 			if got != tt.want {

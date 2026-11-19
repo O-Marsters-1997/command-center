@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
@@ -39,6 +40,7 @@ compat_check   = "compat"
 mergify_sha    = "sha256:1"
 deny           = ["go.mod"]
 verify_command = ["go", "vet"]
+raise          = "manual"
 
 [checks]
 all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" }] }]
@@ -51,6 +53,7 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 			Settings: config.RepoSettings{
 				Tracker: "linear", Stacking: true, CompatCheck: "compat", MergifySHA: "sha256:1",
 				Deny: []string{"go.mod"}, VerifyCommand: []string{"go", "vet"},
+				Raise: plan.RaiseManual,
 				Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 					{Success: "Lint"},
 					{AnyOf: []verdict.Predicate{{Success: "A"}, {Author: "bot"}}},
@@ -71,6 +74,7 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 		}{
 			{"parse error", "stacking = true\ndeny = [\n", 2},
 			{"unknown key", "stacking = true\nstackin = true\n", 2},
+			{"invalid raise", "stacking = true\nraise = \"sometimes\"\n", 2},
 			{"invalid predicate", "stacking = true\n[checks]\nsuccess = \"a\"\nskipped = \"b\"\n", 2},
 		}
 		for _, tt := range tests {

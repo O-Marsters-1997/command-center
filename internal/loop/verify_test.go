@@ -222,7 +222,7 @@ func TestVerify(t *testing.T) {
 			t.Fatalf("refresh facts = %+v, want %s verification failed", facts, f.child.URL)
 		}
 
-		if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: f.child.URL, Verb: plan.VerbRetryPush, At: at.Add(time.Hour),
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)

@@ -154,9 +154,16 @@ func TestSnapshot_Session(t *testing.T) {
 	t.Parallel()
 	first := ticket("1", "cc-1-first")
 	second := ticket("2", "cc-2-second")
-	snap := derive(plan.Rules{}, plan.Input{
-		Tickets:  []plan.Ticket{first, second},
-		Sessions: map[plan.TicketURL]string{first.URL: "abc"},
+	v1 := plan.Workflow{Name: "v1", Hash: "h1", Steps: []plan.Step{
+		{Name: "implement", Tools: []string{"Edit"}}, {Name: "pr", Tools: []string{"Read"}},
+	}}
+	rules := plan.Rules{Workflows: map[string]plan.Workflow{"v1": v1}}
+	snap := derive(rules, plan.Input{
+		Tickets: []plan.Ticket{first, second},
+		Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {WorkflowHash: "h1"}},
+		Passes: map[plan.TicketURL][]plan.StepRun{first.URL: {
+			{ID: 1, Step: "implement", Session: "abc"}, {ID: 2, Step: "pr", Session: "pr-session"},
+		}},
 	})
 
 	if got, ok := snap.Session(first.URL); !ok || got != "abc" {
@@ -165,6 +172,21 @@ func TestSnapshot_Session(t *testing.T) {
 	if got, ok := snap.Session(second.URL); ok {
 		t.Errorf("Session(%s) = %q, true, want none", second.URL, got)
 	}
+
+	t.Run("a v0 ticket resumes its single implement session", func(t *testing.T) {
+		t.Parallel()
+		v0 := plan.Workflow{Name: "v0", Hash: "h0", Steps: []plan.Step{{Name: "implement"}}}
+		snap := derive(plan.Rules{Workflows: map[string]plan.Workflow{"v0": v0}}, plan.Input{
+			Tickets: []plan.Ticket{first},
+			Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {WorkflowHash: "h0"}},
+			Passes: map[plan.TicketURL][]plan.StepRun{first.URL: {
+				{ID: 1, Step: "implement", Session: "v0-session"},
+			}},
+		})
+		if got, ok := snap.Session(first.URL); !ok || got != "v0-session" {
+			t.Errorf("Session(%s) = %q, %t, want v0-session, true", first.URL, got, ok)
+		}
+	})
 }
 
 func TestSnapshot_Pushable(t *testing.T) {
@@ -180,13 +202,21 @@ func TestSnapshot_Pushable(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		in    plan.Input
-		alive bool
-		noTip bool
-		want  []plan.Push
+		name   string
+		in     plan.Input
+		alive  bool
+		noTip  bool
+		manual bool
+		want   []plan.Push
 	}{
 		{name: "never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, want: []plan.Push{pushed}},
+		{name: "manual repo, never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, manual: true},
+		{
+			name:   "manual repo, tip moved past last push",
+			in:     plan.Input{Runs: run(plan.OutcomePush), Verdict: lastPush("abc")},
+			manual: true,
+			want:   []plan.Push{pushed},
+		},
 		{name: "outcome is not push", in: plan.Input{Runs: run(plan.OutcomeAsked)}},
 		{name: "no run", in: plan.Input{}},
 		{name: "agent alive", in: plan.Input{Runs: run(plan.OutcomePush)}, alive: true},
@@ -235,7 +265,11 @@ func TestSnapshot_Pushable(t *testing.T) {
 			obs.Runs[tk.URL] = plan.RunObservation{Alive: tt.alive}
 			tt.in.Tickets = []plan.Ticket{tk}
 			tt.in.Obs = obs
-			got := derive(plan.Rules{}, tt.in).Pushable(obs)
+			rules := plan.Rules{}
+			if tt.manual {
+				rules.Raise = map[string]plan.RaiseMode{tk.Repo: plan.RaiseManual}
+			}
+			got := derive(rules, tt.in).Pushable(obs)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Pushable() mismatch (-want +got):\n%s", diff)
 			}

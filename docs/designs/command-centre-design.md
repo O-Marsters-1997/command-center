@@ -394,6 +394,7 @@ own or parent PR closed unmerged:  a member that has RUN  ──► withdrawn
 | `ready` | unlocked, unauthorised — the row a human acts on | **launch** |
 | `running` | agent process alive | kill, follow-up |
 | `awaiting input` | the agent asked a question and stopped | follow-up, re-run |
+| `awaiting PR` | the repo's `raise` is `manual`, the agent finished with commits and nothing is pushed; the loop holds the first push (ADR 24); **raise** carries the reviewed SHA and pushes only while the local tip still equals it, else records `raise_refused` | raise, follow-up, re-run |
 | `push pending` | the agent finished with commits and the push is held: a blocker is unmerged, or a conflicting lower-ref peer goes first (§4c) | none |
 | `checking` | pushed, PR open, CI running or not yet reporting | re-run, follow-up |
 | `review me` | PR open, every gating check green (stacked base unmoved) | none |

@@ -16,6 +16,7 @@ func TestState_Glyph(t *testing.T) {
 		plan.VerificationFailed: plan.GlyphFailed, plan.Withdrawn: plan.GlyphFailed,
 		plan.ReviewMe: plan.GlyphAttention, plan.NeedsYou: plan.GlyphAttention,
 		plan.AwaitingInput: plan.GlyphAttention, plan.PushRefused: plan.GlyphAttention,
+		plan.AwaitingPR:  plan.GlyphAttention,
 		plan.Running:     plan.GlyphRunning,
 		plan.PushPending: plan.GlyphPending, plan.Queued: plan.GlyphPending, plan.BaseMoved: plan.GlyphPending,
 		plan.Checking: plan.GlyphChecking,

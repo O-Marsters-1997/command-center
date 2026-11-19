@@ -55,6 +55,7 @@ type Server struct {
 	nudger     Nudger
 	pushable   pushableCache
 	agentCmd   []string
+	dataDir    string
 }
 
 const pushableTTL = time.Minute
@@ -85,7 +86,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 		d.BoardPollSeconds = config.DefaultBoardPollSeconds
 	}
 	s := &Server{
-		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand,
+		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand, dataDir: d.DataDir,
 		trackerFor: tracker.Resolve(gh.CLI{}),
 		pushable:   pushableCache{list: gh.CLI{}.PushableRepos},
 	}
@@ -104,6 +105,12 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /rail", s.handle(s.handleRail))
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
+	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
+	mux.Handle("GET /s/{owner}/{name}/{n}/changes/comment", s.handle(s.handleCommentForm))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments", s.handle(s.handleAddComment))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments/{id}/delete", s.handle(s.handleDeleteComment))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/request", s.handle(s.handleRequestChanges))
+	mux.Handle("POST /s/{owner}/{name}/{n}/changes/raise", s.handle(s.handleRaise))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
 	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
@@ -217,6 +224,8 @@ var statusMap = []struct {
 	{store.ErrNotFound, http.StatusNotFound},
 	{store.ErrInvalidProject, http.StatusBadRequest},
 	{view.ErrSessionNotFound, http.StatusNotFound},
+	{view.ErrNoLocalTip, http.StatusNotFound},
+	{view.ErrNoSuchLine, http.StatusBadRequest},
 }
 
 func statusOf(err error) int {
@@ -398,7 +407,7 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	}
 	feature := r.FormValue("feature")
 	if feature != "" {
-		if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+		if _, err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
 			Ticket: feature, Verb: plan.VerbImport, At: s.clock.Now(),
 		}); err != nil {
 			return fmt.Errorf("queue verb intent: %w", err)
@@ -584,7 +593,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, Payload: payload, At: s.clock.Now()}
-	if err := s.store.QueueVerbIntent(ctx, request); err != nil {
+	if _, err := s.store.QueueVerbIntent(ctx, request); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	if r.FormValue("from") == "rail" && hx.IsRequest(r) {
@@ -798,7 +807,7 @@ func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) err
 	if repo != "" && !validRepo(repo) {
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
-	if err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
+	if _, err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
 		Ticket: feature, Verb: plan.VerbImport, Payload: repo, At: s.clock.Now(),
 	}); err != nil {
 		return fmt.Errorf("queue verb intent: %w", err)

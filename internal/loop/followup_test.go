@@ -61,7 +61,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 			t.Fatalf("WriteFile(transcript): %v", err)
 		}
 	}
-	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: testAt,
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
@@ -95,7 +95,7 @@ func TestFollowUp(t *testing.T) {
 	t.Run("spawns a fresh run in the existing worktree with the typed prompt", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: testAt,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
@@ -140,7 +140,7 @@ func TestFollowUp(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Encode: %v", err)
 		}
-		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: payload, At: testAt,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)
@@ -164,7 +164,7 @@ func TestFollowUp(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
 		delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
-		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "do the thing", At: testAt,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)

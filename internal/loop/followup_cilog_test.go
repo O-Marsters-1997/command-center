@@ -32,7 +32,7 @@ func (f *pushFixture) seedCIFailed(t *testing.T, detailsURL string) {
 	}
 	*f.Obs = draftConsumerPR(plan.Merged, checks, "cc-1-tip")
 	f.Obs.Worktrees = map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.Worktree}
-	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "fix the failing test", At: testAt,
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
@@ -112,7 +112,7 @@ func TestFollowUp_CIFailed(t *testing.T) {
 	t.Run("a follow-up from any other state fetches no log", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "tidy up", At: testAt,
 		}); err != nil {
 			t.Fatalf("QueueVerbIntent: %v", err)

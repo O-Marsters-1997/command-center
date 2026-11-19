@@ -36,6 +36,7 @@ type SessionPage struct {
 	RawText        string
 	TranscriptPath string
 	RawPath        string
+	ChangesPath    string
 	ActionsPath    string
 	Actions        []VerbButton
 	Callout        bool
@@ -327,6 +328,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		RawText:        rawText,
 		TranscriptPath: self,
 		RawPath:        self + "?log=raw",
+		ChangesPath:    self + "/changes",
 
 		PendingMessages: pendingMessages,
 		Model:           model,

@@ -45,6 +45,7 @@
   <nav class="pill-tabs" aria-label="log view">
     <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
     <a class="pill-tab" href="{{.RawPath}}" {{template "nav" .RawPath}}{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+    <a class="pill-tab" href="{{.ChangesPath}}" {{template "nav" .ChangesPath}}>Changes</a>
   </nav>
   {{- if .Raw}}
   {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}

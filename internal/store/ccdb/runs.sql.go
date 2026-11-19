@@ -144,6 +144,17 @@ func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonPa
 	return i, err
 }
 
+const intentConsumed = `-- name: IntentConsumed :one
+SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = $1
+`
+
+func (q *Queries) IntentConsumed(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, intentConsumed, id)
+	var consumed bool
+	err := row.Scan(&consumed)
+	return consumed, err
+}
+
 const latestRunLog = `-- name: LatestRunLog :one
 SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1
 `
@@ -300,15 +311,18 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 }
 
 const listPassRuns = `-- name: ListPassRuns :many
-SELECT id, ticket_id::text AS ticket_id, step, outcome FROM runs
+SELECT id, ticket_id::text AS ticket_id, step, outcome,
+  CASE WHEN kind IN ('agent', 'follow_up') THEN COALESCE(session_id::text, '') ELSE '' END::text AS session_id
+FROM runs
 WHERE ticket_id IS NOT NULL ORDER BY id
 `
 
 type ListPassRunsRow struct {
-	ID       int64
-	TicketID string
-	Step     string
-	Outcome  sql.NullString
+	ID        int64
+	TicketID  string
+	Step      string
+	Outcome   sql.NullString
+	SessionID string
 }
 
 func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
@@ -325,6 +339,7 @@ func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
 			&i.TicketID,
 			&i.Step,
 			&i.Outcome,
+			&i.SessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -455,9 +470,10 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 	return items, nil
 }
 
-const queueVerbIntent = `-- name: QueueVerbIntent :exec
+const queueVerbIntent = `-- name: QueueVerbIntent :one
 INSERT INTO intents (at, ticket_id, verb, payload)
 VALUES ($1, $2, $3, $4)
+RETURNING id
 `
 
 type QueueVerbIntentParams struct {
@@ -467,14 +483,16 @@ type QueueVerbIntentParams struct {
 	Payload  json.RawMessage
 }
 
-func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) error {
-	_, err := q.db.ExecContext(ctx, queueVerbIntent,
+func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, queueVerbIntent,
 		arg.At,
 		arg.TicketID,
 		arg.Verb,
 		arg.Payload,
 	)
-	return err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const recordDisposition = `-- name: RecordDisposition :execrows
