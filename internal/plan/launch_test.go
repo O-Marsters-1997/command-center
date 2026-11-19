@@ -84,6 +84,17 @@ func TestLaunchPlan(t *testing.T) {
 			want:             []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
+			name: "a candidate with no run whose blocker's CI is red is excluded",
+			candidates: []plan.LaunchCandidate{
+				{
+					URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true,
+					PromptHashMatches: true, RedBlocker: "sandbox://CC-1",
+				},
+			},
+			maxAgents: 1,
+			want:      nil,
+		},
+		{
 			name: "a candidate whose base already carries a conflict is excluded",
 			candidates: []plan.LaunchCandidate{
 				{
