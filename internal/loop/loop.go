@@ -90,13 +90,15 @@ func (l *Loop) ticket(byURL map[plan.TicketURL]store.Ticket, url string) (store.
 }
 
 func (l *Loop) RunOnce(ctx context.Context) error {
+	var timing tickTiming
+	defer func() { timing.log(ctx, l.logger) }()
 	if err := l.store.PruneHistory(ctx, l.clock.Now()); err != nil {
 		l.logger.Warn("prune history", "err", err)
 	}
 	if err := l.applyTrackIntents(ctx); err != nil {
 		return l.failTick(ctx, fmt.Errorf("track: %w", err))
 	}
-	if err := l.validateCloningRepos(ctx); err != nil {
+	if err := l.timed(&timing.Validate, func() error { return l.validateCloningRepos(ctx) }); err != nil {
 		return l.failTick(ctx, fmt.Errorf("validate repos: %w", err))
 	}
 	if err := l.applyImportIntents(ctx); err != nil {
@@ -106,10 +108,14 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return l.failTick(ctx, fmt.Errorf("edit ticket: %w", err))
 	}
 
-	obs, err := l.observe(ctx)
-	if err == nil {
-		err = l.observeRuns(ctx, &obs)
-	}
+	var obs plan.Observation
+	err := l.timed(&timing.Observe, func() error {
+		var err error
+		if obs, err = l.observe(ctx); err != nil {
+			return err
+		}
+		return l.observeRuns(ctx, &obs)
+	})
 	if err != nil {
 		at := l.clock.Now()
 		tickErr := fmt.Errorf("observe: %w", err)
@@ -119,9 +125,21 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return tickErr
 	}
 
-	t := &tick{now: l.clock.Now(), obs: obs, cancelled: map[int]bool{}}
+	timing.Repos = observedRepos(obs)
+	for _, run := range obs.Runs {
+		if run.Alive {
+			timing.LiveCommandRuns++
+		}
+	}
+
+	t := &tick{now: l.clock.Now(), obs: obs, cancelled: map[int]bool{}, timing: &timing}
 	t.obs.ObservedAt = t.now
-	byURL, err := l.absorb(ctx, t)
+	var byURL map[plan.TicketURL]store.Ticket
+	err = l.timed(&timing.Absorb, func() error {
+		var err error
+		byURL, err = l.absorb(ctx, t)
+		return err
+	})
 	if err != nil {
 		return l.failTick(ctx, err)
 	}
@@ -203,7 +221,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.retargetMerged(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("retarget: %w", err)
 	}
-	if err := l.applyRefreshIntents(ctx, snap, t.obs); err != nil {
+	if err := l.timed(&t.timing.Refresh, func() error { return l.applyRefreshIntents(ctx, snap, t.obs) }); err != nil {
 		return fmt.Errorf("refresh: %w", err)
 	}
 	l.rereadLocalTips(ctx, t.obs)
@@ -213,20 +231,22 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyRaiseIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("raise: %w", err)
 	}
-	if err := l.applyRemoveWorktreeIntents(ctx, snap, t.obs); err != nil {
+	removeWorktrees := func() error { return l.applyRemoveWorktreeIntents(ctx, snap, t.obs) }
+	if err := l.timed(&t.timing.Removal, removeWorktrees); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
 	snap, err := l.derive(ctx, t)
 	if err != nil {
 		return fmt.Errorf("derive for push: %w", err)
 	}
-	if err := l.pushPushable(ctx, snap.Skipping(snap.SkippedRepos()), t.obs); err != nil {
+	pushable := snap.Skipping(snap.SkippedRepos())
+	if err := l.timed(&t.timing.Push, func() error { return l.pushPushable(ctx, pushable, t.obs) }); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 	if err := l.applyDraftGate(ctx, snap); err != nil {
 		return fmt.Errorf("draft gate: %w", err)
 	}
-	if err := l.launchEligible(ctx, snap, t, byURL); err != nil {
+	if err := l.timed(&t.timing.Cut, func() error { return l.launchEligible(ctx, snap, t, byURL) }); err != nil {
 		return fmt.Errorf("launch: %w", err)
 	}
 	return nil

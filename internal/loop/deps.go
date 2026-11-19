@@ -93,4 +93,5 @@ type tick struct {
 	prev      plan.Observation
 	spawned   []plan.TicketURL
 	cancelled map[int]bool
+	timing    *tickTiming
 }
