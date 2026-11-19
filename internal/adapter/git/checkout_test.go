@@ -167,6 +167,38 @@ func TestEnsureCheckout(t *testing.T) {
 		gittest.Run(t, checkout, "repack", "-a", "-d", "-q")
 	})
 
+	t.Run("replaces a leftover temporary clone", func(t *testing.T) {
+		t.Parallel()
+		_, remote := gittest.WithOrigin(t)
+		checkout := filepath.Join(t.TempDir(), "repos", "r")
+		leftover := checkout + ".cloning"
+		if err := os.MkdirAll(filepath.Join(leftover, "half"), 0o700); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", leftover, err)
+		}
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
+			t.Fatalf("EnsureCheckout error = %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
+			t.Errorf("EnsureCheckout left no working tree: %v", err)
+		}
+		if _, err := os.Stat(leftover); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("EnsureCheckout left %s behind: %v", leftover, err)
+		}
+	})
+
+	t.Run("a failed clone leaves nothing behind", func(t *testing.T) {
+		t.Parallel()
+		checkout := filepath.Join(t.TempDir(), "repos", "r")
+		if err := git.EnsureCheckout(t.Context(), "r", "file://"+t.TempDir(), "", checkout); err == nil {
+			t.Fatal("EnsureCheckout(unclonable remote) error = nil, want error")
+		}
+		for _, p := range []string{checkout, checkout + ".cloning"} {
+			if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("EnsureCheckout left %s behind: %v", p, err)
+			}
+		}
+	})
+
 	t.Run("refuses a seed that is not a repo or has another origin, leaving no directory", func(t *testing.T) {
 		t.Parallel()
 		otherRepo, _ := gittest.WithOrigin(t)
