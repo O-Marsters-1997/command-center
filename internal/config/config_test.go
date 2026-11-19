@@ -154,6 +154,19 @@ func TestLoad(t *testing.T) {
 		})
 	}
 
+	t.Run("max_verifies defaults to 1 and loads", func(t *testing.T) {
+		t.Parallel()
+		for body, want := range map[string]int{"": 1, "max_verifies = 3\n": 3} {
+			cfg, err := config.Load(writeConfig(t, body), testEnv)
+			if err != nil {
+				t.Fatalf("Load(%q) error = %v", body, err)
+			}
+			if cfg.MaxVerifies != want {
+				t.Errorf("Load(%q) MaxVerifies = %d, want %d", body, cfg.MaxVerifies, want)
+			}
+		}
+	})
+
 	t.Run("an argv missing a required part", func(t *testing.T) {
 		t.Parallel()
 		complete := withRequiredParts("claude", "-p", "{prompt}")
@@ -198,6 +211,7 @@ func TestLoad(t *testing.T) {
 			want []string
 		}{
 			{"port and max_agents together", "port = 0\nmax_agents = 0\n", []string{"port", "max_agents"}},
+			{"max_verifies zero", "max_verifies = 0\n", []string{"max_verifies"}},
 			{"port above range", "port = 70000\n", []string{"port"}},
 			{"spend_limit_5h above 100", "spend_limit_5h = 101\n", []string{"spend_limit_5h"}},
 			{"spend_limit_5h negative", "spend_limit_5h = -1\n", []string{"spend_limit_5h"}},
