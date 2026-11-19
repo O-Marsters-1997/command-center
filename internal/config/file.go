@@ -121,7 +121,8 @@ func (c Config) validate() error {
 		errs = append(errs, &InvalidValueError{Key: "max_agents", Err: fmt.Errorf("must be at least 1, got %d", c.MaxAgents)})
 	}
 	if c.MaxVerifies < 1 {
-		errs = append(errs, &InvalidValueError{Key: "max_verifies", Err: fmt.Errorf("must be at least 1, got %d", c.MaxVerifies)})
+		err := fmt.Errorf("must be at least 1, got %d", c.MaxVerifies)
+		errs = append(errs, &InvalidValueError{Key: "max_verifies", Err: err})
 	}
 	if c.SpendLimit5h < 0 || c.SpendLimit5h > 100 {
 		errs = append(errs, &InvalidValueError{
