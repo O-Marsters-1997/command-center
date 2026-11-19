@@ -24,10 +24,7 @@ var stateInfo = map[State]stateSpec{
 		name: "running", label: "Agent running", glyph: GlyphRunning,
 		verbs: []Verb{VerbKill, VerbFollowUp}, unattended: true,
 	},
-	Failed: {name: "failed", label: "Failed", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp}},
-	CutFailed: {
-		name: "cut_failed", label: "Cut failed", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp},
-	},
+	Failed:      {name: "failed", label: "Failed", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp}},
 	PushPending: {name: "push_pending", label: "Waiting to push", glyph: GlyphPending, unattended: true},
 	Checking: {
 		name: "checking", label: "Waiting on checks", glyph: GlyphChecking,
@@ -43,12 +40,8 @@ var stateInfo = map[State]stateSpec{
 	},
 	ReviewMe: {name: "review_me", label: "Ready for review", glyph: GlyphAttention},
 	PRMerged: {name: "merged", label: "Merged", glyph: GlyphDone, verbs: []Verb{VerbRemoveWorktree}},
-	PRClosedUnmerged: {
-		name: "pr_closed_unmerged", label: "PR closed", glyph: GlyphFailed,
-		verbs: []Verb{VerbReRun, VerbFollowUp, VerbRemoveWorktree},
-	},
-	BaseGone: {
-		name: "base_gone", label: "Base gone", glyph: GlyphFailed,
+	Withdrawn: {
+		name: "withdrawn", label: "PR closed", glyph: GlyphFailed,
 		verbs: []Verb{VerbReRun, VerbFollowUp, VerbRemoveWorktree},
 	},
 	Cancelled: {name: "cancelled", label: "Cancelled", glyph: GlyphReady, verbs: []Verb{VerbLaunch}},

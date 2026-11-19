@@ -129,15 +129,13 @@ const (
 	Queued
 	Running
 	Failed
-	CutFailed
 	PushPending
 	Checking
 	NeedsYou
 	PushFailed
 	ReviewMe
 	PRMerged
-	PRClosedUnmerged
-	BaseGone
+	Withdrawn
 	Cancelled
 	BaseMoved
 	CIFailed
@@ -182,7 +180,7 @@ type Facts struct {
 
 func Status(f Facts) (State, Reason) {
 	if f.LatestRun.IsSome() && f.Unlock.BlockerClosed {
-		return BaseGone, f.Unlock.Reason
+		return Withdrawn, f.Unlock.Reason
 	}
 	if f.LatestRun.IsSome() && f.LatestRun.Unwrap().PRMerged {
 		return PRMerged, "pull request merged"
@@ -231,7 +229,7 @@ func statusFromRun(latest option.Option[RunFact], unlock Unlock) (State, Reason,
 		}
 		return Queued, "next step pending", true
 	case OutcomeCutFailed:
-		return CutFailed, "cutting the worktree failed", true
+		return Failed, "cutting the worktree failed", true
 	case OutcomeFailed:
 		if state, reason, ok := statusFromNext(run.Next); ok {
 			return state, reason, true
@@ -268,13 +266,13 @@ func firstLine(s string) Reason {
 func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 	switch {
 	case run.PRClosedUnmerged:
-		return PRClosedUnmerged, "pull request closed without merging"
+		return Withdrawn, "this ticket's pull request closed without merging"
 	case run.MidMerge:
 		return RefreshConflicted, "refresh's merge conflicted: the worktree is left mid-merge, resolve it there or abort"
 	case run.ConflictsWithMain:
 		return ConflictsWithMain, run.ConflictsWithMainReason
 	case run.ConflictingPeer != "":
-		return Blocked, conflictingPeerReason(run.ConflictingPeer)
+		return PushPending, conflictingPeerReason(run.ConflictingPeer)
 	case run.VerificationFailed:
 		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:

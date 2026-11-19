@@ -330,11 +330,11 @@ reconstruct — as does `runs` (§8).
 ### 4c · One conflicting peer proceeds at a time
 
 When two open main-based branches conflict, only one is ready at a time. The higher-ref one
-is held at `blocked` and its reason names the peer. Nothing here stops a merge conflicting a
+has its push held (`push_pending`) and its reason names the peer. Nothing here stops a merge conflicting a
 peer, which is git rather than policy; what it stops is the peer being offered as ready
 before its turn, which is what makes a resolution get thrown away by the next merge. The
-hold still offers `launch`, and merging the held PR yourself re-derives on the next tick, so
-nothing deadlocks.
+hold offers no verb: the loop releases it on a later tick once the lower-ref peer merges or
+closes, so nothing deadlocks.
 
 **Observe compares peer tips with the call it already makes.** Every tick, `MergesCleanly`
 runs `git merge-tree --write-tree --name-only` per open branch against `origin/main`. The
@@ -379,38 +379,42 @@ gives orthogonal flags somewhere to live: draft-ness is a flag on a row, not a s
            │            ├──► waiting on producer deploy ──► checking
            │            └──► needs you
            ├──► failed
-           ├──► cut failed
-           └──► push failed
+           ├──► push pending ──► checking
+           ├──► push failed / push refused
+           └──► awaiting input
 
-parent PR closed unmerged:  a member that has RUN  ──► base gone
+own or parent PR closed unmerged:  a member that has RUN  ──► withdrawn
                             a member never launched ──► blocked / queued (re-derived)
 ```
 
 | State | Means | Verbs |
 |---|---|---|
-| `blocked` | a stacking blocker has no OPEN or MERGED PR, or a ready peer conflicts with this branch and has a higher ref; unauthorised | launch (authorises; starts on unlock) |
+| `blocked` | a stacking blocker has no OPEN or MERGED PR, or its base conflicts; unauthorised | launch (authorises; starts on unlock) |
 | `queued` | authorised, waiting — the row says for what: its base, or a slot under `max_agents` | cancel |
 | `ready` | unlocked, unauthorised — the row a human acts on | **launch** |
-| `running` | agent process alive | kill |
-| `checking` | pushed, PR open, CI running or not yet reporting | re-run, close PR |
-| `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
-| `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
-| `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge | resolve, abort, (shell — path on the row) |
-| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 3) | **refresh**, close PR |
-| `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
-| `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
-| `needs you` | a gating check red (other than the compat one), a refused push, or a refused fast-forward | re-run, kill, close PR |
-| `failed` | dead run, no commits since its baseline | re-run |
-| `cut failed` | `treepad.New` failed (hooks, disk, base unresolvable) | re-run |
-| `push failed` | push or `gh pr create` failed | **retry push** (no agent), re-run |
-| `base gone` | this row ran, and its parent's PR was closed unmerged — the work it built on is withdrawn | re-run, remove worktree |
-| `pr closed unmerged` | someone closed this row's PR | re-run, remove |
-| `cancelled` | authorised then cancelled before launching | remove worktree, launch |
+| `running` | agent process alive | kill, follow-up |
+| `awaiting input` | the agent asked a question and stopped | follow-up, re-run |
+| `push pending` | the agent finished with commits and the push is held: a blocker is unmerged, or a conflicting lower-ref peer goes first (§4c) | none |
+| `checking` | pushed, PR open, CI running or not yet reporting | re-run, follow-up |
+| `review me` | PR open, every gating check green (stacked base unmoved) | none |
+| `ci failed` | a gating check is red | re-run, follow-up |
+| `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run, follow-up |
+| `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge | resolve, abort |
+| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 3) | **refresh** |
+| `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run, follow-up |
+| `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-run, follow-up |
+| `needs you` | a verdict that needs a human, or a refresh the app declined | re-run, follow-up, kill |
+| `failed` | dead run with no commits since its baseline, or `treepad.New` failed (hooks, disk, base unresolvable) | re-run, follow-up |
+| `push failed` | push or `gh pr create` failed | **retry push** (no agent), re-run, follow-up |
+| `push refused` | the push touched a protected path (ADR 23) | retry push, re-run, follow-up |
+| `withdrawn` | this row ran, and either its own PR or its parent's was closed unmerged; the label reads "PR closed" | re-run, follow-up, remove worktree |
+| `cancelled` | authorised then cancelled before launching | launch |
 | `merged` | PR merged | remove worktree |
 
 **A row that has ever run never returns to `blocked`** (invariant 19) — `blocked` means
 "nothing to cut from, unauthorised", and a row with a worktree, commits and possibly an open
-PR is neither. Dependents of a closed PR read `base gone`.
+PR is neither. A conflicting peer holds the push (`push pending`) and a closed PR reads
+`withdrawn`.
 
 `checking` exits to `needs you` if no rollup matching the pushed tip appears within a
 bounded wait — **counted only over ticks whose observe phase succeeded** (a GitHub outage
@@ -422,12 +426,10 @@ shows each running row's elapsed time and pgid, and `kill` is one click.
 
 Verbs: `launch` · `re-run` (relaunch in the same worktree, incremental) · `refresh` (§4a) ·
 `retry push` (re-run the push step alone — a push failure is auth or non-fast-forward, and
-relaunching an agent to retry a network operation spends the wall for nothing) · `re-check`
-(**`gh run rerun <id>`** on the compat check's run, id parsed from the rollup's
-`detailsUrl` — no gating workflow in either repo declares `workflow_dispatch`) · `close PR`
-(`gh pr close` — the app can open a PR; it needs a sanctioned way to unopen one) · `cancel` ·
+relaunching an agent to retry a network operation spends the wall for nothing) ·
+`follow-up` · `resolve` · `abort` · `cancel` ·
 `kill` (`-pgid` SIGTERM → SIGKILL) · `remove worktree` (`treepad.Remove` with `Force`, only with MERGED
-PR state or on a `base gone`/`cancelled` row the user clears). Worktree path, pgid, base and
+PR state or on a `withdrawn` row the user clears). Worktree path, pgid, base and
 elapsed time render as plain text so a terminal session is a copy-paste away.
 
 The page shows **stack depth and merge order**, and — because a localhost page is invisible
@@ -626,7 +628,7 @@ Numbered so each can become a test.
     `--bare`.
 18. The HTTP surface binds `127.0.0.1`; every mutating verb is POST-only; a request whose
     `Origin` is absent or mismatched, or whose `Host` is mismatched, is rejected.
-19. A task that has ever run never returns to `blocked`; a withdrawn base is `base gone`.
+19. A task that has ever run never returns to `blocked`; a conflicting peer holds its push and a closed PR is `withdrawn`.
 20. Intent is recorded before every outward effect, and effects are reconciled from the
     world: an existing open PR for a branch is adopted, never duplicated; worktree existence
     is read from git, never inferred from run rows.

@@ -21,8 +21,8 @@ func TestStatus(t *testing.T) {
 	t.Run("failed without a merged PR", statusFailedWithoutAMergedPR)
 	t.Run("an undisposed run is not failed", statusUndisposedRunNotFailed)
 	t.Run("no latest run", statusNoLatestRun)
-	t.Run("base gone outranks anything once it has run", statusBaseGoneOnceRun)
-	t.Run("never base gone without a prior run", statusNeverBaseGoneWithoutARun)
+	t.Run("withdrawn outranks anything once it has run", statusWithdrawnOnceRun)
+	t.Run("never withdrawn without a prior run", statusNeverWithdrawnWithoutARun)
 	t.Run("blocks on a conflicted base", statusBlocksOnAConflictedBase)
 	t.Run("a run outranks a conflicted base", statusRunOverAConflictedBase)
 }
@@ -190,11 +190,12 @@ func statusWithLatestRun(t *testing.T) {
 			reasonHas: "resuming with your message",
 		},
 		{
-			name: "a failed cut derives cut failed",
+			name: "a failed cut derives failed",
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomeCutFailed),
 			}),
-			wantState: plan.CutFailed,
+			wantState: plan.Failed,
+			reasonHas: "cutting the worktree failed",
 		},
 		{
 			name: "a refused push derives push refused, naming every denied path and rule",
@@ -276,7 +277,7 @@ func statusWithLatestRun(t *testing.T) {
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomePush), PRClosedUnmerged: true,
 			}),
-			wantState: plan.PRClosedUnmerged,
+			wantState: plan.Withdrawn,
 		},
 		{
 			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
@@ -370,12 +371,12 @@ func statusWithLatestRun(t *testing.T) {
 			wantState: plan.PRMerged,
 		},
 		{
-			name: "a conflicting peer derives blocked, naming the peer",
+			name: "a conflicting peer holds the push, naming the peer",
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 				ConflictingPeer: "cc-9-lower-ref",
 			}),
-			wantState: plan.Blocked,
+			wantState: plan.PushPending,
 			reasonHas: "cc-9-lower-ref",
 		},
 		{
@@ -394,7 +395,7 @@ func statusWithLatestRun(t *testing.T) {
 				ConflictingPeer: "cc-9-lower-ref",
 				Verdict:         option.Some(verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"}),
 			}),
-			wantState: plan.Blocked,
+			wantState: plan.PushPending,
 			reasonHas: "cc-9-lower-ref",
 		},
 	}
@@ -498,7 +499,7 @@ func statusNoLatestRun(t *testing.T) {
 	}
 }
 
-func statusBaseGoneOnceRun(t *testing.T) {
+func statusWithdrawnOnceRun(t *testing.T) {
 	t.Parallel()
 
 	blockerClosed := plan.Unlock{
@@ -523,8 +524,8 @@ func statusBaseGoneOnceRun(t *testing.T) {
 			t.Parallel()
 
 			state, reason := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: tt.latestRun})
-			if state != plan.BaseGone {
-				t.Errorf("Status(facts) state = %v, want base_gone", state)
+			if state != plan.Withdrawn {
+				t.Errorf("Status(facts) state = %v, want withdrawn", state)
 			}
 			if reason != blockerClosed.Reason {
 				t.Errorf("Status(facts) reason = %q, want the unlock reason %q", reason, blockerClosed.Reason)
@@ -533,7 +534,7 @@ func statusBaseGoneOnceRun(t *testing.T) {
 	}
 }
 
-func statusNeverBaseGoneWithoutARun(t *testing.T) {
+func statusNeverWithdrawnWithoutARun(t *testing.T) {
 	t.Parallel()
 
 	blockerClosed := plan.Unlock{
