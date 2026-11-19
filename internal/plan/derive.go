@@ -140,6 +140,8 @@ type Snapshot struct {
 	obs         Observation
 	refreshes   map[TicketURL]RefreshFact
 	auto        map[TicketURL]AutoHistory
+	runs        map[TicketURL]RunSummary
+	now         time.Time
 }
 
 func (s Snapshot) LaunchAfter(spawned []TicketURL) []TicketURL {
@@ -221,6 +223,8 @@ func (r Rules) Derive(in Input) Snapshot {
 		obs:         in.Obs,
 		refreshes:   in.Refreshes,
 		auto:        in.Auto,
+		runs:        in.Runs,
+		now:         in.Now,
 	}
 	unlocks := Unlocks(in.Tickets)
 	var parked []Transition

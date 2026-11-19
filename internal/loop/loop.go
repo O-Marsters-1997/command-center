@@ -190,6 +190,9 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err := l.applyKillIntents(ctx, t); err != nil {
 		return nil, fmt.Errorf("kill: %w", err)
 	}
+	if err := l.killOverdue(ctx, t); err != nil {
+		return nil, fmt.Errorf("kill overdue: %w", err)
+	}
 	if err := l.interruptForFollowUps(ctx, t); err != nil {
 		return nil, fmt.Errorf("interrupt for follow-ups: %w", err)
 	}
@@ -431,6 +434,30 @@ func (l *Loop) applyKillIntents(ctx context.Context, t *tick) error {
 		}
 		return nil
 	})
+}
+
+func (l *Loop) killOverdue(ctx context.Context, t *tick) error {
+	snap, err := l.derive(ctx, t)
+	if err != nil {
+		return fmt.Errorf("derive: %w", err)
+	}
+	overdue := snap.Overdue()
+	if len(overdue) == 0 {
+		return nil
+	}
+	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
+	if err != nil {
+		return fmt.Errorf("list runs awaiting disposition: %w", err)
+	}
+	for _, run := range pending {
+		if slices.Contains(overdue, plan.RunID(run.ID)) && !t.cancelled[run.Pgid] {
+			l.logger.WarnContext(ctx, "killing command run past its deadline", "run", run.ID, "ticket", run.TicketID)
+			if err := l.cancelRun(t, run.TicketID, run.Pgid); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (l *Loop) interruptForFollowUps(ctx context.Context, t *tick) error {
