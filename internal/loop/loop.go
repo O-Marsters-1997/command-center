@@ -231,7 +231,8 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.applyRaiseIntents(ctx, snap, t.obs); err != nil {
 		return fmt.Errorf("raise: %w", err)
 	}
-	if err := l.timed(&t.timing.Removal, func() error { return l.applyRemoveWorktreeIntents(ctx, snap, t.obs) }); err != nil {
+	removeWorktrees := func() error { return l.applyRemoveWorktreeIntents(ctx, snap, t.obs) }
+	if err := l.timed(&t.timing.Removal, removeWorktrees); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
 	snap, err := l.derive(ctx, t)

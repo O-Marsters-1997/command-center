@@ -59,7 +59,8 @@ func TestRunOnceLogsOneTimingLine(t *testing.T) {
 			if n := strings.Count(got, `msg="tick timing"`); n != 1 {
 				t.Fatalf("tick timing lines = %d, want 1; log:\n%s", n, got)
 			}
-			for _, field := range []string{"validate=", "observe=", "absorb=", "refresh=", "push=", "cut=", "removal=", tt.wantCounts} {
+			fields := []string{"validate=", "observe=", "absorb=", "refresh=", "push=", "cut=", "removal=", tt.wantCounts}
+			for _, field := range fields {
 				if !strings.Contains(got, field) {
 					t.Errorf("tick timing line lacks %q; log:\n%s", field, got)
 				}
