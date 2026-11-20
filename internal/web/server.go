@@ -617,7 +617,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	fromSession := r.FormValue("from") == "session"
-	undoable := fromSession && entry.State != plan.PRMerged
+	undoable := fromSession && snap.Undoable(plan.TicketURL(ticketURL))
 	now := s.clock.Now()
 	request := store.VerbRequest{Ticket: ticketURL, Verb: verb, Payload: payload, At: now}
 	if undoable {
@@ -630,11 +630,12 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	if r.FormValue("from") == "rail" && hx.IsRequest(r) {
 		return s.handleRail(w, r)
 	}
-	if !undoable {
-		id = 0
+	var undoID int64
+	if undoable {
+		undoID = id
 	}
 	if fromSession {
-		return s.afterSessionVerb(w, r, ticketURL, verb, "Queued "+string(verb), id)
+		return s.afterSessionVerb(w, r, ticketURL, verb, "Queued "+string(verb), undoID)
 	}
 	return s.redirectOrSwap(w, r)
 }

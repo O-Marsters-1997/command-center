@@ -810,8 +810,12 @@ func testVerbFromSession(t *testing.T) {
 		if undo := queued.Find(`.toast form[hx-post="/verb/undo"]`); len(undo) != 0 {
 			t.Errorf("htmx POST /verb remove-worktree on a merged session offers undo: %s", undo[0].HTML())
 		}
-		if got := pendingVerbs(t, st, plan.VerbRemoveWorktree); len(got) != 1 {
-			t.Errorf("pending remove-worktree intents = %v, want one", got)
+		pending, err := st.PendingVerbIntents(t.Context(), plan.VerbRemoveWorktree)
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(remove-worktree): %v", err)
+		}
+		if len(pending) != 1 || !pending[0].HoldUntil.IsZero() {
+			t.Errorf("pending remove-worktree intents = %+v, want one with no hold", pending)
 		}
 	})
 

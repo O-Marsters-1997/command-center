@@ -85,6 +85,11 @@ func (s Snapshot) AutoRemovals() []TicketURL {
 	return out
 }
 
+func (s Snapshot) Undoable(url TicketURL) bool {
+	e, ok := s.Entry(url)
+	return ok && e.State != PRMerged
+}
+
 type Rerun struct {
 	Ticket     TicketURL
 	DetailsURL string
