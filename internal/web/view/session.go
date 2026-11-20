@@ -52,7 +52,6 @@ type SessionPage struct {
 	Models          []string
 	Efforts         []plan.Effort
 	Launched        option.Option[Age]
-	Worked          option.Option[WorkedSummary]
 	Steps           []StepCell
 	Selected        option.Option[StepCell]
 	stepsPath       string
@@ -290,9 +289,7 @@ func (r *Reader) Session(
 	}
 	worked := option.None[WorkedSummary]()
 	if row.Log.Worked.Label != "" {
-		summary := row.Log.Summary
-		summary.SpendPctWeek = row.SpendPctWeek
-		worked = option.Some(summary)
+		worked = option.Some(row.Log.Summary)
 	}
 	turns := []Turn{{Log: row.Log}}
 	if raw.IsNone() {
@@ -339,7 +336,6 @@ func (r *Reader) Session(
 		Steps:          steps,
 		Selected:       selected,
 		stepsPath:      ref.pathWithRun(),
-		Worked:         worked,
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		Actions:        actions,

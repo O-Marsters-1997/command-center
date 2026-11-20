@@ -14,9 +14,8 @@ type workedLine struct {
 }
 
 type WorkedSummary struct {
-	Wall         string
-	Turns        int
-	SpendPctWeek float64
+	Wall  string
+	Turns int
 }
 
 type runStats struct {
