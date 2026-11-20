@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
@@ -341,13 +343,58 @@ func TestSessionPage(t *testing.T) {
 		}
 	})
 
-	t.Run("the raw tab serves the JSONL", func(t *testing.T) {
+	t.Run("the raw tab tables the log and filters it by kind and text", func(t *testing.T) {
 		t.Parallel()
-		st, line := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true})
-		pre := htmltest.Parse(t, renderPath(t, newServer(st, testNow), "/s/acme/web/1?log=raw")).One(t, "pre.raw-log")
-		if got := pre.Text(); got != strings.TrimSpace(line) {
-			t.Errorf("GET /s/acme/web/1?log=raw = %q, want %q", got, strings.TrimSpace(line))
+		logPath := filepath.Join(t.TempDir(), "run.jsonl")
+		log := `{"type":"system","subtype":"init"}` + "\n" +
+			`{"type":"assistant","timestamp":"2026-08-20T12:00:01Z","message":{"content":[` +
+			`{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"go vet"}}]}}` + "\n" +
+			`{"type":"user","message":{"content":[` +
+			`{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"vet: bad"}]}}` + "\n"
+		if err := os.WriteFile(logPath, []byte(log), 0o600); err != nil {
+			t.Fatalf("WriteFile(%q): %v", logPath, err)
 		}
+		st := detailStore(t, logPath, testNow, testNow)
+
+		tests := []struct {
+			name      string
+			path      string
+			summaries []string
+		}{
+			{name: "unfiltered", path: "/s/o/r/76?log=raw", summaries: []string{"init", "go vet", "vet: bad"}},
+			{name: "by kind", path: "/s/o/r/76?log=raw&kind=assistant", summaries: []string{"go vet"}},
+			{name: "by text, any case", path: "/s/o/r/76?log=raw&q=VET", summaries: []string{"go vet", "vet: bad"}},
+			{name: "kind and text with no match", path: "/s/o/r/76?log=raw&kind=system&q=vet"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				main := sessionMain(t, st, tt.path)
+				var got []string
+				for _, summary := range main.Find("table.raw-table summary") {
+					got = append(got, summary.Text())
+				}
+				if diff := cmp.Diff(tt.summaries, got); diff != "" {
+					t.Errorf("GET %s summaries mismatch (-want +got):\n%s", tt.path, diff)
+				}
+			})
+		}
+
+		main := sessionMain(t, st, "/s/o/r/76?log=raw")
+		if got := len(main.Find(`tr#raw-3 [data-glyph="failed"]`)); got != 1 {
+			t.Errorf("GET /s/o/r/76?log=raw failed glyphs on the error row = %d, want 1", got)
+		}
+		if got := main.One(t, "tr#raw-1 pre").Text(); !strings.Contains(got, `"subtype": "init"`) {
+			t.Errorf("GET /s/o/r/76?log=raw row 1 JSON = %q, want the line's JSON", got)
+		}
+		form := main.One(t, `form[role="search"]`)
+		if got, _ := form.Attr("hx-get"); got != "/s/o/r/76" {
+			t.Errorf("GET /s/o/r/76?log=raw filter hx-get = %q, want /s/o/r/76", got)
+		}
+		if got, _ := form.Attr("hx-select"); got != "#main" {
+			t.Errorf("GET /s/o/r/76?log=raw filter hx-select = %q, want #main", got)
+		}
+		form.One(t, `input[type="hidden"][name="log"][value="raw"]`)
 	})
 
 	t.Run("shows the worktree to shell into", func(t *testing.T) {

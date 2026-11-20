@@ -33,7 +33,7 @@ type SessionPage struct {
 	Prompt         Prompt
 	Turns          []Turn
 	Raw            bool
-	RawText        string
+	RawLog         RawLog
 	TranscriptPath string
 	RawPath        string
 	ChangesPath    string
@@ -206,7 +206,21 @@ func sessionCrumbs(row Row) []Crumb {
 	return append(crumbs, Crumb{Label: cmp.Or(row.Title, row.Ticket())})
 }
 
-func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw bool) (SessionPage, error) {
+type RawFilter struct {
+	Type  string
+	Query string
+}
+
+type RawLog struct {
+	Filter RawFilter
+	Types  []string
+	Lines  []agentlog.RawLine
+	Total  int
+}
+
+func (r *Reader) Session(
+	ctx context.Context, now time.Time, ref SessionRef, raw option.Option[RawFilter],
+) (SessionPage, error) {
 	board, err := r.Board(ctx, now, Params{})
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load board: %w", err)
@@ -280,7 +294,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		worked = option.Some(summary)
 	}
 	turns := []Turn{{Log: row.Log}}
-	if !raw {
+	if raw.IsNone() {
 		turns = buildTurns(row, runs)
 	}
 	fits, err := r.store.FitFactors(ctx, now)
@@ -291,7 +305,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		live: worked, alive: row.Alive, factor: fits[agentlog.SevenDay].Factor, pick: ref.Run,
 	})
 	picked := slices.IndexFunc(runs, func(run store.SessionRun) bool { return plan.RunID(run.ID) == ref.Run })
-	if picked >= 0 && !raw {
+	if picked >= 0 && raw.IsNone() {
 		turns = turns[picked : picked+1]
 	}
 	promptLog := row.LogPath
@@ -305,7 +319,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if !prompt.Kept && len(runs) > 0 && runs[0].Prompt != "" {
 		prompt = Prompt{Text: runs[0].Prompt, Kept: true}
 	}
-	rawText, err := rawLog(raw, row.LogPath)
+	rawLog, err := readRawLog(raw, row.LogPath)
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load raw log: %w", err)
 	}
@@ -335,8 +349,8 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		Stack:          buildStack(board, row),
 		Ref:            ticketRef(ticketURL),
 		Prompt:         prompt,
-		Raw:            raw,
-		RawText:        rawText,
+		Raw:            raw.IsSome(),
+		RawLog:         rawLog,
 		TranscriptPath: self,
 		RawPath:        self + "?log=raw",
 		ChangesPath:    self + "/changes",
@@ -381,16 +395,43 @@ func readPrompt(logPath string) (Prompt, error) {
 	return Prompt{Text: string(data), Kept: true}, nil
 }
 
-func rawLog(raw bool, logPath string) (string, error) {
-	if !raw || logPath == "" {
-		return "", nil
+func readRawLog(raw option.Option[RawFilter], logPath string) (RawLog, error) {
+	if raw.IsNone() {
+		return RawLog{}, nil
 	}
-	data, err := os.ReadFile(logPath)
+	filter := raw.Unwrap()
+	if logPath == "" {
+		return RawLog{Filter: filter}, nil
+	}
+	f, err := os.Open(logPath)
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
+		return RawLog{Filter: filter}, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("read log %s: %w", logPath, err)
+		return RawLog{}, fmt.Errorf("open log %s: %w", logPath, err)
 	}
-	return string(data), nil
+	lines, err := agentlog.ParseRaw(f)
+	if err = errors.Join(err, f.Close()); err != nil {
+		return RawLog{}, fmt.Errorf("read log %s: %w", logPath, err)
+	}
+	return filterRaw(lines, filter), nil
+}
+
+func filterRaw(lines []agentlog.RawLine, filter RawFilter) RawLog {
+	log := RawLog{Filter: filter, Total: len(lines)}
+	query := strings.ToLower(filter.Query)
+	for _, line := range lines {
+		if !slices.Contains(log.Types, line.Type) {
+			log.Types = append(log.Types, line.Type)
+		}
+		if filter.Type != "" && line.Type != filter.Type {
+			continue
+		}
+		if query != "" && !strings.Contains(strings.ToLower(line.Tool+"\n"+line.Summary+"\n"+line.JSON), query) {
+			continue
+		}
+		log.Lines = append(log.Lines, line)
+	}
+	slices.Sort(log.Types)
+	return log
 }

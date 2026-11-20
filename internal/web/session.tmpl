@@ -50,7 +50,33 @@
     <a class="pill-tab" href="{{.ChangesPath}}" {{template "nav" .ChangesPath}}>Changes</a>
   </nav>
   {{- if .Raw}}
-  {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
+  {{- with .RawLog}}{{if .Total}}
+  <form class="flex flex-wrap items-center gap-2 mb-3" method="get" action="{{$.TranscriptPath}}" role="search" {{template "nav" $.TranscriptPath}}>
+    <input type="hidden" name="log" value="raw">
+    <select name="kind" aria-label="kind">
+      <option value="">all kinds</option>
+      {{- range .Types}}<option value="{{.}}"{{if eq . $.RawLog.Filter.Type}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <input type="search" name="q" value="{{.Filter.Query}}" placeholder="Search the log" aria-label="search the log" autocomplete="off">
+    <button class="btn" type="submit">Filter</button>
+    <span class="text-muted text-xs">{{len .Lines}} of {{.Total}} lines</span>
+  </form>
+  {{- if .Lines}}
+  <div class="table-frame"><table class="raw-table w-full" aria-label="raw log">
+    <thead><tr><th scope="col">time</th><th scope="col">kind</th><th scope="col">tool</th><th scope="col">summary</th></tr></thead>
+    <tbody>
+      {{- range .Lines}}
+      <tr id="raw-{{.N}}">
+        <td class="font-mono">{{if .Failed}}<span class="glyph" data-glyph="failed" role="img" aria-label="failed"></span> {{end}}{{if not .At.IsZero}}{{.At.Format "15:04:05"}}{{end}}</td>
+        <td>{{.Type}}</td>
+        <td class="font-mono">{{.Tool}}</td>
+        <td class="raw-summary"><details><summary>{{.Summary}}</summary><pre class="raw-log">{{.JSON}}</pre></details></td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table></div>
+  {{- else}}<p class="text-muted">No lines match this filter.</p>{{end}}
+  {{- else}}<p class="text-muted">No log was kept for this run.</p>{{end}}{{end}}
   {{- else}}
   {{- if .Empty}}<p class="text-muted">Nothing to show yet: no run has written a log.</p>{{end}}
   <div class="run-thread">
