@@ -88,6 +88,8 @@ type VerbRequest struct {
 	Verb    plan.Verb
 	Payload string
 	At      time.Time
+
+	HoldUntil time.Time
 }
 
 type FollowUpPayload struct {

@@ -15,6 +15,9 @@ WHERE ticket_id = sqlc.arg(ticket_id) AND kind IN ('agent', 'follow_up') AND ses
 UPDATE runs SET pgid = sqlc.arg(pgid), proc_started_at = sqlc.arg(proc_started_at), log_path = sqlc.arg(log_path)
 WHERE id = sqlc.arg(id);
 
+-- name: RecordPrompt :execrows
+UPDATE runs SET prompt = sqlc.arg(prompt) WHERE id = sqlc.arg(id);
+
 -- name: RecordDisposition :execrows
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
     cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message),
@@ -77,15 +80,18 @@ WHERE r.cause IS NOT NULL
 GROUP BY r.ticket_id;
 
 -- name: QueueVerbIntent :one
-INSERT INTO intents (at, ticket_id, verb, payload)
-VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload))
+INSERT INTO intents (at, ticket_id, verb, payload, hold_until)
+VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload), sqlc.narg(hold_until))
 RETURNING id;
+
+-- name: WithdrawHeldIntent :execrows
+DELETE FROM intents WHERE id = sqlc.arg(id) AND consumed_at IS NULL AND hold_until > sqlc.arg(now);
 
 -- name: IntentConsumed :one
 SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = sqlc.arg(id);
 
 -- name: PendingVerbIntents :many
-SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload, hold_until FROM intents
 WHERE verb = sqlc.arg(verb) AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many
@@ -107,6 +113,7 @@ SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
   COALESCE(runs.message, '')::text AS message,
   COALESCE(runs.question, '')::text AS question,
+  COALESCE(runs.prompt, '')::text AS prompt,
   runs.step,
   COALESCE(runs.model, '')::text AS model,
   COALESCE(runs.outcome, '')::text AS outcome,

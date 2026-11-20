@@ -17,6 +17,9 @@
   "pr list --state all --head cc-5-x": {
     "stdout": "[]\n"
   },
+  "label create": {
+    "stdout": ""
+  },
   "pr create": {
     "stdout": "https://example.com/owner/repo/pull/99\n"
   },

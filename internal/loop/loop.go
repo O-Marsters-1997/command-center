@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/O-Marsters-1997/treepad"
 
@@ -65,13 +66,19 @@ func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(pl
 	}
 	intents := make([]plan.Intent, len(pending))
 	for i, p := range pending {
-		intents[i] = plan.Intent{ID: p.ID, Ticket: plan.TicketURL(p.TicketID), Verb: verb, Payload: p.Payload}
+		intents[i] = plan.Intent{
+			ID: p.ID, Ticket: plan.TicketURL(p.TicketID), Verb: verb, Payload: p.Payload, HoldUntil: p.HoldUntil,
+		}
 	}
 	return l.consumeEach(ctx, intents, fn)
 }
 
 func (l *Loop) consumeEach(ctx context.Context, intents []plan.Intent, fn func(plan.Intent) error) error {
+	now := l.clock.Now()
 	for _, intent := range intents {
+		if intent.HeldAt(now) {
+			continue
+		}
 		switch err := fn(intent); {
 		case errors.Is(err, errIntentPending):
 			continue
@@ -275,9 +282,18 @@ func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = l.clock.Now()
+	in.Intents = releasedIntents(in.Intents, in.Now)
 	in.Obs = t.obs
 	in.Prev = t.prev
 	return l.rules(t.obs).Derive(in), nil
+}
+
+func releasedIntents(byTicket map[plan.TicketURL][]plan.Intent, now time.Time) map[plan.TicketURL][]plan.Intent {
+	released := make(map[plan.TicketURL][]plan.Intent, len(byTicket))
+	for url, intents := range byTicket {
+		released[url] = slices.DeleteFunc(slices.Clone(intents), func(i plan.Intent) bool { return i.HeldAt(now) })
+	}
+	return released
 }
 
 func (l *Loop) rules(obs plan.Observation) plan.Rules {
@@ -476,7 +492,11 @@ func (l *Loop) interruptForFollowUps(ctx context.Context, t *tick) error {
 		return fmt.Errorf("latest runs: %w", err)
 	}
 	cancelled := map[plan.TicketURL]bool{}
+	now := l.clock.Now()
 	for _, intent := range intents {
+		if intent.HoldUntil.After(now) {
+			continue
+		}
 		url := plan.TicketURL(intent.TicketID)
 		run, ok := latest[url]
 		steerable := run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp
@@ -634,7 +654,10 @@ func (l *Loop) followUpQueued(ctx context.Context, ticketURL string) (bool, erro
 	if err != nil {
 		return false, fmt.Errorf("list pending follow-up intents: %w", err)
 	}
-	return slices.ContainsFunc(intents, func(i store.VerbIntent) bool { return i.TicketID == ticketURL }), nil
+	now := l.clock.Now()
+	return slices.ContainsFunc(intents, func(i store.VerbIntent) bool {
+		return i.TicketID == ticketURL && !i.HoldUntil.After(now)
+	}), nil
 }
 
 const maxQuestionBytes = 4096
@@ -909,6 +932,9 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	if !step.Command {
 		if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 			return fmt.Errorf("write prompt for run %d: %w", runID, err)
+		}
+		if err := l.store.RecordPrompt(ctx, runID, prompt); err != nil {
+			return fmt.Errorf("store prompt for run %d: %w", runID, err)
 		}
 	}
 	systemPromptPath, err := l.systemPromptFor(runID, spec)

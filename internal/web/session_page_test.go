@@ -13,6 +13,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -28,6 +29,7 @@ type sessionRunOpts struct {
 	Prompt     string
 	KeepPrompt bool
 	Alive      bool
+	Pruned     bool
 	Outcome    plan.Outcome
 
 	LastMessage option.Option[string]
@@ -75,12 +77,26 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 	}); err != nil {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
+	if opts.Pruned {
+		if err := st.RecordPrompt(ctx, runID, opts.Prompt); err != nil {
+			t.Fatalf("RecordPrompt(%d): %v", runID, err)
+		}
+	}
 	if !opts.Alive {
+		metrics := option.None[agentlog.RunMetrics]()
+		if opts.Pruned {
+			metrics = option.Some(agentlog.RunMetrics{Wall: option.Some(90 * time.Second), Turns: 3})
+		}
 		if err := st.RecordDisposition(ctx, storepkg.Disposition{
 			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(0),
-			Cost: option.None[float64](), EndedAt: testNow, LastMessage: opts.LastMessage,
+			Cost: option.None[float64](), EndedAt: testNow, LastMessage: opts.LastMessage, Metrics: metrics,
 		}); err != nil {
 			t.Fatalf("RecordDisposition(%d): %v", runID, err)
+		}
+	}
+	if opts.Pruned {
+		if err := os.Remove(logPath); err != nil {
+			t.Fatalf("Remove(%q): %v", logPath, err)
 		}
 	}
 	obs := plan.Observation{
@@ -308,6 +324,20 @@ func TestSessionPage(t *testing.T) {
 		}
 		if pre := main.Find("pre.prompt-text"); len(pre) != 0 {
 			t.Errorf("GET /s/acme/web/1 still shows a pruned prompt: %s", pre[0].HTML())
+		}
+	})
+
+	t.Run("keeps the prompt and worked-for line after the log is pruned", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "Implement the thing", Pruned: true})
+		main := sessionMain(t, st, "/s/acme/web/1")
+
+		if got := main.One(t, "pre.prompt-text").Text(); !strings.Contains(got, "Implement the thing") {
+			t.Errorf("GET /s/acme/web/1 prompt = %q, want the stored prompt", got)
+		}
+		got := main.One(t, ".worked summary").Text()
+		if !strings.Contains(got, "Worked for 1m 30s") || !strings.Contains(got, "3 turns") {
+			t.Errorf("GET /s/acme/web/1 worked line = %q, want stored wall time and turns", got)
 		}
 	})
 
@@ -651,6 +681,40 @@ func testVerbFromSession(t *testing.T) {
 		poll.One(t, `[data-glyph="pending"]`)
 		if toasts := poll.Find(".toast"); len(toasts) != 0 {
 			t.Errorf("GET /s/acme/web/1/actions repeats the toast: %s", toasts[0].HTML())
+		}
+	})
+
+	t.Run("undo on the toast withdraws the queued verb", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+		srv := newServer(st, testNow)
+		hxHeader := http.Header{"Hx-Request": {"true"}}
+
+		queued := htmltest.Parse(t, do(t, srv, http.MethodPost, "/verb", req{
+			Form:   url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}},
+			Header: hxHeader,
+		}).Body)
+		undo := queued.One(t, `.toast form[hx-post="/verb/undo"]`)
+		form := url.Values{}
+		for _, name := range []string{"ticket", "intent", "verb"} {
+			value, _ := undo.One(t, `input[name="`+name+`"]`).Attr("value")
+			form.Set(name, value)
+		}
+
+		rec := do(t, srv, http.MethodPost, "/verb/undo", req{Form: form, Header: hxHeader})
+		if got := htmltest.Parse(t, rec.Body).One(t, `[role="status"]`).Text(); !strings.Contains(got, "Undid kill") {
+			t.Errorf("POST /verb/undo toast = %q, want it to say Undid kill", got)
+		}
+		if got := pendingVerbs(t, st, "kill"); len(got) != 0 {
+			t.Errorf("pending kill intents after undo = %v, want none", got)
+		}
+
+		again := do(t, srv, http.MethodPost, "/verb/undo", req{Form: form, Header: hxHeader})
+		if got := htmltest.Parse(t, again.Body).One(t, `[role="status"]`).Text(); !strings.Contains(got, "Too late") {
+			t.Errorf("second POST /verb/undo toast = %q, want Too late", got)
+		}
+		if plain := do(t, srv, http.MethodPost, "/verb/undo", req{Form: form}); plain.Code != http.StatusConflict {
+			t.Errorf("plain POST /verb/undo of a withdrawn intent = %d, want 409", plain.Code)
 		}
 	})
 

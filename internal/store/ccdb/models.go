@@ -25,6 +25,7 @@ type Intent struct {
 	Verb       string
 	Payload    json.RawMessage
 	ConsumedAt sql.NullTime
+	HoldUntil  sql.NullTime
 }
 
 type Launch struct {
@@ -115,6 +116,7 @@ type Run struct {
 	Workflow      string
 	WorkflowHash  string
 	Cause         sql.NullString
+	Prompt        sql.NullString
 }
 
 type Ticket struct {

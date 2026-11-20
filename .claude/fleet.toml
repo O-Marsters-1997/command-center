@@ -1,0 +1,9 @@
+ci = "async"
+
+[checks]
+  pre_push = ["just fmt", "just lint", "go test ./..."]
+  suite = ["just ci"]
+
+[regen]
+  "internal/loop/testdata/**" = "go test ./internal/loop -update"
+  "internal/store/ccdb/**" = "sqlc generate"

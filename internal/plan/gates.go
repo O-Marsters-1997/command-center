@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
@@ -13,7 +14,11 @@ type Intent struct {
 	Ticket  TicketURL
 	Verb    Verb
 	Payload string
+
+	HoldUntil time.Time
 }
+
+func (i Intent) HeldAt(now time.Time) bool { return i.HoldUntil.After(now) }
 
 const HeldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
 

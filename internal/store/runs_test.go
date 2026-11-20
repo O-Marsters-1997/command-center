@@ -294,6 +294,50 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 	})
 }
 
+func TestStore_WithdrawHeldIntent(t *testing.T) {
+	t.Parallel()
+	queueHeld := func(t *testing.T, store *storepkg.Store) int64 {
+		t.Helper()
+		id, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: "sandbox://CC-1", Verb: plan.VerbKill, At: testNow, HoldUntil: testNow.Add(5 * time.Second),
+		})
+		if err != nil {
+			t.Fatalf("QueueVerbIntent: %v", err)
+		}
+		return id
+	}
+
+	t.Run("within the hold the intent is deleted", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		id := queueHeld(t, store)
+		if err := store.WithdrawHeldIntent(t.Context(), id, testNow.Add(time.Second)); err != nil {
+			t.Fatalf("WithdrawHeldIntent: %v", err)
+		}
+		pending, err := store.PendingVerbIntents(t.Context(), plan.VerbKill)
+		if err != nil || len(pending) != 0 {
+			t.Errorf("PendingVerbIntents(kill) = %+v, %v, want none", pending, err)
+		}
+	})
+
+	t.Run("past the hold, or once consumed, it is too late", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		id := queueHeld(t, store)
+		err := store.WithdrawHeldIntent(t.Context(), id, testNow.Add(6*time.Second))
+		if !errors.Is(err, storepkg.ErrIntentTooLate) {
+			t.Errorf("WithdrawHeldIntent past hold error = %v, want ErrIntentTooLate", err)
+		}
+		if err := store.ConsumeVerbIntent(t.Context(), id, testNow.Add(6*time.Second)); err != nil {
+			t.Fatalf("ConsumeVerbIntent: %v", err)
+		}
+		err = store.WithdrawHeldIntent(t.Context(), id, testNow.Add(time.Second))
+		if !errors.Is(err, storepkg.ErrIntentTooLate) {
+			t.Errorf("WithdrawHeldIntent after consume error = %v, want ErrIntentTooLate", err)
+		}
+	})
+}
+
 func TestStore_QueueVerbIntent(t *testing.T) {
 	t.Parallel()
 	t.Run("a payload round-trips", func(t *testing.T) {

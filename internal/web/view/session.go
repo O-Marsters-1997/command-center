@@ -42,6 +42,8 @@ type SessionPage struct {
 	Callout        bool
 	PRURL          string
 	Toast          string
+	UndoID         int64
+	UndoVerb       plan.Verb
 	ResetComposer  bool
 	Fragment       bool
 
@@ -265,8 +267,14 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		Path: row.LogPath, Streaming: row.Alive, TicketURL: ticketURL, Records: records, Checks: row.Checks,
 	}
 	row.Log = BuildLogDetail(current, Params{Log: LogAll})
+	if len(runs) > 0 && row.Log.PhaseCount == 0 {
+		if stats, ok := storedStats(runs[len(runs)-1].Metrics); ok {
+			row.Log.Worked = stats.worked()
+			row.Log.Summary = WorkedSummary{Wall: formatShort(stats.wall), Turns: stats.turns}
+		}
+	}
 	worked := option.None[WorkedSummary]()
-	if row.Log.PhaseCount > 0 {
+	if row.Log.Worked.Label != "" {
 		summary := row.Log.Summary
 		summary.SpendPctWeek = row.SpendPctWeek
 		worked = option.Some(summary)
@@ -293,6 +301,9 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	prompt, err := readPrompt(promptLog)
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("read prompt: %w", err)
+	}
+	if !prompt.Kept && len(runs) > 0 && runs[0].Prompt != "" {
+		prompt = Prompt{Text: runs[0].Prompt, Kept: true}
 	}
 	rawText, err := rawLog(raw, row.LogPath)
 	if err != nil {

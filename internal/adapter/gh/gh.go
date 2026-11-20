@@ -179,8 +179,8 @@ func (c CLI) Rerun(ctx context.Context, repoPath, detailsURL string) error {
 // Create opens a pull request with the keep-open label to avoid GitHub's
 // configured 14-day auto-close; a non-empty body overrides --fill.
 func (c CLI) Create(ctx context.Context, repoPath, base, body string, draft bool, labels []string) error {
-	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
-	for _, label := range labels {
+	args := []string{"pr", "create", "--base", base, "--fill"}
+	for _, label := range append([]string{"keep-open"}, labels...) {
 		if _, err := c.Run(ctx, repoPath, "label", "create", label, "--force"); err != nil {
 			return fmt.Errorf("create label %s: %w", label, err)
 		}

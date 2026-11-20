@@ -1,6 +1,7 @@
 /bin/
 .vscode
 .claude/*
+!.claude/fleet.toml
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/solid-islands/

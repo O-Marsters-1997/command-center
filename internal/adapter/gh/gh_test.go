@@ -339,6 +339,26 @@ func TestCLI_IssueTitles(t *testing.T) {
 func TestCLI_Create(t *testing.T) {
 	t.Parallel()
 
+	t.Run("creates keep-open before passing it, so a repo without the label opens the PR", func(t *testing.T) {
+		t.Parallel()
+		var calls [][]string
+		cli := fakeGH(func(args []string) ([]byte, error) {
+			calls = append(calls, args)
+			return nil, nil
+		})
+
+		if err := cli.Create(t.Context(), "/wt", "main", "", false, nil); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		want := [][]string{
+			{"label", "create", "keep-open", "--force"},
+			{"pr", "create", "--base", "main", "--fill", "--label", "keep-open"},
+		}
+		if diff := cmp.Diff(want, calls); diff != "" {
+			t.Errorf("gh calls mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("creates each label before passing it", func(t *testing.T) {
 		t.Parallel()
 		var calls [][]string
@@ -351,6 +371,7 @@ func TestCLI_Create(t *testing.T) {
 			t.Fatalf("Create() error = %v", err)
 		}
 		want := [][]string{
+			{"label", "create", "keep-open", "--force"},
 			{"label", "create", "cc-protected", "--force"},
 			{"pr", "create", "--base", "main", "--fill", "--label", "keep-open", "--label", "cc-protected"},
 		}

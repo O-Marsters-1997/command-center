@@ -24,10 +24,12 @@
     {{- with .Row.Worktree}}
     <p class="session-worktree text-muted"><code>{{.}}</code></p>
     {{- end}}
-    {{- if .Row.Log.PhaseCount}}
+    {{- if .Row.Log.Worked.Label}}
     <details class="worked">
       <summary><span class="worked-spark" aria-hidden="true">✻</span> {{.Row.Log.Worked.Label}}{{with .Row.Log.Worked.Stats}} <span class="worked-stats">{{.}}</span>{{end}}</summary>
+      {{- if .Row.Log.PhaseCount}}
       <p class="text-muted">lines {{.Row.Log.Lines}} · phases {{.Row.Log.PhaseCount}}</p>
+      {{- end}}
     </details>
     {{- end}}
   </header>
@@ -135,7 +137,15 @@
   </aside>
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
-  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}</div>{{end}}
+  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}
+    {{- if $.UndoID}}
+    <form method="post" action="/verb/undo" hx-post="/verb/undo" hx-target="#session-actions" hx-swap="outerHTML">
+      <input type="hidden" name="ticket" value="{{$.Row.URL}}">
+      <input type="hidden" name="intent" value="{{$.UndoID}}">
+      <input type="hidden" name="verb" value="{{$.UndoVerb}}">
+      <button type="submit">Undo</button>
+    </form>
+    {{- end}}</div>{{end}}
   <div class="verbs{{if .Callout}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
     {{- range .Actions}}
