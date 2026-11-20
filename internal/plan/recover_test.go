@@ -67,6 +67,47 @@ func TestSnapshot_AutoFollowUps(t *testing.T) {
 	}
 }
 
+func TestSnapshot_AutoFollowUps_VerifyFailed(t *testing.T) {
+	t.Parallel()
+	first := ticket("1", "cc-1")
+	failedVerify := plan.VerifyFact{Tip: "t1", Outcome: option.Some(plan.OutcomeFailed), LogPath: "verify.log"}
+	started := []plan.AutoFollowUp{{Ticket: first.URL, Cause: plan.CauseVerifyFailed, Tip: "t1", LogPath: "verify.log"}}
+
+	tests := []struct {
+		name      string
+		history   plan.AutoHistory
+		want      []plan.AutoFollowUp
+		wantState plan.State
+	}{
+		{name: "a failed verify on the tip", want: started, wantState: plan.VerificationFailed},
+		{name: "a spent round counts toward the shared cap", history: plan.AutoHistory{Rounds: 1, LastTip: "old"},
+			want: started, wantState: plan.VerificationFailed},
+		{name: "round already run for this tip", history: plan.AutoHistory{Rounds: 1, LastTip: "t1"},
+			wantState: plan.VerificationFailed},
+		{name: "rounds spent park the ticket", history: plan.AutoHistory{Rounds: plan.MaxAutoRounds, LastTip: "old"},
+			wantState: plan.Parked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			obs := plan.NewObservation(time.Time{})
+			obs.LocalTips[key(first.Branch)] = "t1"
+			snap := derive(plan.Rules{Verify: map[string]bool{"r": true}}, plan.Input{
+				Tickets: []plan.Ticket{first}, Obs: obs,
+				Runs:     map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
+				Verifies: map[plan.TicketURL]plan.VerifyFact{first.URL: failedVerify},
+				Auto:     map[plan.TicketURL]plan.AutoHistory{first.URL: tt.history},
+			})
+			if got := entry(t, snap, first.URL).State; got != tt.wantState {
+				t.Errorf("state = %s, want %s", got, tt.wantState)
+			}
+			if diff := cmp.Diff(tt.want, snap.AutoFollowUps(), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("AutoFollowUps() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestSnapshot_ParkedLocksItsDependents(t *testing.T) {
 	t.Parallel()
 	parked, child, grandchild, merged := ticket("1", "cc-1"), ticket("2", "cc-2"), ticket("3", "cc-3"), ticket("4", "cc-4")

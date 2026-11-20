@@ -26,36 +26,49 @@ type AutoHistory struct {
 }
 
 type AutoFollowUp struct {
-	Ticket TicketURL
-	Cause  FollowUpCause
-	Tip    SHA
+	Ticket  TicketURL
+	Cause   FollowUpCause
+	Tip     SHA
+	LogPath string
 }
 
 func (s Snapshot) AutoFollowUps() []AutoFollowUp {
 	var out []AutoFollowUp
 	for _, e := range s.Entries {
-		if e.State != CIFailed || e.Run.IsNone() || e.Run.Unwrap().Verdict.IsNone() || e.LastPush.IsNone() {
+		auto, ok := s.autoCandidate(e)
+		if !ok {
 			continue
 		}
-		tip, history := e.LastPush.Unwrap().PushedTip, s.auto[e.Ticket.URL]
-		if history.Rounds >= MaxAutoRounds || history.LastTip == tip || len(s.intents[e.Ticket.URL]) > 0 {
+		history := s.auto[e.Ticket.URL]
+		if history.Rounds >= MaxAutoRounds || history.LastTip == auto.Tip || len(s.intents[e.Ticket.URL]) > 0 {
 			continue
 		}
-		red := e.Run.Unwrap().Verdict.Unwrap().RedLeaves
-		checks := s.obs.PRs[e.Ticket.Ref()].Checks
-		if len(red) == 0 || slices.ContainsFunc(red, func(name string) bool { return checks[name].Attempt <= 1 }) {
-			continue
-		}
-		out = append(out, AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseCIFailed, Tip: tip})
+		out = append(out, auto)
 	}
 	return out
 }
 
+func (s Snapshot) autoCandidate(e Entry) (AutoFollowUp, bool) {
+	if e.State == VerificationFailed {
+		fact, ok := s.verifyFacts[e.Ticket.URL]
+		return AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseVerifyFailed, Tip: fact.Tip, LogPath: fact.LogPath}, ok
+	}
+	if e.State != CIFailed || e.Run.IsNone() || e.Run.Unwrap().Verdict.IsNone() || e.LastPush.IsNone() {
+		return AutoFollowUp{}, false
+	}
+	red := e.Run.Unwrap().Verdict.Unwrap().RedLeaves
+	checks := s.obs.PRs[e.Ticket.Ref()].Checks
+	if len(red) == 0 || slices.ContainsFunc(red, func(name string) bool { return checks[name].Attempt <= 1 }) {
+		return AutoFollowUp{}, false
+	}
+	return AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseCIFailed, Tip: e.LastPush.Unwrap().PushedTip}, true
+}
+
 func parkExhausted(state State, reason Reason, history AutoHistory) (State, Reason) {
-	if state != CIFailed || history.Rounds < MaxAutoRounds {
+	if (state != CIFailed && state != VerificationFailed) || history.Rounds < MaxAutoRounds {
 		return state, reason
 	}
-	return Parked, Reason(fmt.Sprintf("checks still failing after %d automatic follow-ups: %s", history.Rounds, reason))
+	return Parked, Reason(fmt.Sprintf("still failing after %d automatic follow-ups: %s", history.Rounds, reason))
 }
 
 type Rerun struct {

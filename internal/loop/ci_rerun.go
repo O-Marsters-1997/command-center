@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -22,18 +23,28 @@ func (l *Loop) applyAutoFollowUps(
 		if _, refusal := idleWorktreeFor(ticket.Plan(), t.obs); refusal != "" {
 			continue
 		}
-		checks := t.obs.PRs[ticket.Ref()].Checks
-		var red []plan.RedCheck
-		for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
-			red = append(red, plan.RedCheck{Name: name, DetailsURL: checks[name].DetailsURL})
-		}
-		picked := store.FollowUpPayload{Message: plan.ComposeFixCI(red)}
+		picked := store.FollowUpPayload{Message: autoMessage(auto, entry, t.obs.PRs[ticket.Ref()].Checks)}
 		err := l.followUpOne(ctx, snap, t, ticket, picked, auto.Cause)
 		if err != nil && !errors.Is(err, errIntentPending) {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 	}
 	return nil
+}
+
+func autoMessage(auto plan.AutoFollowUp, entry plan.Entry, checks map[string]plan.CheckState) string {
+	if auto.Cause == plan.CauseVerifyFailed {
+		log, err := os.ReadFile(auto.LogPath)
+		if err != nil {
+			return plan.ComposeFixVerify("(the verify log could not be read: " + err.Error() + ")")
+		}
+		return plan.ComposeFixVerify(string(log))
+	}
+	var red []plan.RedCheck
+	for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
+		red = append(red, plan.RedCheck{Name: name, DetailsURL: checks[name].DetailsURL})
+	}
+	return plan.ComposeFixCI(red)
 }
 
 func (l *Loop) rerunFailedChecks(ctx context.Context, snap plan.Snapshot, byURL map[plan.TicketURL]store.Ticket) {

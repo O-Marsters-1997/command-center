@@ -65,6 +65,14 @@ func ComposeFixCI(checks []RedCheck) string {
 	return b.String()
 }
 
+func ComposeFixVerify(log string) string {
+	lines := strings.Split(strings.TrimRight(log, "\n"), "\n")
+	lines = lines[max(0, len(lines)-ciLogLines):]
+	return fmt.Sprintf("The verify command failed on this branch's tip. Fix what it reports, "+
+		"re-run it locally and commit.\n\nLast %d lines of its log:\n\n```\n%s\n```",
+		ciLogLines, strings.Join(lines, "\n"))
+}
+
 func ComposeFollowUp(text string) string {
 	return fmt.Sprintf(
 		"You were not given a fresh worktree. This one already carries a branch, a diff and a git history "+
