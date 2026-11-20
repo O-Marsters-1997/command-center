@@ -156,6 +156,7 @@ type Turn struct {
 
 type Prompt struct {
 	Text string
+	Lead string
 	Kept bool
 }
 
@@ -317,7 +318,7 @@ func (r *Reader) Session(
 		return SessionPage{}, fmt.Errorf("read prompt: %w", err)
 	}
 	if !prompt.Kept && len(runs) > 0 && runs[0].Prompt != "" {
-		prompt = Prompt{Text: runs[0].Prompt, Kept: true}
+		prompt = keptPrompt(runs[0].Prompt)
 	}
 	rawLog, err := readRawLog(raw, row.LogPath)
 	if err != nil {
@@ -392,7 +393,23 @@ func readPrompt(logPath string) (Prompt, error) {
 	if err != nil {
 		return Prompt{}, fmt.Errorf("read prompt for %s: %w", logPath, err)
 	}
-	return Prompt{Text: string(data), Kept: true}, nil
+	return keptPrompt(string(data)), nil
+}
+
+const leadWords = 10
+
+func keptPrompt(text string) Prompt {
+	var words []string
+	for line := range strings.Lines(text) {
+		if words = strings.Fields(line); len(words) > 0 {
+			break
+		}
+	}
+	lead := strings.Join(words[:min(len(words), leadWords)], " ")
+	if len(words) > leadWords {
+		lead += "…"
+	}
+	return Prompt{Text: text, Lead: lead, Kept: true}
 }
 
 func readRawLog(raw option.Option[RawFilter], logPath string) (RawLog, error) {

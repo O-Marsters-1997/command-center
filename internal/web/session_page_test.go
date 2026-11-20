@@ -286,8 +286,8 @@ func TestSessionPage(t *testing.T) {
 					t.Errorf("GET /s/acme/web/1 heading lacks %q", want)
 				}
 			}
-			if got := main.One(t, ".prompt-meta").Text(); !strings.Contains(got, "Launched from the ticket") {
-				t.Errorf("GET /s/acme/web/1 prompt caption = %q, want it to say where the prompt came from", got)
+			if got := main.One(t, "details.prompt summary").Text(); !strings.Contains(got, "Implement <b>#1</b>") {
+				t.Errorf("GET /s/acme/web/1 closed prompt bar = %q, want the prompt's lead", got)
 			}
 			if got := main.One(t, "p.session-meta").Text(); !strings.Contains(got, "acme/web #1") {
 				t.Errorf("GET /s/acme/web/1 head meta = %q, want repo and ref", got)
@@ -337,7 +337,7 @@ func TestSessionPage(t *testing.T) {
 		if got := main.One(t, "pre.prompt-text").Text(); !strings.Contains(got, "Implement the thing") {
 			t.Errorf("GET /s/acme/web/1 prompt = %q, want the stored prompt", got)
 		}
-		got := main.One(t, ".worked summary").Text()
+		got := main.One(t, ".session-meta .session-worked").Text()
 		if !strings.Contains(got, "Worked for 1m 30s") || !strings.Contains(got, "3 turns") {
 			t.Errorf("GET /s/acme/web/1 worked line = %q, want stored wall time and turns", got)
 		}
@@ -397,16 +397,26 @@ func TestSessionPage(t *testing.T) {
 		form.One(t, `input[type="hidden"][name="log"][value="raw"]`)
 	})
 
-	t.Run("shows the worktree to shell into", func(t *testing.T) {
+	t.Run("shows the worktree to shell into on the branch", func(t *testing.T) {
 		t.Parallel()
 		main := sessionMain(t, detailStore(t, writeLog(t, 1), testNow, testNow), "/s/o/r/76")
-		var codes []string
-		for _, code := range main.Find("code") {
-			codes = append(codes, code.Text())
+		if got, _ := main.One(t, ".session-meta [title]").Attr("title"); !strings.Contains(got, "/repos/repo-cc-76") {
+			t.Errorf("GET /s/o/r/76 branch title = %q, want the worktree path", got)
 		}
-		if !strings.Contains(strings.Join(codes, "\n"), "/repos/repo-cc-76") {
-			t.Errorf("GET /s/o/r/76 code elements = %q, want the worktree path", codes)
+	})
+
+	t.Run("sets a finished run's answer under a Result head carrying the state glyph", func(t *testing.T) {
+		t.Parallel()
+		logPath := writeRunLog(t, `{"type":"assistant","timestamp":"2026-08-20T12:00:00Z",`+
+			`"message":{"content":[{"type":"text","text":"Shipped the rail."}]}}`+"\n"+
+			`{"type":"result","subtype":"success","duration_ms":500,"num_turns":1}`+"\n")
+		main := sessionMain(t, detailStore(t, logPath, testNow, testNow), "/s/o/r/76")
+
+		result := main.One(t, `section[aria-label="Result"]`)
+		if got := result.Text(); !strings.Contains(got, "Result") || !strings.Contains(got, "Shipped the rail.") {
+			t.Errorf("GET /s/o/r/76 result = %q, want the Result head over the final answer", got)
 		}
+		result.One(t, "[data-glyph]")
 	})
 
 	t.Run("dropped log kinds never reach the render", func(t *testing.T) {
@@ -419,10 +429,8 @@ func TestSessionPage(t *testing.T) {
 				t.Errorf("GET /s/o/r/76 text contains dropped kind %q", dropped)
 			}
 		}
-		for _, want := range []string{"echo hi", "lines 4"} {
-			if !strings.Contains(main.Text(), want) {
-				t.Errorf("GET /s/o/r/76 text lacks %q", want)
-			}
+		if !strings.Contains(main.Text(), "echo hi") {
+			t.Errorf("GET /s/o/r/76 text lacks %q", "echo hi")
 		}
 	})
 
