@@ -53,16 +53,16 @@ func rawLine(n int, line []byte, tools map[string]string) RawLine {
 	if json.Indent(&indented, line, "", "  ") != nil {
 		indented.Write(line)
 	}
-	raw := RawLine{N: n, At: head.Timestamp, Type: head.Type, JSON: indented.String()}
+	row := RawLine{N: n, At: head.Timestamp, Type: head.Type, JSON: indented.String()}
 	parsed, err := decode(line)
 	if err != nil {
-		return raw
+		return row
 	}
 	switch parsed.Type {
 	case "system", "result":
-		raw.Summary = parsed.Subtype
-		raw.Failed = head.IsError || strings.HasPrefix(parsed.Subtype, "error")
-		return raw
+		row.Summary = parsed.Subtype
+		row.Failed = head.IsError || strings.HasPrefix(parsed.Subtype, "error")
+		return row
 	}
 	for _, block := range parsed.Message.Content {
 		var summary string
@@ -71,14 +71,14 @@ func rawLine(n int, line []byte, tools map[string]string) RawLine {
 			summary = firstLine(strings.TrimSpace(block.Text))
 		case "tool_use":
 			tools[block.ID] = block.Name
-			raw.Tool = cmp.Or(raw.Tool, block.Name)
+			row.Tool = cmp.Or(row.Tool, block.Name)
 			summary = block.toolEvent().Detail
 		case "tool_result":
-			raw.Tool = cmp.Or(raw.Tool, tools[block.ToolUseID])
-			raw.Failed = raw.Failed || block.IsError
+			row.Tool = cmp.Or(row.Tool, tools[block.ToolUseID])
+			row.Failed = row.Failed || block.IsError
 			summary = firstLine(strings.TrimSpace(block.resultText()))
 		}
-		raw.Summary = cmp.Or(raw.Summary, summary)
+		row.Summary = cmp.Or(row.Summary, summary)
 	}
-	return raw
+	return row
 }

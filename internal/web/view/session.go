@@ -412,7 +412,7 @@ func readRawLog(raw option.Option[RawFilter], logPath string) (RawLog, error) {
 	}
 	lines, err := agentlog.ParseRaw(f)
 	if err = errors.Join(err, f.Close()); err != nil {
-		return RawLog{}, fmt.Errorf("read log %s: %w", logPath, err)
+		return RawLog{}, fmt.Errorf("parse log %s: %w", logPath, err)
 	}
 	return filterRaw(lines, filter), nil
 }
