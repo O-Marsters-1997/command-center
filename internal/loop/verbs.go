@@ -243,11 +243,13 @@ func (l *Loop) reRunOne(
 }
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
+	handled := map[plan.TicketURL]bool{}
 	return l.eachIntent(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent) error {
 		e, ok := snap.Entry(intent.Ticket)
-		if !ok {
+		if !ok || handled[intent.Ticket] {
 			return nil
 		}
+		handled[intent.Ticket] = true
 		if err := l.removeWorktreeOne(ctx, e, snap.Removal(e.Ticket.URL), obs); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
