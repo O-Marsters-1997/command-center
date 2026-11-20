@@ -60,7 +60,7 @@ func TestReader_Session(t *testing.T) {
 
 		reader := view.NewReader(st, 0, 0)
 		ref := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
-		page, err := reader.Session(ctx, testNow, ref, false)
+		page, err := reader.Session(ctx, testNow, ref, option.None[view.RawFilter]())
 		if err != nil {
 			t.Fatalf("Session(acme/web/1): %v", err)
 		}
@@ -76,7 +76,7 @@ func TestReader_Session(t *testing.T) {
 		}
 
 		ref.Run = runIDs[0]
-		page, err = reader.Session(ctx, testNow, ref, false)
+		page, err = reader.Session(ctx, testNow, ref, option.None[view.RawFilter]())
 		if err != nil {
 			t.Fatalf("Session(acme/web/1, run %d): %v", ref.Run, err)
 		}
@@ -134,7 +134,8 @@ func TestReader_Session(t *testing.T) {
 		}
 
 		reader := view.NewReader(st, 0, 0)
-		page, err := reader.Session(ctx, testNow, view.SessionRef{Owner: "acme", Name: "web", N: "1"}, false)
+		ref := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
+		page, err := reader.Session(ctx, testNow, ref, option.None[view.RawFilter]())
 		if err != nil {
 			t.Fatalf("Session(acme/web/1): %v", err)
 		}

@@ -6,13 +6,19 @@ import (
 	"strconv"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 	ref := sessionRef(r)
-	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, r.URL.Query().Get("log") == "raw")
+	query := r.URL.Query()
+	raw := option.None[view.RawFilter]()
+	if query.Get("log") == "raw" {
+		raw = option.Some(view.RawFilter{Type: query.Get("kind"), Query: query.Get("q")})
+	}
+	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, raw)
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
@@ -21,7 +27,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) handleSessionActions(w http.ResponseWriter, r *http.Request) error {
 	ref := sessionRef(r)
-	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, false)
+	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, option.None[view.RawFilter]())
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
@@ -47,7 +53,7 @@ func (s *Server) afterSessionVerb(
 		seeOther(w, r, ref.Path())
 		return nil
 	}
-	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, false)
+	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, option.None[view.RawFilter]())
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
