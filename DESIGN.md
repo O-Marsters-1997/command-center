@@ -305,11 +305,13 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   week · wall · turns" line beneath it, and Transcript and Raw log are right-aligned pill tabs.
   Stored events (launched, pushed, PR opened, agent run finished) read as record lines, and the
   checks that landed fold into one grid of glyph, name and elapsed, with an output link on each
-  failure. A 300px feature-stack panel sits on the right: the feature with its
-  avatar and merged/total, Graph and Board buttons, then Wave 1, Wave 2… groups of rows (glyph,
-  title, right-aligned elapsed or share of week) with the current ticket outlined, then Repo,
-  Branch, PR, Checks and Spend (share of week, never dollars) and a closed "Edit blockers"
-  disclosure. Below 1180px the panel becomes an overlay that opens on demand.
+  failure. A 300px feature-stack panel sits on the right: the feature with its avatar, a
+  merged-progress meter with merged/total, and quiet Graph and Board text links; then "This
+  ticket" (blocked by, merging it unlocks); then "In flight", the live members as rows (glyph,
+  ref, title, right-aligned elapsed or wave) with the current ticket tinted, and closed "Ready
+  to launch", "Blocked" and "Merged" folds with counts. A small PR, Checks and Spend list (share
+  of week, never dollars) and a closed "Edit blockers" fold close the panel. Below 1180px the
+  panel becomes an overlay that opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.

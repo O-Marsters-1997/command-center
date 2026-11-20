@@ -15,24 +15,27 @@ type StackLink struct {
 	Label   string
 	Path    string
 	Metric  string
+	Wave    int
 	Current bool
 }
 
-type StackWave struct {
-	N       int
-	Members []StackLink
+type StackFold struct {
+	Label string
+	Links []StackLink
 }
 
 type Stack struct {
-	Blockers  []StackLink
-	Unlocks   []StackLink
-	Feature   string
-	Project   ProjectMark
-	Merged    int
-	Total     int
-	GraphPath string
-	BoardPath string
-	Waves     []StackWave
+	Blockers      []StackLink
+	Unlocks       []StackLink
+	Feature       string
+	Project       ProjectMark
+	Merged        int
+	Total         int
+	MergedPercent int
+	GraphPath     string
+	BoardPath     string
+	InFlight      []StackLink
+	Folds         []StackFold // Ready to launch, Blocked, Merged, in that order
 }
 
 func (r Row) stackMetric() string {
@@ -88,14 +91,22 @@ func buildStack(board Board, row Row) Stack {
 			s.Merged++
 		}
 	}
+	if s.Total > 0 {
+		s.MergedPercent = s.Merged * 100 / s.Total
+	}
+	s.Folds = []StackFold{{Label: "Ready to launch"}, {Label: "Blocked"}, {Label: "Merged"}}
+	foldOf := map[plan.GlyphWord]*StackFold{
+		plan.GlyphReady: &s.Folds[0], plan.GlyphBlocked: &s.Folds[1], plan.GlyphDone: &s.Folds[2],
+	}
 	wave := plan.Waves(blocking)
 	for _, r := range members {
-		n := wave[plan.TicketURL(r.URL)]
-		if n > len(s.Waves) {
-			s.Waves = append(s.Waves, make([]StackWave, n-len(s.Waves))...)
+		member := link(r.URL)
+		member.Wave = wave[plan.TicketURL(r.URL)]
+		if group, folded := plan.RailGroup(r.Glyph); group == plan.GroupInFlight && !folded {
+			s.InFlight = append(s.InFlight, member)
+		} else if fold, ok := foldOf[r.Glyph]; ok {
+			fold.Links = append(fold.Links, member)
 		}
-		s.Waves[n-1].N = n
-		s.Waves[n-1].Members = append(s.Waves[n-1].Members, link(r.URL))
 	}
 	return s
 }

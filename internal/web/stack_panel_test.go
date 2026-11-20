@@ -39,21 +39,49 @@ func stackPanel(t *testing.T, server http.Handler, path string) htmltest.Node {
 func testSessionStackPanel(t *testing.T) {
 	t.Parallel()
 
-	t.Run("groups the feature's tickets into waves", func(t *testing.T) {
+	t.Run("folds the feature's idle tickets behind counts", func(t *testing.T) {
 		t.Parallel()
 		panel := stackPanel(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
 
-		waves := panel.Find("section.stack-wave")
-		if len(waves) != 3 {
-			t.Fatalf("GET /s/acme/web/2 stack waves = %d, want 3", len(waves))
+		live := panel.One(t, `section[aria-labelledby="stack-live"]`)
+		if !strings.Contains(live.Text(), "Nothing is running") {
+			t.Errorf("GET /s/acme/web/2 In flight = %q, want it to say nothing is running", live.Text())
 		}
-		waves[0].One(t, `a[href="/s/acme/web/1"]`)
-		waves[1].One(t, `a[href="/s/acme/web/2"]`)
-		for _, ref := range []string{"/s/acme/web/3", "/s/acme/web/4"} {
-			waves[2].One(t, `a[href="`+ref+`"]`)
+		folds := live.Find("details")
+		if len(folds) != 2 {
+			t.Fatalf("GET /s/acme/web/2 folds = %d, want 2 (Ready to launch, Blocked)", len(folds))
 		}
-		if got := waves[2].One(t, "h3").Text(); got != "Wave 3" {
-			t.Errorf("GET /s/acme/web/2 third wave heading = %q, want Wave 3", got)
+		for i, want := range []struct {
+			label string
+			count string
+			hrefs []string
+		}{
+			{"Ready to launch", "1", []string{"/s/acme/web/1"}},
+			{"Blocked", "3", []string{"/s/acme/web/2", "/s/acme/web/3", "/s/acme/web/4"}},
+		} {
+			if _, open := folds[i].Attr("open"); open {
+				t.Errorf("GET /s/acme/web/2 fold %q is open, want closed", want.label)
+			}
+			summary := folds[i].One(t, "summary")
+			if !strings.Contains(summary.Text(), want.label) {
+				t.Errorf("GET /s/acme/web/2 fold %d summary = %q, want %q", i, summary.Text(), want.label)
+			}
+			if got := summary.One(t, ".stack-count").Text(); got != want.count {
+				t.Errorf("GET /s/acme/web/2 %s count = %q, want %q", want.label, got, want.count)
+			}
+			for _, href := range want.hrefs {
+				folds[i].One(t, `a[href="`+href+`"]`)
+			}
+		}
+	})
+
+	t.Run("this ticket shows what blocks it and what it unlocks", func(t *testing.T) {
+		t.Parallel()
+		panel := stackPanel(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
+
+		this := panel.One(t, `section[aria-labelledby="stack-this"]`)
+		for _, href := range []string{"/s/acme/web/1", "/s/acme/web/3", "/s/acme/web/4"} {
+			this.One(t, `a[href="`+href+`"][hx-select="#main"]`)
 		}
 	})
 
@@ -77,11 +105,12 @@ func testSessionStackPanel(t *testing.T) {
 				t.Errorf("GET /s/acme/web/2 peek has no link to %s", href)
 			}
 		}
-		panel.One(t, `ul.stack-list li[aria-current="page"] a[href="/s/acme/web/2"]`)
-		if got := len(panel.Find(`li[aria-current="page"]`)); got != 1 {
-			t.Errorf("GET /s/acme/web/2 outlined rows = %d, want 1", got)
+		panel.One(t, `a[aria-current="page"][href="/s/acme/web/2"]`)
+		if got := len(panel.Find(`[aria-current="page"]`)); got != 1 {
+			t.Errorf("GET /s/acme/web/2 current rows = %d, want 1", got)
 		}
-		for _, text := range []string{"checkout", "0/4 merged", "cc-2"} {
+		panel.One(t, `[role="meter"][aria-valuenow="0"]`)
+		for _, text := range []string{"checkout", "0/4 merged", "Checks"} {
 			if !strings.Contains(panel.Text(), text) {
 				t.Errorf("GET /s/acme/web/2 peek = %q, want it to show %q", panel.Text(), text)
 			}
@@ -111,13 +140,9 @@ func testPostTicketFromSession(t *testing.T) {
 			[]string{"https://github.com/acme/web/issues/1"}); err != nil {
 			t.Fatalf("EditTicket(#3): %v", err)
 		}
-		waves := stackPanel(t, server, "/s/acme/web/3").Find("section.stack-wave")
-		if len(waves) != 3 {
-			t.Fatalf("GET /s/acme/web/3 stack waves = %d, want 3", len(waves))
-		}
-		waves[1].One(t, `a[href="/s/acme/web/3"]`)
-		if moved := waves[2].Find(`a[href="/s/acme/web/3"]`); len(moved) != 0 {
-			t.Errorf("GET /s/acme/web/3 still lists #3 in wave 3 after its blocker changed")
+		live := stackPanel(t, server, "/s/acme/web/3").One(t, `section[aria-labelledby="stack-live"]`)
+		if got := live.One(t, `a[href="/s/acme/web/3"]`).Text(); !strings.Contains(got, "wave 2") {
+			t.Errorf("GET /s/acme/web/3 own row = %q, want it in wave 2 after its blocker changed", got)
 		}
 	})
 
