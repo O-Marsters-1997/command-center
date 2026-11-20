@@ -26,13 +26,17 @@ A merged PR's head is already observed, so a branch exactly there is equally pro
 - **Teardown runs before the GitHub issue closes.** A stuck ticket retries teardown, not the close. A
   missing worktree (`ErrNotFound`) counts as done, so a later close failure retries straight to the
   close. `ErrPostHook` means the removal happened, so it is logged and the teardown carries on.
-- **The row shows its last `remove_worktree_refused`** as its warning while the verb is offered.
-  Refusals are not persisted state; a removal withdraws the ticket and drops the row.
+- **Every refusal is a persisted `remove_worktree_refused` event** (`store/events.go`) carrying its
+  reason: dirty, unpushed commits, or the failed step's error, such as a failed issue close. The row
+  and its rail item show the latest one while the verb is offered; a removal withdraws the ticket and
+  drops the row.
 
 ## Consequences
 
-No confirmation gates the forced path: merged, pruned, at a proven tip and clean is what a confirm
-button would ask a human to assert, and they could not verify it. Dirty worktrees and branches ahead of
-every proven tip still refuse. A repo whose `.treepad.toml` configures an interactive hook cannot be
-cut or removed by cc: the library refuses it with `ErrInteractiveHook`, and the text reaches the
-`cut_failed` or refusal event.
+The verb carries confirm text (`view/verbs.go`) naming the issue close, the worktree deleted from
+disk and the worktree path at risk; the session page asks it before queuing, and the rail queues
+without asking. Nothing gates the forced path itself: merged, pruned, at a proven tip and clean is
+what a further confirm would ask a human to assert, and they could not verify it. Dirty worktrees
+and branches ahead of every proven tip still refuse. A repo whose `.treepad.toml` configures an
+interactive hook cannot be cut or removed by cc: the library refuses it with `ErrInteractiveHook`,
+and the text reaches the `cut_failed` or refusal event.

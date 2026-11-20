@@ -3,6 +3,7 @@ package web_test
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -303,6 +304,40 @@ func TestRail(t *testing.T) {
 					t.Errorf("GET /tickets scope counts = %d, want one reading %d running", len(counts), tt.want)
 				}
 			})
+		}
+	})
+
+	t.Run("a queued verb reads queued and keeps its refusal", func(t *testing.T) {
+		t.Parallel()
+		st := railStore(t, true)
+		if err := st.AppendEvent(t.Context(), storepkg.Event{
+			At: testNow, TicketURL: "sandbox://CC-1", Kind: storepkg.EventRemoveWorktreeRefused, Detail: "worktree is dirty",
+		}); err != nil {
+			t.Fatalf("AppendEvent(%q): %v", "sandbox://CC-1", err)
+		}
+		server := newServer(st, testNow)
+
+		before := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, `[data-group="settled"]`)
+		before.One(t, `button[value="remove-worktree"]`)
+		if got := before.Text(); !strings.Contains(got, "worktree is dirty") {
+			t.Errorf("GET /rail settled = %q, want the refusal %q", got, "worktree is dirty")
+		}
+
+		got := do(t, server, http.MethodPost, "/verb", req{
+			Header: http.Header{"Hx-Request": {"true"}},
+			Form: url.Values{
+				"verb": {"remove-worktree"}, "ticket": {"sandbox://CC-1"}, "from": {"rail"},
+			},
+		})
+		after := htmltest.Parse(t, got.Body).One(t, `[data-group="settled"]`)
+		if buttons := after.Find(`button[value="remove-worktree"]`); len(buttons) != 0 {
+			t.Errorf("POST /verb from rail keeps the button: %s", buttons[0].HTML())
+		}
+		after.One(t, `[data-glyph="pending"]`)
+		for _, want := range []string{"remove-worktree queued", "worktree is dirty"} {
+			if text := after.Text(); !strings.Contains(text, want) {
+				t.Errorf("POST /verb from rail settled = %q, want %q", text, want)
+			}
 		}
 	})
 

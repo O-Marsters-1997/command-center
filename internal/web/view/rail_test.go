@@ -203,6 +203,43 @@ func TestBuildRail(t *testing.T) {
 		}
 	})
 
+	t.Run("verb feedback", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name        string
+			pending     []plan.Verb
+			refusal     string
+			wantPending bool
+			wantRefusal string
+		}{
+			{name: "idle"},
+			{name: "queued", pending: []plan.Verb{plan.VerbRemoveWorktree}, wantPending: true},
+			{name: "another verb queued", pending: []plan.Verb{plan.VerbReRun}},
+			{
+				name: "refused", refusal: "worktree removal refused: worktree is dirty",
+				wantRefusal: "worktree removal refused: worktree is dirty",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				row := railRow("5", "billing", plan.GlyphDone)
+				row.Worktree = "/wt"
+				row.Verbs = []plan.Verb{plan.VerbRemoveWorktree}
+				row.PendingVerbs = tt.pending
+				row.Refusal = tt.refusal
+				row.Warning = "ready-to-merge on a non-main base (main): would squash into the parent branch"
+
+				item := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
+
+				if item.Pending != tt.wantPending || item.Refusal != tt.wantRefusal {
+					t.Errorf("BuildRail() item = {Pending: %v, Refusal: %q}, want {%v %q}",
+						item.Pending, item.Refusal, tt.wantPending, tt.wantRefusal)
+				}
+			})
+		}
+	})
+
 	t.Run("scope", func(t *testing.T) {
 		t.Parallel()
 		tests := []struct {

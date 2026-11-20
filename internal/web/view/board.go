@@ -45,6 +45,7 @@ type Row struct {
 	StackDepth      int              `json:"-"`
 	MergeOrder      int              `json:"-"`
 	Warning         string           `json:"-"`
+	Refusal         string           `json:"-"`
 	Blocking        []string         `json:"blocking"`
 	LockedBehind    int              `json:"-"`
 	After           []string         `json:"after"`
@@ -191,6 +192,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			elapsed = e.Elapsed.Unwrap().String()
 			elapsedSeconds = int(e.Elapsed.Unwrap().Seconds())
 		}
+		refusal := removalWarning(e.State, in.Removals[url])
 		rows = append(rows, Row{
 			URL:            t.URL,
 			Repo:           t.Repo,
@@ -217,7 +219,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Elapsed:        elapsed,
 			ElapsedSeconds: elapsedSeconds,
 			LogPath:        e.LogPath,
-			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[url])),
+			Warning:        cmp.Or(readyToMergeWarning(pr), refusal),
+			Refusal:        refusal,
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
 			Blocking:       urlStrings(e.Unlock.Blocking),

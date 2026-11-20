@@ -1334,6 +1334,26 @@
     margin: 0;
   }
 
+  .rail-queued,
+  .rail-refusal {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: var(--space-1) var(--space-2) 0;
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+  }
+
+  .rail-refusal {
+    color: color-mix(in oklab, var(--color-s-failed), var(--color-ink) 12%);
+  }
+
+  .rail-card .rail-queued,
+  .rail-card .rail-refusal {
+    margin: 0;
+    padding: 6px 0 0 22px;
+  }
+
   .rail-feature > summary {
     display: flex;
     align-items: center;
