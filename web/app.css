@@ -1244,6 +1244,7 @@
   }
 
   .rail-card {
+    position: relative;
     display: grid;
     gap: 3px;
     margin-bottom: var(--space-1);
@@ -1263,10 +1264,32 @@
   }
 
   .rail-card .rail-link {
+    position: static;
     min-height: 0;
     padding: 0;
     color: var(--color-fg);
     font-weight: var(--font-weight-medium);
+  }
+
+  .rail-card .rail-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-lg);
+  }
+
+  .rail-card .rail-link:focus-visible {
+    box-shadow: none;
+  }
+
+  .rail-card:has(.rail-link:focus-visible) {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .rail-card form,
+  .rail-card > a.rail-verb {
+    position: relative;
+    z-index: 1;
   }
 
   .rail-card .rail-link:hover,
@@ -1397,6 +1420,9 @@
   }
 
   .rail-count {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     margin-left: auto;
     color: var(--color-meta);
     font-size: var(--text-xs);
@@ -1404,9 +1430,66 @@
     white-space: nowrap;
   }
 
-  .rail-feature > .rail-link,
-  .rail-feature > .rail-waiting {
+  .rail-tally {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .rail-tally::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--glyph);
+  }
+
+  .rail-tally-waiting::before {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--color-meta);
+  }
+
+  .rail-sub {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rail-sub > .rail-link {
     padding-left: 23px;
+  }
+
+  .rail-sub:not(.rail-sub-waiting) > .rail-link {
+    color: var(--color-fg-2);
+  }
+
+  .rail-sub-label {
+    margin: 6px 0 2px;
+    padding-left: 31px;
+    color: var(--color-meta);
+    font-size: var(--text-2xs);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .rail-sub-waiting > .rail-link {
+    min-height: 28px;
+  }
+
+  .rail-sub-waiting .rail-title {
+    color: var(--color-muted);
+  }
+
+  .rail-sub-waiting > .rail-waiting {
+    margin: 2px 0 var(--space-1);
+    padding-left: 31px;
+    color: var(--color-meta);
+  }
+
+  .rail-state {
+    flex: none;
+    order: 3;
+    color: var(--color-meta);
+    font-size: var(--text-2xs);
+    white-space: nowrap;
   }
 
   .rail-footer {
