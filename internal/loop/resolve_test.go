@@ -3,6 +3,7 @@ package loop_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
@@ -123,12 +125,21 @@ func TestResolve(t *testing.T) {
 		fake.Exit(1, 0)
 		c.tick(t)
 
-		if !hasEventIn(t, c.store, storepkg.EventVerificationFailed, "") {
-			t.Error("Events() has no verification_failed after the resolve commit")
+		spawns := fake.Spawns()
+		if len(spawns) != 2 || !slices.Equal(spawns[1].AgentCommand, []string{"false"}) {
+			t.Fatalf("spawns = %+v, want the resolve then the verify command", spawns)
 		}
+		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State != "Verifying" {
+			t.Errorf("child state while verifying = %q, want Verifying", row.State)
+		}
+		fake.Exit(2, 1)
 		c.tick(t)
-		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State != "Verification failed" {
-			t.Errorf("child state = %q, want %q", row.State, "Verification failed")
+		verifies, err := c.store.LatestVerifyRuns(t.Context())
+		if err != nil {
+			t.Fatalf("LatestVerifyRuns: %v", err)
+		}
+		if got := verifies[plan.TicketURL(c.f.child.URL)].Outcome; got != option.Some(plan.OutcomeFailed) {
+			t.Errorf("verify outcome = %v, want failed", got)
 		}
 	})
 }

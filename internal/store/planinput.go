@@ -98,6 +98,11 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		return plan.Input{}, fmt.Errorf("read auto histories: %w", err)
 	}
 
+	verifies, err := s.LatestVerifyRuns(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read verify runs: %w", err)
+	}
+
 	gauges, err := s.LatestReadings(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read latest readings: %w", err)
@@ -132,6 +137,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		FiveHour: gauges[agentlog.FiveHour].Utilization,
 		Passes:   passes,
 		Auto:     auto,
+		Verifies: verifies,
 	}, nil
 }
 

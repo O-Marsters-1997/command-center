@@ -55,12 +55,11 @@ type PushFact struct {
 }
 
 type RefreshFact struct {
-	Tried                    bool
-	Refused                  bool
-	Reason                   string
-	VerificationFailed       bool
-	VerificationFailedDetail string
-	Conflict                 option.Option[ConflictAt]
+	Tried    bool
+	Refused  bool
+	Reason   string
+	Advanced bool
+	Conflict option.Option[ConflictAt]
 }
 
 type Recorded struct {
@@ -95,6 +94,7 @@ type Input struct {
 	FiveHour     float64
 	Passes       map[TicketURL][]StepRun
 	Auto         map[TicketURL]AutoHistory
+	Verifies     map[TicketURL]VerifyFact
 }
 
 type Entry struct {
@@ -141,6 +141,8 @@ type Snapshot struct {
 	refreshes   map[TicketURL]RefreshFact
 	auto        map[TicketURL]AutoHistory
 	runs        map[TicketURL]RunSummary
+	verifies    []Verify
+	verifyFacts map[TicketURL]VerifyFact
 	now         time.Time
 }
 
@@ -172,6 +174,12 @@ func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
 	for _, c := range s.launch {
 		if _, ok := out.byURL[c.URL]; ok {
 			out.launch = append(out.launch, c)
+		}
+	}
+	out.verifies = nil
+	for _, v := range s.verifies {
+		if _, ok := out.byURL[v.Ticket]; ok {
+			out.verifies = append(out.verifies, v)
 		}
 	}
 	return out
@@ -224,6 +232,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		refreshes:   in.Refreshes,
 		auto:        in.Auto,
 		runs:        in.Runs,
+		verifyFacts: in.Verifies,
 		now:         in.Now,
 	}
 	unlocks := Unlocks(in.Tickets)
@@ -234,7 +243,12 @@ func (r Rules) Derive(in Input) Snapshot {
 		if base == "" {
 			base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
 		}
-		run, elapsed, logPath := r.runFor(t, in, peers[t.URL])
+		lastPush := option.None[PushRow]()
+		if row, ok := in.Verdict.PushRows[t.URL]; ok {
+			lastPush = option.Some(row)
+		}
+		verify := r.verifyPhase(t, in, lastPush)
+		run, elapsed, logPath := r.runFor(t, in, peers[t.URL], verify)
 		membership := in.Memberships[t.URL]
 		t.LaunchContext, t.Choice = membership.Context, membership.Choice
 		authorised := membership.LaunchID != 0
@@ -251,10 +265,6 @@ func (r Rules) Derive(in Input) Snapshot {
 			fact := run.Unwrap()
 			fact.Next = option.Some(next)
 			run = option.Some(fact)
-		}
-		lastPush := option.None[PushRow]()
-		if row, ok := in.Verdict.PushRows[t.URL]; ok {
-			lastPush = option.Some(row)
 		}
 		raise := r.Raise[t.Repo]
 		if lastPush.IsSome() {
@@ -285,6 +295,12 @@ func (r Rules) Derive(in Input) Snapshot {
 			snap.load = snap.load.charge(slices.ContainsFunc(in.Passes[t.URL], func(r StepRun) bool {
 				return r.Alive && r.Command
 			}))
+		}
+		if in.Verifies[t.URL].Alive {
+			snap.load = snap.load.charge(true)
+		}
+		if verify == VerifyWaiting {
+			snap.verifies = append(snap.verifies, Verify{Ticket: t.URL, Tip: in.Obs.LocalTips[t.Ref()]})
 		}
 
 		pr := in.Obs.PRs[t.Ref()]
@@ -463,7 +479,7 @@ func draftReason(
 }
 
 func (r Rules) runFor(
-	t Ticket, in Input, peer string,
+	t Ticket, in Input, peer string, verify VerifyPhase,
 ) (run option.Option[RunFact], elapsed option.Option[time.Duration], logPath string) {
 	summary, ok := in.Runs[t.URL]
 	if !ok {
@@ -487,8 +503,14 @@ func (r Rules) runFor(
 			rf := in.Refreshes[t.URL]
 			fact.RefreshRefused = rf.Refused
 			fact.RefreshRefusedReason = Reason(rf.Reason)
-			fact.VerificationFailed = rf.VerificationFailed
-			fact.VerificationFailedReason = Reason(rf.VerificationFailedDetail)
+			fact.Verify = verify
+			if verify != VerifyNone {
+				fact.Alive = false
+			}
+			if vf := in.Verifies[t.URL]; verify == VerifyRunning || verify == VerifyFailed {
+				fact.LogPath, summary.LogPath = vf.LogPath, vf.LogPath
+				fact.VerificationFailedReason = Reason(fmt.Sprintf("verify_command failed; log at %s", vf.LogPath))
+			}
 			fact.MidMerge = in.Obs.MidMerge[key]
 			if in.Obs.ConflictsWithBase[key] {
 				fact.ConflictsWithMain = true

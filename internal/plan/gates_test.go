@@ -207,6 +207,7 @@ func TestSnapshot_Pushable(t *testing.T) {
 		alive  bool
 		noTip  bool
 		manual bool
+		verify bool
 		want   []plan.Push
 	}{
 		{name: "never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, want: []plan.Push{pushed}},
@@ -234,11 +235,53 @@ func TestSnapshot_Pushable(t *testing.T) {
 			},
 		},
 		{
-			name: "verification failed",
+			name: "verify pending after a refresh",
 			in: plan.Input{
 				Runs:      run(plan.OutcomePush),
-				Refreshes: map[plan.TicketURL]plan.RefreshFact{tk.URL: {VerificationFailed: true}},
+				Refreshes: map[plan.TicketURL]plan.RefreshFact{tk.URL: {Advanced: true}},
 			},
+			verify: true,
+		},
+		{
+			name: "verify alive",
+			in: plan.Input{
+				Runs:     run(plan.OutcomePush),
+				Verifies: map[plan.TicketURL]plan.VerifyFact{tk.URL: {Tip: "def", Alive: true}},
+			},
+			verify: true,
+		},
+		{
+			name: "verify failed for the tip",
+			in: plan.Input{
+				Runs: run(plan.OutcomePush),
+				Verifies: map[plan.TicketURL]plan.VerifyFact{
+					tk.URL: {Tip: "def", Outcome: option.Some(plan.OutcomeFailed)},
+				},
+			},
+			verify: true,
+		},
+		{
+			name: "verify passed for the tip",
+			in: plan.Input{
+				Runs:      run(plan.OutcomePush),
+				Refreshes: map[plan.TicketURL]plan.RefreshFact{tk.URL: {Advanced: true}},
+				Verifies: map[plan.TicketURL]plan.VerifyFact{
+					tk.URL: {Tip: "def", Outcome: option.Some(plan.OutcomePassed)},
+				},
+			},
+			verify: true,
+			want:   []plan.Push{pushed},
+		},
+		{
+			name: "verify failed for an older tip",
+			in: plan.Input{
+				Runs: run(plan.OutcomePush),
+				Verifies: map[plan.TicketURL]plan.VerifyFact{
+					tk.URL: {Tip: "old", Outcome: option.Some(plan.OutcomeFailed)},
+				},
+			},
+			verify: true,
+			want:   []plan.Push{pushed},
 		},
 		{name: "tip unchanged since last push", in: plan.Input{Runs: run(plan.OutcomePush), Verdict: lastPush("def")}},
 		{
@@ -266,6 +309,9 @@ func TestSnapshot_Pushable(t *testing.T) {
 			tt.in.Tickets = []plan.Ticket{tk}
 			tt.in.Obs = obs
 			rules := plan.Rules{}
+			if tt.verify {
+				rules.Verify = map[string]bool{tk.Repo: true}
+			}
 			if tt.manual {
 				rules.Raise = map[string]plan.RaiseMode{tk.Repo: plan.RaiseManual}
 			}

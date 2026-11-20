@@ -47,7 +47,7 @@ WHERE pgid IS NOT NULL AND outcome IS NULL;
 SELECT id, ticket_id::text AS ticket_id, step, outcome,
   CASE WHEN kind IN ('agent', 'follow_up') THEN COALESCE(session_id::text, '') ELSE '' END::text AS session_id
 FROM runs
-WHERE ticket_id IS NOT NULL ORDER BY id;
+WHERE ticket_id IS NOT NULL AND kind <> 'verify' ORDER BY id;
 
 -- name: RunBaseline :one
 SELECT COALESCE(baseline_sha, '')::text AS baseline_sha FROM runs WHERE id = sqlc.arg(id);
@@ -56,7 +56,13 @@ SELECT COALESCE(baseline_sha, '')::text AS baseline_sha FROM runs WHERE id = sql
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
        outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause
 FROM runs
-WHERE ticket_id IS NOT NULL
+WHERE ticket_id IS NOT NULL AND kind <> 'verify'
+ORDER BY ticket_id, id DESC;
+
+-- name: ListLatestVerifyRuns :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path, outcome
+FROM runs
+WHERE ticket_id IS NOT NULL AND kind = 'verify' AND (pgid IS NOT NULL OR outcome IS NOT NULL)
 ORDER BY ticket_id, id DESC;
 
 -- name: AutoHistories :many

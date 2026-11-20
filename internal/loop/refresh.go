@@ -5,10 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
-	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -109,31 +106,7 @@ func (l *Loop) refreshOne(
 	if err := l.event(ctx, url, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
 		return fmt.Errorf("record %s of %s: %w", kind, url, err)
 	}
-	if err := l.verifyOne(ctx, ticket, worktreePath, obs.Settings[ticket.Repo].VerifyCommand); err != nil {
-		return fmt.Errorf("verify %s: %w", url, err)
-	}
 	return nil
-}
-
-const (
-	maxVerifyDetail = 4000
-	verifyTimeout   = 10 * time.Minute
-)
-
-func (l *Loop) verifyOne(ctx context.Context, ticket plan.Ticket, worktreePath string, argv []string) error {
-	if len(argv) == 0 {
-		return nil
-	}
-	out, err := command.OutputWithin(ctx, verifyTimeout, worktreePath, argv[0], argv[1:]...)
-	if err == nil {
-		return nil
-	}
-	detail := strings.TrimSpace(err.Error() + "\n" + string(out))
-	if len(detail) > maxVerifyDetail {
-		detail = detail[:maxVerifyDetail] + " …(truncated)"
-	}
-	detail = strings.ToValidUTF8(detail, "")
-	return l.event(ctx, string(ticket.URL), store.EventVerificationFailed, detail)
 }
 
 func advanceOnto(
