@@ -32,6 +32,7 @@ const (
 	RunKindFollowUp RunKind = "follow_up"
 	RunKindCommand  RunKind = "command"
 	RunKindResolve  RunKind = "resolve"
+	RunKindVerify   RunKind = "verify"
 )
 
 type RepoPhase string
@@ -73,7 +74,7 @@ var (
 		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbImport, VerbTrack,
 		VerbRaise,
 	}
-	allRunKinds     = []RunKind{RunKindAgent, RunKindFollowUp, RunKindCommand, RunKindResolve}
+	allRunKinds     = []RunKind{RunKindAgent, RunKindFollowUp, RunKindCommand, RunKindResolve, RunKindVerify}
 	allRepoPhases   = []RepoPhase{RepoCloning, RepoReady, RepoRefused}
 	allRefusalKinds = []RefusalKind{RefusalMergeSettings, RefusalDefaultBranch, RefusalClone, RefusalSettingsParse}
 )

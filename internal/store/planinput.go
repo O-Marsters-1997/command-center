@@ -9,6 +9,18 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 )
 
+func (s *Store) AutoHistories(ctx context.Context) (map[plan.TicketURL]plan.AutoHistory, error) {
+	rows, err := s.q.AutoHistories(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select auto histories: %w", err)
+	}
+	out := make(map[plan.TicketURL]plan.AutoHistory, len(rows))
+	for _, row := range rows {
+		out[plan.TicketURL(row.TicketID)] = plan.AutoHistory{Rounds: int(row.Rounds), LastTip: plan.SHA(row.LastTip)}
+	}
+	return out, nil
+}
+
 // VerdictFacts measures checking time in successful ticks rather than wall time.
 func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	pushRows, err := s.LatestPushes(ctx)
@@ -81,6 +93,16 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		return plan.Input{}, fmt.Errorf("read pass runs: %w", err)
 	}
 
+	auto, err := s.AutoHistories(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read auto histories: %w", err)
+	}
+
+	verifies, err := s.LatestVerifyRuns(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read verify runs: %w", err)
+	}
+
 	gauges, err := s.LatestReadings(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read latest readings: %w", err)
@@ -99,6 +121,9 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		if rec.Merged, err = s.HasEvent(ctx, t.URL, EventPRMerged); err != nil {
 			return plan.Input{}, fmt.Errorf("read pr_merged event: %w", err)
 		}
+		if rec.Parked, err = s.HasEvent(ctx, t.URL, EventParked); err != nil {
+			return plan.Input{}, fmt.Errorf("read parked event: %w", err)
+		}
 		recorded[url] = rec
 	}
 	for url, v := range lastVerdicts {
@@ -111,6 +136,8 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		Verdict: verdictFacts, Intents: intents, Removals: removals,
 		FiveHour: gauges[agentlog.FiveHour].Utilization,
 		Passes:   passes,
+		Auto:     auto,
+		Verifies: verifies,
 	}, nil
 }
 

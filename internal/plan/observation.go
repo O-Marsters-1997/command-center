@@ -9,6 +9,7 @@ type CheckState struct {
 	DetailsURL  string    `json:"details_url"`
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at"`
+	Attempt     int       `json:"attempt"`
 }
 
 type PR struct {

@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -47,6 +46,7 @@ type Row struct {
 	MergeOrder      int              `json:"-"`
 	Warning         string           `json:"-"`
 	Blocking        []string         `json:"blocking"`
+	LockedBehind    int              `json:"-"`
 	After           []string         `json:"after"`
 	Unlocks         []string         `json:"-"`
 	Worktree        string           `json:"-"`
@@ -125,21 +125,16 @@ func (r Row) ProtectedLinks() []ProtectedLink {
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
 func (r Row) FixCI() bool {
-	return r.State == plan.CIFailed.String() && r.FollowUpAvailable() && len(r.RedChecks) > 0
+	failing := r.State == plan.CIFailed.String() || r.State == plan.Parked.String()
+	return failing && r.FollowUpAvailable() && len(r.RedChecks) > 0
 }
 
 func (r Row) FixCIPrompt() string {
-	var b strings.Builder
-	b.WriteString("CI is failing on this branch. Fix the failing checks:\n\n")
-	for _, c := range r.RedChecks {
-		fmt.Fprintf(&b, "- %s", c.Name)
-		if c.DetailsURL != "" {
-			fmt.Fprintf(&b, ": %s", c.DetailsURL)
-		}
-		b.WriteString("\n")
+	red := make([]plan.RedCheck, len(r.RedChecks))
+	for i, c := range r.RedChecks {
+		red[i] = plan.RedCheck{Name: c.Name, DetailsURL: c.DetailsURL}
 	}
-	b.WriteString("\nReproduce each failure locally, fix its cause and commit.")
-	return b.String()
+	return plan.ComposeFixCI(red)
 }
 
 func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput.String() }
@@ -226,6 +221,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
 			Blocking:       urlStrings(e.Unlock.Blocking),
+			LockedBehind:   e.LockedBehind,
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
 			Protected:      e.LastPush.UnwrapOr(plan.PushRow{}).Protected,

@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/notify"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
@@ -113,7 +114,7 @@ func New(
 	lp := loop.New(loop.Deps{
 		Logger: logger, Store: st, Clock: settings.clock, Runner: settings.runner, Observe: observe,
 		Config: cfg, Workspace: ws, Validate: settings.validate, RemoteOf: settings.remoteOf,
-	}, loop.WithForge(settings.forge))
+	}, loop.WithForge(settings.forge), loop.WithNotifier(notify.Log{Logger: logger}))
 	server := web.NewServer(web.Deps{
 		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
 		SpendLimit5h: cfg.SpendLimit5h, BoardPollSeconds: cfg.BoardPollSeconds,

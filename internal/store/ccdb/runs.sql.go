@@ -46,6 +46,47 @@ func (q *Queries) ActiveLaunchHashes(ctx context.Context) ([]ActiveLaunchHashesR
 	return items, nil
 }
 
+const autoHistories = `-- name: AutoHistories :many
+SELECT r.ticket_id::text AS ticket_id, COUNT(*)::int AS rounds,
+  (ARRAY_AGG(COALESCE(r.baseline_sha, '') ORDER BY r.id DESC))[1]::text AS last_tip
+FROM runs r
+WHERE r.cause IS NOT NULL
+  AND COALESCE(r.proc_started_at, r.ended_at, 'infinity'::timestamptz) > COALESCE((
+    SELECT MAX(e.at) FROM events e
+    WHERE e.ticket_id = r.ticket_id AND e.kind = 'verdict_transition' AND e.detail LIKE 'review_me:%'
+  ), '-infinity'::timestamptz)
+GROUP BY r.ticket_id
+`
+
+type AutoHistoriesRow struct {
+	TicketID string
+	Rounds   int32
+	LastTip  string
+}
+
+func (q *Queries) AutoHistories(ctx context.Context) ([]AutoHistoriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, autoHistories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AutoHistoriesRow
+	for rows.Next() {
+		var i AutoHistoriesRow
+		if err := rows.Scan(&i.TicketID, &i.Rounds, &i.LastTip); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const consumeVerbIntent = `-- name: ConsumeVerbIntent :execrows
 UPDATE intents SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL
 `
@@ -95,12 +136,12 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 }
 
 const insertRunSkeleton = `-- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, step, workflow, workflow_hash, session_id, message, model, effort)
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, step, workflow, workflow_hash, session_id, message, model, effort, cause)
 VALUES (
   $1, $2, $3, $4,
   $5, $6, $7,
   CASE WHEN $8::boolean THEN gen_random_uuid() ELSE $9::text::uuid END,
-  $10, $11, $12
+  $10, $11, $12, $13
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id
 `
 
@@ -117,6 +158,7 @@ type InsertRunSkeletonParams struct {
 	Message      sql.NullString
 	Model        sql.NullString
 	Effort       sql.NullString
+	Cause        sql.NullString
 }
 
 type InsertRunSkeletonRow struct {
@@ -138,6 +180,7 @@ func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonPa
 		arg.Message,
 		arg.Model,
 		arg.Effort,
+		arg.Cause,
 	)
 	var i InsertRunSkeletonRow
 	err := row.Scan(&i.ID, &i.SessionID)
@@ -252,9 +295,9 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 
 const listLatestRunsByTicket = `-- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
-       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash
+       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause
 FROM runs
-WHERE ticket_id IS NOT NULL
+WHERE ticket_id IS NOT NULL AND kind <> 'verify'
 ORDER BY ticket_id, id DESC
 `
 
@@ -273,6 +316,7 @@ type ListLatestRunsByTicketRow struct {
 	Question      sql.NullString
 	Step          string
 	WorkflowHash  string
+	Cause         sql.NullString
 }
 
 func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsByTicketRow, error) {
@@ -299,6 +343,55 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 			&i.Question,
 			&i.Step,
 			&i.WorkflowHash,
+			&i.Cause,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestVerifyRuns = `-- name: ListLatestVerifyRuns :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path, outcome
+FROM runs
+WHERE ticket_id IS NOT NULL AND kind = 'verify' AND (pgid IS NOT NULL OR outcome IS NOT NULL)
+ORDER BY ticket_id, id DESC
+`
+
+type ListLatestVerifyRunsRow struct {
+	ID            int64
+	TicketID      string
+	Pgid          sql.NullInt64
+	ProcStartedAt sql.NullTime
+	BaselineSHA   sql.NullString
+	LogPath       sql.NullString
+	Outcome       sql.NullString
+}
+
+func (q *Queries) ListLatestVerifyRuns(ctx context.Context) ([]ListLatestVerifyRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestVerifyRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestVerifyRunsRow
+	for rows.Next() {
+		var i ListLatestVerifyRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Pgid,
+			&i.ProcStartedAt,
+			&i.BaselineSHA,
+			&i.LogPath,
+			&i.Outcome,
 		); err != nil {
 			return nil, err
 		}
@@ -317,7 +410,7 @@ const listPassRuns = `-- name: ListPassRuns :many
 SELECT id, ticket_id::text AS ticket_id, step, outcome,
   CASE WHEN kind IN ('agent', 'follow_up') THEN COALESCE(session_id::text, '') ELSE '' END::text AS session_id
 FROM runs
-WHERE ticket_id IS NOT NULL ORDER BY id
+WHERE ticket_id IS NOT NULL AND kind <> 'verify' ORDER BY id
 `
 
 type ListPassRunsRow struct {

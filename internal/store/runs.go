@@ -73,6 +73,7 @@ func (s *Store) InsertSessionRunSkeleton(
 		NewSession:   r.Session.StartNew,
 		SessionID:    nullIfEmpty(r.Session.JoinID),
 		Message:      nullIfEmpty(r.Session.Message),
+		Cause:        nullIfEmpty(string(r.Cause)),
 	})
 	if err != nil {
 		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
@@ -265,9 +266,33 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		summary.PromptHash = row.PromptHash.String
 		summary.Question = row.Question.String
 		summary.Step, summary.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
+		summary.Cause = plan.FollowUpCause(row.Cause.String)
 		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil
+}
+
+func (s *Store) LatestVerifyRuns(ctx context.Context) (map[plan.TicketURL]plan.VerifyFact, error) {
+	rows, err := s.q.ListLatestVerifyRuns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select latest verify runs: %w", err)
+	}
+	facts := make(map[plan.TicketURL]plan.VerifyFact, len(rows))
+	for _, row := range rows {
+		fact := plan.VerifyFact{
+			Run: plan.RunID(row.ID), Tip: plan.SHA(row.BaselineSHA.String), Alive: !row.Outcome.Valid,
+			StartedAt: row.ProcStartedAt.Time, LogPath: row.LogPath.String,
+		}
+		if row.Outcome.Valid {
+			outcome, err := plan.ParseOutcome(row.Outcome.String)
+			if err != nil {
+				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
+			}
+			fact.Outcome = option.Some(outcome)
+		}
+		facts[plan.TicketURL(row.TicketID)] = fact
+	}
+	return facts, nil
 }
 
 // VerbIntent holds a queued ticket action; verbs without arguments have an empty payload.

@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL       string
 	ClaudeProjectsDir string
 	MaxAgents         int
+	MaxVerifies       int
 	Port              int
 	AgentCommand      []string
 	MaxTurns          int
@@ -21,6 +22,7 @@ type Config struct {
 const (
 	defaultPort             = 7777
 	defaultMaxAgents        = 1
+	defaultMaxVerifies      = 1
 	DefaultBoardPollSeconds = 5
 )
 

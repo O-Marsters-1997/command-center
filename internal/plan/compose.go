@@ -46,6 +46,30 @@ func Compose(t Ticket) string {
 	return prompt
 }
 
+type RedCheck struct {
+	Name       string
+	DetailsURL string
+}
+
+func ComposeFixCI(checks []RedCheck) string {
+	var b strings.Builder
+	b.WriteString("CI is failing on this branch. Fix the failing checks:\n\n")
+	for _, c := range checks {
+		fmt.Fprintf(&b, "- %s", c.Name)
+		if c.DetailsURL != "" {
+			fmt.Fprintf(&b, ": %s", c.DetailsURL)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\nReproduce each failure locally, fix its cause and commit.")
+	return b.String()
+}
+
+func ComposeFixVerify(tail string) string {
+	return fmt.Sprintf("The verify command failed on this branch's tip. Fix what it reports, "+
+		"re-run it locally and commit. Its output ended:\n\n```\n%s\n```", strings.TrimRight(tail, "\n"))
+}
+
 func ComposeFollowUp(text string) string {
 	return fmt.Sprintf(
 		"You were not given a fresh worktree. This one already carries a branch, a diff and a git history "+

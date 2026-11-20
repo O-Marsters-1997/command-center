@@ -21,9 +21,7 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[plan.TicketURL]plan.Refre
 		if o.Kind == EventRefreshRefused {
 			fact.Refused, fact.Reason = true, o.Detail
 		}
-		if o.Kind == EventVerificationFailed {
-			fact.VerificationFailed, fact.VerificationFailedDetail = true, o.Detail
-		}
+		fact.Advanced = o.Advanced
 		if at, ok := parseConflictDetail(o.Detail); ok && o.Kind == EventRefreshConflicted {
 			fact.Conflict = option.Some(at)
 		}
@@ -42,14 +40,15 @@ func parseConflictDetail(detail string) (plan.ConflictAt, bool) {
 
 // RefreshOutcome holds a ticket's latest refresh-domain event.
 type RefreshOutcome struct {
-	Kind   EventKind
-	Detail string
+	Kind     EventKind
+	Detail   string
+	Advanced bool
 }
 
 // LatestRefreshOutcomes excludes events before the ticket's last recorded push.
 func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
 	kinds, err := encodeJSON("refresh outcome kinds", []EventKind{
-		EventRefreshRefused, EventRefreshConflicted, EventVerificationFailed, EventRefreshed, EventRestacked,
+		EventRefreshRefused, EventRefreshConflicted, EventRefreshed, EventRestacked,
 	})
 	if err != nil {
 		return nil, err
@@ -68,7 +67,7 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]R
 		if err != nil {
 			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
-		outcomes[plan.TicketURL(row.TicketID.String)] = RefreshOutcome{Kind: kind, Detail: row.Detail}
+		outcomes[plan.TicketURL(row.TicketID.String)] = RefreshOutcome{Kind: kind, Detail: row.Detail, Advanced: row.Advanced}
 	}
 	return outcomes, nil
 }

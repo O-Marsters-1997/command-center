@@ -23,11 +23,17 @@ type forge interface {
 	Comment(ctx context.Context, repoPath, branch, body string) error
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 	FailedLog(ctx context.Context, repoPath, detailsURL string) (string, error)
+	Attempt(ctx context.Context, repoPath, detailsURL string) (int, error)
+	Rerun(ctx context.Context, repoPath, detailsURL string) error
 }
 
 type worktrees interface {
 	New(ctx context.Context, repoPath, branch, baseRef string) error
 	Remove(ctx context.Context, repoPath, branch string) error
+}
+
+type notifier interface {
+	Notify(ctx context.Context, title, body string) error
 }
 
 type Deps struct {
@@ -48,6 +54,8 @@ type Option func(*Loop)
 func WithForge(f forge) Option { return func(l *Loop) { l.forge = f } }
 
 func WithWorktrees(w worktrees) Option { return func(l *Loop) { l.worktrees = w } }
+
+func WithNotifier(n notifier) Option { return func(l *Loop) { l.notifier = n } }
 
 func New(d Deps, opts ...Option) *Loop {
 	l := &Loop{
@@ -93,4 +101,7 @@ type tick struct {
 	prev      plan.Observation
 	spawned   []plan.TicketURL
 	cancelled map[int]bool
+	timing    *tickTiming
+
+	spawnedCommands int
 }

@@ -251,6 +251,7 @@ func TestMigrations(t *testing.T) {
 		}{
 			{"runs_kind_check", toStrings(plan.AllRunKinds())},
 			{"runs_outcome_check", outcomeNames()},
+			{"runs_cause_check", toStrings(plan.AllFollowUpCauses())},
 			{"intents_verb_check", append(toStrings(plan.AllVerbs()), "edit_ticket")},
 			{"repos_refusal_kind_check", toStrings(plan.AllRefusalKinds())},
 			{"events_kind_check", toStrings(storepkg.AllEventKinds())},

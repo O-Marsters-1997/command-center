@@ -45,7 +45,10 @@ func newLoopWithDeps(deps loop.Deps, opts ...loop.Option) *loop.Loop {
 		}
 		return obs, nil
 	}
-	deps.Logger, deps.Observe = discardLog, completeObserve
+	if deps.Logger == nil {
+		deps.Logger = discardLog
+	}
+	deps.Observe = completeObserve
 	return loop.New(deps, opts...)
 }
 

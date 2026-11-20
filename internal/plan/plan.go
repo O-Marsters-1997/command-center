@@ -146,6 +146,9 @@ const (
 	WaitingOnProducerDeploy
 	AwaitingInput
 	PushRefused
+	Parked
+	Verifying
+	WaitingToVerify
 )
 
 type RunFact struct {
@@ -165,7 +168,7 @@ type RunFact struct {
 	ConflictsWithMain        bool
 	ConflictsWithMainReason  Reason
 	ConflictingPeer          string
-	VerificationFailed       bool
+	Verify                   VerifyPhase
 	VerificationFailedReason Reason
 	Question                 string
 	Next                     option.Option[Next]
@@ -178,6 +181,7 @@ type Facts struct {
 	CancelledMember bool
 	ConflictedBase  string
 	Raise           RaiseMode
+	RedBlocker      TicketURL
 }
 
 func Status(f Facts) (State, Reason) {
@@ -195,6 +199,8 @@ func Status(f Facts) (State, Reason) {
 		return Cancelled, "authorised then cancelled before launching"
 	case f.ConflictedBase != "":
 		return Blocked, conflictedBaseReason(f.ConflictedBase)
+	case f.Unlock.Unlocked && f.Authorised && f.RedBlocker != "":
+		return Queued, Reason(fmt.Sprintf("waiting on %s's CI", f.RedBlocker))
 	case f.Unlock.Unlocked && f.Authorised:
 		return Queued, "waiting for a slot"
 	case f.Unlock.Unlocked:
@@ -275,7 +281,11 @@ func statusFromPush(run RunFact, unlock Unlock, raise RaiseMode) (State, Reason)
 		return ConflictsWithMain, run.ConflictsWithMainReason
 	case run.ConflictingPeer != "":
 		return PushPending, conflictingPeerReason(run.ConflictingPeer)
-	case run.VerificationFailed:
+	case run.Verify == VerifyRunning:
+		return Verifying, "verify command running"
+	case run.Verify == VerifyWaiting:
+		return WaitingToVerify, "verify command waiting for a slot"
+	case run.Verify == VerifyFailed:
 		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:
 		return PushRefused, refusedReason(run.PushDenied)

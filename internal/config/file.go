@@ -15,6 +15,7 @@ type fileConfig struct {
 	DatabaseURL       string   `toml:"database_url"`
 	ClaudeProjectsDir string   `toml:"claude_projects_dir"`
 	MaxAgents         int      `toml:"max_agents"`
+	MaxVerifies       int      `toml:"max_verifies"`
 	Port              int      `toml:"port"`
 	AgentCommand      []string `toml:"agent_command"`
 	MaxTurns          int      `toml:"max_turns"`
@@ -24,8 +25,9 @@ type fileConfig struct {
 
 func decodeFile(path string) (fileConfig, error) {
 	f := fileConfig{
-		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: DefaultBoardPollSeconds,
-		AgentCommand: slices.Clone(defaultAgentCommand),
+		Port: defaultPort, MaxAgents: defaultMaxAgents, MaxVerifies: defaultMaxVerifies,
+		BoardPollSeconds: DefaultBoardPollSeconds,
+		AgentCommand:     slices.Clone(defaultAgentCommand),
 	}
 	if _, err := toml.DecodeFile(path, &f); err != nil {
 		return fileConfig{}, fmt.Errorf("read config %s: %w", path, err)
@@ -51,6 +53,7 @@ func resolve(f fileConfig, env Env) (Config, error) {
 		DatabaseURL:       resolveDatabaseURL(f.DatabaseURL, env),
 		ClaudeProjectsDir: claudeProjectsDir,
 		MaxAgents:         f.MaxAgents,
+		MaxVerifies:       f.MaxVerifies,
 		Port:              f.Port,
 		AgentCommand:      argv,
 		MaxTurns:          f.MaxTurns,
@@ -116,6 +119,10 @@ func (c Config) validate() error {
 	}
 	if c.MaxAgents < 1 {
 		errs = append(errs, &InvalidValueError{Key: "max_agents", Err: fmt.Errorf("must be at least 1, got %d", c.MaxAgents)})
+	}
+	if c.MaxVerifies < 1 {
+		err := fmt.Errorf("must be at least 1, got %d", c.MaxVerifies)
+		errs = append(errs, &InvalidValueError{Key: "max_verifies", Err: err})
 	}
 	if c.SpendLimit5h < 0 || c.SpendLimit5h > 100 {
 		errs = append(errs, &InvalidValueError{

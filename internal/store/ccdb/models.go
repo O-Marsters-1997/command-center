@@ -115,6 +115,7 @@ type Run struct {
 	Step          string
 	Workflow      string
 	WorkflowHash  string
+	Cause         sql.NullString
 	Prompt        sql.NullString
 }
 

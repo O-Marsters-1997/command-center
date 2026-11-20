@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
@@ -122,5 +123,48 @@ func TestWorkflowPass(t *testing.T) {
 	creates := f.Forge.Calls("Create")
 	if len(creates) != 1 || creates[0].Body != "Adds a.go and b.go." {
 		t.Errorf("Create calls = %+v, want one opened with the pr handoff as its body", creates)
+	}
+}
+
+func TestKillOverdue(t *testing.T) {
+	t.Parallel()
+
+	f := newLoopFixture(t)
+	url := f.Tickets[0].URL
+	launch := storepkg.LaunchRequest{Ticket: url, PromptHash: composeHash(url), Group: "g", At: testAt, Workflow: "v1"}
+	if err := f.Store.QueueLaunchIntent(t.Context(), launch); err != nil {
+		t.Fatalf("QueueLaunchIntent(%q): %v", url, err)
+	}
+	obs := plan.Observation{
+		Settings:  map[string]plan.RepoSettings{"repo": {VerifyCommand: []string{"just", "test"}}},
+		Worktrees: map[plan.BranchRef]string{},
+	}
+	clock := newManualClock(testAt)
+	lp := newLoop(f.Store, observing(obs), clock, f.Cfg, f.WS, f.Fake, loop.WithForge(f.Forge))
+	tick := func(t *testing.T) {
+		t.Helper()
+		if err := lp.RunOnce(t.Context()); err != nil {
+			t.Fatalf("RunOnce() error = %v", err)
+		}
+	}
+
+	tick(t)
+	if got := f.Latest(t)[url].Kind; got != plan.RunKindCommand {
+		t.Fatalf("first run kind = %q, want %q", got, plan.RunKindCommand)
+	}
+
+	clock.Advance(plan.CommandDeadline)
+	tick(t)
+	if got := f.Fake.Canceled(); len(got) != 0 {
+		t.Errorf("canceled at the deadline = %v, want none", got)
+	}
+
+	clock.Advance(time.Second)
+	tick(t)
+	if got := len(f.Fake.Canceled()); got != 1 {
+		t.Errorf("canceled past the deadline = %d runs, want 1", got)
+	}
+	if got := f.Latest(t)[url].Outcome; got != option.Some(plan.OutcomeFailed) {
+		t.Errorf("killed run outcome = %v, want failed in the same tick", got)
 	}
 }

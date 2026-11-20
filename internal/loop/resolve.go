@@ -85,11 +85,3 @@ func (l *Loop) resolveOne(
 	}
 	return nil
 }
-
-func (l *Loop) verifyResolved(ctx context.Context, ticket store.Ticket, obs plan.Observation) error {
-	worktreePath, ok := obs.Worktrees[ticket.Ref()]
-	if !ok {
-		return nil
-	}
-	return l.verifyOne(ctx, ticket.Plan(), worktreePath, obs.Settings[ticket.Repo].VerifyCommand)
-}

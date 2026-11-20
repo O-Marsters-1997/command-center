@@ -37,6 +37,7 @@ type RunSummary struct {
 	Question      string
 	Step          StepName
 	WorkflowHash  string
+	Cause         FollowUpCause
 }
 
 type PushRow struct {
@@ -54,17 +55,17 @@ type PushFact struct {
 }
 
 type RefreshFact struct {
-	Tried                    bool
-	Refused                  bool
-	Reason                   string
-	VerificationFailed       bool
-	VerificationFailedDetail string
-	Conflict                 option.Option[ConflictAt]
+	Tried    bool
+	Refused  bool
+	Reason   string
+	Advanced bool
+	Conflict option.Option[ConflictAt]
 }
 
 type Recorded struct {
 	Opened bool
 	Merged bool
+	Parked bool
 }
 
 type VerdictFacts struct {
@@ -92,6 +93,8 @@ type Input struct {
 	Removals     map[TicketURL]string
 	FiveHour     float64
 	Passes       map[TicketURL][]StepRun
+	Auto         map[TicketURL]AutoHistory
+	Verifies     map[TicketURL]VerifyFact
 }
 
 type Entry struct {
@@ -114,6 +117,7 @@ type Entry struct {
 	Next           Next
 	Workflow       string
 	Raise          RaiseMode
+	LockedBehind   int
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -124,8 +128,8 @@ type Snapshot struct {
 	Entries     []Entry
 	byURL       map[TicketURL]int
 	launch      []LaunchCandidate
-	running     int
-	maxAgents   int
+	load        Load
+	caps        Caps
 	spendPaused bool
 	intents     map[TicketURL][]Intent
 	sessions    map[TicketURL]string
@@ -135,10 +139,21 @@ type Snapshot struct {
 	repos       []RepoStatus
 	obs         Observation
 	refreshes   map[TicketURL]RefreshFact
+	auto        map[TicketURL]AutoHistory
+	runs        map[TicketURL]RunSummary
+	verifies    []Verify
+	verifyFacts map[TicketURL]VerifyFact
+	now         time.Time
 }
 
-func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
-	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
+func (s Snapshot) LaunchAfter(spawned []TicketURL) []TicketURL {
+	load := s.load
+	for _, c := range s.launch {
+		if slices.Contains(spawned, c.URL) {
+			load = load.charge(c.command())
+		}
+	}
+	return LaunchPlan(s.launch, load, s.caps, s.spendPaused)
 }
 
 func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
@@ -159,6 +174,12 @@ func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
 	for _, c := range s.launch {
 		if _, ok := out.byURL[c.URL]; ok {
 			out.launch = append(out.launch, c)
+		}
+	}
+	out.verifies = nil
+	for _, v := range s.verifies {
+		if _, ok := out.byURL[v.Ticket]; ok {
+			out.verifies = append(out.verifies, v)
 		}
 	}
 	return out
@@ -201,7 +222,7 @@ func (r Rules) Derive(in Input) Snapshot {
 	snap := Snapshot{
 		Entries:     make([]Entry, 0, len(in.Tickets)),
 		byURL:       make(map[TicketURL]int, len(in.Tickets)),
-		maxAgents:   r.MaxAgents,
+		caps:        Caps{Agents: r.MaxAgents, Commands: r.MaxVerifies},
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
 		sessions:    make(map[TicketURL]string, len(in.Tickets)),
@@ -209,14 +230,25 @@ func (r Rules) Derive(in Input) Snapshot {
 		repos:       in.Repos,
 		obs:         in.Obs,
 		refreshes:   in.Refreshes,
+		auto:        in.Auto,
+		runs:        in.Runs,
+		verifyFacts: in.Verifies,
+		now:         in.Now,
 	}
+	unlocks := Unlocks(in.Tickets)
+	var parked []Transition
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
 		base := unlock.BaseBranch
 		if base == "" {
 			base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
 		}
-		run, elapsed, logPath := r.runFor(t, in, peers[t.URL])
+		lastPush := option.None[PushRow]()
+		if row, ok := in.Verdict.PushRows[t.URL]; ok {
+			lastPush = option.Some(row)
+		}
+		verify := r.verifyPhase(t, in, lastPush)
+		run, elapsed, logPath := r.runFor(t, in, peers[t.URL], verify)
 		membership := in.Memberships[t.URL]
 		t.LaunchContext, t.Choice = membership.Context, membership.Choice
 		authorised := membership.LaunchID != 0
@@ -224,6 +256,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		if r.conflictedBase(t, base, in) {
 			conflictedBase = base
 		}
+		redBlocker := r.redBlocker(t, byURL, in)
 		workflow, next := r.nextFor(t, in, membership.Workflow)
 		if session := sessionOf(workflow, in.Passes[t.URL], r.Verify[t.Repo]); session != "" {
 			snap.sessions[t.URL] = session
@@ -232,10 +265,6 @@ func (r Rules) Derive(in Input) Snapshot {
 			fact := run.Unwrap()
 			fact.Next = option.Some(next)
 			run = option.Some(fact)
-		}
-		lastPush := option.None[PushRow]()
-		if row, ok := in.Verdict.PushRows[t.URL]; ok {
-			lastPush = option.Some(row)
 		}
 		raise := r.Raise[t.Repo]
 		if lastPush.IsSome() {
@@ -248,7 +277,9 @@ func (r Rules) Derive(in Input) Snapshot {
 			CancelledMember: membership.Cancelled,
 			ConflictedBase:  conflictedBase,
 			Raise:           raise,
+			RedBlocker:      redBlocker,
 		})
+		state, reason = parkExhausted(state, reason, in.Auto[t.URL])
 		snap.launch = append(snap.launch, LaunchCandidate{
 			URL:               t.URL,
 			Unlock:            unlock,
@@ -258,9 +289,18 @@ func (r Rules) Derive(in Input) Snapshot {
 			ConflictedBase:    conflictedBase,
 			Next:              next,
 			InFlight:          run.IsSome() && next.Kind == NextRun && next.Step.IsSome(),
+			RedBlocker:        redBlocker,
 		})
 		if in.Runs[t.URL].Pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
-			snap.running++
+			snap.load = snap.load.charge(slices.ContainsFunc(in.Passes[t.URL], func(r StepRun) bool {
+				return r.Alive && r.Command
+			}))
+		}
+		if in.Verifies[t.URL].Alive {
+			snap.load = snap.load.charge(true)
+		}
+		if verify == VerifyWaiting {
+			snap.verifies = append(snap.verifies, Verify{Ticket: t.URL, Tip: in.Obs.LocalTips[t.Ref()]})
 		}
 
 		pr := in.Obs.PRs[t.Ref()]
@@ -276,11 +316,41 @@ func (r Rules) Derive(in Input) Snapshot {
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
 			Next: next, Workflow: membership.Workflow, Raise: raise,
 		}
+		if state == Parked {
+			entry.LockedBehind = lockedBehind(t.URL, unlocks, byURL, prs)
+		}
 		snap.Entries = append(snap.Entries, entry)
 		snap.removals[t.URL] = removalFor(entry, pr)
+		if state == Parked && !in.Recorded[t.URL].Parked {
+			parked = append(parked, Transition{Ticket: t.URL, Kind: TransitionParked, At: in.Now, Detail: string(reason)})
+		}
 	}
 	snap.transitions, snap.verdicts = r.transitions(in)
+	snap.transitions = append(snap.transitions, parked...)
 	return snap
+}
+
+func lockedBehind(
+	root TicketURL, unlocks map[TicketURL][]TicketURL, byURL map[TicketURL]Ticket, prs map[string]PRState,
+) int {
+	seen := map[TicketURL]bool{root: true}
+	queue := []TicketURL{root}
+	locked := 0
+	for len(queue) > 0 {
+		next := unlocks[queue[0]]
+		queue = queue[1:]
+		for _, url := range next {
+			if seen[url] {
+				continue
+			}
+			seen[url] = true
+			queue = append(queue, url)
+			if prs[byURL[url].Branch] != Merged {
+				locked++
+			}
+		}
+	}
+	return locked
 }
 
 func sessionOf(w Workflow, runs []StepRun, hasVerify bool) string {
@@ -322,6 +392,19 @@ func (r Rules) nextFor(t Ticket, in Input, launchWorkflow string) (Workflow, Nex
 		return Workflow{}, Next{}
 	}
 	return w, w.Next(in.Passes[t.URL], r.Verify[t.Repo])
+}
+
+func (r Rules) redBlocker(t Ticket, byURL map[TicketURL]Ticket, in Input) TicketURL {
+	for _, url := range t.BlockedBy {
+		blocker, ok := byURL[url]
+		if !ok || blocker.Repo != t.Repo || in.Obs.PRs[blocker.Ref()].State != Open {
+			continue
+		}
+		if res := r.ApplyVerdict(blocker, in.Obs, in.Verdict); res.IsSome() && res.Unwrap().Kind == verdict.CIFailed {
+			return url
+		}
+	}
+	return ""
 }
 
 func (r Rules) conflictedBase(t Ticket, base string, in Input) bool {
@@ -396,7 +479,7 @@ func draftReason(
 }
 
 func (r Rules) runFor(
-	t Ticket, in Input, peer string,
+	t Ticket, in Input, peer string, verify VerifyPhase,
 ) (run option.Option[RunFact], elapsed option.Option[time.Duration], logPath string) {
 	summary, ok := in.Runs[t.URL]
 	if !ok {
@@ -420,8 +503,14 @@ func (r Rules) runFor(
 			rf := in.Refreshes[t.URL]
 			fact.RefreshRefused = rf.Refused
 			fact.RefreshRefusedReason = Reason(rf.Reason)
-			fact.VerificationFailed = rf.VerificationFailed
-			fact.VerificationFailedReason = Reason(rf.VerificationFailedDetail)
+			fact.Verify = verify
+			if verify != VerifyNone {
+				fact.Alive = false
+			}
+			if vf := in.Verifies[t.URL]; verify == VerifyRunning || verify == VerifyFailed {
+				fact.LogPath, summary.LogPath = vf.LogPath, vf.LogPath
+				fact.VerificationFailedReason = Reason(fmt.Sprintf("verify_command failed; log at %s", vf.LogPath))
+			}
 			fact.MidMerge = in.Obs.MidMerge[key]
 			if in.Obs.ConflictsWithBase[key] {
 				fact.ConflictsWithMain = true

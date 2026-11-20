@@ -694,6 +694,8 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
+	start := s.clock.Now()
+	defer func() { s.logger.InfoContext(r.Context(), "repos render", "duration", s.clock.Now().Sub(start)) }()
 	offers := s.importOffers(r.Context())
 	page, err := s.view.Repos(r.Context(), s.clock.Now(), offers)
 	if err != nil {

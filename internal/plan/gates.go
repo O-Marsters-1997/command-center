@@ -92,7 +92,7 @@ func (s Snapshot) Pushable(obs Observation) []Push {
 			continue
 		}
 		run := e.Run.Unwrap()
-		if e.Raise == RaiseManual || run.PushFailed || run.PushRefused || run.VerificationFailed {
+		if e.Raise == RaiseManual || run.PushFailed || run.PushRefused || run.Verify != VerifyNone {
 			continue
 		}
 		p, ok := s.Push(e.Ticket.URL, obs)
