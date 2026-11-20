@@ -12,11 +12,25 @@
 {{end}}
 
 {{define "railVerb"}}
+{{- if .Pending}}<p class="pv-queued" role="status"><span class="glyph" data-glyph="pending" aria-hidden="true"></span>{{.Verb}} queued</p>
+{{- else}}
 <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
   <input type="hidden" name="ticket" value="{{.URL}}">
   <input type="hidden" name="from" value="rail">
   <button class="btn btn-sm rail-verb" type="submit" name="verb" value="{{.Verb}}">{{.Verb}}</button>
 </form>
+{{- end}}
+{{- with .Warning}}<p class="pv-warn">{{.}}</p>{{end}}
+{{end}}
+
+{{define "pvRailRow"}}
+<a class="rail-link pv-row" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
+  <span class="glyph{{if .Started}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>
+  <span class="rail-title">{{.Title}}</span>
+  {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
+  {{- if .Started}}<span class="sr-only">{{.Label}}</span><span class="rail-timer" data-started="{{.Started}}"></span>
+  {{- else}}<span class="pv-state" data-glyph="{{.Glyph}}">{{.Label}}</span>{{end}}
+</a>
 {{end}}
 
 {{define "railReply"}}
@@ -50,9 +64,19 @@
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
-      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting · {{.Merged}}/{{.Total}} merged</span></summary>
-      {{- range .Live}}{{template "railItem" .}}{{end}}
-      {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
+      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count pv-count-line">{{with .Working}}<span class="pv-tally" data-glyph="running">{{len .}} working</span>{{end}}{{with .WaitingTotal}}<span class="pv-tally" data-glyph="pending">{{.}} waiting</span>{{end}}<span class="pv-tally-merged" title="merged">{{.Merged}}/{{.Total}}</span></span></summary>
+      {{- with .Working}}
+      <div class="pv-sub" role="group" aria-label="Working">
+        {{- range .}}{{template "pvRailRow" .}}{{end}}
+      </div>
+      {{- end}}
+      {{- if .WaitingTotal}}
+      <div class="pv-sub pv-sub-waiting" role="group" aria-label="Waiting">
+        <p class="pv-sub-label">Waiting</p>
+        {{- range .Holding}}{{template "pvRailRow" .}}{{end}}
+        {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
+      </div>
+      {{- end}}
     </details>
     {{- else}}
     <p class="rail-empty">{{if $.Query}}No match.{{else}}Nothing in flight.{{end}}</p>
@@ -63,9 +87,20 @@
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
       <summary>{{template "icon" "chev"}}<span class="rail-name">Settled</span> <span class="rail-count">{{len .Items}}</span></summary>
       {{- range .Items}}
-      <div class="rail-settled">
-        {{template "railItem" .}}
-        {{if .Verb}}{{template "railVerb" .}}{{end}}
+      <div class="pv-settled" data-glyph="{{.Glyph}}">
+        <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>
+        {{- if .PRURL}}<a class="pv-settled-title" href="{{.PRURL}}" target="_blank" rel="noopener" title="Open the merged PR">{{.Title}}</a>
+        {{- else}}<a class="pv-settled-title" href="{{.Path}}" {{template "nav" .Path}}>{{.Title}}</a>{{end}}
+        <span class="sr-only">{{.Label}}</span>
+        {{- if .Pending}}<span class="pv-settled-act pv-spin" role="status" title="Removing the worktree" aria-label="Removing the worktree"></span>
+        {{- else if .Verb}}
+        <form class="pv-settled-act" method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
+          <input type="hidden" name="ticket" value="{{.URL}}">
+          <input type="hidden" name="from" value="rail">
+          <button class="pv-icon-btn{{if .Warning}} pv-icon-btn-warn{{end}}" type="submit" name="verb" value="{{.Verb}}" aria-label="Clean up {{.Ref}}: {{.Verb}}" title="{{if .Warning}}Refused: {{.Warning}}. Try again{{else}}Clean up: remove the worktree{{end}}">{{template "icon" "broom"}}</button>
+        </form>
+        {{- end}}
+        {{- with .Warning}}<p class="pv-warn pv-settled-warn">{{.}}</p>{{end}}
       </div>
       {{- else}}
       <p class="rail-empty">No match.</p>

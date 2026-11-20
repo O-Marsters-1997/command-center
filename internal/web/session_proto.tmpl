@@ -11,6 +11,16 @@
     {{- with .Worked}}{{if .IsSome}}{{with .Unwrap}}<span class="pv-sep" aria-hidden="true"></span><span class="pv-num">{{.Wall}}{{if .Turns}} · {{.Turns}} turns{{end}}</span>{{end}}{{end}}{{end}}
   </p>
   {{- if .Callout}}{{with .Row.Detail}}<p class="pv-reason">{{.}}</p>{{end}}{{end}}
+  {{- with .Row.ProtectedLinks}}
+  <details class="session-protected pv-protected">
+    <summary><span class="flag flag-warning">protected</span> {{len .}} protected {{if eq (len .) 1}}change{{else}}changes{{end}}</summary>
+    <ul class="font-mono text-xs">
+      {{- range .}}
+      <li>{{if .Href}}<a href="{{.Href}}" target="_blank" rel="noopener">{{.Path}}</a>{{else}}{{.Path}}{{end}} <span class="text-muted">{{.Rule}}</span> +{{.Added}} −{{.Deleted}}</li>
+      {{- end}}
+    </ul>
+  </details>
+  {{- end}}
 </header>{{end}}
 
 {{define "protoPrompt"}}<details class="pv-prompt">

@@ -71,7 +71,20 @@ type RailItem struct {
 	Updated   Age
 	Last      string
 	Protected bool
+	Pending   bool
+	Warning   string
+	PRURL     string
 }
+
+func (f RailFeature) Working() []RailItem {
+	return slices.DeleteFunc(slices.Clone(f.Live), func(it RailItem) bool { return it.Glyph != plan.GlyphRunning })
+}
+
+func (f RailFeature) Holding() []RailItem {
+	return slices.DeleteFunc(slices.Clone(f.Live), func(it RailItem) bool { return it.Glyph == plan.GlyphRunning })
+}
+
+func (f RailFeature) WaitingTotal() int { return f.Waiting() + len(f.Holding()) }
 
 type RailFeature struct {
 	Key     string
@@ -192,12 +205,17 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 				break
 			}
 		}
+		it.Pending = it.Verb != "" && slices.Contains(r.PendingVerbs, it.Verb)
+		it.Warning = r.Warning
+		if r.PRNumber > 0 {
+			it.PRURL = "https://github.com/" + r.Repo + "/pull/" + strconv.Itoa(r.PRNumber)
+		}
 		if r.Alive && r.Glyph == plan.GlyphRunning {
 			it.Started = now.Add(-time.Duration(r.ElapsedSeconds) * time.Second).UTC().Format(time.RFC3339)
 		}
 		return it
 	}
-	open := func(key string) bool { return slices.Contains(params.Open, key) }
+	open := func(key string) bool { return params.Open == nil || slices.Contains(params.Open, key) }
 	byRepoThenRef := func(a, b RailItem) int {
 		return cmp.Or(cmp.Compare(a.Repo, b.Repo), cmp.Compare(refNumber(a.URL), refNumber(b.URL)), cmp.Compare(a.URL, b.URL))
 	}

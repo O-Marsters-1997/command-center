@@ -16,6 +16,57 @@ type StackLink struct {
 	Path    string
 	Metric  string
 	Current bool
+	Wave    int
+}
+
+func (s Stack) members() []StackLink {
+	var all []StackLink
+	for _, w := range s.Waves {
+		all = append(all, w.Members...)
+	}
+	return all
+}
+
+func (s Stack) withGlyph(keep func(plan.GlyphWord) bool) []StackLink {
+	return slices.DeleteFunc(s.members(), func(l StackLink) bool { return !keep(l.Glyph) })
+}
+
+func (s Stack) Live() []StackLink {
+	return s.withGlyph(func(g plan.GlyphWord) bool {
+		return g != plan.GlyphDone && g != plan.GlyphBlocked && g != plan.GlyphReady
+	})
+}
+
+func (s Stack) ReadyLinks() []StackLink {
+	return s.withGlyph(func(g plan.GlyphWord) bool { return g == plan.GlyphReady })
+}
+
+func (s Stack) BlockedLinks() []StackLink {
+	return s.withGlyph(func(g plan.GlyphWord) bool { return g == plan.GlyphBlocked })
+}
+
+func (s Stack) MergedLinks() []StackLink {
+	return s.withGlyph(func(g plan.GlyphWord) bool { return g == plan.GlyphDone })
+}
+
+type StackFold struct {
+	Label string
+	Links []StackLink
+}
+
+func (s Stack) Folds() []StackFold {
+	return []StackFold{
+		{Label: "Ready to launch", Links: s.ReadyLinks()},
+		{Label: "Blocked", Links: s.BlockedLinks()},
+		{Label: "Merged", Links: s.MergedLinks()},
+	}
+}
+
+func (s Stack) MergedPct() int {
+	if s.Total == 0 {
+		return 0
+	}
+	return s.Merged * 100 / s.Total
 }
 
 type StackWave struct {
@@ -95,7 +146,9 @@ func buildStack(board Board, row Row) Stack {
 			s.Waves = append(s.Waves, make([]StackWave, n-len(s.Waves))...)
 		}
 		s.Waves[n-1].N = n
-		s.Waves[n-1].Members = append(s.Waves[n-1].Members, link(r.URL))
+		member := link(r.URL)
+		member.Wave = n
+		s.Waves[n-1].Members = append(s.Waves[n-1].Members, member)
 	}
 	return s
 }

@@ -1,0 +1,261 @@
+{{/* PROTOTYPE (branch prototype/session-disclosure): rail and stack panel. Never merge. */}}
+{{define "pvStackRow"}}<a class="pv-stack-row" href="{{.Path}}" {{if .Path}}{{template "nav" .Path}}{{end}}{{if .Current}} aria-current="page"{{end}}>
+  <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>
+  <span class="pv-stack-ref">{{.Ref}}</span>
+  <span class="pv-stack-name">{{or .Title .Ref}}</span>
+  <span class="pv-stack-tail">{{with .Metric}}{{.}}{{else}}{{if .Wave}}wave {{.Wave}}{{end}}{{end}}</span>
+  <span class="sr-only">{{.Label}}</span>
+</a>{{end}}
+
+{{define "pvStackMore"}}{{if .Links}}<details class="pv-stack-more">
+  <summary><span class="pv-chev" aria-hidden="true">{{template "icon" "chev"}}</span>{{.Label}}<span class="pv-stack-count">{{len .Links}}</span></summary>
+  <div class="pv-stack-list">{{range .Links}}{{template "pvStackRow" .}}{{end}}</div>
+</details>{{end}}{{end}}
+
+{{define "protoStack"}}<aside id="stack-panel" class="stack-panel pv-stack" popover aria-label="Feature stack">
+  {{- with .Stack}}{{if .Feature}}
+  <header class="pv-stack-head">
+    <h2 class="pv-stack-title">{{template "mark" .Project}}<span>{{.Feature}}</span></h2>
+    <div class="pv-stack-progress">
+      <span class="meter" role="img" aria-label="{{.Merged}} of {{.Total}} merged"><span class="meter-fill" style="width: {{.MergedPct}}%"></span></span>
+      <span class="pv-num">{{.Merged}}/{{.Total}} merged</span>
+    </div>
+    <nav class="pv-stack-links" aria-label="Feature views"><a href="{{.GraphPath}}" data-key="f" {{template "nav" .GraphPath}}>Graph</a><a href="{{.BoardPath}}" {{template "nav" .BoardPath}}>Board</a></nav>
+  </header>
+  {{- end}}
+
+  <section class="pv-stack-sec" aria-labelledby="pv-stack-this">
+    <h3 id="pv-stack-this">This ticket</h3>
+    {{- if .Blockers}}
+    <p class="pv-stack-sub">Blocked by</p>
+    <div class="pv-stack-list">{{range .Blockers}}{{template "pvStackRow" .}}{{end}}</div>
+    {{- end}}
+    {{- if .Unlocks}}
+    <p class="pv-stack-sub">Merging it unlocks</p>
+    <div class="pv-stack-list">{{range .Unlocks}}{{template "pvStackRow" .}}{{end}}</div>
+    {{- end}}
+    {{- if not (or .Blockers .Unlocks)}}<p class="pv-stack-none">Nothing blocks it and nothing waits on it.</p>{{end}}
+  </section>
+
+  {{- if .Feature}}
+  <section class="pv-stack-sec" aria-labelledby="pv-stack-live">
+    <h3 id="pv-stack-live">In flight <span class="pv-stack-count">{{len .Live}}</span></h3>
+    {{- with .Live}}<div class="pv-stack-list">{{range .}}{{template "pvStackRow" .}}{{end}}</div>
+    {{- else}}<p class="pv-stack-none">Nothing is running in this feature.</p>{{end}}
+    <div class="pv-stack-folds">
+      {{- range .Folds}}{{template "pvStackMore" .}}{{end}}
+    </div>
+  </section>
+  {{- end}}{{end}}
+
+  <dl class="pv-stack-props">
+    <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
+    <dt>Checks</dt><dd>{{if .Row.ChecksTotal}}{{.Row.ChecksPassed}}/{{.Row.ChecksTotal}} passing{{else}}—{{end}}</dd>
+    <dt>Spend</dt><dd class="pv-num">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
+  </dl>
+  <details class="pv-stack-more">
+    <summary><span class="pv-chev" aria-hidden="true">{{template "icon" "chev"}}</span>Edit blockers</summary>
+    <form method="post" action="/ticket" class="stack-form">
+      <input type="hidden" name="ticket" value="{{.Row.URL}}">
+      <input type="hidden" name="branch" value="{{.Row.Branch}}">
+      <input type="hidden" name="return" value="{{.TranscriptPath}}">
+      <fieldset class="stack-fields">
+        <legend class="sr-only">Blockers</legend>
+        {{- range .Row.BlockedBy}}
+        <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
+        {{- end}}
+        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+      </fieldset>
+      <button type="submit" class="btn btn-sm">Save</button>
+    </form>
+  </details>
+</aside>{{end}}
+
+{{define "protoChrome"}}<style>
+/* Sidebar: resizable and collapsible. */
+.sidebar { transition: width var(--motion-base) var(--ease-out); }
+html[data-pv-resizing] .sidebar { transition: none; }
+html[data-pv-resizing] { cursor: col-resize; user-select: none; }
+.pv-resizer { position: sticky; top: 0; flex: none; width: 0; height: 100vh; z-index: 5; outline: none; }
+.pv-resizer::before { content: ""; position: absolute; inset: 0 -5px; cursor: col-resize; }
+.pv-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: -1px; width: 2px; background: transparent; transition: background var(--motion-fast) var(--ease-out); }
+.pv-resizer:hover::after, .pv-resizer:focus-visible::after, html[data-pv-resizing] .pv-resizer::after { background: var(--color-border-strong); }
+.pv-collapse { margin-left: 2px; color: var(--color-meta); }
+.pv-collapse:hover { color: var(--color-fg); }
+
+.app[data-pv-collapsed] { --sidebar-w: 52px; }
+.app[data-pv-collapsed] .pv-resizer { display: none; }
+.app[data-pv-collapsed] .sidebar { padding: 0 6px; overflow-x: hidden; }
+.app[data-pv-collapsed] .sidebar-head { flex-direction: column; justify-content: center; gap: 6px; height: auto; padding: 10px 0 8px; }
+.app[data-pv-collapsed] .sidebar-head > * { margin: 0; }
+.app[data-pv-collapsed] .pv-collapse { order: -1; }
+.app[data-pv-collapsed] .sidebar-brand { display: none; }
+.app[data-pv-collapsed] .sidebar-brand b,
+.app[data-pv-collapsed] .rail-search-wrap,
+.app[data-pv-collapsed] .scope-menu,
+.app[data-pv-collapsed] .rail-slot,
+.app[data-pv-collapsed] .rail-footer,
+.app[data-pv-collapsed] .shortcuts-button kbd,
+.app[data-pv-collapsed] .sidebar-count { display: none; }
+.app[data-pv-collapsed] .sidebar-item > span,
+.app[data-pv-collapsed] .shortcuts-button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.app[data-pv-collapsed] .sidebar-item { justify-content: center; padding: 0; }
+.app[data-pv-collapsed] .sidebar-foot { margin-top: auto; }
+.app[data-pv-collapsed] .pv-collapse .icon { transform: scaleX(-1); }
+
+/* Needs you: the whole card is the target; its verb sits above the stretched link. */
+.rail-card { position: relative; cursor: pointer; transition: border-color var(--motion-fast) var(--ease-out); }
+.rail-card .rail-link { position: static; }
+.rail-card .rail-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-lg); }
+.rail-card .rail-link:focus-visible { outline: none; }
+.rail-card:has(.rail-link:focus-visible) { box-shadow: var(--shadow-focus); }
+.rail-card form, .rail-card > a.rail-verb, .rail-card .pv-queued, .rail-card .pv-warn { position: relative; z-index: 1; }
+
+/* Verb feedback: queued while the loop works, refusal in words. */
+.pv-queued { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; padding-left: 22px; color: var(--color-muted); font-size: var(--text-xs); }
+.pv-warn { margin: 4px 0 0; padding-left: 22px; color: color-mix(in oklab, var(--color-s-failed), var(--color-ink) 12%); font-size: var(--text-xs); line-height: 1.4; }
+.rail-verb[disabled] { opacity: 0.6; cursor: progress; }
+
+/* In flight: working rows first and bright; waiting rows dim, each with its state word. */
+.pv-count-line { display: inline-flex; align-items: center; gap: 8px; }
+.pv-tally { display: inline-flex; align-items: center; gap: 4px; }
+.pv-tally::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--glyph); }
+.pv-tally[data-glyph="pending"]::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--color-meta); }
+.pv-sub > .rail-link, .pv-sub > .rail-waiting { padding-left: 23px; }
+.pv-sub { display: flex; flex-direction: column; }
+.pv-sub-label { margin: 6px 0 2px; padding-left: 31px; color: var(--color-meta); font-size: var(--text-2xs); font-weight: var(--font-weight-medium); }
+.rail-feature .pv-sub:not(.pv-sub-waiting) .rail-link { color: var(--color-fg-2); }
+.pv-sub-waiting .rail-link { min-height: 28px; }
+.pv-sub-waiting .rail-title { color: var(--color-muted); }
+.pv-sub-waiting > .rail-waiting { padding-left: 31px; margin: 2px 0 4px; color: var(--color-meta); }
+.pv-state { flex: none; order: 3; color: var(--color-meta); font-size: var(--text-2xs); white-space: nowrap; }
+.pv-state[data-glyph="checking"] { color: var(--color-muted); }
+
+/* Settled: one line, the PR title, one cleanup control. */
+.pv-settled { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; min-height: 30px; padding: 0 2px 0 31px; border-radius: var(--radius-sm); }
+.pv-settled:hover { background: var(--color-surface-3); }
+.pv-settled-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--color-muted); font-size: var(--text-sm); text-decoration: none; }
+.pv-settled-title:hover { color: var(--color-fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--color-border-strong); }
+.pv-settled-act { display: inline-flex; margin: 0; }
+.pv-icon-btn { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-meta); cursor: pointer; }
+.pv-icon-btn .icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.pv-icon-btn:hover { background: var(--color-surface); color: var(--color-fg); box-shadow: 0 0 0 1px var(--color-border); }
+.pv-icon-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.pv-icon-btn[disabled] { cursor: progress; opacity: 0.5; }
+.pv-icon-btn-warn { color: var(--color-s-failed); }
+.pv-spin { width: 26px; height: 26px; display: inline-grid; place-items: center; }
+.pv-spin::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--color-border); border-top-color: var(--color-muted); animation: pv-spin 0.9s linear infinite; }
+@keyframes pv-spin { to { rotate: 1turn; } }
+.pv-settled-warn { grid-column: 2 / -1; margin: 0 0 6px; padding: 0; }
+
+/* Stack panel: this ticket first, then live work; the rest folds away. */
+.pv-stack { gap: var(--space-4) !important; font-size: var(--text-sm); }
+.pv-stack .icon { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pv-stack-head { display: flex; flex-direction: column; gap: 8px; }
+.pv-stack-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-md); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-tight); }
+.pv-stack-progress { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-3); color: var(--color-muted); font-size: var(--text-xs); }
+.pv-stack-progress .meter { width: auto; }
+.pv-stack-links { display: flex; gap: var(--space-3); font-size: var(--text-xs); }
+.pv-stack-links a { color: var(--color-muted); text-underline-offset: 3px; }
+.pv-stack-links a:hover { color: var(--color-fg); }
+.pv-stack-sec { display: flex; flex-direction: column; gap: 2px; padding-top: var(--space-3); border-top: 1px solid var(--color-border-soft); }
+.pv-stack-sec h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; color: var(--color-muted); font-size: var(--text-xs); font-weight: var(--font-weight-medium); }
+.pv-stack-sub { margin: 6px 0 0; color: var(--color-meta); font-size: var(--text-2xs); }
+.pv-stack-none { margin: 0; color: var(--color-meta); font-size: var(--text-xs); }
+.pv-stack-count { color: var(--color-meta); font-weight: 400; font-variant-numeric: tabular-nums; }
+.pv-stack-list { display: flex; flex-direction: column; }
+.pv-stack-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: var(--radius-sm); color: var(--color-fg-2); text-decoration: none; }
+.pv-stack-row:hover { background: var(--color-surface-2); color: var(--color-fg); }
+.pv-stack-row[aria-current="page"] { background: var(--color-surface-2); color: var(--color-fg); font-weight: var(--font-weight-medium); }
+.pv-stack-row:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.pv-stack-ref { color: var(--color-meta); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.pv-stack-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pv-stack-tail { color: var(--color-meta); font-family: var(--font-mono); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
+.pv-stack-folds { display: flex; flex-direction: column; margin-top: 4px; }
+.pv-stack-more > summary { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px 0 2px; border-radius: var(--radius-sm); list-style: none; cursor: pointer; color: var(--color-muted); font-size: var(--text-xs); }
+.pv-stack-more > summary::-webkit-details-marker { display: none; }
+.pv-stack-more > summary:hover { background: var(--color-surface-2); color: var(--color-fg-2); }
+.pv-stack-more > summary:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.pv-stack-more > summary .pv-stack-count { margin-left: auto; }
+.pv-stack-more .pv-chev { display: inline-flex; color: var(--color-meta); transition: transform var(--motion-base) var(--ease-out); }
+.pv-stack-more[open] > summary .pv-chev { transform: rotate(90deg); }
+.pv-stack-more .pv-stack-row { color: var(--color-muted); }
+.pv-stack-more .stack-form { margin-top: var(--space-2); }
+.pv-stack-props { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--space-4); margin: 0; padding-top: var(--space-3); border-top: 1px solid var(--color-border-soft); font-size: var(--text-xs); }
+.pv-stack-props dt { color: var(--color-muted); }
+.pv-stack-props dd { margin: 0; color: var(--color-fg-2); }
+.pv-stack .pv-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 759px) {
+  .pv-resizer, .pv-collapse { display: none; }
+  .pv-icon-btn, .pv-spin { width: 36px; height: 36px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .pv-stack-more .pv-chev { transition: none; }
+  .pv-spin::before { animation-duration: 3s; }
+}
+</style>
+<script>
+(() => {
+  if (window.__pvChrome) return;
+  window.__pvChrome = true;
+  const MIN = 220, MAX = 440, DEF = 300, KEY_W = "cc:sidebar-w", KEY_C = "cc:sidebar-collapsed";
+  const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const put = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  const app = () => document.querySelector(".app");
+  const collapsed = () => app()?.hasAttribute("data-pv-collapsed") ?? false;
+  const setWidth = (w) => {
+    w = Math.round(Math.min(MAX, Math.max(MIN, w)));
+    document.documentElement.style.setProperty("--sidebar-w", w + "px");
+    document.querySelector(".pv-resizer")?.setAttribute("aria-valuenow", String(w));
+    return w;
+  };
+  const setCollapsed = (on) => {
+    app()?.toggleAttribute("data-pv-collapsed", on);
+    const b = document.querySelector("[data-pv-collapse]");
+    if (b) {
+      b.setAttribute("aria-expanded", String(!on));
+      b.setAttribute("aria-label", on ? "Expand sidebar" : "Collapse sidebar");
+      b.title = (on ? "Expand" : "Collapse") + " sidebar  [";
+    }
+    put(KEY_C, on ? "1" : "");
+  };
+  const width = () => document.getElementById("sidebar")?.getBoundingClientRect().width ?? DEF;
+  const w = Number(get(KEY_W));
+  if (w) setWidth(w);
+  document.addEventListener("DOMContentLoaded", () => setCollapsed(get(KEY_C) === "1" || new URL(location.href).searchParams.has("collapsed")));
+  document.addEventListener("htmx:afterSettle", () => setCollapsed(collapsed()));
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-pv-collapse]")) setCollapsed(!collapsed());
+  });
+  document.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".pv-resizer")) put(KEY_W, setWidth(DEF));
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "[" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.closest("input, textarea, select, [contenteditable]")) {
+      setCollapsed(!collapsed());
+      return;
+    }
+    if (e.target.closest?.(".pv-resizer") && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      put(KEY_W, setWidth(width() + (e.key === "ArrowLeft" ? -16 : 16)));
+    }
+  });
+  document.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest(".pv-resizer");
+    if (!handle || e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    document.documentElement.setAttribute("data-pv-resizing", "");
+    const move = (ev) => setWidth(ev.clientX);
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      document.documentElement.removeAttribute("data-pv-resizing");
+      put(KEY_W, String(Math.round(width())));
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up, { once: true });
+    handle.addEventListener("pointercancel", up, { once: true });
+  });
+})();
+</script>{{end}}

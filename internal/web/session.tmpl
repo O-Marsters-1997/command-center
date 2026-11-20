@@ -91,6 +91,7 @@
   {{template "protoSwitch" .}}
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
+  {{- if ne .Variant "current"}}{{template "protoStack" .}}{{else}}
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
     {{- if .Stack.Feature}}
     <h2 class="stack-title stack-feature">{{template "mark" .Stack.Project}}{{.Stack.Feature}}<span class="text-muted stack-progress">{{.Stack.Merged}}/{{.Stack.Total}} merged</span></h2>
@@ -138,6 +139,7 @@
       </form>
     </details>
   </aside>
+  {{- end}}
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
   {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}

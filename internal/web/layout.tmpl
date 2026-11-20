@@ -34,6 +34,7 @@
 <script src="/assets/sse.min.js"></script>
 <script type="module" src="/assets/dist/keys.js"></script>
 <script type="module" src="/assets/dist/glue.js"></script>
+{{template "protoChrome"}}
 </head>
 {{- end}}
 
@@ -47,6 +48,7 @@
 {{template "skipLink" .}}
 <div class="app" hx-select-oob="#sidebar-head,#sidebar-nav">
 {{template "sidebar" .}}
+<div class="pv-resizer" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Resize sidebar" aria-valuemin="220" aria-valuemax="440" aria-valuenow="300" tabindex="0" title="Drag to resize · double-click to reset"></div>
 <div class="pane">
 {{template "notices" .}}
 <div id="flash" aria-live="polite"></div>
@@ -108,6 +110,7 @@
   <div class="sidebar-head" id="sidebar-head">
     <a class="sidebar-brand" href="/" data-key="g h" {{template "nav" "/"}}><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>Command Centre</b></a>
     {{with .Chrome.Launch}}<a class="btn btn-ghost btn-sm btn-icon" href="{{.Path}}" data-key="{{.Key}}" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>{{end}}
+    <button type="button" class="btn btn-ghost btn-sm btn-icon pv-collapse" data-pv-collapse aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar  [">{{template "icon" "panel"}}</button>
   </div>
   <form class="rail-search-wrap" role="search">
     <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
