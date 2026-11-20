@@ -4,8 +4,10 @@ default:
 build: assets
     go build -o bin/cc ./cmd/cc
 
+log_view := "{ command -v hl >/dev/null && hl -P || cat; }"
+
 run *args: assets
-    go run ./cmd/cc {{args}}
+    set -o pipefail; go run ./cmd/cc {{args}} 2>&1 | {{log_view}}
 
 # Start the Postgres the app and the tests connect to.
 up:
@@ -94,4 +96,4 @@ ci:
     just test-e2e
 
 demo *args: assets
-    go run -tags=demo ./cmd/cc demo {{args}}
+    set -o pipefail; go run -tags=demo ./cmd/cc demo {{args}} 2>&1 | {{log_view}}
