@@ -1,7 +1,7 @@
 ci = "async"
 
 [checks]
-  pre_push = ["just fmt", "just lint", "go test ./..."]
+  pre_push = ["just fmt", "just lint-changed", "go test ./..."]
   suite = ["just ci"]
 
 [regen]
