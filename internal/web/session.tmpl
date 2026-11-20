@@ -115,37 +115,53 @@
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
-    {{- if .Stack.Feature}}
-    <h2 class="stack-title stack-feature">{{template "mark" .Stack.Project}}{{.Stack.Feature}}<span class="text-muted stack-progress">{{.Stack.Merged}}/{{.Stack.Total}} merged</span></h2>
-    <div class="stack-links">
-      <a class="btn btn-sm" href="{{.Stack.GraphPath}}" data-key="f" {{template "nav" .Stack.GraphPath}}>Graph</a>
-      <a class="btn btn-sm" href="{{.Stack.BoardPath}}" {{template "nav" .Stack.BoardPath}}>Board</a>
-    </div>
-    {{- range .Stack.Waves}}
-    <section class="stack-wave" aria-label="Wave {{.N}}">
-      <h3 class="stack-wave-label text-muted">Wave {{.N}}</h3>
-      <ul class="stack-list">{{range .Members}}<li class="stack-row"{{if .Current}} aria-current="page"{{end}}>{{template "stackLink" .}}</li>{{end}}</ul>
+    {{- with .Stack}}
+    {{- if .Feature}}
+    <header class="flex flex-col gap-2">
+      <h2 class="stack-title">{{template "mark" .Project}}<span>{{.Feature}}</span></h2>
+      <div class="stack-progress">
+        <span class="meter" data-glyph="done" role="meter" aria-valuenow="{{.MergedPercent}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.Merged}} of {{.Total}} merged"><span class="meter-fill" style="width: {{.MergedPercent}}%"></span></span>
+        <span class="font-mono">{{.Merged}}/{{.Total}} merged</span>
+      </div>
+      <nav class="stack-links" aria-label="Feature views">
+        <a href="{{.GraphPath}}" data-key="f" {{template "nav" .GraphPath}}>Graph</a>
+        <a href="{{.BoardPath}}" {{template "nav" .BoardPath}}>Board</a>
+      </nav>
+    </header>
+    {{- end}}
+    <section class="stack-section" aria-labelledby="stack-this">
+      <h3 id="stack-this" class="stack-heading">This ticket</h3>
+      {{- with .Blockers}}
+      <p class="stack-sub">Blocked by</p>
+      {{template "stackList" .}}
+      {{- end}}
+      {{- with .Unlocks}}
+      <p class="stack-sub">Merging it unlocks</p>
+      {{template "stackList" .}}
+      {{- end}}
+      {{- if not (or .Blockers .Unlocks)}}<p class="stack-none">Nothing blocks it and nothing waits on it.</p>{{end}}
+    </section>
+    {{- if .Feature}}
+    <section class="stack-section" aria-labelledby="stack-live">
+      <h3 id="stack-live" class="stack-heading">In flight <span class="stack-count">{{len .InFlight}}</span></h3>
+      {{- with .InFlight}}{{template "stackList" .}}
+      {{- else}}<p class="stack-none">Nothing is running in this feature.</p>{{end}}
+      {{- range .Folds}}{{if .Links}}
+      <details class="stack-fold">
+        <summary>{{template "icon" "chev"}}{{.Label}}<span class="stack-count">{{len .Links}}</span></summary>
+        {{template "stackList" .Links}}
+      </details>
+      {{- end}}{{end}}
     </section>
     {{- end}}
-    {{- else}}
-    <h2 class="stack-title">Blocked by</h2>
-    {{- if .Stack.Blockers}}
-    <ul class="stack-list">{{range .Stack.Blockers}}<li class="stack-row">{{template "stackLink" .}}</li>{{end}}</ul>
-    {{- else}}<p class="text-muted">Nothing blocks this ticket.</p>{{end}}
-    <h2 class="stack-title">Merging this unlocks</h2>
-    {{- if .Stack.Unlocks}}
-    <ul class="stack-list">{{range .Stack.Unlocks}}<li class="stack-row">{{template "stackLink" .}}</li>{{end}}</ul>
-    {{- else}}<p class="text-muted">Nothing waits on this ticket.</p>{{end}}
     {{- end}}
     <dl class="stack-props">
-      <dt>Repo</dt><dd>{{.Row.Repo}}</dd>
-      <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
       <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
       <dt>Checks</dt><dd>{{if .Row.ChecksTotal}}{{.Row.ChecksPassed}}/{{.Row.ChecksTotal}} passing{{else}}—{{end}}</dd>
-      <dt>Spend</dt><dd class="mono">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
+      <dt>Spend</dt><dd class="font-mono">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
     </dl>
-    <details class="stack-edit">
-      <summary>Edit blockers</summary>
+    <details class="stack-fold stack-edit">
+      <summary>{{template "icon" "chev"}}Edit blockers</summary>
       <form method="post" action="/ticket" class="stack-form">
         <input type="hidden" name="ticket" value="{{.Row.URL}}">
         <input type="hidden" name="branch" value="{{.Row.Branch}}">
@@ -268,4 +284,16 @@
   </a>
   {{- end}}
 </nav>{{end}}{{end}}
-{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .Title}} <span class="stack-row-title">{{.}}</span>{{end}}{{with .Metric}}<span class="stack-row-metric font-mono text-muted">{{.}}</span>{{end}}{{end}}
+{{define "stackList"}}<ul class="stack-list">
+  {{- range .}}
+  <li>{{if .Path}}<a class="stack-row" href="{{.Path}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "stackRow" .}}</a>
+  {{- else}}<span class="stack-row">{{template "stackRow" .}}</span>{{end}}</li>
+  {{- end}}
+</ul>{{end}}
+{{define "stackRow"}}
+    {{- if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}
+    <span class="stack-row-ref">{{.Ref}}</span>
+    <span class="stack-row-title">{{or .Title .Ref}}</span>
+    <span class="stack-row-tail">{{with .Metric}}{{.}}{{else}}{{with .Wave}}wave {{.}}{{end}}{{end}}</span>
+    {{- with .Label}}<span class="sr-only">{{.}}</span>{{end}}
+{{- end}}
