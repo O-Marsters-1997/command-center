@@ -134,6 +134,7 @@ type Snapshot struct {
 	intents     map[TicketURL][]Intent
 	sessions    map[TicketURL]string
 	removals    map[TicketURL]Removal
+	refusals    map[TicketURL]string
 	transitions []Transition
 	verdicts    map[TicketURL]string
 	repos       []RepoStatus
@@ -227,6 +228,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		intents:     in.Intents,
 		sessions:    make(map[TicketURL]string, len(in.Tickets)),
 		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
+		refusals:    in.Removals,
 		repos:       in.Repos,
 		obs:         in.Obs,
 		refreshes:   in.Refreshes,

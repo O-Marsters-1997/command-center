@@ -67,6 +67,47 @@ func TestSnapshot_AutoFollowUps(t *testing.T) {
 	}
 }
 
+func TestSnapshot_AutoRemovals(t *testing.T) {
+	t.Parallel()
+	first := ticket("1", "cc-1")
+
+	tests := []struct {
+		name     string
+		pr       plan.PRState
+		worktree bool
+		intents  []plan.Intent
+		refusals map[plan.TicketURL]string
+		want     []plan.TicketURL
+	}{
+		{name: "merged with a worktree", pr: plan.Merged, worktree: true, want: []plan.TicketURL{first.URL}},
+		{name: "open pull request", pr: plan.Open, worktree: true},
+		{name: "worktree already gone", pr: plan.Merged},
+		{name: "intent pending", pr: plan.Merged, worktree: true,
+			intents: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
+		{name: "removal refused before", pr: plan.Merged, worktree: true,
+			refusals: map[plan.TicketURL]string{first.URL: "worktree is dirty"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			obs := plan.NewObservation(time.Time{})
+			obs.PRs[key(first.Branch)] = plan.PR{Number: 1, State: tt.pr}
+			if tt.worktree {
+				obs.Worktrees[key(first.Branch)] = "/wt/cc-1"
+			}
+			snap := derive(plan.Rules{}, plan.Input{
+				Tickets: []plan.Ticket{first}, Obs: obs,
+				Runs:     map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
+				Intents:  map[plan.TicketURL][]plan.Intent{first.URL: tt.intents},
+				Removals: tt.refusals,
+			})
+			if diff := cmp.Diff(tt.want, snap.AutoRemovals(), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("AutoRemovals() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestSnapshot_AutoFollowUps_VerifyFailed(t *testing.T) {
 	t.Parallel()
 	first := ticket("1", "cc-1")

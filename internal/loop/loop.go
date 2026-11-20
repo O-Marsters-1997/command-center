@@ -250,6 +250,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err := l.timed(&t.timing.Removal, removeWorktrees); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
+	if err := l.queueAutoRemovals(ctx, snap); err != nil {
+		return fmt.Errorf("auto removal: %w", err)
+	}
 	snap, err := l.derive(ctx, t)
 	if err != nil {
 		return fmt.Errorf("derive for push: %w", err)

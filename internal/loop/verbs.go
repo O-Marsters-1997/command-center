@@ -255,6 +255,16 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapsho
 	})
 }
 
+func (l *Loop) queueAutoRemovals(ctx context.Context, snap plan.Snapshot) error {
+	for _, url := range snap.AutoRemovals() {
+		request := store.VerbRequest{Ticket: string(url), Verb: plan.VerbRemoveWorktree, At: l.clock.Now()}
+		if _, err := l.store.QueueVerbIntent(ctx, request); err != nil {
+			return fmt.Errorf("queue removal of %s: %w", url, err)
+		}
+	}
+	return nil
+}
+
 func (l *Loop) removeWorktreeOne(
 	ctx context.Context, e plan.Entry, removal plan.Removal, obs plan.Observation,
 ) error {
