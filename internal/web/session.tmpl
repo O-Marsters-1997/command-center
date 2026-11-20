@@ -62,12 +62,12 @@
       {{- range .Log.Phases}}
       <section class="phase">
         <header class="phase-head flex items-baseline gap-2">
-          <span class="phase-skill">{{if .Skill}}{{.Skill}}{{else}}start{{end}}</span>{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
+          {{if .Skill}}{{template "skillPill" .Skill}}{{else}}<span class="phase-skill">start</span>{{end}}{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
           <span class="phase-rule"></span>
           <span class="phase-at">{{.At}}</span>
         </header>
         {{- range .Items}}
-        {{if .Folded}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{template "logline" .}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{else}}{{template "logline" .Line}}{{end}}
+        {{if .Folded}}<details class="fold"><summary><span class="fold-count">{{.Group.Calls}} tool call{{if ne .Group.Calls 1}}s{{end}}</span>{{with .Group.Failed}} <span class="fold-fail">· {{.}} failed</span>{{end}} <span class="fold-mix">{{.Group.Mix}}</span></summary><div class="fold-body">{{range .Group.Lines}}{{template "logline" .}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{else}}{{template "logline" .Line}}{{end}}
         {{- end}}
       </section>
       {{- end}}

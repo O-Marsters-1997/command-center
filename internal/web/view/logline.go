@@ -28,8 +28,6 @@ type LogLine struct {
 	Result  string
 	Failed  bool
 	Output  string
-	Fold    bool
-	Open    bool
 	Diff    []DiffRow
 	Added   int
 	Removed int
@@ -185,8 +183,6 @@ func (p callPair) line() LogLine {
 		line.CallID = p.call.CallID
 		line.Result = p.cmdWord()
 		line.Output = p.result.Output
-		line.Fold = line.Output != ""
-		line.Open = line.Fold && line.Failed
 		return line
 	}
 	if p.called && p.answered {

@@ -51,10 +51,10 @@ type logItem struct {
 }
 
 type callGroup struct {
-	Summary  string
-	FailNote string
-	Open     bool
-	Lines    []LogLine
+	Calls  int
+	Failed int
+	Mix    string // tool-mix summary, shown on hover and when open
+	Lines  []LogLine
 }
 
 type LogDetail struct {
@@ -214,11 +214,10 @@ func takeFinalAnswer(run *agentlog.Run) string {
 
 func buildPhases(phases []agentlog.Phase, mode LogFilter) []phaseView {
 	firstFail := firstFailureIndex(phases)
-	openGroups := mode == LogTools || mode == LogFails
 	idx := 0
 	var views []phaseView
 	for _, phase := range phases {
-		b := phaseBuilder{mode: mode, openGroups: openGroups}
+		b := phaseBuilder{mode: mode}
 		for _, event := range phase.Events {
 			b.add(event, idx == firstFail)
 			idx++
@@ -230,10 +229,9 @@ func buildPhases(phases []agentlog.Phase, mode LogFilter) []phaseView {
 }
 
 type phaseBuilder struct {
-	mode       LogFilter
-	openGroups bool
-	items      []logItem
-	pending    []callPair
+	mode    LogFilter
+	items   []logItem
+	pending []callPair
 }
 
 func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
@@ -281,17 +279,12 @@ func (b *phaseBuilder) flush() {
 		}
 	}
 	if len(shown) > 0 {
-		group := callGroup{Summary: mixOf(shown).summary(), Open: b.openGroups}
-		failed := 0
+		group := callGroup{Calls: len(shown), Mix: mixOf(shown).summary()}
 		for _, p := range shown {
 			group.Lines = append(group.Lines, flattenLine(p.line()))
-			group.Open = group.Open || p.anchor
 			if p.failed() {
-				failed++
+				group.Failed++
 			}
-		}
-		if failed > 0 {
-			group.FailNote = fmt.Sprintf("%d failed", failed)
 		}
 		b.items = append(b.items, logItem{Kind: "calls", Group: group, Folded: true})
 	}
