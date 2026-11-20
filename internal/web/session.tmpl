@@ -4,6 +4,7 @@
 {{template "shellContent" .}}
 <article class="session" data-session="{{.Row.URL}}">
 <div class="session-main">
+  {{- if .Variant}}{{template "protoMain" .}}{{else}}
   <header class="session-head">
     <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.Label}}</span></span>
     <h1 class="session-ref">{{or .Row.Title .Ref}}</h1>
@@ -86,6 +87,8 @@
   {{- end}}
   {{template "sessionActions" .}}
   {{template "sessionComposer" .}}
+  {{- end}}
+  {{template "protoSwitch" .}}
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">

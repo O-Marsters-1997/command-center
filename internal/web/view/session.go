@@ -46,6 +46,7 @@ type SessionPage struct {
 	UndoVerb       plan.Verb
 	ResetComposer  bool
 	Fragment       bool
+	Variant        string
 
 	PendingMessages []string
 	Model           string
