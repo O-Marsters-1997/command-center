@@ -56,6 +56,26 @@ lint:
         golangci/golangci-lint:{{golangci_version}} \
         golangci-lint run ./...
 
+lint-changed base="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ! grep -nE '^[[:space:]]*exec[[:space:]]+sleep([[:space:]]|$)' e2e/tests/*.txtar
+    want="{{golangci_version}}"
+    have="v$(golangci-lint version --short)"
+    if [ "${have%.*}" != "${want%.*}" ]; then
+        echo "error: golangci-lint $have does not match .golangci-version $want" >&2
+        exit 1
+    fi
+    base="{{base}}"
+    [ -n "$base" ] || base=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo origin/main)
+    from=$(git merge-base "$base" HEAD)
+    pkgs=$({
+        git diff --name-only --diff-filter=d "$from"
+        git ls-files --others --exclude-standard
+    } | grep '\.go$' | xargs -n1 dirname | sort -u | sed 's|^|./|' || true)
+    [ -n "$pkgs" ] || exit 0
+    golangci-lint run --allow-parallel-runners --new-from-rev="$from" $pkgs
+
 fmt:
     go fmt ./...
 
