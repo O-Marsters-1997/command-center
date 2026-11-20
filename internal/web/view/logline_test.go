@@ -49,8 +49,8 @@ func TestLineOf(t *testing.T) {
 	t.Run("command result", func(t *testing.T) {
 		t.Parallel()
 		type result struct {
-			Result             string
-			Failed, Fold, Open bool
+			Result, Output string
+			Failed         bool
 		}
 		tests := []struct {
 			name  string
@@ -58,14 +58,14 @@ func TestLineOf(t *testing.T) {
 			want  result
 		}{
 			{
-				name:  "a pass shows a tick and its duration, output folded",
+				name:  "a pass shows a tick and its duration, and keeps its output",
 				event: agentlog.Event{Kind: agentlog.Cmd, Done: true, Elapsed: 1200 * time.Millisecond, Output: "ok"},
-				want:  result{Result: "✓ 1.2s", Fold: true},
+				want:  result{Result: "✓ 1.2s", Output: "ok"},
 			},
 			{
-				name:  "a failure shows its exit code, output open",
+				name:  "a failure shows its exit code and keeps its output",
 				event: agentlog.Event{Kind: agentlog.Cmd, Done: true, ExitCode: 2, Elapsed: 3 * time.Second, Output: "boom"},
-				want:  result{Result: "exit 2 3s", Failed: true, Fold: true, Open: true},
+				want:  result{Result: "exit 2 3s", Output: "boom", Failed: true},
 			},
 			{
 				name:  "interrupted is not a pass",
@@ -83,7 +83,7 @@ func TestLineOf(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				line := view.LineOf(tt.event)
-				got := result{Result: line.Result, Failed: line.Failed, Fold: line.Fold, Open: line.Open}
+				got := result{Result: line.Result, Output: line.Output, Failed: line.Failed}
 				if diff := cmp.Diff(tt.want, got); diff != "" {
 					t.Errorf("LineOf(%+v) mismatch (-want +got):\n%s", tt.event, diff)
 				}

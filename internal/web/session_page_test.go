@@ -379,6 +379,28 @@ func TestSessionPage(t *testing.T) {
 		}
 	})
 
+	t.Run("a tool group holding a failure renders closed with its counts", func(t *testing.T) {
+		t.Parallel()
+		const log = `{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":[` +
+			`{"type":"tool_use","id":"a","name":"Read","input":{"file_path":"a.go"}},` +
+			`{"type":"tool_use","id":"b","name":"Read","input":{"file_path":"b.go"}}]}}` + "\n" +
+			`{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"content":[` +
+			`{"type":"tool_result","tool_use_id":"a","content":"ok"},` +
+			`{"type":"tool_result","tool_use_id":"b","is_error":true,"content":"no such file"}]}}` + "\n"
+		path := sessionPagePath("https://github.com/o/r/issues/76")
+		main := sessionMain(t, detailStore(t, writeRunLog(t, log), testNow, testNow), path)
+
+		if open := main.Find("details[open]"); len(open) != 0 {
+			t.Errorf("GET %s open details = %d, want every fold closed despite the failure", path, len(open))
+		}
+		if text := strings.Join(strings.Fields(main.Text()), " "); !strings.Contains(text, "2 tool calls · 1 failed") {
+			t.Errorf("GET %s text = %q, want the group to read 2 tool calls · 1 failed", path, text)
+		}
+		if got := len(main.Find("details details[data-glyph=failed]")); got != 1 {
+			t.Errorf("GET %s failed calls inside the group = %d, want 1", path, got)
+		}
+	})
+
 	t.Run("connects the transcript to the log stream", func(t *testing.T) {
 		t.Parallel()
 		logPath := writeLog(t, 3)
