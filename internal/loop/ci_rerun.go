@@ -22,18 +22,24 @@ func (l *Loop) applyAutoFollowUps(
 		if _, refusal := idleWorktreeFor(ticket.Plan(), t.obs); refusal != "" {
 			continue
 		}
-		checks := t.obs.PRs[ticket.Ref()].Checks
-		var red []plan.RedCheck
-		for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
-			red = append(red, plan.RedCheck{Name: name, DetailsURL: checks[name].DetailsURL})
-		}
-		picked := store.FollowUpPayload{Message: plan.ComposeFixCI(red)}
+		picked := store.FollowUpPayload{Message: l.autoMessage(auto, entry, t.obs.PRs[ticket.Ref()].Checks)}
 		err := l.followUpOne(ctx, snap, t, ticket, picked, auto.Cause)
 		if err != nil && !errors.Is(err, errIntentPending) {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 	}
 	return nil
+}
+
+func (l *Loop) autoMessage(auto plan.AutoFollowUp, entry plan.Entry, checks map[string]plan.CheckState) string {
+	if auto.Cause == plan.CauseVerifyFailed {
+		return plan.ComposeFixVerify(l.tailOf(auto.LogPath))
+	}
+	var red []plan.RedCheck
+	for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
+		red = append(red, plan.RedCheck{Name: name, DetailsURL: checks[name].DetailsURL})
+	}
+	return plan.ComposeFixCI(red)
 }
 
 func (l *Loop) rerunFailedChecks(ctx context.Context, snap plan.Snapshot, byURL map[plan.TicketURL]store.Ticket) {

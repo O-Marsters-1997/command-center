@@ -1,8 +1,10 @@
 package loop_test
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,20 +58,30 @@ func TestVerify(t *testing.T) {
 		p.Obs.LocalTips = map[plan.BranchRef]plan.SHA{
 			branchRef("repo", "child"): plan.SHA(p.head(t, f.childWorktree, "HEAD")),
 		}
+		if err := os.WriteFile(spawns[0].LogFile.Name(), []byte("lint: unused variable x\n"), 0o600); err != nil {
+			t.Fatalf("write verify log: %v", err)
+		}
 		fake.Exit(1, 1)
+		p.tick(t)
 		p.tick(t)
 		p.tick(t)
 		if got := p.events(t, "verification_failed"); len(got) != 0 {
 			t.Errorf("verification_failed events = %+v, want none", got)
 		}
-		if got := len(fake.Spawns()); got != 1 {
-			t.Errorf("spawns after the failure = %d, want the failed tip not reverified", got)
+		after := fake.Spawns()
+		if len(after) != 2 {
+			t.Fatalf("spawns after the failure = %d, want the verify and one follow-up", len(after))
+		}
+		for _, want := range []string{"verify command failed", "lint: unused variable x"} {
+			if !strings.Contains(after[1].Prompt, want) {
+				t.Errorf("follow-up prompt = %q, want it to mention %q", after[1].Prompt, want)
+			}
 		}
 		if got := remoteTip(t, p); got != originalTip {
 			t.Errorf("remote parent tip = %s, want unchanged %s", got, originalTip)
 		}
-		if got := rowState(t, p, f); got != "Verification failed" {
-			t.Errorf("row state = %q, want Verification failed", got)
+		if got := rowState(t, p, f); got != "Agent running" {
+			t.Errorf("row state = %q, want Agent running", got)
 		}
 	})
 

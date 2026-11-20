@@ -65,6 +65,11 @@ func ComposeFixCI(checks []RedCheck) string {
 	return b.String()
 }
 
+func ComposeFixVerify(tail string) string {
+	return fmt.Sprintf("The verify command failed on this branch's tip. Fix what it reports, "+
+		"re-run it locally and commit. Its output ended:\n\n```\n%s\n```", strings.TrimRight(tail, "\n"))
+}
+
 func ComposeFollowUp(text string) string {
 	return fmt.Sprintf(
 		"You were not given a fresh worktree. This one already carries a branch, a diff and a git history "+
