@@ -64,6 +64,8 @@ type RailItem struct {
 	Label     string
 	Detail    string
 	Verb      plan.Verb
+	Pending   bool
+	Refusal   string
 	Reply     bool
 	Path      string
 	Selected  bool
@@ -179,7 +181,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
 			Project: r.Mark(), Label: r.Label,
 			Detail: r.Detail, Path: scope.withScope(cmp.Or(SessionPath(r.URL), ticketsPath)),
-			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0,
+			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0, Refusal: r.Refusal,
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Detail != ""
@@ -192,6 +194,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 				break
 			}
 		}
+		it.Pending = it.Verb != "" && slices.Contains(r.PendingVerbs, it.Verb)
 		if r.Alive && r.Glyph == plan.GlyphRunning {
 			it.Started = now.Add(-time.Duration(r.ElapsedSeconds) * time.Second).UTC().Format(time.RFC3339)
 		}
