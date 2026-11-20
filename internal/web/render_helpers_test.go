@@ -21,9 +21,14 @@ func renderBoard(t *testing.T, server *web.Server) string {
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
 	t.Helper()
-	r := req{}
+	return renderPathWith(t, server, path, http.Header{})
+}
+
+func renderPathWith(t *testing.T, server *web.Server, path string, header http.Header) string {
+	t.Helper()
+	r := req{Header: header.Clone()}
 	if isFragmentRoute(path) {
-		r.Header = http.Header{"Hx-Request": {"true"}}
+		r.Header.Set("Hx-Request", "true")
 	}
 	rec := do(t, server, http.MethodGet, path, r)
 	if rec.Code != http.StatusOK {

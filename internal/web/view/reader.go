@@ -229,6 +229,7 @@ func (r *Reader) buildChrome(f frame) Chrome {
 		Gauges:       deriveGauges(gauges, split, now),
 		PageTitle:    appTitle,
 		Keymap:       Keymap,
+		Sidebar:      Sidebar{Width: sidebarInitial},
 		RepoScope:    params.Repo,
 		FeatureScope: params.Feature,
 		Launch:       NavItem{Path: params.withScope("/launch"), Key: keyLaunch},

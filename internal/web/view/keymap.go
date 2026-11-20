@@ -20,6 +20,7 @@ var Keymap = []KeyGroup{
 		{"G 1 – G 9", "Scope to project 1–9"},
 		{"G 0", "All projects"},
 		{"C", "Launch a feature"},
+		{"[", "Collapse or expand the sidebar"},
 		{"?", "Show this sheet"},
 		{"Esc", "Close the sheet; clear the search"},
 	}},

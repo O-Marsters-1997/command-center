@@ -1,11 +1,13 @@
 package web_test
 
 import (
+	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
@@ -19,21 +21,27 @@ func everyPage(t *testing.T) []renderedPage {
 	board := newServer(railStore(t, true), testNow)
 	features := threeFeatureServer(t)
 	repos := reposServer(t, new(atomic.Int32))
+	render := func(server *web.Server, path string) string {
+		t.Helper()
+		return renderPathWith(t, server, path, http.Header{"Cookie": {sidebarCookies}})
+	}
 	return []renderedPage{
-		{name: "home", html: renderPath(t, board, "/")},
-		{name: "tickets", html: renderPath(t, board, "/tickets")},
-		{name: "board", html: renderPath(t, board, "/board")},
-		{name: "rail", html: renderPath(t, board, "/rail")},
-		{name: "insights", html: renderPath(t, board, "/insights")},
-		{name: "feature", html: renderPath(t, features, "/f/board-scope")},
-		{name: "feature graph", html: renderPath(t, features, "/f/board-scope/graph")},
-		{name: "feature launch", html: renderPath(t, features, "/f/board-scope/launch")},
-		{name: "launch picker", html: renderPath(t, features, "/launch")},
-		{name: "session", html: renderPath(t, newServer(failed, testNow), "/s/acme/web/1")},
-		{name: "repos", html: renderPath(t, repos, "/repos")},
-		{name: "repo", html: renderPath(t, repos, "/repos/acme/new")},
+		{name: "home", html: render(board, "/")},
+		{name: "tickets", html: render(board, "/tickets")},
+		{name: "board", html: render(board, "/board")},
+		{name: "rail", html: render(board, "/rail")},
+		{name: "insights", html: render(board, "/insights")},
+		{name: "feature", html: render(features, "/f/board-scope")},
+		{name: "feature graph", html: render(features, "/f/board-scope/graph")},
+		{name: "feature launch", html: render(features, "/f/board-scope/launch")},
+		{name: "launch picker", html: render(features, "/launch")},
+		{name: "session", html: render(newServer(failed, testNow), "/s/acme/web/1")},
+		{name: "repos", html: render(repos, "/repos")},
+		{name: "repo", html: render(repos, "/repos/acme/new")},
 	}
 }
+
+const sidebarCookies = "rail-width=9000; rail-collapsed=1"
 
 func isThirdParty(url string) bool {
 	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "//")
@@ -57,6 +65,24 @@ func TestPageInvariants(t *testing.T) {
 				if _, external := attrs["src"]; tag.Data == "script" && !external {
 					t.Errorf("%s has an inline script: %s", page.name, tag.String())
 				}
+			}
+		})
+
+		t.Run(page.name+" renders the sidebar from its cookies", func(t *testing.T) {
+			t.Parallel()
+			root := htmltest.Parse(t, page.html)
+			apps := root.Find(".app")
+			if len(apps) == 0 {
+				return
+			}
+			if _, ok := apps[0].Attr("data-collapsed"); !ok {
+				t.Errorf("%s .app is not collapsed under %q", page.name, sidebarCookies)
+			}
+			if got, _ := root.One(t, ".sidebar-resizer").Attr("aria-valuenow"); got != "440" {
+				t.Errorf("%s resizer aria-valuenow = %q, want 440 (clamped)", page.name, got)
+			}
+			if got, _ := root.One(t, "button[data-sidebar-toggle]").Attr("aria-expanded"); got != "false" {
+				t.Errorf("%s sidebar toggle aria-expanded = %q, want false", page.name, got)
 			}
 		})
 

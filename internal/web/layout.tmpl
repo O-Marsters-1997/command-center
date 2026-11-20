@@ -45,8 +45,9 @@
 {{template "docHead" .}}
 <body>
 {{template "skipLink" .}}
-<div class="app" hx-select-oob="#sidebar-head,#sidebar-nav">
+<div class="app" hx-select-oob="#sidebar-head,#sidebar-nav" style="--sidebar-w: {{.Sidebar.Width}}px"{{if .Sidebar.Collapsed}} data-collapsed{{end}}>
 {{template "sidebar" .}}
+<div class="sidebar-resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="sidebar" aria-label="Resize sidebar" aria-valuemin="{{.Sidebar.Min}}" aria-valuemax="{{.Sidebar.Max}}" aria-valuenow="{{.Sidebar.Width}}" title="Drag to resize · double-click to reset"></div>
 <div class="pane">
 {{template "notices" .}}
 <div id="flash" aria-live="polite"></div>
@@ -108,6 +109,7 @@
   <div class="sidebar-head" id="sidebar-head">
     <a class="sidebar-brand" href="/" data-key="g h" {{template "nav" "/"}}><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>Command Centre</b></a>
     {{with .Chrome.Launch}}<a class="btn btn-ghost btn-sm btn-icon" href="{{.Path}}" data-key="{{.Key}}" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>{{end}}
+    <button type="button" class="btn btn-ghost btn-sm btn-icon sidebar-toggle" data-key="[" data-sidebar-toggle aria-controls="sidebar" aria-expanded="{{not .Sidebar.Collapsed}}" aria-label="Toggle sidebar" title="Toggle sidebar  [">{{template "icon" "panel"}}</button>
   </div>
   <form class="rail-search-wrap" role="search">
     <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
