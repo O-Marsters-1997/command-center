@@ -1,26 +1,22 @@
-{{/* PROTOTYPE (branch prototype/session-disclosure): session page variants behind ?variant=a|b|c. Never merge. */}}
-{{define "protoMain"}}
-{{template "protoStyle"}}
-{{if eq .Variant "b"}}{{template "protoB" .}}{{else if eq .Variant "c"}}{{template "protoC" .}}{{else}}{{template "protoA" .}}{{end}}
-{{end}}
+{{/* PROTOTYPE (branch prototype/session-disclosure): the Thread session page. ?variant=current shows the old page. Never merge. */}}
+{{define "protoMain"}}{{template "protoStyle"}}{{template "protoA" .}}{{end}}
 
-{{/* ---------- shared pieces ---------- */}}
 {{define "protoTitle"}}<header class="pv-head">
   <h1 class="pv-title">{{or .Row.Title .Ref}}</h1>
   <p class="pv-meta">
     <span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}" data-glyph="{{.Row.Glyph}}">{{.Row.Label}}</span>
-    <span class="pv-sep"></span><span>{{.Row.Repo}} {{.Ref}}</span>
-    {{- with .Row.Branch}}<span class="pv-sep"></span><span class="pv-mono" title="{{$.Row.Worktree}}">{{.}}</span>{{end}}
-    {{- with .PRURL}}<span class="pv-sep"></span><a href="{{.}}" target="_blank" rel="noopener">PR #{{$.Row.PRNumber}}</a>{{end}}
-    {{- with .Worked}}{{if .IsSome}}{{with .Unwrap}}<span class="pv-sep"></span><span class="pv-num">{{.Wall}}{{if .Turns}} · {{.Turns}} turns{{end}}</span>{{end}}{{end}}{{end}}
+    <span class="pv-sep" aria-hidden="true"></span><span>{{.Row.Repo}} {{.Ref}}</span>
+    {{- with .Row.Branch}}<span class="pv-sep" aria-hidden="true"></span><span class="pv-mono" title="{{$.Row.Worktree}}">{{.}}</span>{{end}}
+    {{- with .PRURL}}<span class="pv-sep" aria-hidden="true"></span><a href="{{.}}" target="_blank" rel="noopener">PR #{{$.Row.PRNumber}}</a>{{end}}
+    {{- with .Worked}}{{if .IsSome}}{{with .Unwrap}}<span class="pv-sep" aria-hidden="true"></span><span class="pv-num">{{.Wall}}{{if .Turns}} · {{.Turns}} turns{{end}}</span>{{end}}{{end}}{{end}}
   </p>
   {{- if .Callout}}{{with .Row.Detail}}<p class="pv-reason">{{.}}</p>{{end}}{{end}}
 </header>{{end}}
 
 {{define "protoPrompt"}}<details class="pv-prompt">
-  <summary>{{template "icon" "doc"}}<span class="pv-prompt-label">Prompt</span>
+  <summary><span class="pv-chev" aria-hidden="true">{{template "icon" "chev"}}</span><span class="pv-prompt-label">Prompt</span>
     <span class="pv-clip">{{if .Prompt.Kept}}{{.Prompt.Text}}{{else}}not kept{{end}}</span>
-    <span class="pv-hint">{{with .Launched}}{{if .IsSome}}{{template "age" .Unwrap}}{{end}}{{end}}</span></summary>
+    <span class="pv-num pv-faint">{{with .Launched}}{{if .IsSome}}{{template "age" .Unwrap}}{{end}}{{end}}</span></summary>
   {{- if .Prompt.Kept}}<pre class="pv-prompt-body">{{.Prompt.Text}}</pre>{{end}}
 </details>{{end}}
 
@@ -33,34 +29,33 @@
   </nav>
 </div>{{end}}
 
-{{define "protoSkill"}}<span class="pv-skill">{{template "icon" "zap"}}{{.Arg}}</span>{{end}}
+{{define "protoSkill"}}<span class="pv-skill">{{template "icon" "zap"}}{{.}}</span>{{end}}
 
-{{define "protoCall"}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}<div class="pv-call-skill">{{template "protoSkill" .}}</div>
+{{define "protoCall"}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}<div class="pv-call-skill">{{template "protoSkill" .Arg}}</div>
 {{- else}}<details class="pv-call"{{if .Failed}} data-glyph="failed"{{end}}{{if .CallID}} id="call-{{.CallID}}"{{end}}>
   <summary><span class="pv-call-verb">{{.Verb}}</span><code class="pv-call-arg">{{.Arg}}</code><span class="pv-call-res">{{if and (not .Failed) (or .Added .Removed)}}<span class="diff-plus">+{{.Added}}</span> <span class="diff-minus">−{{.Removed}}</span>{{else}}{{.Result}}{{end}}</span></summary>
   <div class="pv-call-body">
     {{- with .Arg}}<pre class="pv-out pv-out-arg">{{.}}</pre>{{end}}
     {{- with .Output}}<pre class="pv-out">{{.}}</pre>{{end}}
     {{- with .Diff}}<div class="call-diff">{{range .}}<div class="diff-row diff-{{.Op}}">{{.Text}}</div>{{end}}</div>{{end}}
-    {{- if not (or .Output .Diff)}}<p class="pv-hint">No output kept.</p>{{end}}
+    {{- if not (or .Output .Diff)}}<p class="pv-faint pv-small">No output kept.</p>{{end}}
   </div>
 </details>{{end}}{{end}}
 
-{{define "protoTools"}}<details class="pv-tools"{{if .FailNote}} data-failed{{end}}>
+{{define "protoTools"}}<details class="pv-tools">
   <summary>
-    <span class="pv-chev">{{template "icon" "chev"}}</span>
+    <span class="pv-chev" aria-hidden="true">{{template "icon" "chev"}}</span>
     <span class="pv-count">{{len .Lines}} tool {{if eq (len .Lines) 1}}call{{else}}calls{{end}}</span>
     {{- with .FailNote}}<span class="pv-fail">{{.}}</span>{{end}}
-    {{- range .Lines}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}{{template "protoSkill" .}}{{end}}{{end}}
+    {{- range .Lines}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}{{template "protoSkill" .Arg}}{{end}}{{end}}
     <span class="pv-mix">{{.Summary}}</span>
   </summary>
   <div class="pv-tools-body">{{range .Lines}}{{template "protoCall" .}}{{end}}</div>
 </details>{{end}}
 
-{{define "protoEvent"}}<div class="pv-event">{{template "icon" "dot"}}<span class="pv-event-verb">{{.Verb}}</span>{{with .Arg}}<span class="pv-event-arg">{{if $.Href}}<a href="{{$.Href}}" target="_blank" rel="noopener">{{.}}</a>{{else}}{{.}}{{end}}</span>{{end}}{{with .Result}}<span class="pv-num pv-event-at">{{.}}</span>{{end}}</div>{{end}}
+{{define "protoEvent"}}<div class="pv-event"><span class="pv-event-verb">{{.Verb}}</span>{{with .Arg}}<span class="pv-event-arg">{{if $.Href}}<a href="{{$.Href}}" target="_blank" rel="noopener">{{.}}</a>{{else}}{{.}}{{end}}</span>{{end}}{{with .Result}}<span class="pv-num pv-event-at">{{.}}</span>{{end}}</div>{{end}}
 
-{{/* ---------- A: Thread (t3code) ---------- */}}
-{{define "protoA"}}<div class="pv pv-a">
+{{define "protoA"}}<div class="pv">
   {{template "protoTitle" .}}
   {{template "protoPrompt" .}}
   {{template "protoBar" .}}
@@ -69,18 +64,24 @@
     {{- range .Turns}}
     {{- with .You}}<div class="pv-you">{{.}}</div>{{end}}
     {{- range .Log.Phases}}
-      {{- with .Skill}}<div class="pv-call-skill pv-phase-skill"><span class="pv-skill">{{template "icon" "zap"}}{{.}}</span></div>{{end}}
+      {{- with .Skill}}<div class="pv-call-skill">{{template "protoSkill" .}}</div>{{end}}
       {{- range .Items}}
         {{- if .Folded}}{{template "protoTools" .Group}}
         {{- else if .FirstFail}}
-        {{- else if eq .Line.Shape "say"}}{{template "logline" .Line}}
-        {{- else if eq .Line.Shape "record"}}{{if .Line.Checks}}{{template "logline" .Line}}{{else}}{{template "protoEvent" .Line}}{{end}}
+        {{- else if eq .Line.Shape "say"}}<div class="pv-say">{{template "logline" .Line}}</div>
+        {{- else if eq .Line.Shape "record"}}{{if .Line.Checks}}<div class="pv-checks">{{template "logline" .Line}}</div>{{else}}{{template "protoEvent" .Line}}{{end}}
         {{- else}}{{template "protoCall" .Line}}{{end}}
       {{- end}}
     {{- end}}
     {{- with .Log.StreamPath}}<div class="run-log-live" hx-ext="sse" sse-connect="{{.}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>{{end}}
-    {{- with .Log.Final}}<div class="pv-final"><p class="pv-final-label">Result</p>{{template "logline" .}}</div>{{end}}
-    {{- with .Ask}}<div class="pv-ask"><p class="pv-final-label">The agent asks</p><p>{{.}}</p></div>{{end}}
+    {{- with .Log.Final}}<section class="pv-final" data-glyph="{{$.Row.Glyph}}" aria-label="Result">
+      <p class="pv-final-label"><span class="glyph glyph-{{$.Row.Glyph}}" aria-hidden="true"></span>Result</p>
+      {{template "logline" .}}
+    </section>{{end}}
+    {{- with .Ask}}<section class="pv-final pv-ask" data-glyph="attention" aria-label="The agent asks">
+      <p class="pv-final-label"><span class="glyph glyph-attention" aria-hidden="true"></span>The agent asks</p>
+      <p class="pv-ask-text">{{.}}</p>
+    </section>{{end}}
     {{- end}}
   </div>
   {{- end}}
@@ -88,246 +89,116 @@
   {{template "sessionComposer" .}}
 </div>{{end}}
 
-{{/* ---------- B: Brief (outcome first, timeline below) ---------- */}}
-{{define "protoB"}}<div class="pv pv-b">
-  {{template "protoTitle" .}}
-  {{- $last := ""}}{{$final := false}}
-  <section class="pv-outcome" aria-label="Latest from the agent">
-    {{- range .Turns}}{{with .Log.Final}}{{$final = true}}{{end}}{{end}}
-    {{- range .Turns}}
-      {{- with .Ask}}<p class="pv-final-label">The agent asks</p><p class="pv-ask-b">{{.}}</p>{{end}}
-      {{- with .Log.Final}}<p class="pv-final-label">Result</p>{{template "logline" .}}{{end}}
-    {{- end}}
-    {{- if not $final}}{{range .Turns}}{{range .Log.Phases}}{{range .Items}}{{if and (not .Folded) (eq .Line.Shape "say")}}{{$last = "y"}}{{end}}{{end}}{{end}}{{end}}
-      {{- if $last}}<p class="pv-final-label">Latest message</p>{{template "protoLastSay" .}}{{else}}<p class="pv-hint">The agent has not said anything yet.</p>{{end}}{{end}}
-  </section>
-  {{template "sessionActions" .}}
-  {{template "sessionComposer" .}}
-  <section class="pv-run" aria-label="Run">
-    <div class="pv-run-head"><h2>Run</h2>{{template "protoBar" .}}</div>
-    {{- if .Raw}}{{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{end}}{{else}}
-    <ol class="pv-tl">
-      {{- range .Turns}}
-      {{- with .You}}<li class="pv-tl-you"><span class="pv-tl-mark">{{template "icon" "send"}}</span><div>{{.}}</div></li>{{end}}
-      {{- range .Log.Phases}}
-        {{- with .Skill}}<li class="pv-tl-skill"><span class="pv-tl-mark">{{template "icon" "zap"}}</span><div>Skill <strong>{{.}}</strong></div></li>{{end}}
-        {{- range .Items}}
-          {{- if .Folded}}
-            {{- range .Group.Lines}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}<li class="pv-tl-skill"><span class="pv-tl-mark">{{template "icon" "zap"}}</span><div>Skill <strong>{{.Arg}}</strong></div></li>{{end}}{{end}}
-            <li class="pv-tl-tools"><span class="pv-tl-mark">{{template "icon" "wrench"}}</span>{{template "protoTools" .Group}}</li>
-          {{- else if .FirstFail}}
-          {{- else if eq .Line.Shape "say"}}<li class="pv-tl-say"><span class="pv-tl-mark pv-tl-agent"></span><details class="pv-say"><summary>{{template "logline" .Line}}</summary></details></li>
-          {{- else if eq .Line.Shape "record"}}<li class="pv-tl-event"><span class="pv-tl-mark">{{template "icon" "dot"}}</span>{{if .Line.Checks}}{{template "logline" .Line}}{{else}}{{template "protoEvent" .Line}}{{end}}</li>
-          {{- else}}<li><span class="pv-tl-mark"></span>{{template "protoCall" .Line}}</li>{{end}}
-        {{- end}}
-      {{- end}}
-      {{- end}}
-    </ol>
-    {{- end}}
-  </section>
-  {{template "protoPrompt" .}}
-</div>{{end}}
-
-{{define "protoLastSay"}}{{$l := ""}}{{range .Turns}}{{range .Log.Phases}}{{range .Items}}{{if and (not .Folded) (eq .Line.Shape "say")}}{{$l = .Line}}{{end}}{{end}}{{end}}{{end}}{{with $l}}{{template "logline" .}}{{end}}{{end}}
-
-{{/* ---------- C: Outline (index left, reader right) ---------- */}}
-{{define "protoC"}}<div class="pv pv-c">
-  {{template "protoTitle" .}}
-  {{template "protoBar" .}}
-  <div class="pv-c-grid">
-    <nav class="pv-outline" aria-label="Run outline">
-      <a href="#pv-prompt">{{template "icon" "doc"}}Prompt</a>
-      <p class="pv-outline-h">Skills</p>
-      {{- $any := false}}
-      {{- range $ti, $t := .Turns}}{{range $pi, $p := .Log.Phases}}
-        {{- with .Skill}}{{$any = true}}<a href="#pv-p-{{$ti}}-{{$pi}}" class="pv-outline-skill">{{template "icon" "zap"}}{{.}}</a>{{end}}
-        {{- range $ii, $it := .Items}}{{if .Folded}}{{range .Group.Lines}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}{{$any = true}}<a href="#pv-i-{{$ti}}-{{$pi}}-{{$ii}}" class="pv-outline-skill">{{template "icon" "zap"}}{{.Arg}}</a>{{end}}{{end}}{{end}}{{end}}
-      {{- end}}{{end}}
-      {{- if not $any}}<span class="pv-hint">None</span>{{end}}
-      <p class="pv-outline-h">Milestones</p>
-      {{- range $ti, $t := .Turns}}{{range $pi, $p := .Log.Phases}}{{range $ii, $it := .Items}}{{if and (not .Folded) (eq .Line.Shape "record")}}<a href="#pv-i-{{$ti}}-{{$pi}}-{{$ii}}" class="pv-outline-event"><span>{{.Line.Verb}}</span><span class="pv-num">{{.Line.Result}}</span></a>{{end}}{{end}}{{end}}{{end}}
-      <a href="#first-fail" class="pv-outline-fail">First failure</a>
-    </nav>
-    <div class="pv-reader">
-      <details class="pv-prompt" id="pv-prompt">
-        <summary>{{template "icon" "doc"}}<span class="pv-prompt-label">Prompt</span><span class="pv-clip">{{if .Prompt.Kept}}{{.Prompt.Text}}{{else}}not kept{{end}}</span></summary>
-        {{- if .Prompt.Kept}}<pre class="pv-prompt-body">{{.Prompt.Text}}</pre>{{end}}
-      </details>
-      {{- if .Raw}}{{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{end}}{{else}}
-      {{- range $ti, $t := .Turns}}
-        {{- with .You}}<div class="pv-you">{{.}}</div>{{end}}
-        {{- range $pi, $p := .Log.Phases}}<span id="pv-p-{{$ti}}-{{$pi}}"></span>
-          {{- range $ii, $it := .Items}}
-            {{- if .Folded}}<details class="pv-rule" id="pv-i-{{$ti}}-{{$pi}}-{{$ii}}"{{if .Group.FailNote}} data-failed{{end}}><summary><span>{{len .Group.Lines}} tool calls{{with .Group.FailNote}} · <span class="pv-fail">{{.}}</span>{{end}}</span>{{range .Group.Lines}}{{if or (eq .Kind "skill") (eq .Verb "Skill")}}{{template "protoSkill" .}}{{end}}{{end}}</summary><div class="pv-tools-body">{{range .Group.Lines}}{{template "protoCall" .}}{{end}}</div></details>
-            {{- else if .FirstFail}}<span id="first-fail"></span>
-            {{- else if eq .Line.Shape "say"}}{{template "logline" .Line}}
-            {{- else if eq .Line.Shape "record"}}<div id="pv-i-{{$ti}}-{{$pi}}-{{$ii}}">{{if .Line.Checks}}{{template "logline" .Line}}{{else}}{{template "protoEvent" .Line}}{{end}}</div>
-            {{- else}}{{template "protoCall" .Line}}{{end}}
-          {{- end}}
-        {{- end}}
-        {{- with .Log.Final}}<div class="pv-final"><p class="pv-final-label">Result</p>{{template "logline" .}}</div>{{end}}
-        {{- with .Ask}}<div class="pv-ask"><p class="pv-final-label">The agent asks</p><p>{{.}}</p></div>{{end}}
-      {{- end}}
-      {{- end}}
-      {{template "sessionActions" .}}
-      {{template "sessionComposer" .}}
-    </div>
-  </div>
-</div>{{end}}
-
-{{/* ---------- switcher ---------- */}}
-{{define "protoSwitch"}}<div class="pv-switch" role="toolbar" aria-label="Prototype variant">
-  <button type="button" data-pv-step="-1" aria-label="Previous variant">←</button>
-  <span>{{if eq .Variant "a"}}A — Thread{{else if eq .Variant "b"}}B — Brief{{else if eq .Variant "c"}}C — Outline{{else}}Current{{end}}</span>
-  <button type="button" data-pv-step="1" aria-label="Next variant">→</button>
+{{define "protoSwitch"}}{{if true}}<div class="pv-switch" role="toolbar" aria-label="Prototype variant">
+  <a href="?variant={{if eq .Variant "current"}}a{{else}}current{{end}}">{{if eq .Variant "current"}}Current page · show Thread →{{else}}Thread · show current →{{end}}</a>
 </div>
-<script>
-(() => {
-  if (window.__pvSwitch) return;
-  window.__pvSwitch = true;
-  if (new URL(location.href).searchParams.has("open")) {
-    document.querySelectorAll(".pv-tools, .pv-rule, .pv-prompt").forEach((d, i) => { if (i < 3) d.open = true; });
-    document.querySelector(".pv-call[data-glyph]")?.setAttribute("open", "");
-  }
-  const order = ["", "a", "b", "c"];
-  const go = (step) => {
-    const url = new URL(location.href);
-    const at = order.indexOf(url.searchParams.get("variant") ?? "");
-    const next = order[(at + step + order.length) % order.length];
-    next ? url.searchParams.set("variant", next) : url.searchParams.delete("variant");
-    location.replace(url);
-  };
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-pv-step]");
-    if (b) go(Number(b.dataset.pvStep));
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.target.closest("input, textarea, select, [contenteditable]")) return;
-    if (e.key === "ArrowLeft") go(-1);
-    if (e.key === "ArrowRight") go(1);
-  });
-})();
-</script>{{end}}
+<style>
+.pv-switch { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; padding: 8px 14px; border-radius: 9999px; background: var(--color-ink); box-shadow: var(--shadow-overlay); font: 500 12px/1 var(--font-mono); }
+.pv-switch a { color: var(--color-canvas); text-decoration: none; }
+</style>{{end}}{{end}}
 
 {{define "protoStyle"}}<style>
-.pv { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-.pv .icon { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
-.pv-head { display: flex; flex-direction: column; gap: var(--space-1); }
-.pv-title { margin: 0; font-size: var(--text-xl); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-display); line-height: 1.25; text-wrap: balance; }
-.pv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--text-sm); color: var(--color-muted); }
-.pv-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--color-border-strong); }
-.pv-mono, .pv-num { font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.pv-reason { margin: var(--space-1) 0 0; color: var(--color-fg-2); font-size: var(--text-sm); }
-.pv-hint { color: var(--color-muted); font-size: var(--text-xs); }
-
+/* Voice: the agent's prose. Machinery: everything that can be expanded. */
+.pv { --pv-voice: var(--color-fg); --pv-machine: var(--color-muted); --pv-faint: var(--color-meta);
+  display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.pv .icon { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pv :where(summary, a):focus-visible { outline: none; border-radius: var(--radius-xs); box-shadow: var(--shadow-focus); }
 .pv details > summary { list-style: none; cursor: pointer; }
 .pv details > summary::-webkit-details-marker { display: none; }
+.pv-faint { color: var(--pv-faint); }
+.pv-small { margin: 0; font-size: var(--text-2xs); }
+.pv-mono, .pv-num { font-family: var(--font-mono); font-size: 0.92em; font-variant-numeric: tabular-nums; }
 
-.pv-prompt { border: 1px solid var(--color-border-soft); border-radius: var(--radius-lg); background: var(--color-surface); }
-.pv-prompt > summary { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--color-muted); min-height: var(--hit-min); }
-.pv-prompt > summary:hover { color: var(--color-fg); }
-.pv-prompt-label { color: var(--color-fg-2); font-weight: var(--font-weight-medium); flex: none; }
+.pv-head { display: flex; flex-direction: column; gap: 6px; }
+.pv-title { margin: 0; font-size: var(--text-xl); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-display); line-height: 1.25; text-wrap: balance; }
+.pv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2); margin: 0; font-size: var(--text-xs); color: var(--pv-machine); }
+.pv-meta a { color: inherit; text-underline-offset: 3px; }
+.pv-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--color-border-strong); }
+.pv-reason { margin: 2px 0 0; color: var(--color-fg-2); font-size: var(--text-sm); }
+
+.pv-chev { display: inline-flex; color: var(--pv-faint); transition: transform var(--motion-base) var(--ease-out); }
+details[open] > summary > .pv-chev { transform: rotate(90deg); }
+
+/* Prompt: one quiet line, not a box. */
+.pv-prompt > summary { display: flex; align-items: center; gap: var(--space-2); min-height: 28px; font-size: var(--text-xs); color: var(--pv-faint); }
+.pv-prompt-label { flex: none; color: var(--pv-machine); font-weight: var(--font-weight-medium); }
 .pv-clip { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pv-prompt > summary:hover, .pv-prompt > summary:hover .pv-prompt-label { color: var(--color-fg-2); }
 .pv-prompt[open] .pv-clip { visibility: hidden; }
-.pv-prompt-body { margin: 0; padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--color-border-soft); font-family: var(--font-sans); font-size: var(--text-sm); line-height: var(--leading-read); white-space: pre-wrap; color: var(--color-fg-2); max-height: 50vh; overflow: auto; }
+.pv-prompt-body { margin: var(--space-2) 0 0 20px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-2); font: var(--text-sm)/var(--leading-read) var(--font-sans); color: var(--color-fg-2); white-space: pre-wrap; max-height: 50vh; overflow: auto; }
 
-.pv-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.pv-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border-soft); }
 .pv-bar #step-strip { margin: 0; }
 .pv-tabs { display: flex; gap: var(--space-4); font-size: var(--text-sm); }
-.pv-tabs a { color: var(--color-muted); text-decoration: none; padding: var(--space-1) 0; border-bottom: 1.5px solid transparent; }
+.pv-tabs a { padding: 2px 0; border-bottom: 1.5px solid transparent; color: var(--pv-machine); text-decoration: none; }
 .pv-tabs a:hover { color: var(--color-fg); }
 .pv-tabs a[aria-current="page"] { color: var(--color-fg); border-bottom-color: var(--color-fg); }
 
-.pv-thread, .pv-reader { display: flex; flex-direction: column; gap: var(--space-3); font-size: var(--text-read); line-height: var(--leading-read); }
-.pv-thread .prose p:last-child, .pv-reader .prose p:last-child { margin-bottom: 0; }
-.pv-you { align-self: flex-end; max-width: 80%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg); background: var(--color-accent-soft); white-space: pre-wrap; font-size: var(--text-sm); }
+/* The thread. Machinery rows sit tight; voice gets air above and below. */
+.pv-thread { display: flex; flex-direction: column; gap: 2px; }
 
-.pv-tools > summary { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--text-sm); color: var(--color-muted); min-width: 0; }
+.pv-say { margin: var(--space-4) 0; max-width: 66ch; font-size: var(--text-md); line-height: 1.68; letter-spacing: -0.011em; color: var(--pv-voice); }
+.pv-thread > .pv-say:first-child { margin-top: var(--space-2); }
+.pv-say .prose p { max-width: none; margin: 0 0 0.7em; text-wrap: pretty; }
+.pv-say .prose p:last-child, .pv-say .prose ul:last-child { margin-bottom: 0; }
+.pv-say .prose ul { margin: 0 0 0.7em; padding-left: 1.2em; }
+.pv-say .prose li { margin: 0.3em 0; padding-left: 0.15em; }
+.pv-say .prose li::marker { color: var(--pv-faint); }
+.pv-say strong { font-weight: var(--font-weight-semibold); color: var(--color-ink); }
+.pv-say .code-chip, .pv-final .code-chip { padding: 0.06em 0.36em; border: 0; border-radius: var(--radius-xs); background: var(--color-surface-3); color: var(--color-fg); font-size: 0.84em; }
+
+.pv-you { align-self: flex-end; max-width: 80%; margin: var(--space-4) 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg); background: var(--color-accent-soft); white-space: pre-wrap; font-size: var(--text-read); }
+
+.pv-tools > summary { display: flex; align-items: center; gap: var(--space-2); min-height: 26px; font-size: var(--text-xs); color: var(--pv-machine); min-width: 0; }
 .pv-tools > summary > * { flex: none; }
-.pv-tools > summary > .pv-mix { flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: right; }
-.pv-b .pv-tools .pv-skill { display: none; }
-.pv-tl .pv-event > .icon { display: none; }
-.pv-tools > summary:hover { color: var(--color-fg); }
-.pv-chev { display: inline-flex; transition: transform var(--motion-base) var(--ease-out); }
-.pv-tools[open] .pv-chev { transform: rotate(90deg); }
-.pv-count { color: var(--color-fg-2); font-weight: var(--font-weight-medium); }
-.pv-fail { color: var(--color-s-failed); }
-.pv-mix { font-size: var(--text-xs); }
-.pv-tools-body { display: flex; flex-direction: column; margin: var(--space-1) 0 var(--space-2) 6px; padding-left: var(--space-3); border-left: 1px solid var(--color-border-soft); }
+.pv-count { font-variant-numeric: tabular-nums; }
+.pv-fail { color: var(--color-s-failed); font-variant-numeric: tabular-nums; }
+.pv-fail::before { content: "·"; margin-right: var(--space-2); color: var(--pv-faint); }
+.pv-tools > summary > .pv-mix { flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--pv-faint); opacity: 0; transition: opacity var(--motion-fast) var(--ease-out); }
+.pv-tools > summary:hover > .pv-mix, .pv-tools > summary:focus-visible > .pv-mix, .pv-tools[open] > summary > .pv-mix { opacity: 1; }
+.pv-tools > summary:hover, .pv-tools[open] > summary { color: var(--color-fg-2); }
+.pv-tools-body { display: flex; flex-direction: column; margin: 2px 0 var(--space-3) 5px; padding-left: 14px; border-left: 1px solid var(--color-border-soft); }
 
-.pv-skill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 9999px; background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-xs); font-weight: var(--font-weight-medium); line-height: 1.6; }
-.pv-skill .icon { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-.pv-call-skill { padding: 3px 0; }
+/* Skills: a filled bolt and medium weight, in ink, not indigo. */
+.pv-skill { display: inline-flex; align-items: center; gap: 3px; color: var(--color-fg-2); font-size: var(--text-xs); font-weight: var(--font-weight-medium); }
+.pv-skill .icon { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+.pv-tools > summary .pv-skill { padding: 0 6px 0 4px; border: 1px solid var(--color-border); border-radius: 9999px; line-height: 18px; }
+.pv-call-skill { display: flex; min-height: 24px; align-items: center; }
 
-.pv-call > summary { display: flex; align-items: baseline; gap: var(--space-2); padding: 3px 0; font-size: var(--text-sm); min-width: 0; }
-.pv-call > summary:hover .pv-call-arg { color: var(--color-fg); }
-.pv-call-verb { flex: none; color: var(--color-fg-2); font-weight: var(--font-weight-medium); }
-.pv-call-arg { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 12px; color: var(--color-muted); }
-.pv-call-res { flex: none; font-family: var(--font-mono); font-size: 12px; color: var(--color-muted); }
+.pv-call > summary { display: flex; align-items: baseline; gap: var(--space-2); padding: 3px 0; font-size: var(--text-xs); min-width: 0; }
+.pv-call-verb { flex: none; color: var(--pv-machine); font-weight: var(--font-weight-medium); }
+.pv-call-arg { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 11.5px; color: var(--pv-faint); }
+.pv-call-res { flex: none; font-family: var(--font-mono); font-size: 11.5px; color: var(--pv-faint); }
+.pv-call > summary:hover .pv-call-arg, .pv-call[open] .pv-call-arg { color: var(--color-fg-2); }
 .pv-call[data-glyph] .pv-call-verb, .pv-call[data-glyph] .pv-call-res { color: var(--color-s-failed); }
-.pv-call-body { margin: var(--space-1) 0 var(--space-2); }
-.pv-out { margin: 0 0 var(--space-1); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-surface-2); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-fg-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; }
-.pv-out-arg { background: transparent; border: 1px solid var(--color-border-soft); }
+.pv-call-body { margin: 2px 0 var(--space-2); }
+.pv-out { margin: 0 0 var(--space-1); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-surface-2); font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55; color: var(--color-fg-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; }
+.pv-out-arg { background: transparent; box-shadow: inset 0 0 0 1px var(--color-border-soft); }
 .pv-call[data-glyph] .pv-out:not(.pv-out-arg) { color: var(--color-s-failed); background: var(--color-s-failed-soft); }
 
-.pv-event { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--color-muted); }
-.pv-event .icon { width: 10px; height: 10px; fill: currentColor; }
-.pv-event-verb { color: var(--color-fg-2); font-weight: var(--font-weight-medium); }
+.pv-event { display: flex; align-items: baseline; gap: var(--space-2); min-height: 22px; font-size: var(--text-2xs); color: var(--pv-faint); }
+.pv-event-verb { color: var(--pv-machine); }
 .pv-event-arg { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pv-event-at { margin-left: auto; font-size: 11px; }
+.pv-event-arg a { color: inherit; text-underline-offset: 2px; }
+.pv-event-at { margin-left: auto; }
+.pv-checks { font-size: var(--text-xs); }
 
-.pv-final, .pv-ask { padding-top: var(--space-3); border-top: 1px solid var(--color-border-soft); }
-.pv-final-label { margin: 0 0 var(--space-1); font-size: var(--text-xs); font-weight: var(--font-weight-medium); color: var(--color-muted); }
+/* The handover: the result arrives as its own note. */
+.pv-final { margin: var(--space-5) 0 var(--space-2); padding: var(--space-4) var(--space-5) var(--space-5); border-radius: var(--radius-xl); background: var(--color-surface); box-shadow: 0 0 0 1px var(--color-border-soft); font-size: var(--text-md); line-height: 1.68; letter-spacing: -0.011em; color: var(--pv-voice); animation: pv-arrive 420ms var(--ease-out) both; }
+.pv-final .prose p { max-width: 66ch; margin: 0 0 0.7em; text-wrap: pretty; }
+.pv-final .prose > :last-child { margin-bottom: 0; }
+.pv-final strong { font-weight: var(--font-weight-semibold); color: var(--color-ink); }
+.pv-final-label { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-2); font-size: var(--text-xs); font-weight: var(--font-weight-medium); letter-spacing: 0; color: var(--pv-machine); }
+.pv-ask-text { margin: 0; font-weight: var(--font-weight-medium); }
+@keyframes pv-arrive { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .pv-final { animation: none; } .pv-chev, .pv-mix { transition: none; } }
 
-/* B */
-.pv-outcome { padding: var(--space-4) var(--space-5); border: 1px solid var(--color-border-soft); border-radius: var(--radius-lg); background: var(--color-surface); font-size: var(--text-read); line-height: var(--leading-read); }
-.pv-outcome .prose p:last-child { margin-bottom: 0; }
-.pv-ask-b { margin: 0 0 var(--space-3); font-weight: var(--font-weight-medium); }
-.pv-run { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4); }
-.pv-run-head { display: flex; flex-direction: column; gap: var(--space-2); }
-.pv-run-head h2 { margin: 0; font-size: var(--text-md); font-weight: var(--font-weight-semibold); }
-.pv-tl { list-style: none; margin: 0; padding: 0; position: relative; }
-.pv-tl::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 1px; background: var(--color-border-soft); }
-.pv-tl > li { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--space-3); padding: 5px 0; font-size: var(--text-sm); }
-.pv-tl-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--color-canvas); color: var(--color-muted); }
-.pv-tl-mark .icon { width: 12px; height: 12px; }
-.pv-tl-skill .pv-tl-mark { background: var(--color-accent-soft); color: var(--color-accent); }
-.pv-tl-skill .pv-tl-mark .icon { fill: currentColor; stroke: none; }
-.pv-tl-skill strong { font-weight: var(--font-weight-medium); }
-.pv-tl-agent::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-fg-2); }
-.pv-tl-event .pv-tl-mark .icon { width: 8px; height: 8px; fill: currentColor; }
-.pv-say > summary .prose { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--color-fg-2); }
-.pv-say[open] > summary .prose { display: block; color: var(--color-fg); }
-.pv-say .prose p { margin: 0 0 0.4rem; }
-.pv-b .pv-tools > summary { padding: 0; }
-
-/* C */
-.pv-c-grid { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: var(--space-6); align-items: start; }
-.pv-outline { position: sticky; top: var(--space-4); display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); }
-.pv-outline a { display: flex; align-items: center; gap: var(--space-2); padding: 3px var(--space-2); border-radius: var(--radius-sm); color: var(--color-fg-2); text-decoration: none; min-width: 0; }
-.pv-outline a:hover { background: var(--color-surface-2); color: var(--color-fg); }
-.pv-outline-h { margin: var(--space-3) 0 2px; padding: 0 var(--space-2); font-size: var(--text-xs); color: var(--color-muted); }
-.pv-outline-skill { color: var(--color-accent) !important; }
-.pv-outline-skill .icon { fill: currentColor; stroke: none; width: 12px; height: 12px; }
-.pv-outline-event { justify-content: space-between; font-size: var(--text-xs); }
-.pv-outline-event .pv-num { font-size: 11px; color: var(--color-muted); }
-.pv-outline-fail { margin-top: var(--space-3); color: var(--color-s-failed) !important; font-size: var(--text-xs); }
-.pv-rule > summary { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--color-muted); }
-.pv-rule > summary::before, .pv-rule > summary::after { content: ""; flex: 1; height: 1px; background: var(--color-border-soft); }
-.pv-rule > summary:hover { color: var(--color-fg); }
-.pv-rule[open] > summary { color: var(--color-fg-2); }
 
 @media (max-width: 759px) {
-  .pv-c-grid { grid-template-columns: minmax(0, 1fr); }
-  .pv-outline { position: static; flex-direction: row; flex-wrap: wrap; }
-  .pv-outline-h { display: none; }
   .pv-bar { flex-direction: column; align-items: flex-start; }
-  .pv-tools > summary { flex-wrap: wrap; }
-  .pv-tools > summary > .pv-mix { flex-basis: 100%; text-align: left; padding-left: 22px; }
+  .pv-tools > summary { flex-wrap: wrap; row-gap: 4px; padding: 3px 0; }
+  .pv-tools > summary > .pv-mix { display: none; }
+  .pv-say, .pv-final { font-size: var(--text-read); }
+  .pv-final { padding: var(--space-3) var(--space-4) var(--space-4); }
 }
-
-.pv-switch { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--color-ink); color: var(--color-canvas); font: 500 13px/1 var(--font-mono); box-shadow: var(--shadow-overlay); }
-.pv-switch span { padding: 0 10px; min-width: 9.5em; text-align: center; }
-.pv-switch button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font: inherit; }
-.pv-switch button:hover { background: rgb(255 255 255 / 0.14); }
 </style>{{end}}

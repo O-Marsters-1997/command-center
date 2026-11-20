@@ -4,7 +4,7 @@
 {{template "shellContent" .}}
 <article class="session" data-session="{{.Row.URL}}">
 <div class="session-main">
-  {{- if .Variant}}{{template "protoMain" .}}{{else}}
+  {{- if ne .Variant "current"}}{{template "protoMain" .}}{{else}}
   <header class="session-head">
     <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.Label}}</span></span>
     <h1 class="session-ref">{{or .Row.Title .Ref}}</h1>
