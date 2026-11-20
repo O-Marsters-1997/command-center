@@ -22,6 +22,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
+	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "session.tmpl", page)
 }
 

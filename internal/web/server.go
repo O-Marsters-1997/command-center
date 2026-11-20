@@ -254,6 +254,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load home: %w", err)
 	}
+	home.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "home.tmpl", home)
 }
 
@@ -264,6 +265,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load board: %w", err)
 	}
+	board.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "tickets.tmpl", board)
 }
 
@@ -294,6 +296,7 @@ func (s *Server) featureBoard(r *http.Request) (view.Board, error) {
 	if board.FeatureScope != feature {
 		return view.Board{}, errorf(http.StatusNotFound, "no feature %q", feature)
 	}
+	board.Sidebar = sidebarFrom(r)
 	return board, nil
 }
 
@@ -322,10 +325,27 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 		}
 		page.Launch = &modal
 	}
+	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "launch_picker.tmpl", page)
 }
 
-const railOpenCookie = "rail-open"
+const (
+	railOpenCookie      = "rail-open"
+	railWidthCookie     = "rail-width"
+	railCollapsedCookie = "rail-collapsed"
+)
+
+func sidebarFrom(r *http.Request) view.Sidebar {
+	return view.ParseSidebar(cookieValue(r, railWidthCookie), cookieValue(r, railCollapsedCookie))
+}
+
+func cookieValue(r *http.Request, name string) string {
+	c, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return c.Value
+}
 
 func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
 	currentURL := r.Header.Get(hx.HeaderCurrentURL)
@@ -709,6 +729,7 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 		}
 		page.Search = &search
 	}
+	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "repos.tmpl", page)
 }
 
@@ -722,6 +743,7 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load repo page: %w", err)
 	}
+	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "repo.tmpl", page)
 }
 
@@ -890,6 +912,7 @@ func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return fmt.Errorf("load insights page: %w", err)
 	}
+	data.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "insights.tmpl", data)
 }
 
