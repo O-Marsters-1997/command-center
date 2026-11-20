@@ -203,6 +203,36 @@ func TestRemoveWorktree(t *testing.T) {
 		}
 	})
 
+	t.Run("leaves a removal held for undo alone", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoveWorktreeFixture(t, "cc-1")
+		obs := plan.Observation{
+			Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+		}
+		at := f.at.Add(time.Second)
+		if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: f.ticket.URL, Verb: plan.VerbRemoveWorktree, At: at, HoldUntil: at.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent(%q, held remove-worktree): %v", f.ticket.URL, err)
+		}
+
+		if err := f.tick(t, obs, at); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+
+		if _, err := os.Stat(f.worktreePath); err != nil {
+			t.Errorf("worktree while the removal is held: %v, want it preserved", err)
+		}
+		pending, err := f.store.PendingIntents(t.Context())
+		if err != nil {
+			t.Fatalf("PendingIntents(): %v", err)
+		}
+		if got := pending[plan.TicketURL(f.ticket.URL)]; len(got) != 1 {
+			t.Errorf("pending intents = %+v, want only the held one", got)
+		}
+	})
+
 	t.Run("leaves a refused auto-removal in place and never requeues it", func(t *testing.T) {
 		t.Parallel()
 		f := newRemoveWorktreeFixture(t, "cc-1")

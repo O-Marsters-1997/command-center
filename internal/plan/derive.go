@@ -90,6 +90,7 @@ type Input struct {
 	LastVerdicts map[TicketURL]string
 	Verdict      VerdictFacts
 	Intents      map[TicketURL][]Intent
+	Held         map[TicketURL][]Intent
 	Removals     map[TicketURL]string
 	FiveHour     float64
 	Passes       map[TicketURL][]StepRun
@@ -132,6 +133,7 @@ type Snapshot struct {
 	caps        Caps
 	spendPaused bool
 	intents     map[TicketURL][]Intent
+	held        map[TicketURL][]Intent
 	sessions    map[TicketURL]string
 	removals    map[TicketURL]Removal
 	refusals    map[TicketURL]string
@@ -226,6 +228,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		caps:        Caps{Agents: r.MaxAgents, Commands: r.MaxVerifies},
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 		intents:     in.Intents,
+		held:        in.Held,
 		sessions:    make(map[TicketURL]string, len(in.Tickets)),
 		removals:    make(map[TicketURL]Removal, len(in.Tickets)),
 		refusals:    in.Removals,

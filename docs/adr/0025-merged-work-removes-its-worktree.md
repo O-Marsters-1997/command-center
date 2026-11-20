@@ -17,7 +17,8 @@ worktree, or an agent still waiting on an answer. The refusal is recorded as a
 
 **The loop removes a merged ticket's worktree without being asked.** An auto-removal is a
 remove-worktree the loop queues itself for a ticket in `PRMerged` with a worktree present, no
-pending intent and no recorded refusal.
+pending intent and no recorded refusal. An intent still held for Undo counts as pending, so the
+loop never queues past a removal the operator may yet take back.
 
 - `plan.Snapshot.AutoRemovals` makes the decision; only `plan` derives
   ([ADR 13](0013-only-plan-derives.md)).
@@ -37,5 +38,6 @@ so each retry would only add another refusal event.
 Merged tickets leave the rail a tick or two after the merge is observed, and their worktrees and
 local branches go with them. This supersedes the "merged offers only remove-worktree" reading in
 [the new UI gap audit](../designs/new-ui-gap-audit.md#3-settle-auto-settle-on-merge-undo--partial).
-A ticket refused once before it merged (for example "neither merged nor withdrawn") also never
-auto-removes, since the latest refusal is all that is stored; the verb still works.
+Any recorded refusal counts, including one that has since stopped being true: "neither merged nor
+withdrawn" from before the merge, or an agent that was awaiting an answer. Such a ticket waits for
+the verb.

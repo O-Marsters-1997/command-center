@@ -76,7 +76,8 @@ func (s Snapshot) AutoRemovals() []TicketURL {
 	for _, e := range s.Entries {
 		_, present := s.obs.Worktrees[e.Ticket.Ref()]
 		_, refused := s.refusals[e.Ticket.URL]
-		if e.State != PRMerged || !present || refused || len(s.intents[e.Ticket.URL]) > 0 {
+		queued := len(s.intents[e.Ticket.URL]) + len(s.held[e.Ticket.URL])
+		if e.State != PRMerged || !present || refused || queued > 0 {
 			continue
 		}
 		out = append(out, e.Ticket.URL)

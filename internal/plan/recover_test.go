@@ -76,6 +76,7 @@ func TestSnapshot_AutoRemovals(t *testing.T) {
 		pr       plan.PRState
 		worktree bool
 		intents  []plan.Intent
+		held     []plan.Intent
 		refusals map[plan.TicketURL]string
 		want     []plan.TicketURL
 	}{
@@ -84,6 +85,8 @@ func TestSnapshot_AutoRemovals(t *testing.T) {
 		{name: "worktree already gone", pr: plan.Merged},
 		{name: "intent pending", pr: plan.Merged, worktree: true,
 			intents: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
+		{name: "intent held for undo", pr: plan.Merged, worktree: true,
+			held: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
 		{name: "removal refused before", pr: plan.Merged, worktree: true,
 			refusals: map[plan.TicketURL]string{first.URL: "worktree is dirty"}},
 	}
@@ -99,6 +102,7 @@ func TestSnapshot_AutoRemovals(t *testing.T) {
 				Tickets: []plan.Ticket{first}, Obs: obs,
 				Runs:     map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
 				Intents:  map[plan.TicketURL][]plan.Intent{first.URL: tt.intents},
+				Held:     map[plan.TicketURL][]plan.Intent{first.URL: tt.held},
 				Removals: tt.refusals,
 			})
 			if diff := cmp.Diff(tt.want, snap.AutoRemovals(), cmpopts.EquateEmpty()); diff != "" {

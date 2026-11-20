@@ -285,18 +285,27 @@ func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = l.clock.Now()
-	in.Intents = releasedIntents(in.Intents, in.Now)
+	in.Intents, in.Held = splitHeld(in.Intents, in.Now)
 	in.Obs = t.obs
 	in.Prev = t.prev
 	return l.rules(t.obs).Derive(in), nil
 }
 
-func releasedIntents(byTicket map[plan.TicketURL][]plan.Intent, now time.Time) map[plan.TicketURL][]plan.Intent {
-	released := make(map[plan.TicketURL][]plan.Intent, len(byTicket))
+func splitHeld(
+	byTicket map[plan.TicketURL][]plan.Intent, now time.Time,
+) (released, held map[plan.TicketURL][]plan.Intent) {
+	released = make(map[plan.TicketURL][]plan.Intent, len(byTicket))
+	held = make(map[plan.TicketURL][]plan.Intent)
 	for url, intents := range byTicket {
-		released[url] = slices.DeleteFunc(slices.Clone(intents), func(i plan.Intent) bool { return i.HeldAt(now) })
+		for _, i := range intents {
+			if i.HeldAt(now) {
+				held[url] = append(held[url], i)
+			} else {
+				released[url] = append(released[url], i)
+			}
+		}
 	}
-	return released
+	return released, held
 }
 
 func (l *Loop) rules(obs plan.Observation) plan.Rules {
