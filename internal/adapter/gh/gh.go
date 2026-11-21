@@ -83,9 +83,6 @@ func (c CLI) List(ctx context.Context, repoPath string, tracked []string) (Snaps
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("decode pr list for %s: %w", repoPath, err)
 	}
-	if len(prs) >= ListLimit {
-		return Snapshot{}, fmt.Errorf("read pr list for %s: %w", repoPath, &FullPageError{Limit: ListLimit})
-	}
 
 	byBranch := make(map[string]PR, len(tracked))
 	for _, pr := range prs {
@@ -248,12 +245,9 @@ func (c CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]strin
 }
 
 func decodeIssueTitles(raw []byte) (map[string]string, error) {
-	decoded, err := Decode[[]rawIssue](raw)
+	decoded, err := DecodePage[rawIssue](raw)
 	if err != nil {
 		return nil, fmt.Errorf("issue list: %w", err)
-	}
-	if len(decoded) >= ListLimit {
-		return nil, fmt.Errorf("read issues: %w", &FullPageError{Limit: ListLimit})
 	}
 	titles := make(map[string]string, len(decoded))
 	for _, issue := range decoded {
@@ -302,7 +296,7 @@ type rawCheck struct {
 }
 
 func decode(raw []byte) ([]PR, error) {
-	decoded, err := Decode[[]rawPR](raw)
+	decoded, err := DecodePage[rawPR](raw)
 	if err != nil {
 		return nil, fmt.Errorf("pr list: %w", err)
 	}

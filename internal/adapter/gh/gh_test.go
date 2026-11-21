@@ -17,7 +17,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 )
@@ -31,7 +30,7 @@ func fakeGH(respond func(args []string) ([]byte, error)) gh.CLI {
 		}
 		return respond(args)
 	}
-	return gh.CLI{Exec: command.ExecutorFunc(run)}
+	return gh.CLI{Exec: run}
 }
 
 func readFixture(t *testing.T, name string) []byte {
