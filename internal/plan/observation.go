@@ -1,6 +1,9 @@
 package plan
 
-import "time"
+import (
+	"maps"
+	"time"
+)
 
 type CheckState struct {
 	Name        string    `json:"name"`
@@ -62,6 +65,47 @@ func NewObservation(at time.Time) Observation {
 		HeadDescends: map[BranchRef]bool{},
 		Settings:     map[string]RepoSettings{}, SettingsErrors: map[string]string{},
 		SettingsSources: map[string]string{}, RepoErrors: map[string]string{}, Questions: map[RunID]string{},
+	}
+}
+
+func (o *Observation) Merge(src Observation) {
+	maps.Copy(o.PRs, src.PRs)
+	maps.Copy(o.Worktrees, src.Worktrees)
+	maps.Copy(o.MergifyHash, src.MergifyHash)
+	maps.Copy(o.BranchTips, src.BranchTips)
+	maps.Copy(o.LocalTips, src.LocalTips)
+	maps.Copy(o.MidMerge, src.MidMerge)
+	maps.Copy(o.Titles, src.Titles)
+	maps.Copy(o.ConflictsWithBase, src.ConflictsWithBase)
+	maps.Copy(o.ConflictsWithPeer, src.ConflictsWithPeer)
+	maps.Copy(o.HeadDescends, src.HeadDescends)
+	maps.Copy(o.Settings, src.Settings)
+	maps.Copy(o.SettingsErrors, src.SettingsErrors)
+	maps.Copy(o.SettingsSources, src.SettingsSources)
+}
+
+func (o *Observation) CarryForward(prev Observation, repo string) {
+	keep := func(key BranchRef) bool { return key.Repo == repo }
+	copyKeyed(o.PRs, prev.PRs, keep)
+	copyKeyed(o.Worktrees, prev.Worktrees, keep)
+	copyKeyed(o.BranchTips, prev.BranchTips, keep)
+	copyKeyed(o.LocalTips, prev.LocalTips, keep)
+	copyKeyed(o.MidMerge, prev.MidMerge, keep)
+	copyKeyed(o.ConflictsWithBase, prev.ConflictsWithBase, keep)
+	copyKeyed(o.ConflictsWithPeer, prev.ConflictsWithPeer, keep)
+	copyKeyed(o.HeadDescends, prev.HeadDescends, keep)
+	copyKeyed(o.Titles, prev.Titles, func(TicketURL) bool { return true })
+	named := func(key string) bool { return key == repo }
+	copyKeyed(o.MergifyHash, prev.MergifyHash, named)
+	copyKeyed(o.Settings, prev.Settings, named)
+	copyKeyed(o.SettingsErrors, prev.SettingsErrors, named)
+}
+
+func copyKeyed[K comparable, V any](dst, src map[K]V, keep func(K) bool) {
+	for key, value := range src {
+		if _, taken := dst[key]; !taken && keep(key) {
+			dst[key] = value
+		}
 	}
 }
 

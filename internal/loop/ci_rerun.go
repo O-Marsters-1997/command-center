@@ -14,7 +14,7 @@ func (l *Loop) applyAutoFollowUps(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
 	for _, auto := range snap.AutoFollowUps() {
-		ticket, ok := l.ticket(byURL, string(auto.Ticket))
+		ticket, ok := byURL[auto.Ticket]
 		entry, found := snap.Entry(auto.Ticket)
 		if !ok || !found {
 			continue

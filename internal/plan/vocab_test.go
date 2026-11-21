@@ -110,3 +110,36 @@ func TestVerb_IsRowVerb(t *testing.T) {
 		})
 	}
 }
+
+func TestRunKind_Predicates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		kind                                             plan.RunKind
+		steerable, startsSession, takesSystem, isCommand bool
+	}{
+		{kind: plan.RunKindAgent, steerable: true, startsSession: true, takesSystem: true},
+		{kind: plan.RunKindFollowUp, steerable: true, startsSession: true},
+		{kind: plan.RunKindResolve, startsSession: true, takesSystem: true},
+		{kind: plan.RunKindCommand, isCommand: true},
+		{kind: plan.RunKindVerify, isCommand: true},
+		{kind: plan.RunKindUnknown},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.kind), func(t *testing.T) {
+			t.Parallel()
+			if got := tt.kind.Steerable(); got != tt.steerable {
+				t.Errorf("%q.Steerable() = %v, want %v", tt.kind, got, tt.steerable)
+			}
+			if got := tt.kind.StartsSession(); got != tt.startsSession {
+				t.Errorf("%q.StartsSession() = %v, want %v", tt.kind, got, tt.startsSession)
+			}
+			if got := tt.kind.TakesSystemPrompt(); got != tt.takesSystem {
+				t.Errorf("%q.TakesSystemPrompt() = %v, want %v", tt.kind, got, tt.takesSystem)
+			}
+			if got := tt.kind.IsCommand(); got != tt.isCommand {
+				t.Errorf("%q.IsCommand() = %v, want %v", tt.kind, got, tt.isCommand)
+			}
+		})
+	}
+}

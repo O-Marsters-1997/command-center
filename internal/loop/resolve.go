@@ -12,15 +12,12 @@ import (
 func (l *Loop) applyResolveIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntent(ctx, snap, plan.VerbResolve, func(intent plan.Intent) error {
-		ticket, ok := l.ticket(byURL, string(intent.Ticket))
+	return l.eachIntentEntry(ctx, snap, plan.VerbResolve, func(_ plan.Intent, e plan.Entry) error {
+		ticket, ok := byURL[e.Ticket.URL]
 		if !ok {
 			return nil
 		}
-		if err := l.resolveOne(ctx, snap, t, ticket, byURL); err != nil {
-			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
-		}
-		return nil
+		return l.resolveOne(ctx, snap, t, ticket, byURL)
 	})
 }
 
@@ -70,9 +67,9 @@ func (l *Loop) resolveOne(
 		}
 	}
 
-	baseline, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
+	baseline, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
+		return err
 	}
 	if err := l.event(ctx, ticket.URL, store.EventResolveStarted, pair); err != nil {
 		return err
