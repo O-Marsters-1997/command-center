@@ -466,7 +466,7 @@ func (s *Server) launchModal(
 	}
 	modal, err := s.view.TicketModal(ctx, now, tickets)
 	if err != nil {
-		return view.LaunchModal{}, err
+		return view.LaunchModal{}, fmt.Errorf("load ticket modal: %w", err)
 	}
 	return modal, nil
 }
