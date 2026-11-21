@@ -148,7 +148,7 @@ func observeRepo(
 		if pr.State != gh.Open || pushed == "" || pr.HeadOid == "" || plan.SHA(pr.HeadOid) == pushed {
 			continue
 		}
-		descends, err := git.Ancestor(ctx, path, string(pushed), pr.HeadOid)
+		descends, err := git.AncestorIfPresent(ctx, path, string(pushed), pr.HeadOid)
 		if err != nil {
 			return plan.Observation{}, fmt.Errorf("check %s descends from %s: %w", branch, pushed, err)
 		}
