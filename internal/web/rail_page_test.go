@@ -44,7 +44,9 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 	obs := plan.Observation{
 		ObservedAt: testNow,
 		Runs:       map[plan.TicketURL]plan.RunObservation{"sandbox://CC-3": {Alive: true}},
-		PRs:        map[plan.BranchRef]plan.PR{branchRef("repo", "one"): {Number: 1, State: plan.Merged}},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("repo", "one"): {
+			Number: 1, State: plan.Merged, Title: "Billing export", URL: "https://github.com/acme/web/pull/1",
+		}},
 	}
 	if withWorktree {
 		obs.Worktrees = map[plan.BranchRef]string{branchRef("repo", "one"): "/wt/one"}
@@ -74,7 +76,15 @@ func testRailSettled(t *testing.T) {
 	t.Parallel()
 
 	withRail := htmltest.Parse(t, renderPath(t, newServer(railStore(t, true), testNow), "/rail")).One(t, "#rail-body")
-	withRail.One(t, `[data-group="settled"]`).One(t, `button[value="remove-worktree"]`)
+	settled := withRail.One(t, `[data-group="settled"]`)
+	settled.One(t, `button[value="remove-worktree"]`)
+	title := settled.One(t, "a.rail-title")
+	if got, want := title.Text(), "Billing export"; got != want {
+		t.Errorf("GET /rail settled title = %q, want %q", got, want)
+	}
+	if href, _ := title.Attr("href"); href != "https://github.com/acme/web/pull/1" {
+		t.Errorf("GET /rail settled title href = %q, want the merged PR", href)
+	}
 	withoutRail := htmltest.Parse(t, renderPath(t, newServer(railStore(t, false), testNow), "/rail")).One(t, "#rail-body")
 	if settled := withoutRail.Find(`[data-group="settled"]`); len(settled) != 0 {
 		t.Errorf("GET /rail keeps the settled group once the worktree is gone: %s", settled[0].HTML())
@@ -89,13 +99,13 @@ func testRailRequestState(t *testing.T) {
 	got := do(t, server, http.MethodGet, "/rail", req{Header: http.Header{
 		"Hx-Request":     {"true"},
 		"Hx-Current-Url": {"http://cc/s/acme/web/1"},
-		"Cookie":         {"rail-open=feature:checkout"},
+		"Cookie":         {"rail-closed=feature:checkout"},
 	}})
 
 	rail := htmltest.Parse(t, got.Body).One(t, "#rail-body")
 	checkout := rail.One(t, `[data-rail-key="feature:checkout"]`)
-	if _, ok := checkout.Attr("open"); !ok {
-		t.Errorf("checkout rendered closed: %s", checkout.HTML())
+	if _, ok := checkout.Attr("open"); ok {
+		t.Errorf("checkout rendered open: %s", checkout.HTML())
 	}
 	rail.One(t, `a[aria-current="page"]`)
 }
@@ -318,9 +328,9 @@ func TestRail(t *testing.T) {
 		server := newServer(st, testNow)
 
 		before := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, `[data-group="settled"]`)
-		before.One(t, `button[value="remove-worktree"]`)
-		if got := before.Text(); !strings.Contains(got, "worktree is dirty") {
-			t.Errorf("GET /rail settled = %q, want the refusal %q", got, "worktree is dirty")
+		refused := before.One(t, `button[value="remove-worktree"][data-refused]`)
+		if got, _ := refused.Attr("title"); !strings.Contains(got, "worktree is dirty") {
+			t.Errorf("GET /rail settled broom title = %q, want the refusal %q", got, "worktree is dirty")
 		}
 
 		got := do(t, server, http.MethodPost, "/verb", req{
@@ -333,12 +343,7 @@ func TestRail(t *testing.T) {
 		if buttons := after.Find(`button[value="remove-worktree"]`); len(buttons) != 0 {
 			t.Errorf("POST /verb from rail keeps the button: %s", buttons[0].HTML())
 		}
-		after.One(t, `[data-glyph="pending"]`)
-		for _, want := range []string{"remove-worktree queued", "worktree is dirty"} {
-			if text := after.Text(); !strings.Contains(text, want) {
-				t.Errorf("POST /verb from rail settled = %q, want %q", text, want)
-			}
-		}
+		after.One(t, `.rail-broom[data-pending][role="status"]`)
 	})
 
 	t.Run("verb buttons carry no key", func(t *testing.T) {

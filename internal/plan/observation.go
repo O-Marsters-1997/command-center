@@ -24,6 +24,8 @@ type PR struct {
 	Checks      map[string]CheckState `json:"checks"`
 	Labels      []string              `json:"labels"`
 	MergedAt    time.Time             `json:"merged_at"`
+	Title       string                `json:"title"`
+	URL         string                `json:"url"`
 }
 
 type RunObservation struct {

@@ -2,7 +2,7 @@ import { initSidebar } from "./sidebar";
 
 export const maxLiveLines = 1000;
 
-const railCookieName = "rail-open";
+const railCookieName = "rail-closed";
 const wideViewport = "(min-width: 760px)";
 
 export function failureText(event: "responseError" | "sendError", status?: number): string {
@@ -25,13 +25,13 @@ export function elapsed(ms: number): string {
   return m < 60 ? `${m}m${s % 60}s` : `${Math.floor(m / 60)}h${m % 60}m`;
 }
 
-export function railOpenCookie(cookie: string, key: string, open: boolean): string {
+export function railClosedCookie(cookie: string, key: string, open: boolean): string {
   const current = cookie
     .split("; ")
     .filter((c) => c.startsWith(`${railCookieName}=`))
     .flatMap((c) => decodeURIComponent(c.slice(railCookieName.length + 1)).split("|"))
     .filter((k) => k !== "" && k !== key);
-  if (open) current.push(key);
+  if (!open) current.push(key);
   return `${railCookieName}=${encodeURIComponent(current.join("|"))}; path=/; max-age=31536000; samesite=lax`;
 }
 
@@ -214,7 +214,7 @@ function initGlue(): void {
     (e) => {
       const el = eventElement(e);
       if (!(el instanceof HTMLDetailsElement) || !el.dataset.railKey || el.hasAttribute("data-rail-forced")) return;
-      document.cookie = railOpenCookie(document.cookie, el.dataset.railKey, el.open);
+      document.cookie = railClosedCookie(document.cookie, el.dataset.railKey, el.open);
     },
     true,
   );

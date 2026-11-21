@@ -50,6 +50,8 @@ type PR struct {
 	Checks      map[string]CheckState `json:"checks"`
 	Labels      []string              `json:"labels"`
 	MergedAt    time.Time             `json:"merged_at"`
+	Title       string                `json:"title"`
+	URL         string                `json:"url"`
 }
 
 type Snapshot struct {
@@ -65,9 +67,9 @@ func (e *FullPageError) Error() string {
 }
 
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
-	"statusCheckRollup,author,labels,mergedAt"
+	"statusCheckRollup,author,labels,mergedAt,title,url"
 
-const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
+const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt,title,url"
 
 // List reads tracked branches' pull requests, including merged and closed PRs
 // omitted by GitHub's open-only bulk listing.
@@ -276,6 +278,8 @@ type rawPR struct {
 		Name string `json:"name"`
 	} `json:"labels"`
 	MergedAt string `json:"mergedAt"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
 }
 
 type rawIssue struct {
@@ -329,6 +333,8 @@ func decode(raw []byte) ([]PR, error) {
 			Checks:      normalise(r.StatusCheckRollup),
 			Labels:      labels,
 			MergedAt:    mergedAt,
+			Title:       r.Title,
+			URL:         r.URL,
 		})
 	}
 	return prs, nil

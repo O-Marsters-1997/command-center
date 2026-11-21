@@ -3,7 +3,6 @@
 {{define "railItem"}}
 <a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
-  <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
   {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
   <span class="rail-state sr-only">{{.Label}}</span>
@@ -14,7 +13,6 @@
 {{define "railWaitingItem"}}
 <a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
-  <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
   {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
   <span class="rail-state">{{.Label}}</span>
@@ -90,9 +88,20 @@
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
       <summary>{{template "icon" "chev"}}<span class="rail-name">Settled</span> <span class="rail-count">{{len .Items}}</span></summary>
       {{- range .Items}}
-      <div class="rail-settled">
-        {{template "railItem" .}}
-        {{if .Verb}}{{template "railVerb" .}}{{end}}
+      <div class="rail-settled" data-glyph="{{.Glyph}}">
+        <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>
+        {{- if .PRURL}}<a class="rail-title" href="{{.PRURL}}" target="_blank" rel="noopener" title="Open the merged PR">{{or .Title .Ref}}</a>
+        {{- else}}<a class="rail-title" href="{{.Path}}" {{template "nav" .Path}}>{{or .Title .Ref}}</a>{{end}}
+        <span class="sr-only">{{.Label}}</span>
+        {{- if .Pending}}
+        <span class="rail-broom" data-pending role="status" aria-label="Removing the worktree for {{.Ref}}" title="Removing the worktree">{{template "icon" "broom"}}</span>
+        {{- else if .Verb}}
+        <form class="rail-settled-act" method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
+          <input type="hidden" name="ticket" value="{{.URL}}">
+          <input type="hidden" name="from" value="rail">
+          <button class="rail-broom" type="submit" name="verb" value="{{.Verb}}"{{if .Refusal}} data-refused{{end}} aria-label="Remove the worktree for {{.Ref}}{{with .Refusal}}. Refused: {{.}}{{end}}" title="{{with .Refusal}}Refused: {{.}}{{else}}Remove the worktree{{end}}">{{template "icon" "broom"}}</button>
+        </form>
+        {{- end}}
       </div>
       {{- else}}
       <p class="rail-empty">No match.</p>

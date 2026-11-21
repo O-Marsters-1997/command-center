@@ -330,7 +330,7 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 }
 
 const (
-	railOpenCookie      = "rail-open"
+	railClosedCookie    = "rail-closed"
 	railWidthCookie     = "rail-width"
 	railCollapsedCookie = "rail-collapsed"
 )
@@ -354,9 +354,9 @@ func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
 		Query: strings.TrimSpace(r.FormValue("q")),
 	}
 	params.Project, params.Repo = view.RailScope(currentURL)
-	if c, err := r.Cookie(railOpenCookie); err == nil {
+	if c, err := r.Cookie(railClosedCookie); err == nil {
 		if value, err := url.QueryUnescape(c.Value); err == nil && value != "" {
-			params.Open = strings.Split(value, view.RailOpenSeparator)
+			params.Closed = strings.Split(value, view.RailClosedSeparator)
 		}
 	}
 	rail, err := s.view.Rail(r.Context(), s.clock.Now(), params)
