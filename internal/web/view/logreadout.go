@@ -28,7 +28,8 @@ func measure(run agentlog.Run) runStats {
 	for _, phase := range run.Phases {
 		stats.turns += phase.Turns
 	}
-	if r := run.Result; r != nil {
+	if run.Result.IsSome() {
+		r := run.Result.Unwrap()
 		stats.wall = r.Duration
 		stats.turns = r.Turns
 	}
