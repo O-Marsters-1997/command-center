@@ -19,57 +19,58 @@ import (
 const defaultBaseBranch = "main"
 
 type Row struct {
-	URL             string           `json:"url"`
-	Ref             string           `json:"ref"`
-	Repo            string           `json:"-"`
-	Feature         string           `json:"-"`
-	Project         string           `json:"-"`
-	ProjectHue      int              `json:"-"`
-	Title           string           `json:"title"`
-	State           string           `json:"state"`
-	Reason          string           `json:"reason"`
-	Label           string           `json:"label"`
-	Detail          string           `json:"detail"`
-	Updated         Age              `json:"-"`
-	Last            string           `json:"-"`
-	Question        string           `json:"-"`
-	Glyph           plan.GlyphWord   `json:"glyph"`
-	Alive           bool             `json:"alive"`
-	Verbs           []plan.Verb      `json:"-"`
-	Branch          string           `json:"-"`
-	BlockedBy       []string         `json:"-"`
-	PendingVerbs    []plan.Verb      `json:"-"`
-	Base            string           `json:"-"`
-	BaseVerdict     string           `json:"-"`
-	StackDepth      int              `json:"-"`
-	MergeOrder      int              `json:"-"`
-	Warning         string           `json:"-"`
-	Refusal         string           `json:"-"`
-	Blocking        []string         `json:"blocking"`
-	LockedBehind    int              `json:"-"`
-	After           []string         `json:"after"`
-	Unlocks         []string         `json:"-"`
-	Worktree        string           `json:"-"`
-	PRNumber        int              `json:"pr_number"`
-	PRState         string           `json:"-"`
-	PRURL           string           `json:"-"`
-	Pgid            string           `json:"-"`
-	Elapsed         string           `json:"elapsed"`
-	ElapsedSeconds  int              `json:"-"`
-	ElapsedPercent  int              `json:"-"`
-	LogPath         string           `json:"-"`
-	SpendTokens     int              `json:"-"`
-	ChecksPassed    int              `json:"checks_passed"`
-	ChecksTotal     int              `json:"checks_total"`
-	Checks          []Check          `json:"-"`
-	RedChecks       []Check          `json:"-"`
-	Draft           bool             `json:"-"`
-	DraftReason     string           `json:"-"`
-	AgentPctWeek    float64          `json:"-"`
-	FollowUpPctWeek float64          `json:"-"`
-	SpendPctWeek    float64          `json:"-"`
-	TicketOpen      bool             `json:"-"`
-	Protected       []plan.PathMatch `json:"protected"`
+	URL             string                           `json:"url"`
+	Ref             string                           `json:"ref"`
+	Repo            string                           `json:"-"`
+	Feature         string                           `json:"-"`
+	Project         string                           `json:"-"`
+	ProjectHue      int                              `json:"-"`
+	Title           string                           `json:"title"`
+	State           string                           `json:"state"`
+	Reason          string                           `json:"reason"`
+	Label           string                           `json:"label"`
+	Detail          string                           `json:"detail"`
+	Updated         Age                              `json:"-"`
+	Last            string                           `json:"-"`
+	Question        string                           `json:"-"`
+	Glyph           plan.GlyphWord                   `json:"glyph"`
+	Alive           bool                             `json:"alive"`
+	Verbs           []plan.Verb                      `json:"-"`
+	Branch          string                           `json:"-"`
+	BlockedBy       []string                         `json:"-"`
+	PendingVerbs    []plan.Verb                      `json:"-"`
+	Intent          option.Option[plan.IntentStatus] `json:"-"`
+	Base            string                           `json:"-"`
+	BaseVerdict     string                           `json:"-"`
+	StackDepth      int                              `json:"-"`
+	MergeOrder      int                              `json:"-"`
+	Warning         string                           `json:"-"`
+	Refusal         string                           `json:"-"`
+	Blocking        []string                         `json:"blocking"`
+	LockedBehind    int                              `json:"-"`
+	After           []string                         `json:"after"`
+	Unlocks         []string                         `json:"-"`
+	Worktree        string                           `json:"-"`
+	PRNumber        int                              `json:"pr_number"`
+	PRState         string                           `json:"-"`
+	PRURL           string                           `json:"-"`
+	Pgid            string                           `json:"-"`
+	Elapsed         string                           `json:"elapsed"`
+	ElapsedSeconds  int                              `json:"-"`
+	ElapsedPercent  int                              `json:"-"`
+	LogPath         string                           `json:"-"`
+	SpendTokens     int                              `json:"-"`
+	ChecksPassed    int                              `json:"checks_passed"`
+	ChecksTotal     int                              `json:"checks_total"`
+	Checks          []Check                          `json:"-"`
+	RedChecks       []Check                          `json:"-"`
+	Draft           bool                             `json:"-"`
+	DraftReason     string                           `json:"-"`
+	AgentPctWeek    float64                          `json:"-"`
+	FollowUpPctWeek float64                          `json:"-"`
+	SpendPctWeek    float64                          `json:"-"`
+	TicketOpen      bool                             `json:"-"`
+	Protected       []plan.PathMatch                 `json:"protected"`
 
 	Launchable  bool         `json:"-"`
 	Buttons     []VerbButton `json:"-"`
@@ -209,6 +210,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Alive:          in.Obs.Runs[url].Alive,
 			Verbs:          plan.Verbs(e.State),
 			PendingVerbs:   pendingVerbs(in.Intents[url]),
+			Intent:         e.Intent,
 			Branch:         t.Branch,
 			BlockedBy:      t.BlockedBy,
 			Base:           e.Unlock.BaseBranch,

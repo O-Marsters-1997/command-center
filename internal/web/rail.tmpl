@@ -22,9 +22,7 @@
 {{end}}
 
 {{define "railVerb"}}
-{{- if .Pending}}
-<p class="rail-queued" role="status"><span class="glyph" data-glyph="pending" aria-hidden="true"></span>{{.Verb}} queued</p>
-{{- else}}
+{{- if not .Pending}}
 <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
   <input type="hidden" name="ticket" value="{{.URL}}">
   <input type="hidden" name="from" value="rail">

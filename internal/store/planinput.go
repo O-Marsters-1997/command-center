@@ -67,6 +67,10 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read pending intents: %w", err)
 	}
+	latest, err := s.LatestRowIntents(ctx)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read latest intents: %w", err)
+	}
 	repos, err := s.repoStatuses(ctx)
 	if err != nil {
 		return plan.Input{}, err
@@ -133,7 +137,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		Observed: observed, Tickets: planTickets, Obs: obs, Repos: repos,
 		Memberships: memberships, Runs: runs, Pushes: pushes, Refreshes: refreshes,
 		Restacked: restacked, Recorded: recorded, LastVerdicts: verdicts,
-		Verdict: verdictFacts, Intents: intents, Removals: removals,
+		Verdict: verdictFacts, Intents: intents, Latest: latest, Removals: removals,
 		FiveHour: gauges[agentlog.FiveHour].Utilization,
 		Passes:   passes,
 		Auto:     auto,

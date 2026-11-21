@@ -459,6 +459,31 @@ func TestStore_IntentHistory(t *testing.T) {
 	})
 }
 
+func TestStore_LatestRowIntents(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	queue := func(ticket string, verb plan.Verb) int64 {
+		t.Helper()
+		id, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{Ticket: ticket, Verb: verb, At: testNow})
+		if err != nil {
+			t.Fatalf("QueueVerbIntent(%s): %v", verb, err)
+		}
+		return id
+	}
+	queue("sandbox://CC-1", plan.VerbAbort)
+	latest := queue("sandbox://CC-1", plan.VerbResolve)
+	queue("sandbox://CC-1", plan.VerbTrack)
+	other := queue("sandbox://CC-2", plan.VerbKill)
+
+	got, err := store.LatestRowIntents(t.Context())
+	if err != nil {
+		t.Fatalf("LatestRowIntents: %v", err)
+	}
+	if len(got) != 2 || got["sandbox://CC-1"].ID != latest || got["sandbox://CC-2"].ID != other {
+		t.Errorf("LatestRowIntents() = %+v, want the newest row verb per ticket (%d and %d)", got, latest, other)
+	}
+}
+
 func TestStore_QueueVerbIntent(t *testing.T) {
 	t.Parallel()
 	t.Run("a payload round-trips", func(t *testing.T) {
