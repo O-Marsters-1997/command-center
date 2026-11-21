@@ -19,10 +19,7 @@ import (
 // InsertRunSkeleton reserves a run before its process exists; RecordSpawn fills in its process details.
 func (s *Store) InsertRunSkeleton(ctx context.Context, r RunSkeleton) (int64, error) {
 	id, _, err := s.InsertSessionRunSkeleton(ctx, r)
-	if err != nil {
-		return 0, fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
-	}
-	return id, nil
+	return id, err
 }
 
 type RunSession struct {
@@ -45,15 +42,11 @@ func (s *Store) RunDetails(ctx context.Context, id plan.RunID) (RunDetails, erro
 	if err != nil {
 		return RunDetails{}, fmt.Errorf("read run %d: %w", id, err)
 	}
-	details := RunDetails{SessionID: row.SessionID, Message: row.Message}
-	if row.Outcome != "" {
-		outcome, err := plan.ParseOutcome(row.Outcome)
-		if err != nil {
-			return RunDetails{}, fmt.Errorf("read outcome of run %d: %w", id, err)
-		}
-		details.Outcome = option.Some(outcome)
+	outcome, err := parseOutcome(nullIfEmpty(row.Outcome))
+	if err != nil {
+		return RunDetails{}, fmt.Errorf("read run %d: %w", id, err)
 	}
-	return details, nil
+	return RunDetails{SessionID: row.SessionID, Message: row.Message, Outcome: outcome}, nil
 }
 
 func (s *Store) InsertSessionRunSkeleton(
@@ -108,18 +101,6 @@ func (s *Store) RecordPrompt(ctx context.Context, runID int64, prompt string) er
 }
 
 func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
-	var exitCodeParam sql.NullInt64
-	if d.ExitCode.IsSome() {
-		exitCodeParam = sql.NullInt64{Int64: int64(d.ExitCode.Unwrap()), Valid: true}
-	}
-	var costParam sql.NullFloat64
-	if d.Cost.IsSome() {
-		costParam = sql.NullFloat64{Float64: d.Cost.Unwrap(), Valid: true}
-	}
-	var lastMessageParam sql.NullString
-	if d.LastMessage.IsSome() {
-		lastMessageParam = notNull(d.LastMessage.Unwrap())
-	}
 	var metricsParam json.RawMessage
 	if d.Metrics.IsSome() {
 		raw, err := json.Marshal(d.Metrics.Unwrap())
@@ -131,10 +112,10 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Metrics:     metricsParam,
 		Outcome:     notNull(d.Outcome.String()),
-		ExitCode:    exitCodeParam,
+		ExitCode:    nullInt(d.ExitCode),
 		EndedAt:     notNullTime(d.EndedAt.UTC()),
-		CostUsd:     costParam,
-		LastMessage: lastMessageParam,
+		CostUsd:     nullFloat(d.Cost),
+		LastMessage: nullString(d.LastMessage),
 		ID:          int64(d.RunID),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
@@ -182,15 +163,12 @@ func (s *Store) PassRuns(ctx context.Context) (map[plan.TicketURL][]plan.StepRun
 	}
 	passes := map[plan.TicketURL][]plan.StepRun{}
 	for _, row := range rows {
-		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid,
-			Session: row.SessionID}
-		if row.Outcome.Valid {
-			outcome, err := plan.ParseOutcome(row.Outcome.String)
-			if err != nil {
-				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
-			}
-			run.Outcome = option.Some(outcome)
+		outcome, err := parseOutcome(row.Outcome)
+		if err != nil {
+			return nil, fmt.Errorf("read run %d: %w", row.ID, err)
 		}
+		run := plan.StepRun{ID: plan.RunID(row.ID), Step: plan.StepName(row.Step), Alive: !row.Outcome.Valid,
+			Session: row.SessionID, Outcome: outcome}
 		url := plan.TicketURL(row.TicketID)
 		passes[url] = append(passes[url], run)
 	}
@@ -242,25 +220,14 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		if err != nil {
 			return nil, fmt.Errorf("read runs.kind of run %d: %w", row.ID, err)
 		}
-		summary := plan.RunSummary{ID: plan.RunID(row.ID), Kind: kind}
-		if row.Pgid.Valid {
-			summary.Pgid = option.Some(int(row.Pgid.Int64))
+		outcome, err := parseOutcome(row.Outcome)
+		if err != nil {
+			return nil, fmt.Errorf("read run %d: %w", row.ID, err)
 		}
-		if row.ProcStartedAt.Valid {
-			summary.ProcStartedAt = option.Some(row.ProcStartedAt.Time)
-		}
-		if row.EndedAt.Valid {
-			summary.EndedAt = option.Some(row.EndedAt.Time)
-		}
-		if row.ExitCode.Valid {
-			summary.ExitCode = option.Some(int(row.ExitCode.Int64))
-		}
-		if row.Outcome.Valid {
-			outcome, err := plan.ParseOutcome(row.Outcome.String)
-			if err != nil {
-				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
-			}
-			summary.Outcome = option.Some(outcome)
+		summary := plan.RunSummary{
+			ID: plan.RunID(row.ID), Kind: kind, Pgid: optInt(row.Pgid),
+			ProcStartedAt: optTime(row.ProcStartedAt), EndedAt: optTime(row.EndedAt),
+			ExitCode: optInt(row.ExitCode), Outcome: outcome,
 		}
 		summary.BaselineSHA, summary.LogPath = plan.SHA(row.BaselineSHA.String), row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
@@ -279,16 +246,13 @@ func (s *Store) LatestVerifyRuns(ctx context.Context) (map[plan.TicketURL]plan.V
 	}
 	facts := make(map[plan.TicketURL]plan.VerifyFact, len(rows))
 	for _, row := range rows {
+		outcome, err := parseOutcome(row.Outcome)
+		if err != nil {
+			return nil, fmt.Errorf("read run %d: %w", row.ID, err)
+		}
 		fact := plan.VerifyFact{
 			Run: plan.RunID(row.ID), Tip: plan.SHA(row.BaselineSHA.String), Alive: !row.Outcome.Valid,
-			StartedAt: row.ProcStartedAt.Time, LogPath: row.LogPath.String,
-		}
-		if row.Outcome.Valid {
-			outcome, err := plan.ParseOutcome(row.Outcome.String)
-			if err != nil {
-				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
-			}
-			fact.Outcome = option.Some(outcome)
+			StartedAt: row.ProcStartedAt.Time, LogPath: row.LogPath.String, Outcome: outcome,
 		}
 		facts[plan.TicketURL(row.TicketID)] = fact
 	}
@@ -317,16 +281,12 @@ func queueVerbIntent(ctx context.Context, q *ccdb.Queries, v VerbRequest) (int64
 			return 0, fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
 		}
 	}
-	var holdUntil sql.NullTime
-	if !v.HoldUntil.IsZero() {
-		holdUntil = notNullTime(v.HoldUntil.UTC())
-	}
 	id, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:        v.At.UTC(),
 		TicketID:  v.Ticket,
 		Verb:      string(v.Verb),
 		Payload:   encoded,
-		HoldUntil: holdUntil,
+		HoldUntil: nullTime(v.HoldUntil),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
@@ -451,10 +411,7 @@ func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]Se
 		run := SessionRun{
 			ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question,
 			Prompt: row.Prompt, Step: plan.StepName(row.Step), Model: row.Model, Outcome: row.Outcome,
-			Cost: option.None[float64](), Metrics: option.None[agentlog.RunMetrics](),
-		}
-		if row.CostUsd.Valid {
-			run.Cost = option.Some(row.CostUsd.Float64)
+			Cost: optFloat(row.CostUsd), Metrics: option.None[agentlog.RunMetrics](),
 		}
 		if string(row.Metrics) != "null" {
 			var m agentlog.RunMetrics

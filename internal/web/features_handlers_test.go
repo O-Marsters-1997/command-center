@@ -27,7 +27,7 @@ func TestFeatures(t *testing.T) {
 		}
 
 		conflict := &storepkg.FeatureConflictError{URL: ticketURL, Existing: "project:x", Importing: "project:y"}
-		if err := store.RecordImportRefusal(ctx, "project:y", conflict, testNow); err != nil {
+		if err := store.RecordImportRefusal(ctx, "project:y", conflict.URL, conflict.Error(), testNow); err != nil {
 			t.Fatalf("RecordImportRefusal(project:y): %v", err)
 		}
 

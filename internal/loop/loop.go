@@ -417,9 +417,9 @@ func (l *Loop) importFeature(ctx context.Context, feature, onlyRepo string) erro
 	var closure *store.FeatureClosureError
 	switch {
 	case errors.As(err, &conflict):
-		err = l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())
+		err = l.store.RecordImportRefusal(ctx, feature, conflict.URL, conflict.Error(), l.clock.Now())
 	case errors.As(err, &closure):
-		err = l.store.RecordImportRefusal(ctx, feature, closure, l.clock.Now())
+		err = l.store.RecordImportRefusal(ctx, feature, "", closure.Error(), l.clock.Now())
 	}
 	if err != nil {
 		return fmt.Errorf("import tickets for %s: %w", feature, err)
@@ -439,7 +439,7 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 		var closure *store.FeatureClosureError
 		switch {
 		case errors.As(err, &closure):
-			if err := l.store.RecordImportRefusal(ctx, closure.Feature, closure, now); err != nil {
+			if err := l.store.RecordImportRefusal(ctx, closure.Feature, "", closure.Error(), now); err != nil {
 				return fmt.Errorf("record import refusal for %s: %w", intent.TicketID, err)
 			}
 		case err != nil:

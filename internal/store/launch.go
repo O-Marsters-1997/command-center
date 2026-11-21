@@ -26,11 +26,8 @@ type launchPayload struct {
 }
 
 func choiceColumns(c plan.AgentChoice) (model, effort sql.NullString) {
-	model = nullIfEmpty(c.Model)
-	if c.Effort.IsSome() {
-		effort = notNull(string(c.Effort.Unwrap()))
-	}
-	return model, effort
+	effort = sql.NullString{String: string(c.Effort.UnwrapOr("")), Valid: c.Effort.IsSome()}
+	return nullIfEmpty(c.Model), effort
 }
 
 func choiceFrom(model, effort sql.NullString) plan.AgentChoice {

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -12,8 +13,6 @@ import (
 type FeatureClosureError struct {
 	Feature, URL, Blocker, BlockerFeature string
 }
-
-func (e *FeatureClosureError) refusedTicket() string { return "" }
 
 func (e *FeatureClosureError) Error() string {
 	if e.BlockerFeature == "" {
@@ -29,41 +28,40 @@ func (e *FeatureClosureError) Error() string {
 }
 
 type ticketBlockedBy struct {
-	URL       string
-	BlockedBy []string
+	URL       string   `json:"url"`
+	BlockedBy []string `json:"blocked_by"`
 }
 
 func closeUnderBlockedBy(
-	feature string,
-	tickets []ticketBlockedBy,
-	ticketFeature func(url string) (string, error),
-	merged func(url string) (bool, error),
-) (*FeatureClosureError, error) {
+	feature string, tickets []ticketBlockedBy, featureOf map[string]string, merged map[string]bool,
+) *FeatureClosureError {
 	for _, t := range tickets {
 		for _, blocker := range t.BlockedBy {
-			blockerFeature, err := ticketFeature(blocker)
-			if err != nil {
-				return nil, fmt.Errorf("read feature of blocker %s: %w", blocker, err)
-			}
-			if blockerFeature == feature {
+			if featureOf[blocker] == feature || merged[blocker] {
 				continue
 			}
-			isMerged, err := merged(blocker)
-			if err != nil {
-				return nil, fmt.Errorf("read merged state of blocker %s: %w", blocker, err)
-			}
-			if isMerged {
-				continue
-			}
-			return &FeatureClosureError{Feature: feature, URL: t.URL, Blocker: blocker, BlockerFeature: blockerFeature}, nil
+			return &FeatureClosureError{Feature: feature, URL: t.URL, Blocker: blocker, BlockerFeature: featureOf[blocker]}
 		}
 	}
-	return nil, nil
+	return nil
+}
+
+func checkClosure(
+	ctx context.Context, qtx *ccdb.Queries, feature string, tickets []ticketBlockedBy, obs plan.Observation,
+) error {
+	featureOf, merged, err := closureLookups(ctx, qtx, tickets, obs)
+	if err != nil {
+		return err
+	}
+	if violation := closeUnderBlockedBy(feature, tickets, featureOf, merged); violation != nil {
+		return violation
+	}
+	return nil
 }
 
 func closureLookups(
 	ctx context.Context, qtx *ccdb.Queries, tickets []ticketBlockedBy, obs plan.Observation,
-) (func(url string) (string, error), func(url string) (bool, error), error) {
+) (map[string]string, map[string]bool, error) {
 	seen := map[string]bool{}
 	blockers := []string{}
 	for _, t := range tickets {
@@ -94,18 +92,11 @@ func closureLookups(
 	for _, row := range branchRows {
 		merged[row.URL] = obs.PRs[plan.BranchRef{Repo: row.Repo, Branch: row.Branch}].State == plan.Merged
 	}
-	featureOf := func(url string) (string, error) { return features[url], nil }
-	isMerged := func(url string) (bool, error) { return merged[url], nil }
-	return featureOf, isMerged, nil
-}
-
-type blockedByOverride struct {
-	URL       string
-	BlockedBy []string
+	return features, merged, nil
 }
 
 func featureTicketsWithOverride(
-	ctx context.Context, qtx *ccdb.Queries, feature string, edit blockedByOverride,
+	ctx context.Context, qtx *ccdb.Queries, feature string, edit ticketBlockedBy,
 ) ([]ticketBlockedBy, error) {
 	rows, err := qtx.ListTicketsInFeature(ctx, feature)
 	if err != nil {
@@ -113,14 +104,12 @@ func featureTicketsWithOverride(
 	}
 	tickets := make([]ticketBlockedBy, 0, len(rows))
 	for _, row := range rows {
-		blockedBy := edit.BlockedBy
+		blockedBy := slices.Clone(edit.BlockedBy)
 		if row.URL != edit.URL {
-			// json.Unmarshal can reuse a slice's backing array and overwrite the edit under validation.
-			decoded, err := decodeBlockedBy(row.BlockedBy)
+			blockedBy, err = decodeBlockedBy(row.URL, row.BlockedBy)
 			if err != nil {
-				return nil, fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+				return nil, err
 			}
-			blockedBy = decoded
 		}
 		tickets = append(tickets, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
 	}
