@@ -13,7 +13,6 @@ import (
 var (
 	ErrProjectExists  = errors.New("store: project already exists")
 	ErrInvalidProject = errors.New("store: invalid project")
-	ErrNotFound       = errors.New("store: not found")
 )
 
 const (
@@ -67,7 +66,7 @@ func (s *Store) CreateProject(ctx context.Context, p NewProject) error {
 		}
 		for _, repo := range p.Repos {
 			if err := setRepoProjectID(ctx, q, repo, sql.NullInt64{Int64: id, Valid: true}); err != nil {
-				return fmt.Errorf("assign repo %s to project %q: %w", repo, name, err)
+				return err
 			}
 		}
 		return nil
@@ -86,10 +85,7 @@ func (s *Store) SetRepoProject(ctx context.Context, repo, project string) error 
 		}
 		id = sql.NullInt64{Int64: projectID, Valid: true}
 	}
-	if err := setRepoProjectID(ctx, s.q, repo, id); err != nil {
-		return fmt.Errorf("set project of repo %s: %w", repo, err)
-	}
-	return nil
+	return setRepoProjectID(ctx, s.q, repo, id)
 }
 
 func setRepoProjectID(ctx context.Context, q *ccdb.Queries, repo string, id sql.NullInt64) error {

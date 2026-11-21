@@ -86,6 +86,14 @@ func AllRunKinds() []RunKind { return slices.Clone(allRunKinds) }
 
 func AllRefusalKinds() []RefusalKind { return slices.Clone(allRefusalKinds) }
 
+func (k RunKind) Steerable() bool { return k == RunKindAgent || k == RunKindFollowUp }
+
+func (k RunKind) StartsSession() bool { return k.Steerable() || k == RunKindResolve }
+
+func (k RunKind) TakesSystemPrompt() bool { return k == RunKindAgent || k == RunKindResolve }
+
+func (k RunKind) IsCommand() bool { return k == RunKindCommand || k == RunKindVerify }
+
 func ParseVerb(s string) (Verb, error) { return parseMember("verb", s, allVerbs) }
 
 func ParseRunKind(s string) (RunKind, error) { return parseMember("run kind", s, allRunKinds) }

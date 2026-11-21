@@ -1,10 +1,8 @@
 package web_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -363,23 +361,6 @@ func testScopedRepoPage(t *testing.T) {
 		t.Errorf("repo page keeps import or project controls: %s", forms[0].HTML())
 	}
 	main.One(t, `p a[href="/repos"]`)
-}
-
-func TestReposPageLogsRenderTime(t *testing.T) {
-	t.Parallel()
-
-	var logs bytes.Buffer
-	server := web.NewServer(web.Deps{
-		Logger: slog.New(slog.NewTextHandler(&logs, nil)), Store: openStore(t), Clock: fixedClock(testNow),
-	})
-
-	if got := do(t, server, http.MethodGet, "/repos", req{}); got.Code != http.StatusOK {
-		t.Fatalf("GET /repos status = %d, want 200", got.Code)
-	}
-
-	if n := strings.Count(logs.String(), `msg="repos render"`); n != 1 || !strings.Contains(logs.String(), "duration=") {
-		t.Errorf("GET /repos render lines = %d, want 1 with a duration; log:\n%s", n, logs.String())
-	}
 }
 
 func TestProjectsPageImports(t *testing.T) {

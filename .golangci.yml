@@ -26,6 +26,10 @@ linters:
   settings:
     lll:
       line-length: 120
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/O-Marsters-1997/command-center/internal/adapter/command
+        - github.com/O-Marsters-1997/command-center/internal/adapter/gh
     usetesting:
       context-background: true
       context-todo: true

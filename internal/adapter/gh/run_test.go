@@ -27,7 +27,7 @@ func TestCLI_Retry(t *testing.T) {
 	t.Run("read recovers after timeouts", func(t *testing.T) {
 		t.Parallel()
 		calls := 0
-		exec := command.ExecutorFunc(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
+		exec := command.Executor(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
 			calls++
 			if calls < 3 {
 				return nil, timeout
@@ -48,7 +48,7 @@ func TestCLI_Retry(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		calls := 0
-		exec := command.ExecutorFunc(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
+		exec := command.Executor(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
 			calls++
 			cancel()
 			return nil, timeout
@@ -78,7 +78,7 @@ func TestCLI_Retry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			calls := 0
-			exec := command.ExecutorFunc(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
+			exec := command.Executor(func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
 				calls++
 				return nil, tt.failure
 			})

@@ -39,10 +39,10 @@ type manualClock struct{ at time.Time }
 func (c manualClock) Now() time.Time                     { return c.at }
 func (manualClock) After(time.Duration) <-chan time.Time { return nil }
 
-func newApp(t *testing.T, configPath string, env config.Env, opts ...app.Option) *app.App {
+func newApp(t *testing.T, configPath string, env config.Env, seams app.Seams) *app.App {
 	t.Helper()
-	opts = append([]app.Option{app.WithForge(&ghtest.Forge{}), app.WithRunner(&runnertest.Runner{})}, opts...)
-	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, env, opts...)
+	seams.Forge, seams.Runner = &ghtest.Forge{}, &runnertest.Runner{}
+	inst, err := app.New(slog.New(slog.DiscardHandler), configPath, env, seams)
 	if err != nil {
 		t.Fatalf("New(%s) error = %v", configPath, err)
 	}
@@ -91,7 +91,7 @@ func appConfig(t *testing.T) string {
 
 func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	t.Helper()
-	db, err := store.OpenStore(dsn, store.MaxOpenConns(4))
+	db, err := store.OpenStore(dsn, store.MaxOpenConns(4), store.SkipMigrate())
 	if err != nil {
 		t.Fatalf("OpenStore(%s): %v", dsn, err)
 	}
@@ -141,7 +141,7 @@ func TestNew(t *testing.T) {
 			PRs: map[plan.BranchRef]plan.PR{{Repo: sandboxRepo, Branch: "cc-1-first"}: {Number: 41, State: plan.Open}},
 		}
 		stub := func(context.Context) (plan.Observation, error) { return observed, nil }
-		inst := newApp(t, appConfig(t), testEnv, app.WithClock(manualClock{at}), app.WithObserver(stub))
+		inst := newApp(t, appConfig(t), testEnv, app.Seams{Clock: manualClock{at}, Observe: stub})
 
 		if err := inst.RunOnce(t.Context()); err != nil {
 			t.Fatalf("RunOnce() error = %v", err)
@@ -156,10 +156,10 @@ func TestNew(t *testing.T) {
 	t.Run("refuses a second instance", func(t *testing.T) {
 		t.Parallel()
 		configPath := appConfig(t)
-		newApp(t, configPath, testEnv)
+		newApp(t, configPath, testEnv, app.Seams{})
 
 		logger := slog.New(slog.DiscardHandler)
-		if _, err := app.New(t.Context(), logger, configPath, testEnv); !errors.Is(err, app.ErrLocked) {
+		if _, err := app.New(logger, configPath, testEnv, app.Seams{}); !errors.Is(err, app.ErrLocked) {
 			t.Errorf("New(second instance) error = %v, want %v", err, app.ErrLocked)
 		}
 	})
@@ -173,7 +173,7 @@ func TestNew(t *testing.T) {
 		if err := os.WriteFile(configPath, nil, 0o600); err != nil {
 			t.Fatalf("WriteFile(%s): %v", configPath, err)
 		}
-		inst := newApp(t, configPath, env)
+		inst := newApp(t, configPath, env, app.Seams{})
 
 		if err := inst.RunOnce(t.Context()); err != nil {
 			t.Errorf("RunOnce() with no repos = %v, want nil", err)
@@ -184,7 +184,7 @@ func TestNew(t *testing.T) {
 		t.Parallel()
 		missing := filepath.Join(t.TempDir(), "absent.toml")
 
-		_, err := app.New(t.Context(), slog.New(slog.DiscardHandler), missing, config.Env{})
+		_, err := app.New(slog.New(slog.DiscardHandler), missing, config.Env{}, app.Seams{})
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("New(%s) error = %v, want %v", missing, err, os.ErrNotExist)
 		}
@@ -197,7 +197,7 @@ func TestApp_Run(t *testing.T) {
 
 	t.Run("returns nil on a clean shutdown", func(t *testing.T) {
 		t.Parallel()
-		inst := newApp(t, appConfig(t), testEnv, app.WithObserver(idle))
+		inst := newApp(t, appConfig(t), testEnv, app.Seams{Observe: idle})
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan error, 1)
 		go func() { done <- inst.Run(ctx) }()
@@ -229,7 +229,7 @@ func TestApp_Run(t *testing.T) {
 		if err := os.WriteFile(configPath, body, 0o600); err != nil {
 			t.Fatalf("WriteFile(%s): %v", configPath, err)
 		}
-		inst := newApp(t, configPath, testEnv, app.WithObserver(idle))
+		inst := newApp(t, configPath, testEnv, app.Seams{Observe: idle})
 
 		if err := inst.Run(t.Context()); !errors.Is(err, syscall.EADDRINUSE) {
 			t.Errorf("Run() = %v, want %v", err, syscall.EADDRINUSE)

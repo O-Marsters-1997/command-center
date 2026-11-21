@@ -213,18 +213,3 @@ func (q *Queries) ListLaunchMemberships(ctx context.Context, maxRows int32) ([]L
 	}
 	return items, nil
 }
-
-const queueLaunchIntent = `-- name: QueueLaunchIntent :exec
-INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'launch', $3)
-`
-
-type QueueLaunchIntentParams struct {
-	At       time.Time
-	TicketID string
-	Payload  json.RawMessage
-}
-
-func (q *Queries) QueueLaunchIntent(ctx context.Context, arg QueueLaunchIntentParams) error {
-	_, err := q.db.ExecContext(ctx, queueLaunchIntent, arg.At, arg.TicketID, arg.Payload)
-	return err
-}

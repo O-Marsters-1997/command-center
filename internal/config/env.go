@@ -16,8 +16,9 @@ type Env struct {
 	AgentCommand  string
 	Home          string
 	UserConfigDir string
-	TZ            string
 }
+
+const AgentCommandEnv = "CC_AGENT_COMMAND"
 
 func EnvFrom(lookup func(string) string) (Env, error) {
 	home := lookup("HOME")
@@ -35,9 +36,8 @@ func EnvFrom(lookup func(string) string) (Env, error) {
 	return Env{
 		DataDir:       lookup("CC_DATA_DIR"),
 		DatabaseURL:   lookup("CC_DATABASE_URL"),
-		AgentCommand:  lookup("CC_AGENT_COMMAND"),
+		AgentCommand:  lookup(AgentCommandEnv),
 		Home:          home,
 		UserConfigDir: configDir,
-		TZ:            lookup("TZ"),
 	}, nil
 }

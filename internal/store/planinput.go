@@ -9,7 +9,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 )
 
-func (s *Store) AutoHistories(ctx context.Context) (map[plan.TicketURL]plan.AutoHistory, error) {
+func (s *Store) autoHistories(ctx context.Context) (map[plan.TicketURL]plan.AutoHistory, error) {
 	rows, err := s.q.AutoHistories(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select auto histories: %w", err)
@@ -23,11 +23,11 @@ func (s *Store) AutoHistories(ctx context.Context) (map[plan.TicketURL]plan.Auto
 
 // VerdictFacts measures checking time in successful ticks rather than wall time.
 func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
-	pushRows, err := s.LatestPushes(ctx)
+	pushRows, err := s.latestPushes(ctx)
 	if err != nil {
 		return plan.VerdictFacts{}, fmt.Errorf("read latest pushes: %w", err)
 	}
-	checkingTicks, err := s.CheckingTicks(ctx)
+	checkingTicks, err := s.checkingTicks(ctx)
 	if err != nil {
 		return plan.VerdictFacts{}, fmt.Errorf("read checking ticks: %w", err)
 	}
@@ -47,7 +47,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read last observation: %w", err)
 	}
-	memberships, err := s.LaunchMemberships(ctx)
+	memberships, err := s.launchMemberships(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read launch memberships: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read restacked tickets: %w", err)
 	}
-	lastVerdicts, err := s.LastVerdicts(ctx)
+	lastVerdicts, err := s.lastVerdicts(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read last verdicts: %w", err)
 	}
@@ -93,12 +93,12 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		return plan.Input{}, fmt.Errorf("read pass runs: %w", err)
 	}
 
-	auto, err := s.AutoHistories(ctx)
+	auto, err := s.autoHistories(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read auto histories: %w", err)
 	}
 
-	verifies, err := s.LatestVerifyRuns(ctx)
+	verifies, err := s.latestVerifyRuns(ctx)
 	if err != nil {
 		return plan.Input{}, fmt.Errorf("read verify runs: %w", err)
 	}
@@ -109,22 +109,13 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	}
 
 	planTickets := make([]plan.Ticket, len(tickets))
-	recorded := make(map[plan.TicketURL]plan.Recorded, len(tickets))
+	recorded, err := s.recordedEvents(ctx, tickets)
+	if err != nil {
+		return plan.Input{}, fmt.Errorf("read recorded events: %w", err)
+	}
 	verdicts := make(map[plan.TicketURL]string, len(lastVerdicts))
 	for i, t := range tickets {
 		planTickets[i] = t.Plan()
-		url := plan.TicketURL(t.URL)
-		var rec plan.Recorded
-		if rec.Opened, err = s.HasEvent(ctx, t.URL, EventPROpened); err != nil {
-			return plan.Input{}, fmt.Errorf("read pr_opened event: %w", err)
-		}
-		if rec.Merged, err = s.HasEvent(ctx, t.URL, EventPRMerged); err != nil {
-			return plan.Input{}, fmt.Errorf("read pr_merged event: %w", err)
-		}
-		if rec.Parked, err = s.HasEvent(ctx, t.URL, EventParked); err != nil {
-			return plan.Input{}, fmt.Errorf("read parked event: %w", err)
-		}
-		recorded[url] = rec
 	}
 	for url, v := range lastVerdicts {
 		verdicts[plan.TicketURL(url)] = v
@@ -139,6 +130,34 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		Auto:     auto,
 		Verifies: verifies,
 	}, nil
+}
+
+func (s *Store) recordedEvents(ctx context.Context, tickets []Ticket) (map[plan.TicketURL]plan.Recorded, error) {
+	kinds, err := encodeJSON("recorded event kinds", []EventKind{EventPROpened, EventPRMerged, EventParked})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListRecordedEvents(ctx, kinds)
+	if err != nil {
+		return nil, fmt.Errorf("select recorded events: %w", err)
+	}
+	recorded := make(map[plan.TicketURL]plan.Recorded, len(tickets))
+	for _, t := range tickets {
+		recorded[plan.TicketURL(t.URL)] = plan.Recorded{}
+	}
+	for _, row := range rows {
+		url := plan.TicketURL(row.TicketID.String)
+		rec, ok := recorded[url]
+		if !ok {
+			continue
+		}
+		kind := EventKind(row.Kind)
+		rec.Opened = rec.Opened || kind == EventPROpened
+		rec.Merged = rec.Merged || kind == EventPRMerged
+		rec.Parked = rec.Parked || kind == EventParked
+		recorded[url] = rec
+	}
+	return recorded, nil
 }
 
 func (s *Store) repoStatuses(ctx context.Context) ([]plan.RepoStatus, error) {

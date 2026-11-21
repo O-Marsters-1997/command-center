@@ -7,6 +7,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -41,7 +42,7 @@ func TestReRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			f := newPushFixture(t)
-			firstRunID, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+			firstRunID, _, err := f.Store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 				Ticket: f.Ticket.URL, Kind: "agent", PromptHash: "hash-1",
 			})
 			if err != nil {
@@ -57,11 +58,9 @@ func TestReRun(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("RecordDisposition: %v", err)
 			}
-			if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			storetest.Verb(t, f.Store, storepkg.VerbRequest{
 				Ticket: f.Ticket.URL, Verb: "re-run", At: testAt.Add(time.Second),
-			}); err != nil {
-				t.Fatalf("QueueVerbIntent: %v", err)
-			}
+			})
 			tt.prepare(t, f)
 			fake := &runnertest.Runner{}
 			f.reset(testAt.Add(time.Second), fake)
@@ -100,7 +99,7 @@ func TestReRun(t *testing.T) {
 			if summary.Outcome.IsSome() {
 				t.Error("the freshly spawned re-run must not already have an outcome")
 			}
-			if events := f.events(t, "re_run_refused"); len(events) != 0 {
+			if events := storetest.Events(t, f.Store, "re_run_refused"); len(events) != 0 {
 				t.Errorf("re-run refusals = %+v, want none", events)
 			}
 			pending, err := f.Store.PendingVerbIntents(t.Context(), "re-run")

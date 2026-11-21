@@ -2,7 +2,6 @@ package view
 
 import (
 	"fmt"
-	"net/url"
 	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -75,8 +74,8 @@ func buildStack(board Board, row Row) Stack {
 		return s
 	}
 	s.Feature = row.Feature
-	s.BoardPath = "/f/" + url.PathEscape(row.Feature)
-	s.GraphPath = s.BoardPath + "/graph"
+	s.BoardPath = FeaturePath(row.Feature)
+	s.GraphPath = FeatureGraphPath(row.Feature)
 	s.Project = row.Mark()
 	var members []Row
 	blocking := make(map[plan.TicketURL][]plan.TicketURL)
@@ -87,7 +86,7 @@ func buildStack(board Board, row Row) Stack {
 		members = append(members, r)
 		blocking[plan.TicketURL(r.URL)] = plan.TicketURLs(r.BlockedBy)
 		s.Total++
-		if r.State == plan.Merged.String() {
+		if r.State == plan.PRMerged {
 			s.Merged++
 		}
 	}

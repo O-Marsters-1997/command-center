@@ -9,6 +9,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/htmltest"
 )
 
@@ -29,8 +30,8 @@ func TestInsightsPage(t *testing.T) {
 	t.Run("carries the repo and feature scope through", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		server := openServer(track(t, store, named("cc-sandbox")...), fixedClock(testNow.Add(31*24*time.Hour)), "")
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		server := newServer(track(t, store, named("cc-sandbox")...), testNow.Add(31*24*time.Hour))
 
 		root := htmltest.Parse(t, renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a"))
 		root.One(t, `a[href="/insights?feature=feat-a"]`)
@@ -42,10 +43,10 @@ func TestInsightsPage(t *testing.T) {
 	t.Run("renders merged tickets as an SVG chart", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 		now := testNow.Add(31*24*time.Hour + 3*time.Hour)
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
-		mergeInsightsTicket(t, store, "sandbox://CC-1", now)
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
+		storetest.Merged(t, store, "sandbox://CC-1", now)
 
 		htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights")).One(t, `main#main svg[width]`)
 	})
@@ -53,26 +54,19 @@ func TestInsightsPage(t *testing.T) {
 	t.Run("breaks merged spend down by workflow and step", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 		now := testNow.Add(31*24*time.Hour + 3*time.Hour)
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-			Ticket: "sandbox://CC-1", Kind: "agent", PromptHash: "h",
+		storetest.Run(t, store, storetest.RunOpts{
+			TicketURL: "sandbox://CC-1", Kind: "agent", PromptHash: "h",
 			Step: "implement", Workflow: "default", WorkflowHash: "abcdef0123456789",
+			Outcome: option.Some(plan.OutcomePush), Cost: option.Some(4.20), EndedAt: now.Add(-time.Hour),
 		})
-		if err != nil {
-			t.Fatalf("InsertRunSkeleton: %v", err)
-		}
-		if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
-			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, Cost: option.Some(4.20), EndedAt: now.Add(-time.Hour),
-		}); err != nil {
-			t.Fatalf("RecordDisposition: %v", err)
-		}
 		if err := store.AppendEvent(t.Context(), storepkg.Event{
 			At: now.Add(-2 * time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened,
 		}); err != nil {
 			t.Fatalf("AppendEvent: %v", err)
 		}
-		mergeInsightsTicket(t, store, "sandbox://CC-1", now)
+		storetest.Merged(t, store, "sandbox://CC-1", now)
 
 		root := htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights"))
 		table := root.One(t, `[aria-label="workflow default·abcdef0"]`)

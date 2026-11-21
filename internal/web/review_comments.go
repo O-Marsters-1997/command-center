@@ -13,28 +13,28 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-func commentTarget(r *http.Request) (path string, side plan.Side, line int, err error) {
-	path = r.FormValue("path")
-	side = plan.Side(r.FormValue("side"))
-	line, _ = strconv.Atoi(r.FormValue("line"))
-	if path == "" || line < 1 || (side != plan.SideOld && side != plan.SideNew) {
-		return "", "", 0, errorf(http.StatusBadRequest,
-			"comment target %q %q %q is not a diff line", path, side, r.FormValue("line"))
+func commentTarget(r *http.Request) (view.DiffLine, error) {
+	target := view.DiffLine{Path: r.FormValue("path"), Side: plan.Side(r.FormValue("side"))}
+	target.Line, _ = strconv.Atoi(r.FormValue("line"))
+	if target.Path == "" || target.Line < 1 || (target.Side != plan.SideOld && target.Side != plan.SideNew) {
+		return view.DiffLine{}, errorf(http.StatusBadRequest,
+			"comment target %q %q %q is not a diff line", target.Path, target.Side, r.FormValue("line"))
 	}
-	return path, side, line, nil
+	return target, nil
 }
 
 func (s *Server) handleCommentForm(w http.ResponseWriter, r *http.Request) error {
-	path, side, line, err := commentTarget(r)
+	target, err := commentTarget(r)
 	if err != nil {
 		return err
 	}
 	ref := sessionRef(r)
-	return renderHTML(w, "reviewForm", view.ReviewForm{SessionPath: ref.Path(), Path: path, Side: side, Line: line})
+	form := view.ReviewForm{SessionPath: ref.Path(), Path: target.Path, Side: target.Side, Line: target.Line}
+	return renderHTML(w, "reviewForm", form)
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error {
-	path, side, line, err := commentTarget(r)
+	target, err := commentTarget(r)
 	if err != nil {
 		return err
 	}
@@ -44,11 +44,13 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 	}
 	ref := sessionRef(r)
 	now := s.clock.Now()
-	anchor, err := s.view.CommentAnchor(r.Context(), now, ref, s.dataDir, path, side, line)
+	anchor, err := s.view.CommentAnchor(r.Context(), now, ref, target)
 	if err != nil {
 		return fmt.Errorf("anchor comment: %w", err)
 	}
-	c := plan.ReviewComment{Tip: anchor.Tip, Path: path, Line: line, Side: side, Hunk: anchor.Hunk, Body: body}
+	c := plan.ReviewComment{
+		Tip: anchor.Tip, Path: target.Path, Line: target.Line, Side: target.Side, Hunk: anchor.Hunk, Body: body,
+	}
 	c.ID, err = s.store.AddReviewComment(r.Context(), store.NewReviewComment{
 		Ticket: anchor.Ticket, ReviewComment: c, At: now,
 	})
@@ -77,18 +79,12 @@ func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) er
 	ctx := r.Context()
 	ref := sessionRef(r)
 	now := s.clock.Now()
-	ticket, err := s.view.SessionTicket(ctx, now, ref)
+	ticket, snap, err := s.view.SessionSnapshot(ctx, now, ref)
 	if err != nil {
 		return fmt.Errorf("resolve ticket: %w", err)
 	}
-	snap, err := s.view.Snapshot(ctx, now)
-	if err != nil {
-		return fmt.Errorf("load snapshot: %w", err)
-	}
-	if !snap.Offers(ticket, plan.VerbFollowUp) {
-		entry, _ := snap.Entry(ticket)
-		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s",
-			ticket, entry.State, plan.VerbFollowUp, entry.Reason)
+	if err := requireOffer(snap, ticket, plan.VerbFollowUp); err != nil {
+		return err
 	}
 	comments, err := s.store.ReviewComments(ctx, ticket)
 	if err != nil {
@@ -117,18 +113,12 @@ func (s *Server) handleRaise(w http.ResponseWriter, r *http.Request) error {
 	if tip == "" {
 		return errorf(http.StatusBadRequest, "sha is required to raise")
 	}
-	ticket, err := s.view.SessionTicket(ctx, now, ref)
+	ticket, snap, err := s.view.SessionSnapshot(ctx, now, ref)
 	if err != nil {
 		return fmt.Errorf("resolve ticket: %w", err)
 	}
-	snap, err := s.view.Snapshot(ctx, now)
-	if err != nil {
-		return fmt.Errorf("load snapshot: %w", err)
-	}
-	if !snap.Offers(ticket, plan.VerbRaise) {
-		entry, _ := snap.Entry(ticket)
-		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s",
-			ticket, entry.State, plan.VerbRaise, entry.Reason)
+	if err := requireOffer(snap, ticket, plan.VerbRaise); err != nil {
+		return err
 	}
 	id, err := s.store.Raise(ctx, ticket, tip, now)
 	if err != nil {

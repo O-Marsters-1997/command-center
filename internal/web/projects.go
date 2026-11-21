@@ -10,9 +10,6 @@ import (
 )
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) error {
-	if err := r.ParseForm(); err != nil {
-		return errorf(http.StatusBadRequest, "malformed form: %w", err)
-	}
 	name := strings.TrimSpace(r.PostForm.Get("name"))
 	if !store.ProjectNamePattern.MatchString(name) {
 		return errorf(http.StatusBadRequest, "project name %q is malformed", name)
@@ -23,8 +20,8 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) err
 	}
 	repos := r.PostForm["repo"]
 	for _, repo := range repos {
-		if !validRepo(repo) {
-			return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+		if err := repoParam(repo); err != nil {
+			return err
 		}
 	}
 	project := store.NewProject{Name: name, Hue: hue, Repos: repos, At: s.clock.Now()}
@@ -35,9 +32,6 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) err
 }
 
 func (s *Server) handleEditProject(w http.ResponseWriter, r *http.Request) error {
-	if err := r.ParseForm(); err != nil {
-		return errorf(http.StatusBadRequest, "malformed form: %w", err)
-	}
 	name := r.PathValue("name")
 	newName := strings.TrimSpace(r.PostForm.Get("name"))
 	if !store.ProjectNamePattern.MatchString(newName) {
@@ -61,12 +55,9 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) err
 }
 
 func (s *Server) handleSetRepoProject(w http.ResponseWriter, r *http.Request) error {
-	if err := r.ParseForm(); err != nil {
-		return errorf(http.StatusBadRequest, "malformed form: %w", err)
-	}
 	repo := r.PathValue("owner") + "/" + r.PathValue("name")
-	if !validRepo(repo) {
-		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	if err := repoParam(repo); err != nil {
+		return err
 	}
 	if err := s.store.SetRepoProject(r.Context(), repo, strings.TrimSpace(r.PostForm.Get("project"))); err != nil {
 		return fmt.Errorf("set repo project: %w", err)

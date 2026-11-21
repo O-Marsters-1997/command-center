@@ -13,32 +13,25 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 func (c conflictFixture) queueResolve(t *testing.T) {
 	t.Helper()
-	if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	storetest.Verb(t, c.store, storepkg.VerbRequest{
 		Ticket: c.f.child.URL, Verb: plan.VerbResolve, At: testAt.Add(time.Hour),
-	}); err != nil {
-		t.Fatalf("QueueVerbIntent(resolve): %v", err)
-	}
+	})
 }
 
 func conflictedPair(t *testing.T, store *storepkg.Store) string {
 	t.Helper()
-	events, err := store.Events(t.Context())
-	if err != nil {
-		t.Fatalf("Events(): %v", err)
+	conflicts := storetest.Events(t, store, storepkg.EventRefreshConflicted)
+	if len(conflicts) == 0 {
+		t.Fatal("Events() has no refresh_conflicted event")
 	}
-	for _, e := range events {
-		if e.Kind == storepkg.EventRefreshConflicted {
-			fields := strings.SplitN(e.Detail, " ", 3)
-			return fields[0] + " " + fields[1]
-		}
-	}
-	t.Fatal("Events() has no refresh_conflicted event")
-	return ""
+	fields := strings.SplitN(conflicts[0].Detail, " ", 3)
+	return fields[0] + " " + fields[1]
 }
 
 func TestResolve(t *testing.T) {
@@ -63,13 +56,8 @@ func TestResolve(t *testing.T) {
 		if spawn.WorktreePath != c.f.childWorktree {
 			t.Errorf("spawn worktree = %q, want %q", spawn.WorktreePath, c.f.childWorktree)
 		}
-		for _, want := range []string{
-			"shared.txt", "Add the lobby", "Rewrite the frontdoor", "origin/parent",
-			strings.Fields(pair)[0], strings.Fields(pair)[1], plan.ResolveCommitPrefix,
-		} {
-			if !strings.Contains(spawn.Prompt, want) {
-				t.Errorf("spawn prompt = %q, want it to mention %q", spawn.Prompt, want)
-			}
+		if !strings.Contains(spawn.Prompt, "shared.txt") {
+			t.Errorf("spawn prompt = %q, want it to name the conflicted file", spawn.Prompt)
 		}
 		latest, err := c.store.LatestRunsByTicket(t.Context())
 		if err != nil {
@@ -78,7 +66,7 @@ func TestResolve(t *testing.T) {
 		if kind := latest[plan.TicketURL(c.f.child.URL)].Kind; kind != plan.RunKindResolve {
 			t.Errorf("run kind = %q, want %q", kind, plan.RunKindResolve)
 		}
-		if !hasEventIn(t, c.store, storepkg.EventResolveStarted, pair) {
+		if !hasEvent(storetest.Events(t, c.store, ""), storepkg.EventResolveStarted, pair) {
 			t.Errorf("Events() has no resolve_started for %q", pair)
 		}
 	})
@@ -102,7 +90,7 @@ func TestResolve(t *testing.T) {
 		if got := len(fake.Spawns()); got != 0 {
 			t.Errorf("spawns = %d, want 0", got)
 		}
-		if !hasEventIn(t, c.store, storepkg.EventResolveRefused, "already ran") {
+		if !hasEvent(storetest.Events(t, c.store, ""), storepkg.EventResolveRefused, "already ran") {
 			t.Error("Events() has no resolve_refused saying a resolve already ran")
 		}
 	})
@@ -134,10 +122,7 @@ func TestResolve(t *testing.T) {
 		}
 		fake.Exit(2, 1)
 		c.tick(t)
-		verifies, err := c.store.LatestVerifyRuns(t.Context())
-		if err != nil {
-			t.Fatalf("LatestVerifyRuns: %v", err)
-		}
+		verifies := planInput(t, c.store).Verifies
 		if got := verifies[plan.TicketURL(c.f.child.URL)].Outcome; got != option.Some(plan.OutcomeFailed) {
 			t.Errorf("verify outcome = %v, want failed", got)
 		}

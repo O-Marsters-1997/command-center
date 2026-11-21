@@ -3,7 +3,6 @@ package loop
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
@@ -44,9 +43,6 @@ type Deps struct {
 	Observe   ObserveFunc
 	Config    config.Config
 	Workspace config.Workspace
-	Validate  ValidateFunc
-	RemoteOf  RemoteFunc
-	Tracker   tracker.Resolver
 }
 
 type Option func(*Loop)
@@ -57,29 +53,23 @@ func WithWorktrees(w worktrees) Option { return func(l *Loop) { l.worktrees = w 
 
 func WithNotifier(n notifier) Option { return func(l *Loop) { l.notifier = n } }
 
+func WithValidator(v ValidateFunc) Option { return func(l *Loop) { l.validate = v } }
+
+func WithRemoteOf(r RemoteFunc) Option { return func(l *Loop) { l.remoteOf = r } }
+
+func WithTracker(t tracker.Resolver) Option { return func(l *Loop) { l.trackerFor = t } }
+
 func New(d Deps, opts ...Option) *Loop {
 	l := &Loop{
 		logger: d.Logger, store: d.Store, observe: d.Observe, clock: d.Clock, runner: d.Runner,
 		cfg: d.Config, ws: d.Workspace,
-		forge:      gh.CLI{},
-		worktrees:  git.Library{},
-		validate:   ValidateRepo,
-		remoteOf:   gh.CLI{}.RepoRemote,
-		trackerFor: tracker.Resolve(gh.CLI{}),
-		nudgeCh:    make(chan struct{}, 1),
-		workflows:  config.Workflows(),
+		worktrees: git.Library{},
+		validate:  ValidateRepo,
+		nudgeCh:   make(chan struct{}, 1),
+		workflows: config.Workflows(),
 	}
 	for _, opt := range opts {
 		opt(l)
-	}
-	if d.Validate != nil {
-		l.validate = d.Validate
-	}
-	if d.RemoteOf != nil {
-		l.remoteOf = d.RemoteOf
-	}
-	if d.Tracker != nil {
-		l.trackerFor = d.Tracker
 	}
 	return l
 }
@@ -96,7 +86,6 @@ func (n Nudger) Nudge() {
 func (l *Loop) Nudger() Nudger { return Nudger{ch: l.nudgeCh} }
 
 type tick struct {
-	now       time.Time
 	obs       plan.Observation
 	prev      plan.Observation
 	spawned   []plan.TicketURL

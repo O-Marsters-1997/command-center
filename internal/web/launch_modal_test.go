@@ -184,7 +184,7 @@ func TestCandidates(t *testing.T) {
 				claimed := "https://github.com/acme/alpha/issues/1"
 				storetest.Tickets(t, store, storepkg.Ticket{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"})
 				conflict := &storepkg.FeatureConflictError{URL: claimed, Existing: "project:y", Importing: "project:x"}
-				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict, testNow); err != nil {
+				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict.URL, conflict.Error(), testNow); err != nil {
 					t.Fatalf("RecordImportRefusal(project:x): %v", err)
 				}
 			},
@@ -199,7 +199,7 @@ func TestCandidates(t *testing.T) {
 					URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
 				})
 				conflict := &storepkg.FeatureConflictError{URL: "sandbox://CC-1", Existing: "project:y", Importing: "project:x"}
-				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict, testNow); err != nil {
+				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict.URL, conflict.Error(), testNow); err != nil {
 					t.Fatalf("RecordImportRefusal(project:x): %v", err)
 				}
 			},

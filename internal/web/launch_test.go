@@ -21,9 +21,15 @@ func activeLaunchHashes(t *testing.T, store *storepkg.Store) map[string]string {
 	if err := store.ApplyLaunchIntents(t.Context(), testNow); err != nil {
 		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
-	hashes, err := store.ActiveLaunchHashes(t.Context())
+	in, err := store.PlanInput(t.Context())
 	if err != nil {
-		t.Fatalf("ActiveLaunchHashes: %v", err)
+		t.Fatalf("PlanInput: %v", err)
+	}
+	hashes := map[string]string{}
+	for url, m := range in.Memberships {
+		if !m.Cancelled {
+			hashes[string(url)] = m.PromptHash
+		}
 	}
 	return hashes
 }

@@ -11,7 +11,8 @@ import (
 type Outcome int
 
 const (
-	OutcomePush Outcome = iota
+	OutcomeUnknown Outcome = iota
+	OutcomePush
 	OutcomeFailed
 	OutcomeCutFailed
 	OutcomeAsked
@@ -33,9 +34,9 @@ func (o Outcome) String() string {
 		return "continued"
 	case OutcomePassed:
 		return "passed"
-	default:
-		return "failed"
+	case OutcomeUnknown:
 	}
+	return "unknown"
 }
 
 func (o Outcome) Glyph() GlyphWord {
@@ -44,7 +45,7 @@ func (o Outcome) Glyph() GlyphWord {
 		return GlyphDone
 	case OutcomeAsked:
 		return GlyphAttention
-	case OutcomeFailed, OutcomeCutFailed:
+	case OutcomeFailed, OutcomeCutFailed, OutcomeUnknown:
 		return GlyphFailed
 	}
 	return GlyphFailed
@@ -66,7 +67,7 @@ func ParseOutcome(s string) (Outcome, error) {
 const emptyQuestion = "(the agent asked without writing a question)"
 
 func Asked(kind RunKind, questionFile option.Option[string]) option.Option[string] {
-	if kind != RunKindAgent && kind != RunKindFollowUp || questionFile.IsNone() {
+	if !kind.Steerable() || questionFile.IsNone() {
 		return option.None[string]()
 	}
 	question := strings.TrimSpace(strings.ToValidUTF8(questionFile.Unwrap(), ""))

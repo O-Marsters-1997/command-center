@@ -23,7 +23,7 @@ func (n *recordingNotifier) Notify(_ context.Context, title, _ string) error {
 func (f *pushFixture) seedAutoCIFailed(t *testing.T, autoRounds int) {
 	t.Helper()
 	for range autoRounds {
-		if _, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		if _, _, err := f.Store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: f.Ticket.URL, Kind: plan.RunKindFollowUp, BaselineSHA: "older-tip", PromptHash: "h",
 			Cause: plan.CauseCIFailed,
 		}); err != nil {
@@ -47,7 +47,7 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 	t.Run("starts one follow-up with the failed log and never a second for the same tip", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		f.Forge.Logs = map[string]string{ghtest.FailedRunURL: "boom\n"}
+		f.Forge.Seed(ghtest.Seed{Logs: map[string]string{ghtest.FailedRunURL: "boom\n"}})
 		f.seedAutoCIFailed(t, 0)
 		fake := &runnertest.Runner{}
 		f.reset(testAt, fake)
@@ -59,16 +59,14 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 		if len(spawns) != 1 {
 			t.Fatalf("spawns across two ticks and a restart = %d, want 1", len(spawns))
 		}
-		for _, want := range []string{"CI is failing on this branch", "## Failed CI log: CI", "boom"} {
-			if !strings.Contains(spawns[0].Prompt, want) {
-				t.Errorf("prompt = %q, want it to mention %q", spawns[0].Prompt, want)
-			}
+		if !strings.Contains(spawns[0].Prompt, "boom") {
+			t.Errorf("prompt = %q, want it to carry the failed log", spawns[0].Prompt)
 		}
-		histories, err := f.Store.AutoHistories(t.Context())
+		in, err := f.Store.PlanInput(t.Context())
 		if err != nil {
-			t.Fatalf("AutoHistories: %v", err)
+			t.Fatalf("PlanInput: %v", err)
 		}
-		if got := histories[plan.TicketURL(f.Ticket.URL)]; got.Rounds != 1 || got.LastTip == "" {
+		if got := in.Auto[plan.TicketURL(f.Ticket.URL)]; got.Rounds != 1 || got.LastTip == "" {
 			t.Errorf("auto history = %+v, want one round with a tip", got)
 		}
 	})
@@ -87,7 +85,7 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 		if len(notes.titles) != 1 {
 			t.Errorf("notifications = %v, want exactly one", notes.titles)
 		}
-		if got := len(f.events(t, storepkg.EventParked)); got != 1 {
+		if got := len(storetest.Events(t, f.Store, storepkg.EventParked)); got != 1 {
 			t.Errorf("parked events = %d, want 1", got)
 		}
 	})

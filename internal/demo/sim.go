@@ -184,9 +184,9 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	lp := loop.New(
 		loop.Deps{
 			Logger: logger, Store: st, Clock: clock, Runner: agent, Observe: loop.NewObserver(st, forge, cfg),
-			Config: cfg, Workspace: ws, Tracker: resolve,
+			Config: cfg, Workspace: ws,
 		},
-		loop.WithForge(forge),
+		loop.WithForge(forge), loop.WithTracker(resolve),
 	)
 	server := web.NewServer(
 		web.Deps{Logger: logger, Store: st, Clock: clock, DataDir: ws.DataDir, BoardPollSeconds: 1},
@@ -324,7 +324,7 @@ func (s *Sim) states(ctx context.Context) (map[plan.TicketURL]plan.State, error)
 		return nil, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = s.clock.Now()
-	snap := plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in)
+	snap := plan.Daemon{Workflows: config.Workflows()}.Derive(in)
 	states := make(map[plan.TicketURL]plan.State, len(s.issues))
 	for _, i := range s.issues {
 		ref := plan.TicketURL(i.url)

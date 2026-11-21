@@ -32,6 +32,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
@@ -116,9 +117,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		lp := newLoop(store, observing(observed), fixedClock(testAt), config.Config{}, config.Workspace{},
 			runner.ProcessRunner{})
-		if err := lp.RunOnce(ctx); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
 		got, ok, err := store.LastObservation(ctx)
 		if err != nil || !ok {
@@ -147,14 +146,9 @@ func TestLoop_RunOnce(t *testing.T) {
 
 		lp := newLoop(store, observing(plan.Observation{}), fixedClock(testAt), config.Config{}, config.Workspace{},
 			runner.ProcessRunner{})
-		if err := lp.RunOnce(ctx); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
-		memberships, err := store.LaunchMemberships(ctx)
-		if err != nil {
-			t.Fatalf("LaunchMemberships: %v", err)
-		}
+		memberships := planInput(t, store).Memberships
 		if memberships["sandbox://CC-1"].LaunchID == 0 {
 			t.Error("LaunchMemberships()[sandbox://CC-1].LaunchID = 0, want the queued launch applied")
 		}
@@ -175,9 +169,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		ok := newLoop(store, observing(observed), fixedClock(good), config.Config{}, config.Workspace{},
 			runner.ProcessRunner{})
-		if err := ok.RunOnce(ctx); err != nil {
-			t.Fatalf("first RunOnce() error = %v", err)
-		}
+		runOnce(t, ok)
 		launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: bad}
 		if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 			t.Fatalf("QueueLaunchIntent: %v", err)
@@ -191,10 +183,7 @@ func TestLoop_RunOnce(t *testing.T) {
 			t.Fatalf("RunOnce(failing observe) error = %v, want %v", err, boom)
 		}
 
-		memberships, err := store.LaunchMemberships(ctx)
-		if err != nil {
-			t.Fatalf("LaunchMemberships: %v", err)
-		}
+		memberships := planInput(t, store).Memberships
 		if len(memberships) != 0 {
 			t.Errorf("LaunchMemberships() = %+v, want none applied by a failed observe", memberships)
 		}
@@ -213,16 +202,12 @@ func TestLoop_RunOnce(t *testing.T) {
 		if tickErr := last.Unwrap(); !tickErr.At.Equal(bad) {
 			t.Errorf("LastError().At = %s, want %s", tickErr.At, bad)
 		}
-		events, err := store.Events(ctx)
-		if err != nil {
-			t.Fatalf("Events: %v", err)
-		}
 		type kindAt struct {
 			Kind storepkg.EventKind
 			At   time.Time
 		}
 		var got []kindAt
-		for _, e := range events {
+		for _, e := range storetest.Events(t, store, "") {
 			got = append(got, kindAt{e.Kind, e.At})
 		}
 		want := []kindAt{{"pr_opened", good}, {storepkg.EventTickError, bad}}
@@ -246,25 +231,17 @@ func TestLoop_RunOnce(t *testing.T) {
 		}, fixedClock(testAt.Add(time.Hour)), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
 		for range 3 {
-			if err := ok.RunOnce(ctx); err != nil {
-				t.Fatalf("RunOnce() error = %v", err)
-			}
+			runOnce(t, ok)
 		}
 		for range 50 {
 			if err := failing.RunOnce(ctx); err == nil {
 				t.Fatal("RunOnce(failing observe) error = nil, want one")
 			}
 		}
-		if err := ok.RunOnce(ctx); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, ok)
 
-		ticks, err := store.CheckingTicks(ctx)
-		if err != nil {
-			t.Fatalf("CheckingTicks: %v", err)
-		}
-		if got := ticks["sandbox://CC-1"]; got != 4 {
-			t.Errorf("CheckingTicks()[sandbox://CC-1] = %d after 4 good and 50 failed observes, want 4", got)
+		if got, want := planInput(t, store).Verdict.CheckingFor["sandbox://CC-1"], 4*storepkg.TickPeriod; got != want {
+			t.Errorf("CheckingFor[sandbox://CC-1] = %v after 4 good and 50 failed observes, want %v", got, want)
 		}
 	})
 
@@ -282,20 +259,14 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		dispositionAsPushed(t, store, tickets[0].URL, testAt)
 		authoriseTicket(t, store, tickets[1].URL, composeHash(tickets[1].URL), testAt)
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: tickets[0].URL, Verb: "re-run", At: testAt,
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(re-run): %v", err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: tickets[0].URL, Verb: "re-run", At: testAt})
 
 		obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 		cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 		fake := &runnertest.Runner{}
 		lp := newLoop(store, observing(obs), fixedClock(testAt.Add(time.Minute)), cfg, ws, fake,
 			loop.WithForge(&ghtest.Forge{}))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
 		if got := len(fake.Spawns()); got != 1 {
 			t.Fatalf("spawns = %d, want 1 (max_agents = 1)", got)
@@ -314,6 +285,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		root, repoPath := repoWithOrigin(t)
 		forge := &ghtest.Forge{}
 		worktreePath := cutWorktree(t, repoPath, "cc-1")
+		forge.Seed(ghtest.Seed{Checkouts: map[string]string{worktreePath: "cc-1"}})
 		baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 		gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
 		store := openStore(t)
@@ -321,7 +293,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 			t.Fatalf("UpsertTickets: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		})
 		if err != nil {
@@ -338,15 +310,13 @@ func TestLoop_RunOnce(t *testing.T) {
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observing(obs), fixedClock(testAt.Add(time.Minute)), cfg, ws, &runnertest.Runner{},
 			loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
 		if !gittest.HasRef(t, filepath.Join(root, "remote.git"), "refs/heads/cc-1") {
 			t.Error("origin has no cc-1, want the run disposed this tick pushed")
 		}
-		if got := len(forge.Calls("Create")); got != 1 {
-			t.Errorf("Create calls = %d, want 1", got)
+		if _, ok := openPRs(t, forge)["cc-1"]; !ok {
+			t.Error("forge has no PR on cc-1, want one for the pushed run")
 		}
 	})
 
@@ -363,15 +333,9 @@ func TestLoop_RunOnce(t *testing.T) {
 
 		f.Tick(t)
 
-		events, err := f.Store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
 		var details []string
-		for _, e := range events {
-			if e.Kind == storepkg.EventTickError {
-				details = append(details, e.Detail)
-			}
+		for _, e := range storetest.Events(t, f.Store, storepkg.EventTickError) {
+			details = append(details, e.Detail)
 		}
 		if diff := cmp.Diff([]string{"new"}, details); diff != "" {
 			t.Errorf("tick_error details mismatch (-want +got):\n%s", diff)
@@ -390,7 +354,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 			t.Fatalf("UpsertTickets: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		})
 		if err != nil {
@@ -411,9 +375,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		fake := &runnertest.Runner{}
 		fake.Exit(999, 0)
 		lp := newLoop(store, observing(obs), fixedClock(testAt.Add(30*time.Second)), cfg, ws, fake)
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
 		latest, err := store.LatestRunsByTicket(t.Context())
 		if err != nil {
@@ -446,20 +408,14 @@ func TestLoop_RunOnce(t *testing.T) {
 		fake := &runnertest.Runner{}
 		lp := newLoopWithDeps(loop.Deps{
 			Store: store, Observe: loop.NewObserver(store, forge, cfg), Clock: fixedClock(at), Config: cfg, Workspace: ws,
-			Runner: fake, Tracker: resolve,
-		}, loop.WithForge(forge))
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: "project:x", Verb: plan.VerbImport, At: at,
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(import): %v", err)
-		}
+			Runner: fake,
+		}, loop.WithForge(forge), loop.WithTracker(resolve))
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: "project:x", Verb: plan.VerbImport, At: at})
 		authoriseTicket(t, store, issue.URL, composeHash(issue.URL), at)
 		tick := func(n int) {
 			t.Helper()
 			for range n {
-				if err := lp.RunOnce(t.Context()); err != nil {
-					t.Fatalf("RunOnce() error = %v", err)
-				}
+				runOnce(t, lp)
 			}
 		}
 
@@ -470,13 +426,17 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		gittest.Commit(t, spawns[0].WorktreePath, "x.go", "package x\n")
 		fake.Exit(1, 0)
-		tick(4)
-		creates := forge.Calls("Create")
-		if len(creates) != 1 {
-			t.Fatalf("Create calls = %+v, want one", creates)
-		}
 		branch := gittest.Run(t, spawns[0].WorktreePath, "branch", "--show-current")
-		forge.SetSnapshot(gh.Snapshot{ByBranch: map[string]gh.PR{branch: {
+		forge.Seed(ghtest.Seed{Checkouts: map[string]string{spawns[0].WorktreePath: branch}})
+		tick(4)
+		listed, err := forge.List(t.Context(), root, []string{branch})
+		if err != nil {
+			t.Fatalf("List() error = %v", err)
+		}
+		if _, ok := listed.ByBranch[branch]; !ok {
+			t.Fatalf("List() = %+v, want a PR for %s", listed.ByBranch, branch)
+		}
+		forge.Seed(ghtest.Seed{PRs: []gh.PR{{
 			Number: 1, HeadRef: branch, State: gh.Open,
 			HeadOid: gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/"+branch),
 			Checks:  map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},

@@ -14,7 +14,7 @@ func (l *Loop) applyAutoFollowUps(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
 	for _, auto := range snap.AutoFollowUps() {
-		ticket, ok := l.ticket(byURL, string(auto.Ticket))
+		ticket, ok := byURL[auto.Ticket]
 		entry, found := snap.Entry(auto.Ticket)
 		if !ok || !found {
 			continue
@@ -35,11 +35,7 @@ func (l *Loop) autoMessage(auto plan.AutoFollowUp, entry plan.Entry, checks map[
 	if auto.Cause == plan.CauseVerifyFailed {
 		return plan.ComposeFixVerify(l.tailOf(auto.LogPath))
 	}
-	var red []plan.RedCheck
-	for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
-		red = append(red, plan.RedCheck{Name: name, DetailsURL: checks[name].DetailsURL})
-	}
-	return plan.ComposeFixCI(red)
+	return plan.ComposeFixCI(entry.RedChecks(checks))
 }
 
 func (l *Loop) rerunFailedChecks(ctx context.Context, snap plan.Snapshot, byURL map[plan.TicketURL]store.Ticket) {

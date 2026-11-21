@@ -40,9 +40,11 @@ var templateFiles embed.FS
 
 var templates = template.Must(template.New("").
 	Funcs(template.FuncMap{
-		"percent":     view.PercentOf,
-		"pathEscape":  url.PathEscape,
-		"queryEscape": url.QueryEscape,
+		"pathEscape":        url.PathEscape,
+		"queryEscape":       url.QueryEscape,
+		"featurePath":       view.FeaturePath,
+		"featureGraphPath":  view.FeatureGraphPath,
+		"featureLaunchPath": view.FeatureLaunchPath,
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
 
@@ -56,7 +58,6 @@ type Server struct {
 	nudger     Nudger
 	pushable   pushableCache
 	agentCmd   []string
-	dataDir    string
 }
 
 const pushableTTL = time.Minute
@@ -87,14 +88,16 @@ func NewServer(d Deps, opts ...Option) *Server {
 		d.BoardPollSeconds = config.DefaultBoardPollSeconds
 	}
 	s := &Server{
-		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand, dataDir: d.DataDir,
+		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger, agentCmd: d.AgentCommand,
 		trackerFor: tracker.Resolve(gh.CLI{}),
 		pushable:   pushableCache{list: gh.CLI{}.PushableRepos},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
-	s.view = view.NewReader(d.Store, d.BoardPollSeconds, d.SpendLimit5h)
+	s.view = view.NewReader(d.Store, d.DataDir, view.ReaderSettings{
+		BoardPollSeconds: d.BoardPollSeconds, SpendLimit5h: d.SpendLimit5h,
+	})
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", s.handle(s.handleIndex))
 	mux.Handle("GET /tickets", s.handle(s.handleTickets))
@@ -114,7 +117,6 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/raise", s.handle(s.handleRaise))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
-	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", s.handle(s.handleLog))
@@ -154,51 +156,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.Serve
 
 func (s *Server) handle(h func(http.ResponseWriter, *http.Request) error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			if err := r.ParseForm(); err != nil {
+				s.writeError(w, r, errorf(http.StatusBadRequest, "malformed form: %w", err))
+				return
+			}
+		}
 		if err := h(w, r); err != nil {
 			s.writeError(w, r, err)
 		}
 	})
 }
 
-func clientMessage(err error) string {
-	if se, ok := errors.AsType[statusError](err); ok {
-		return se.Error()
-	}
-	if invalid, ok := errors.AsType[view.InvalidError](err); ok {
-		return invalid.Error()
-	}
-	for _, m := range statusMap {
-		if !errors.Is(err, m.target) {
-			continue
-		}
-		e := err
-		for {
-			next := errors.Unwrap(e)
-			if next == nil || errors.Unwrap(next) == nil || !errors.Is(next, m.target) {
-				break
-			}
-			e = next
-		}
-		return e.Error()
-	}
-	return err.Error()
-}
-
 func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
-	status := statusOf(err)
+	status, message := classify(err)
 	if status >= http.StatusInternalServerError {
 		s.logger.ErrorContext(r.Context(), "request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		http.Error(w, "internal error", status)
 		return
 	}
 	if !hx.IsRequest(r) {
-		http.Error(w, clientMessage(err), status)
+		http.Error(w, message, status)
 		return
 	}
 	w.Header().Set(hx.HeaderRetarget, "#flash")
 	w.Header().Set(hx.HeaderReswap, "innerHTML")
 	w.Header().Set(hx.HeaderReselect, "p.banner")
-	if renderErr := renderHTMLStatus(w, http.StatusUnprocessableEntity, "flash", clientMessage(err)); renderErr != nil {
+	if renderErr := renderHTMLStatus(w, http.StatusUnprocessableEntity, "flash", message); renderErr != nil {
 		s.logger.ErrorContext(r.Context(), "render flash", "err", renderErr)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
@@ -212,37 +196,53 @@ type statusError struct {
 func (e statusError) Error() string { return e.err.Error() }
 func (e statusError) Unwrap() error { return e.err }
 
-func withStatus(status int, err error) error { return statusError{status: status, err: err} }
-
 func errorf(status int, format string, args ...any) error {
-	return withStatus(status, fmt.Errorf(format, args...))
+	return statusError{status: status, err: fmt.Errorf(format, args...)}
 }
 
 var statusMap = []struct {
-	target error
-	status int
+	target  error
+	status  int
+	message string
 }{
-	{store.ErrProjectExists, http.StatusConflict},
-	{store.ErrNotFound, http.StatusNotFound},
-	{store.ErrInvalidProject, http.StatusBadRequest},
-	{view.ErrSessionNotFound, http.StatusNotFound},
-	{view.ErrNoLocalTip, http.StatusNotFound},
-	{view.ErrNoSuchLine, http.StatusBadRequest},
+	{store.ErrProjectExists, http.StatusConflict, "a project with that name already exists"},
+	{store.ErrNotFound, http.StatusNotFound, "not found"},
+	{store.ErrInvalidProject, http.StatusBadRequest, "invalid project"},
+	{view.ErrSessionNotFound, http.StatusNotFound, "no such session"},
+	{view.ErrNoLocalTip, http.StatusNotFound, "ticket has no local tip"},
+	{view.ErrNoSuchLine, http.StatusBadRequest, "no such diff line"},
+	{plan.ErrUnknownTicket, http.StatusBadRequest, "unknown ticket"},
+	{view.ErrInvalidInput, http.StatusBadRequest, "invalid request"},
 }
 
-func statusOf(err error) int {
+func classify(err error) (int, string) {
 	if se, ok := errors.AsType[statusError](err); ok {
-		return se.status
-	}
-	if _, ok := errors.AsType[view.InvalidError](err); ok {
-		return http.StatusBadRequest
+		return se.status, se.Error()
 	}
 	for _, m := range statusMap {
 		if errors.Is(err, m.target) {
-			return m.status
+			return m.status, m.message
 		}
 	}
-	return http.StatusInternalServerError
+	return http.StatusInternalServerError, "internal error"
+}
+
+func requireOffer(snap plan.Snapshot, ticket plan.TicketURL, verb plan.Verb) error {
+	entry, ok := snap.Entry(ticket)
+	if !ok {
+		return fmt.Errorf("%w %q", plan.ErrUnknownTicket, ticket)
+	}
+	if !snap.Offers(ticket, verb) {
+		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s", ticket, entry.State, verb, entry.Reason)
+	}
+	return nil
+}
+
+func repoParam(repo string) error {
+	if !validRepo(repo) {
+		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	}
+	return nil
 }
 
 func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
@@ -321,9 +321,9 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 	if requested := r.URL.Query()["ticket"]; len(requested) > 0 {
 		modal, err := s.launchModal(r.Context(), s.clock.Now(), "", requested)
 		if err != nil {
-			return withStatus(http.StatusBadRequest, err)
+			return err
 		}
-		page.Launch = &modal
+		page.Launch = option.Some(modal)
 	}
 	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "launch_picker.tmpl", page)
@@ -408,11 +408,7 @@ func (s *Server) renderBoard(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load board: %w", err)
 	}
-	host := "/tickets"
-	if r.URL.RawQuery != "" {
-		host += "?" + r.URL.RawQuery
-	}
-	return renderFragment(w, r, host, "board", board)
+	return renderFragment(w, r, view.TicketsPath(r.URL.RawQuery), "board", board)
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
@@ -424,9 +420,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error {
-	if err := r.ParseForm(); err != nil {
-		return withStatus(http.StatusBadRequest, err)
-	}
 	feature := r.FormValue("feature")
 	if feature != "" {
 		if _, err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
@@ -467,7 +460,7 @@ func (s *Server) launchModal(
 	}
 	modal, err := s.view.TicketModal(ctx, now, tickets)
 	if err != nil {
-		return view.LaunchModal{}, withStatus(http.StatusBadRequest, err)
+		return view.LaunchModal{}, fmt.Errorf("load ticket modal: %w", err)
 	}
 	return modal, nil
 }
@@ -482,9 +475,6 @@ func (s *Server) handleCandidatesJSON(w http.ResponseWriter, r *http.Request) er
 
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	if err := r.ParseForm(); err != nil {
-		return withStatus(http.StatusBadRequest, err)
-	}
 	requested := r.Form["ticket"]
 	if len(requested) == 0 {
 		return errorf(http.StatusBadRequest, "at least one ticket is required")
@@ -504,7 +494,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	}
 	choice, err := parseAgentChoice(r.FormValue("model"), r.FormValue("effort"))
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return errorf(http.StatusBadRequest, "%w", err)
 	}
 	workflow := cmp.Or(r.FormValue("workflow"), config.DefaultWorkflow)
 	if _, ok := config.Workflows()[workflow]; !ok {
@@ -516,7 +506,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	launchContext := strings.TrimSpace(r.FormValue("context"))
 	base, err := snap.Preview(plan.TicketURLs(requested), "")
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return fmt.Errorf("preview launch: %w", err)
 	}
 	for _, row := range base {
 		ticketURL := string(row.Ticket.URL)
@@ -527,7 +517,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	}
 	rows, err := snap.Preview(plan.TicketURLs(requested), launchContext)
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return fmt.Errorf("preview launch with context: %w", err)
 	}
 	hashes := make(map[string]string, len(rows))
 	for _, row := range rows {
@@ -607,13 +597,8 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
-	entry, ok := snap.Entry(plan.TicketURL(ticketURL))
-	if !ok {
-		return errorf(http.StatusBadRequest, "unknown ticket %q", ticketURL)
-	}
-	if !snap.Offers(plan.TicketURL(ticketURL), verb) {
-		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s",
-			ticketURL, entry.State, verb, entry.Reason)
+	if err := requireOffer(snap, plan.TicketURL(ticketURL), verb); err != nil {
+		return err
 	}
 
 	fromSession := r.FormValue("from") == "session"
@@ -680,9 +665,6 @@ func nonBlank(values []string) []string {
 
 func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	if err := r.ParseForm(); err != nil {
-		return withStatus(http.StatusBadRequest, err)
-	}
 	ticketURL := r.FormValue("ticket")
 	branch := r.FormValue("branch")
 	if ticketURL == "" || branch == "" {
@@ -719,8 +701,6 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
-	start := s.clock.Now()
-	defer func() { s.logger.InfoContext(r.Context(), "repos render", "duration", s.clock.Now().Sub(start)) }()
 	offers := s.importOffers(r.Context())
 	page, err := s.view.Repos(r.Context(), s.clock.Now(), offers)
 	if err != nil {
@@ -732,7 +712,7 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		page.Search = &search
+		page.Search = option.Some(search)
 	}
 	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "repos.tmpl", page)
@@ -765,16 +745,13 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 	if hx.IsRequest(r) {
 		rawSeen := r.URL.Query().Get("seen")
 		if rawSeen != "" {
-			seen := view.BannerState(rawSeen)
-			if !slices.Contains([]view.BannerState{
-				view.BannerUntracked, view.BannerCloning, view.BannerReady, view.BannerRefused,
-			}, seen) || seen != banner.State {
+			if seen, ok := view.ParseBannerState(rawSeen); !ok || seen != banner.State {
 				w.Header().Set(hx.HeaderRefresh, "true")
 			}
 		}
 		if rawSeen != "" && !banner.Polling() {
 			w.Header().Add("Vary", hx.HeaderRequest)
-			return renderHTMLStatus(w, 286, "repoBanner", banner)
+			return renderHTMLStatus(w, hx.StatusStopPolling, "repoBanner", banner)
 		}
 	}
 	return renderFragment(w, r, host, "repoBanner", banner)
@@ -790,8 +767,8 @@ func validRepo(name string) bool {
 
 func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 	repo := strings.TrimSpace(r.FormValue("repo"))
-	if !validRepo(repo) {
-		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	if err := repoParam(repo); err != nil {
+		return err
 	}
 	seedPath := strings.TrimSpace(r.FormValue("seed_path"))
 	if seedPath != "" && !filepath.IsAbs(seedPath) {
@@ -859,12 +836,11 @@ func ticketByURL(tickets []store.Ticket, ticketURL string) (store.Ticket, bool) 
 }
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
-	if err := r.ParseForm(); err != nil {
-		return errorf(http.StatusBadRequest, "malformed form: %w", err)
-	}
 	feature, repo := r.PathValue("feature"), strings.TrimSpace(r.PostForm.Get("repo"))
-	if repo != "" && !validRepo(repo) {
-		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	if repo != "" {
+		if err := repoParam(repo); err != nil {
+			return err
+		}
 	}
 	if _, err := s.store.QueueVerbIntent(r.Context(), store.VerbRequest{
 		Ticket: feature, Verb: plan.VerbImport, Payload: repo, At: s.clock.Now(),
@@ -919,12 +895,4 @@ func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) erro
 	}
 	data.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "insights.tmpl", data)
-}
-
-func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) error {
-	resp, err := s.view.Insights(r.Context(), s.now(), r.URL.Query())
-	if err != nil {
-		return fmt.Errorf("load insights: %w", err)
-	}
-	return writeJSON(w, resp)
 }

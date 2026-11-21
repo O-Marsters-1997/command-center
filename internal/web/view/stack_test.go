@@ -21,7 +21,7 @@ func TestBuildStack(t *testing.T) {
 		}
 	}
 	merged := member("1", plan.GlyphDone)
-	merged.State = plan.PRMerged.String()
+	merged.State = plan.PRMerged
 	current := member("2", plan.GlyphRunning, base+"1")
 	current.Alive, current.Elapsed = true, "4m"
 	checking := member("3", plan.GlyphChecking, base+"2")

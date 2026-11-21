@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -125,16 +124,12 @@ func (l *Loop) advancePass(
 	for i := range pass {
 		pass[i].Handoff = l.readHandoff(pass[i].ID)
 	}
-	baseline, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
+	baseline, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return fmt.Errorf("read baseline for %s: %w", ticket.URL, err)
+		return err
 	}
-	step := entry.Next.Step.Unwrap()
-	return l.spawnRun(ctx, t, spawnSpec{
-		ticket: ticket, worktree: worktree, baseline: baseline, hash: summary.PromptHash,
-		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, entry.Ticket, step, pass), choice: entry.Ticket.Choice,
-		workflow: w, step: step, verify: verify,
-	})
+	begin := start{workflow: w, step: entry.Next.Step.Unwrap(), verify: verify}
+	return l.spawnRun(ctx, t, begin.spec(ticket, entry.Ticket, worktree, baseline, summary.PromptHash, pass))
 }
 
 func (l *Loop) passBaseline(
@@ -174,15 +169,16 @@ func (l *Loop) writeHandoff(run store.PendingRun, step plan.Step, lastMessage op
 func (l *Loop) tailOf(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
+		l.logger.Warn("open command log", "path", path, "err", err)
 		return ""
 	}
 	buf := make([]byte, maxCommandHandoffBytes)
 	n := 0
-	if info, err := f.Stat(); err == nil {
-		n, err = f.ReadAt(buf, max(0, info.Size()-maxCommandHandoffBytes))
-		if err != nil && !errors.Is(err, io.EOF) {
-			n = 0
-		}
+	if info, err := f.Stat(); err != nil {
+		l.logger.Warn("stat command log", "path", path, "err", err)
+	} else if n, err = f.ReadAt(buf, max(0, info.Size()-maxCommandHandoffBytes)); err != nil && !errors.Is(err, io.EOF) {
+		l.logger.Warn("read command log", "path", path, "err", err)
+		n = 0
 	}
 	if err := f.Close(); err != nil {
 		l.logger.Warn("close command log", "path", path, "err", err)

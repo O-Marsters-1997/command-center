@@ -148,7 +148,7 @@ func TestNewObserver(t *testing.T) {
 		})
 		observeHead := func() bool {
 			head := gittest.Run(t, repoPath, "rev-parse", "origin/a")
-			forge.Snapshot.ByBranch = map[string]gh.PR{"a": {Number: 1, State: gh.Open, HeadOid: head}}
+			forge.Seed(ghtest.Seed{PRs: []gh.PR{{Number: 1, HeadRef: "a", State: gh.Open, HeadOid: head}}})
 			return f.observation(t).HeadDescends[a]
 		}
 
