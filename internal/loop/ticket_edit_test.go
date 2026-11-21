@@ -37,9 +37,7 @@ func TestEditTicket(t *testing.T) {
 		}
 
 		lp := newLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-		if err := lp.RunOnce(ctx); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		got, err := store.Tickets(ctx)
 		if err != nil {
@@ -92,9 +90,7 @@ func TestEditTicket(t *testing.T) {
 		lp := newLoop(
 			store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 		)
-		if err := lp.RunOnce(ctx); err != nil {
-			t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
-		}
+		runOnce(t, lp)
 
 		got, err := store.Tickets(ctx)
 		if err != nil {

@@ -38,7 +38,9 @@ func (r *requestReader) add(parsed logLine) (int, bool) {
 	return index, true
 }
 
-func readUsage(logPath string) (requests []RequestUsage, settled option.Option[RequestUsage], decoded int, err error) {
+func readUsage(
+	logPath string, each func(parsed logLine, added bool),
+) (requests []RequestUsage, settled option.Option[RequestUsage], decoded int, err error) {
 	reader := newRequestReader()
 	var model string
 	err = forEachLine(logPath, func(parsed logLine, last time.Time) {
@@ -46,22 +48,24 @@ func readUsage(logPath string) (requests []RequestUsage, settled option.Option[R
 		if parsed.Message.Model != "" {
 			model = parsed.Message.Model
 		}
+		var added bool
 		if parsed.Type == "result" {
 			request := requestUsage(model, last, parsed.Usage)
-			if parsed.CostUSD != nil {
-				request.CostUSD = option.Some(*parsed.CostUSD)
-			}
+			request.CostUSD = parsed.CostUSD
 			settled = option.Some(request)
-			return
+		} else {
+			_, added = reader.add(parsed)
 		}
-		reader.add(parsed)
+		if each != nil {
+			each(parsed, added)
+		}
 	})
 	return reader.requests, settled, decoded, err
 }
 
 // ParseTranscriptUsage reads a transcript's settled total or its deduplicated request usage.
 func ParseTranscriptUsage(logPath string) ([]RequestUsage, error) {
-	requests, settled, _, err := readUsage(logPath)
+	requests, settled, _, err := readUsage(logPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("parse transcript usage: %w", err)
 	}

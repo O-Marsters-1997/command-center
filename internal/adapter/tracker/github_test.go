@@ -39,7 +39,7 @@ func sourceReplaying(t *testing.T, respond func(args []string) ([]byte, error)) 
 		}
 		return respond(args)
 	}
-	src, err := tracker.Resolve(gh.CLI{Exec: command.ExecutorFunc(run)})(tracker.GitHub, remote)
+	src, err := tracker.Resolve(gh.CLI{Exec: run})(tracker.GitHub, remote)
 	if err != nil {
 		t.Fatalf("Resolve(%s): %v", remote, err)
 	}
@@ -146,6 +146,25 @@ func TestGithubSource_Features(t *testing.T) {
 		src := sourceReplaying(t, func([]string) ([]byte, error) { return []byte("not json"), nil })
 		if _, err := src.Features(t.Context()); err == nil {
 			t.Error("Features(not json) error = nil, want one")
+		}
+	})
+
+	t.Run("a network timeout is retried", func(t *testing.T) {
+		t.Parallel()
+		calls := 0
+		run := func(context.Context, time.Duration, string, string, ...string) ([]byte, error) {
+			calls++
+			if calls == 1 {
+				return nil, &command.Error{Stderr: "i/o timeout", Err: errors.New("exit status 1")}
+			}
+			return []byte("[]"), nil
+		}
+		src, err := tracker.Resolve(gh.CLI{Exec: run, Backoff: time.Nanosecond})(tracker.GitHub, remote)
+		if err != nil {
+			t.Fatalf("Resolve(%s): %v", remote, err)
+		}
+		if _, err := src.Features(t.Context()); err != nil || calls != 2 {
+			t.Errorf("Features() error = %v after %d calls, want nil after 2", err, calls)
 		}
 	})
 

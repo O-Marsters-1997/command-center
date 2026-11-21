@@ -19,12 +19,9 @@ func TestAdoptHead(t *testing.T) {
 			URL: f.Ticket.URL, Tip: "cc-1-tip", Base: "main", BaseTip: "main-tip", At: testAt,
 		})
 		*f.Obs = draftConsumerPR(plan.Merged, nil, "forced-head")
-		id, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		id := storetest.Verb(t, f.Store, storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbAdoptHead, At: testAt,
 		})
-		if err != nil {
-			t.Fatalf("QueueVerbIntent: %v", err)
-		}
 		f.tick(t)
 
 		if got := f.pushedTip(t); got != "forced-head" {

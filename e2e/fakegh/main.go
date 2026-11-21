@@ -87,5 +87,7 @@ func fixtureKey(args []string) string {
 }
 
 func printf(w io.Writer, format string, args ...any) {
-	_, _ = fmt.Fprintf(w, format, args...)
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		os.Exit(1)
+	}
 }
