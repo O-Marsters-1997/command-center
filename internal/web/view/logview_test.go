@@ -310,8 +310,8 @@ func TestBuildLogDetail(t *testing.T) {
 			t.Fatalf("BuildLogDetail(run) anchors = %d, want 1", got)
 		}
 		failing := detail.Phases[0].Items[0].Group
-		if !failing.Lines[0].Anchor || !failing.Open || failing.FailNote == "" {
-			t.Errorf("BuildLogDetail(run) failing group = %+v, want it anchored, open and noting its failure", failing)
+		if !failing.Lines[0].Anchor || failing.Failed == 0 {
+			t.Errorf("BuildLogDetail(run) failing group = %+v, want it anchored and counting its failure", failing)
 		}
 	})
 
@@ -338,15 +338,57 @@ func TestBuildLogDetail(t *testing.T) {
 			t.Fatalf("BuildLogDetail(session) phase 0 items = %+v, want the prose then one group", items)
 		}
 		group := items[1].Group
-		if group.Open {
-			t.Errorf("BuildLogDetail(session) group.Open = true, want a closed group")
-		}
 		want := []string{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
 		if diff := cmp.Diff(want, lineTexts(group.Lines)); diff != "" {
 			t.Errorf("BuildLogDetail(session) group lines mismatch (-want +got):\n%s", diff)
 		}
 		if len(detail.Phases[1].Items) != 1 {
 			t.Errorf("BuildLogDetail(session) phase 1 items = %+v, want only the Bash group", detail.Phases[1].Items)
+		}
+	})
+
+	t.Run("group counts", func(t *testing.T) {
+		t.Parallel()
+		result := func(id, extra string) string {
+			return `{"type":"user","timestamp":"2026-01-01T00:00:09Z","message":{"content":` +
+				`[{"type":"tool_result","tool_use_id":"` + id + `",` + extra + `"content":"out"}]}}` + "\n"
+		}
+		pass := func(id string) string { return result(id, "") }
+		fail := func(id string) string { return result(id, `"is_error":true,`) }
+		type counts struct{ Calls, Failed, Lines int }
+		tests := []struct {
+			name  string
+			tools []string
+			ends  string
+			want  counts
+		}{
+			{
+				name: "all pass", tools: []string{"Read", "Grep"}, ends: pass("t0") + pass("t1"),
+				want: counts{Calls: 2, Lines: 2},
+			},
+			{
+				name: "one of three failed", tools: []string{"Read", "Read", "Edit"}, ends: pass("t0") + fail("t1") + pass("t2"),
+				want: counts{Calls: 3, Failed: 1, Lines: 3},
+			},
+			{
+				name: "every call failed", tools: []string{"Read", "Edit"}, ends: fail("t0") + fail("t1"),
+				want: counts{Calls: 2, Failed: 2, Lines: 2},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				src := view.LogSource{Path: writeRunLog(t, toolCalls(tt.tools...)+tt.ends), TicketURL: "x"}
+				items := logDetail(src, view.LogAll).Phases[0].Items
+				if len(items) != 1 {
+					t.Fatalf("BuildLogDetail(%v) items = %+v, want one group", tt.tools, items)
+				}
+				group := items[0].Group
+				got := counts{Calls: group.Calls, Failed: group.Failed, Lines: len(group.Lines)}
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("BuildLogDetail(%v) group counts mismatch (-want +got):\n%s", tt.tools, diff)
+				}
+			})
 		}
 	})
 
@@ -372,7 +414,7 @@ func TestBuildLogDetail(t *testing.T) {
 				t.Parallel()
 				src := view.LogSource{Path: writeRunLog(t, toolCalls(tt.tools...)), TicketURL: "x"}
 				items := logDetail(src, view.LogAll).Phases[0].Items
-				if len(items) != 1 || items[0].Group.Summary != tt.want {
+				if len(items) != 1 || items[0].Group.Mix != tt.want {
 					t.Errorf("BuildLogDetail(%v) items = %+v, want one group summarised %q", tt.tools, items, tt.want)
 				}
 			})

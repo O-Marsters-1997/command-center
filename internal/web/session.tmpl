@@ -50,7 +50,33 @@
     <a class="pill-tab" href="{{.ChangesPath}}" {{template "nav" .ChangesPath}}>Changes</a>
   </nav>
   {{- if .Raw}}
-  {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
+  {{- with .RawLog}}{{if .Total}}
+  <form class="flex flex-wrap items-center gap-2 mb-3" method="get" action="{{$.TranscriptPath}}" role="search" {{template "nav" $.TranscriptPath}}>
+    <input type="hidden" name="log" value="raw">
+    <select name="kind" aria-label="kind">
+      <option value="">all kinds</option>
+      {{- range .Types}}<option value="{{.}}"{{if eq . $.RawLog.Filter.Type}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <input type="search" name="q" value="{{.Filter.Query}}" placeholder="Search the log" aria-label="search the log" autocomplete="off">
+    <button class="btn" type="submit">Filter</button>
+    <span class="text-muted text-xs">{{len .Lines}} of {{.Total}} lines</span>
+  </form>
+  {{- if .Lines}}
+  <div class="table-frame"><table class="raw-table w-full" aria-label="raw log">
+    <thead><tr><th scope="col">time</th><th scope="col">kind</th><th scope="col">tool</th><th scope="col">summary</th></tr></thead>
+    <tbody>
+      {{- range .Lines}}
+      <tr id="raw-{{.N}}">
+        <td class="font-mono">{{if .Failed}}<span class="glyph" data-glyph="failed" role="img" aria-label="failed"></span> {{end}}{{if not .At.IsZero}}{{.At.Format "15:04:05"}}{{end}}</td>
+        <td>{{.Type}}</td>
+        <td class="font-mono">{{.Tool}}</td>
+        <td class="raw-summary"><details><summary>{{.Summary}}</summary><pre class="raw-log">{{.JSON}}</pre></details></td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table></div>
+  {{- else}}<p class="text-muted">No lines match this filter.</p>{{end}}
+  {{- else}}<p class="text-muted">No log was kept for this run.</p>{{end}}{{end}}
   {{- else}}
   {{- if .Empty}}<p class="text-muted">Nothing to show yet: no run has written a log.</p>{{end}}
   <div class="run-thread">
@@ -62,12 +88,12 @@
       {{- range .Log.Phases}}
       <section class="phase">
         <header class="phase-head flex items-baseline gap-2">
-          <span class="phase-skill">{{if .Skill}}{{.Skill}}{{else}}start{{end}}</span>{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
+          {{if .Skill}}{{template "skillPill" .Skill}}{{else}}<span class="phase-skill">start</span>{{end}}{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
           <span class="phase-rule"></span>
           <span class="phase-at">{{.At}}</span>
         </header>
         {{- range .Items}}
-        {{if .Folded}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{template "logline" .}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{else}}{{template "logline" .Line}}{{end}}
+        {{if .Folded}}<details class="fold"><summary><span class="fold-count">{{.Group.Calls}} tool call{{if ne .Group.Calls 1}}s{{end}}</span>{{with .Group.Failed}} <span class="fold-fail">· {{.}} failed</span>{{end}} <span class="fold-mix">{{.Group.Mix}}</span></summary><div class="fold-body">{{range .Group.Lines}}{{template "logline" .}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{else}}{{template "logline" .Line}}{{end}}
         {{- end}}
       </section>
       {{- end}}
@@ -89,37 +115,53 @@
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
-    {{- if .Stack.Feature}}
-    <h2 class="stack-title stack-feature">{{template "mark" .Stack.Project}}{{.Stack.Feature}}<span class="text-muted stack-progress">{{.Stack.Merged}}/{{.Stack.Total}} merged</span></h2>
-    <div class="stack-links">
-      <a class="btn btn-sm" href="{{.Stack.GraphPath}}" data-key="f" {{template "nav" .Stack.GraphPath}}>Graph</a>
-      <a class="btn btn-sm" href="{{.Stack.BoardPath}}" {{template "nav" .Stack.BoardPath}}>Board</a>
-    </div>
-    {{- range .Stack.Waves}}
-    <section class="stack-wave" aria-label="Wave {{.N}}">
-      <h3 class="stack-wave-label text-muted">Wave {{.N}}</h3>
-      <ul class="stack-list">{{range .Members}}<li class="stack-row"{{if .Current}} aria-current="page"{{end}}>{{template "stackLink" .}}</li>{{end}}</ul>
+    {{- with .Stack}}
+    {{- if .Feature}}
+    <header class="flex flex-col gap-2">
+      <h2 class="stack-title">{{template "mark" .Project}}<span>{{.Feature}}</span></h2>
+      <div class="stack-progress">
+        <span class="meter" data-glyph="done" role="meter" aria-valuenow="{{.MergedPercent}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.Merged}} of {{.Total}} merged"><span class="meter-fill" style="width: {{.MergedPercent}}%"></span></span>
+        <span class="font-mono">{{.Merged}}/{{.Total}} merged</span>
+      </div>
+      <nav class="stack-links" aria-label="Feature views">
+        <a href="{{.GraphPath}}" data-key="f" {{template "nav" .GraphPath}}>Graph</a>
+        <a href="{{.BoardPath}}" {{template "nav" .BoardPath}}>Board</a>
+      </nav>
+    </header>
+    {{- end}}
+    <section class="stack-section" aria-labelledby="stack-this">
+      <h3 id="stack-this" class="stack-heading">This ticket</h3>
+      {{- with .Blockers}}
+      <p class="stack-sub">Blocked by</p>
+      {{template "stackList" .}}
+      {{- end}}
+      {{- with .Unlocks}}
+      <p class="stack-sub">Merging it unlocks</p>
+      {{template "stackList" .}}
+      {{- end}}
+      {{- if not (or .Blockers .Unlocks)}}<p class="stack-none">Nothing blocks it and nothing waits on it.</p>{{end}}
+    </section>
+    {{- if .Feature}}
+    <section class="stack-section" aria-labelledby="stack-live">
+      <h3 id="stack-live" class="stack-heading">In flight <span class="stack-count">{{len .InFlight}}</span></h3>
+      {{- with .InFlight}}{{template "stackList" .}}
+      {{- else}}<p class="stack-none">Nothing is running in this feature.</p>{{end}}
+      {{- range .Folds}}{{if .Links}}
+      <details class="stack-fold">
+        <summary>{{template "icon" "chev"}}{{.Label}}<span class="stack-count">{{len .Links}}</span></summary>
+        {{template "stackList" .Links}}
+      </details>
+      {{- end}}{{end}}
     </section>
     {{- end}}
-    {{- else}}
-    <h2 class="stack-title">Blocked by</h2>
-    {{- if .Stack.Blockers}}
-    <ul class="stack-list">{{range .Stack.Blockers}}<li class="stack-row">{{template "stackLink" .}}</li>{{end}}</ul>
-    {{- else}}<p class="text-muted">Nothing blocks this ticket.</p>{{end}}
-    <h2 class="stack-title">Merging this unlocks</h2>
-    {{- if .Stack.Unlocks}}
-    <ul class="stack-list">{{range .Stack.Unlocks}}<li class="stack-row">{{template "stackLink" .}}</li>{{end}}</ul>
-    {{- else}}<p class="text-muted">Nothing waits on this ticket.</p>{{end}}
     {{- end}}
     <dl class="stack-props">
-      <dt>Repo</dt><dd>{{.Row.Repo}}</dd>
-      <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
       <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
       <dt>Checks</dt><dd>{{if .Row.ChecksTotal}}{{.Row.ChecksPassed}}/{{.Row.ChecksTotal}} passing{{else}}—{{end}}</dd>
-      <dt>Spend</dt><dd class="mono">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
+      <dt>Spend</dt><dd class="font-mono">{{if gt .Row.SpendPctWeek 0.0}}{{printf "%.2f" .Row.SpendPctWeek}}% of week{{else}}—{{end}}</dd>
     </dl>
-    <details class="stack-edit">
-      <summary>Edit blockers</summary>
+    <details class="stack-fold stack-edit">
+      <summary>{{template "icon" "chev"}}Edit blockers</summary>
       <form method="post" action="/ticket" class="stack-form">
         <input type="hidden" name="ticket" value="{{.Row.URL}}">
         <input type="hidden" name="branch" value="{{.Row.Branch}}">
@@ -242,4 +284,16 @@
   </a>
   {{- end}}
 </nav>{{end}}{{end}}
-{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .Title}} <span class="stack-row-title">{{.}}</span>{{end}}{{with .Metric}}<span class="stack-row-metric font-mono text-muted">{{.}}</span>{{end}}{{end}}
+{{define "stackList"}}<ul class="stack-list">
+  {{- range .}}
+  <li>{{if .Path}}<a class="stack-row" href="{{.Path}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "stackRow" .}}</a>
+  {{- else}}<span class="stack-row">{{template "stackRow" .}}</span>{{end}}</li>
+  {{- end}}
+</ul>{{end}}
+{{define "stackRow"}}
+    {{- if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}
+    <span class="stack-row-ref">{{.Ref}}</span>
+    <span class="stack-row-title">{{or .Title .Ref}}</span>
+    <span class="stack-row-tail">{{with .Metric}}{{.}}{{else}}{{with .Wave}}wave {{.}}{{end}}{{end}}</span>
+    {{- with .Label}}<span class="sr-only">{{.}}</span>{{end}}
+{{- end}}

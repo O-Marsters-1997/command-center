@@ -11,12 +11,29 @@
 </a>
 {{end}}
 
+{{define "railWaitingItem"}}
+<a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
+  <span class="glyph" data-glyph="{{.Glyph}}"></span>
+  <span class="rail-ref">{{.Ref}}</span>
+  <span class="rail-title">{{.Title}}</span>
+  {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
+  <span class="rail-state">{{.Label}}</span>
+</a>
+{{end}}
+
 {{define "railVerb"}}
+{{- if .Pending}}
+<p class="rail-queued" role="status"><span class="glyph" data-glyph="pending" aria-hidden="true"></span>{{.Verb}} queued</p>
+{{- else}}
 <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
   <input type="hidden" name="ticket" value="{{.URL}}">
   <input type="hidden" name="from" value="rail">
   <button class="btn btn-sm rail-verb" type="submit" name="verb" value="{{.Verb}}">{{.Verb}}</button>
 </form>
+{{- end}}
+{{- with .Refusal}}
+<p class="rail-refusal">{{.}}</p>
+{{- end}}
 {{end}}
 
 {{define "railReply"}}
@@ -50,9 +67,19 @@
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
-      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting · {{.Merged}}/{{.Total}} merged</span></summary>
-      {{- range .Live}}{{template "railItem" .}}{{end}}
-      {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
+      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count"><span class="rail-tally" data-glyph="running">{{len .Working}} working</span><span class="rail-tally rail-tally-waiting">{{.WaitingCount}} waiting</span><span title="merged">{{.Merged}}/{{.Total}}</span></span></summary>
+      {{- with .Working}}
+      <div class="rail-sub" role="group" aria-label="Working">
+        {{- range .}}{{template "railItem" .}}{{end}}
+      </div>
+      {{- end}}
+      {{- if .WaitingCount}}
+      <div class="rail-sub rail-sub-waiting" role="group" aria-labelledby="waiting-{{.Key}}">
+        <p class="rail-sub-label" id="waiting-{{.Key}}">Waiting</p>
+        {{- range .Waiting}}{{template "railWaitingItem" .}}{{end}}
+        {{- with .WaitingLine}}<p class="rail-waiting">{{.}}</p>{{end}}
+      </div>
+      {{- end}}
     </details>
     {{- else}}
     <p class="rail-empty">{{if $.Query}}No match.{{else}}Nothing in flight.{{end}}</p>

@@ -64,6 +64,8 @@ type RailItem struct {
 	Label     string
 	Detail    string
 	Verb      plan.Verb
+	Pending   bool
+	Refusal   string
 	Reply     bool
 	Path      string
 	Selected  bool
@@ -78,14 +80,15 @@ type RailFeature struct {
 	Name    string
 	Open    bool
 	Marks   []ProjectMark
-	Live    []RailItem
+	Working []RailItem
+	Waiting []RailItem
 	Blocked int
 	Ready   int
 	Merged  int
 	Total   int
 }
 
-func (f RailFeature) Waiting() int { return f.Blocked + f.Ready }
+func (f RailFeature) WaitingCount() int { return len(f.Waiting) + f.Blocked + f.Ready }
 
 func (f RailFeature) WaitingLine() string {
 	var parts []string
@@ -179,7 +182,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
 			Project: r.Mark(), Label: r.Label,
 			Detail: r.Detail, Path: scope.withScope(cmp.Or(SessionPath(r.URL), ticketsPath)),
-			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0,
+			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0, Refusal: r.Refusal,
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Detail != ""
@@ -192,6 +195,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 				break
 			}
 		}
+		it.Pending = it.Verb != "" && slices.Contains(r.PendingVerbs, it.Verb)
 		if r.Alive && r.Glyph == plan.GlyphRunning {
 			it.Started = now.Add(-time.Duration(r.ElapsedSeconds) * time.Second).UTC().Format(time.RFC3339)
 		}
@@ -241,14 +245,20 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			case plan.GlyphUnknown, plan.GlyphFailed, plan.GlyphAttention, plan.GlyphRunning,
 				plan.GlyphPending, plan.GlyphChecking:
 			}
-			if group, folded := plan.RailGroup(r.Glyph); group == plan.GroupInFlight && !folded {
-				f.Live = append(f.Live, item(r))
+			if group, folded := plan.RailGroup(r.Glyph); group != plan.GroupInFlight || folded {
+				continue
+			}
+			if r.Glyph == plan.GlyphRunning {
+				f.Working = append(f.Working, item(r))
+			} else {
+				f.Waiting = append(f.Waiting, item(r))
 			}
 		}
-		if len(f.Live) == 0 {
+		if len(f.Working)+len(f.Waiting) == 0 {
 			continue
 		}
-		slices.SortFunc(f.Live, byRepoThenRef)
+		slices.SortFunc(f.Working, byRepoThenRef)
+		slices.SortFunc(f.Waiting, byRepoThenRef)
 		slices.SortFunc(f.Marks, compareMarks)
 		rail.Features = append(rail.Features, f)
 	}
@@ -275,9 +285,9 @@ func filterRail(rail Rail, query string) Rail {
 	var features []RailFeature
 	for _, f := range rail.Features {
 		if !matchesAll(terms, f.Name) {
-			f.Live = keep(f.Live)
+			f.Working, f.Waiting = keep(f.Working), keep(f.Waiting)
 		}
-		if len(f.Live) == 0 {
+		if len(f.Working)+len(f.Waiting) == 0 {
 			continue
 		}
 		f.Open = true

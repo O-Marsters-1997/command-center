@@ -1,3 +1,5 @@
+import { initSidebar } from "./sidebar";
+
 export const maxLiveLines = 1000;
 
 const railCookieName = "rail-open";
@@ -238,6 +240,7 @@ function initGlue(): void {
     applyViewed(root);
   });
   applyAllViewed();
+  initSidebar(document);
 
   setInterval(tickTimes, 1000);
   setInterval(tickStarted, 1000);

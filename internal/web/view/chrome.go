@@ -2,6 +2,7 @@ package view
 
 import (
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
@@ -31,6 +32,29 @@ type Chrome struct {
 	ScopeMenu      []ScopeChoice
 	Launch         NavItem
 	Nav            []NavItem
+	Sidebar        Sidebar
+}
+
+type Sidebar struct {
+	Width     int
+	Collapsed bool
+}
+
+const (
+	sidebarMin     = 220
+	sidebarMax     = 440
+	sidebarInitial = 300
+)
+
+func (Sidebar) Min() int { return sidebarMin }
+func (Sidebar) Max() int { return sidebarMax }
+
+func ParseSidebar(width, collapsed string) Sidebar {
+	w, err := strconv.Atoi(width)
+	if err != nil {
+		w = sidebarInitial
+	}
+	return Sidebar{Width: min(max(w, sidebarMin), sidebarMax), Collapsed: collapsed == "1"}
 }
 
 const (

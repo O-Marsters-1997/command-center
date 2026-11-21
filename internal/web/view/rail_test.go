@@ -27,12 +27,12 @@ func refs(items []view.RailItem) []string {
 	return out
 }
 
-func liveByFeature(rail view.Rail) map[string][]string {
-	live := map[string][]string{}
+func workingByFeature(rail view.Rail) map[string][]string {
+	working := map[string][]string{}
 	for _, f := range rail.Features {
-		live[f.Name] = refs(f.Live)
+		working[f.Name] = refs(f.Working)
 	}
-	return live
+	return working
 }
 
 func scopedRailRows() []view.Row {
@@ -95,11 +95,17 @@ func TestBuildRail(t *testing.T) {
 		if diff := cmp.Diff([]string{"#1", "#12"}, refs(rail.NeedsYou)); diff != "" {
 			t.Errorf("BuildRail().NeedsYou mismatch (-want +got):\n%s", diff)
 		}
-		wantLive := map[string][]string{"billing": {"#2", "#6", "#11"}, "repo": {"#30"}}
-		if diff := cmp.Diff(wantLive, liveByFeature(rail)); diff != "" {
-			t.Errorf("BuildRail() live by feature mismatch (-want +got):\n%s", diff)
+		wantWorking := map[string][]string{"billing": {"#2"}, "repo": {"#30"}}
+		if diff := cmp.Diff(wantWorking, workingByFeature(rail)); diff != "" {
+			t.Errorf("BuildRail() working by feature mismatch (-want +got):\n%s", diff)
 		}
 		billing := rail.Features[0]
+		if diff := cmp.Diff([]string{"#6", "#11"}, refs(billing.Waiting)); diff != "" {
+			t.Errorf("billing.Waiting mismatch (-want +got):\n%s", diff)
+		}
+		if got, want := billing.WaitingCount(), 5; got != want {
+			t.Errorf("billing.WaitingCount() = %d, want %d", got, want)
+		}
 		if got, want := billing.WaitingLine(), "2 blocked, 1 ready"; got != want {
 			t.Errorf("billing.WaitingLine() = %q, want %q", got, want)
 		}
@@ -203,25 +209,62 @@ func TestBuildRail(t *testing.T) {
 		}
 	})
 
+	t.Run("verb feedback", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name        string
+			pending     []plan.Verb
+			refusal     string
+			wantPending bool
+			wantRefusal string
+		}{
+			{name: "idle"},
+			{name: "queued", pending: []plan.Verb{plan.VerbRemoveWorktree}, wantPending: true},
+			{name: "another verb queued", pending: []plan.Verb{plan.VerbReRun}},
+			{
+				name: "refused", refusal: "worktree removal refused: worktree is dirty",
+				wantRefusal: "worktree removal refused: worktree is dirty",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				row := railRow("5", "billing", plan.GlyphDone)
+				row.Worktree = "/wt"
+				row.Verbs = []plan.Verb{plan.VerbRemoveWorktree}
+				row.PendingVerbs = tt.pending
+				row.Refusal = tt.refusal
+				row.Warning = "ready-to-merge on a non-main base (main): would squash into the parent branch"
+
+				item := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
+
+				if item.Pending != tt.wantPending || item.Refusal != tt.wantRefusal {
+					t.Errorf("BuildRail() item = {Pending: %v, Refusal: %q}, want {%v %q}",
+						item.Pending, item.Refusal, tt.wantPending, tt.wantRefusal)
+				}
+			})
+		}
+	})
+
 	t.Run("scope", func(t *testing.T) {
 		t.Parallel()
 		tests := []struct {
 			name         string
 			params       view.RailParams
 			wantNeedsYou []string
-			wantLive     map[string][]string
+			wantWorking  map[string][]string
 		}{
 			{
 				name:         "a project keeps admitted chains",
 				params:       acmeScope,
 				wantNeedsYou: []string{"#1", "#5"},
-				wantLive:     map[string][]string{"checkout": {"#2"}},
+				wantWorking:  map[string][]string{"checkout": {"#2"}},
 			},
 			{
 				name:         "a repo",
 				params:       view.RailParams{Repo: "other/repo"},
 				wantNeedsYou: []string{"#1", "#3", "#5"},
-				wantLive:     map[string][]string{"billing": {"#4"}},
+				wantWorking:  map[string][]string{"billing": {"#4"}},
 			},
 		}
 		for _, tt := range tests {
@@ -232,8 +275,8 @@ func TestBuildRail(t *testing.T) {
 				if diff := cmp.Diff(tt.wantNeedsYou, refs(rail.NeedsYou)); diff != "" {
 					t.Errorf("BuildRail(%+v).NeedsYou mismatch (-want +got):\n%s", tt.params, diff)
 				}
-				if diff := cmp.Diff(tt.wantLive, liveByFeature(rail)); diff != "" {
-					t.Errorf("BuildRail(%+v) live by feature mismatch (-want +got):\n%s", tt.params, diff)
+				if diff := cmp.Diff(tt.wantWorking, workingByFeature(rail)); diff != "" {
+					t.Errorf("BuildRail(%+v) working by feature mismatch (-want +got):\n%s", tt.params, diff)
 				}
 			})
 		}
@@ -254,22 +297,25 @@ func TestBuildRail(t *testing.T) {
 			name     string
 			query    string
 			needsYou []string
-			live     map[string][]string
+			working  map[string][]string
 			settled  []string
 		}{
 			{
 				name:     "all",
 				needsYou: []string{"#12"},
-				live:     map[string][]string{"billing": {"#2", "#3"}, "checkout": {"#40"}},
+				working:  map[string][]string{"billing": {"#2", "#3"}, "checkout": {"#40"}},
 				settled:  []string{"#5"},
 			},
 			{name: "issue reference", query: "#12", needsYou: []string{"#12"}},
 			{name: "issue number", query: "12", needsYou: []string{"#12"}},
 			{name: "case insensitive", query: "INVOICE", needsYou: []string{"#12"}},
-			{name: "repo", query: "web", live: map[string][]string{"checkout": {"#40"}}},
-			{name: "feature", query: "billing", needsYou: []string{"#12"}, live: map[string][]string{"billing": {"#2", "#3"}}},
-			{name: "title", query: "refund", live: map[string][]string{"billing": {"#3"}}},
-			{name: "multiple terms", query: "billing refund", live: map[string][]string{"billing": {"#3"}}},
+			{name: "repo", query: "web", working: map[string][]string{"checkout": {"#40"}}},
+			{
+				name: "feature", query: "billing", needsYou: []string{"#12"},
+				working: map[string][]string{"billing": {"#2", "#3"}},
+			},
+			{name: "title", query: "refund", working: map[string][]string{"billing": {"#3"}}},
+			{name: "multiple terms", query: "billing refund", working: map[string][]string{"billing": {"#3"}}},
 			{name: "no match", query: "refund cart"},
 			{name: "settled", query: "old", settled: []string{"#5"}},
 		}
@@ -281,13 +327,28 @@ func TestBuildRail(t *testing.T) {
 				if diff := cmp.Diff(tt.needsYou, refs(rail.NeedsYou)); diff != "" {
 					t.Errorf("BuildRail(%q).NeedsYou mismatch (-want +got):\n%s", tt.query, diff)
 				}
-				if diff := cmp.Diff(tt.live, liveByFeature(rail), cmpopts.EquateEmpty()); diff != "" {
-					t.Errorf("BuildRail(%q) live by feature mismatch (-want +got):\n%s", tt.query, diff)
+				if diff := cmp.Diff(tt.working, workingByFeature(rail), cmpopts.EquateEmpty()); diff != "" {
+					t.Errorf("BuildRail(%q) working by feature mismatch (-want +got):\n%s", tt.query, diff)
 				}
 				if diff := cmp.Diff(tt.settled, refs(rail.Settled.Items)); diff != "" {
 					t.Errorf("BuildRail(%q).Settled mismatch (-want +got):\n%s", tt.query, diff)
 				}
 			})
+		}
+	})
+
+	t.Run("a query keeps a matching waiting ticket", func(t *testing.T) {
+		t.Parallel()
+		queued := railRow("7", "billing", plan.GlyphPending)
+		queued.Title = "Retry webhooks"
+
+		rail := view.BuildRail(append(searchRows(), queued), testNow, view.RailParams{Query: "webhooks"})
+
+		if len(rail.Features) != 1 || len(rail.Features[0].Working) != 0 {
+			t.Fatalf("BuildRail(webhooks).Features = %+v, want billing with only #7 waiting", rail.Features)
+		}
+		if diff := cmp.Diff([]string{"#7"}, refs(rail.Features[0].Waiting)); diff != "" {
+			t.Errorf("BuildRail(webhooks) billing.Waiting mismatch (-want +got):\n%s", diff)
 		}
 	})
 
