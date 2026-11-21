@@ -284,7 +284,7 @@ func TestStore_WithdrawTicket(t *testing.T) {
 		if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
 			t.Fatalf("ApplyLaunchIntents: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(
+		runID, _, err := store.InsertSessionRunSkeleton(
 			ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
 		if err != nil {
 			t.Fatalf("InsertRunSkeleton: %v", err)
@@ -321,12 +321,12 @@ func TestStore_WithdrawTicket(t *testing.T) {
 		if got := tips[plan.TicketURL(ticket.URL)]; got != "deadbeef" {
 			t.Errorf("LastPushedTips()[CC-1] after WithdrawTicket = %q, want deadbeef", got)
 		}
-		memberships, err := store.LaunchMemberships(ctx)
+		in, err := store.PlanInput(ctx)
 		if err != nil {
-			t.Fatalf("LaunchMemberships: %v", err)
+			t.Fatalf("PlanInput: %v", err)
 		}
-		if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
-			t.Errorf("LaunchMemberships() after WithdrawTicket = %+v, want CC-1's membership kept", memberships)
+		if _, ok := in.Memberships[plan.TicketURL(ticket.URL)]; !ok {
+			t.Errorf("PlanInput().Memberships after WithdrawTicket = %+v, want CC-1's membership kept", in.Memberships)
 		}
 	})
 

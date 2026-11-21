@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
@@ -17,11 +18,7 @@ func TestNewHeadRestartsTheWait(t *testing.T) {
 	ref := branchRef("repo", "cc-1")
 	ticks := func() int {
 		t.Helper()
-		got, err := f.Store.CheckingTicks(t.Context())
-		if err != nil {
-			t.Fatalf("CheckingTicks: %v", err)
-		}
-		return got[plan.TicketURL(f.Ticket.URL)]
+		return int(planInput(t, f.Store).Verdict.CheckingFor[plan.TicketURL(f.Ticket.URL)] / storepkg.TickPeriod)
 	}
 	observeHead := func(head string) {
 		*f.Obs = draftConsumerPR(plan.Merged, nil, head)

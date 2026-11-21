@@ -75,10 +75,9 @@ WHERE ticket_id = sqlc.arg(ticket_id) AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(max_rows);
 
--- name: HasEvent :one
-SELECT EXISTS (
-    SELECT 1 FROM events WHERE ticket_id = sqlc.arg(ticket_id) AND kind = sqlc.arg(kind)
-) AS found;
+-- name: ListRecordedEvents :many
+SELECT DISTINCT ticket_id, kind FROM events
+WHERE kind IN (SELECT jsonb_array_elements_text(sqlc.arg(kinds)::jsonb)) AND ticket_id IS NOT NULL;
 
 -- name: HasEventDetail :one
 SELECT EXISTS (

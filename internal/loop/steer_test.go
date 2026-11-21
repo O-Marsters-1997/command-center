@@ -122,16 +122,16 @@ func TestSteer(t *testing.T) {
 		if got := f.pendingFollowUps(t); got != 0 {
 			t.Errorf("pending follow-ups = %d, want 0", got)
 		}
-		ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
+		runs, err := f.store.SessionRunsForTicket(t.Context(), f.ticket.URL)
 		if err != nil {
-			t.Fatalf("RunIDsForTicket: %v", err)
+			t.Fatalf("SessionRunsForTicket: %v", err)
 		}
-		if len(ids) != 2 {
-			t.Fatalf("RunIDsForTicket() = %v, want the interrupted run and its resume", ids)
+		if len(runs) != 2 {
+			t.Fatalf("SessionRunsForTicket() = %+v, want the interrupted run and its resume", runs)
 		}
-		first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
+		first, err := f.store.RunDetails(t.Context(), plan.RunID(runs[0].ID))
 		if err != nil {
-			t.Fatalf("RunDetails(%d): %v", ids[0], err)
+			t.Fatalf("RunDetails(%d): %v", runs[0].ID, err)
 		}
 		if first.Outcome != option.Some(plan.OutcomeContinued) {
 			t.Errorf("interrupted run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)

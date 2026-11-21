@@ -1,13 +1,11 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -15,15 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
-
-// InsertRunSkeleton reserves a run before its process exists; RecordSpawn fills in its process details.
-func (s *Store) InsertRunSkeleton(ctx context.Context, r RunSkeleton) (int64, error) {
-	id, _, err := s.InsertSessionRunSkeleton(ctx, r)
-	if err != nil {
-		return 0, fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
-	}
-	return id, nil
-}
 
 type RunSession struct {
 	StartNew bool
@@ -79,17 +68,6 @@ func (s *Store) InsertSessionRunSkeleton(
 		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
 	}
 	return row.ID, row.SessionID, nil
-}
-
-func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, error) {
-	id, err := s.q.LatestSessionID(ctx, notNull(ticketID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("session of %s: %w", ticketID, ErrNotFound)
-	}
-	if err != nil {
-		return "", fmt.Errorf("select latest session of %s: %w", ticketID, err)
-	}
-	return id, nil
 }
 
 func (s *Store) RecordSpawn(ctx context.Context, sp Spawn) error {
@@ -272,7 +250,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 	return summaries, nil
 }
 
-func (s *Store) LatestVerifyRuns(ctx context.Context) (map[plan.TicketURL]plan.VerifyFact, error) {
+func (s *Store) latestVerifyRuns(ctx context.Context) (map[plan.TicketURL]plan.VerifyFact, error) {
 	rows, err := s.q.ListLatestVerifyRuns(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest verify runs: %w", err)
@@ -317,19 +295,25 @@ func queueVerbIntent(ctx context.Context, q *ccdb.Queries, v VerbRequest) (int64
 			return 0, fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
 		}
 	}
+	return queueIntent(ctx, q, v.At, v.Ticket, string(v.Verb), encoded, v.HoldUntil)
+}
+
+func queueIntent(
+	ctx context.Context, q *ccdb.Queries, at time.Time, ticket, verb string, raw []byte, hold time.Time,
+) (int64, error) {
 	var holdUntil sql.NullTime
-	if !v.HoldUntil.IsZero() {
-		holdUntil = notNullTime(v.HoldUntil.UTC())
+	if !hold.IsZero() {
+		holdUntil = notNullTime(hold.UTC())
 	}
 	id, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
-		At:        v.At.UTC(),
-		TicketID:  v.Ticket,
-		Verb:      string(v.Verb),
-		Payload:   encoded,
+		At:        at.UTC(),
+		TicketID:  ticket,
+		Verb:      verb,
+		Payload:   raw,
 		HoldUntil: holdUntil,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
+		return 0, fmt.Errorf("queue %s intent for %s: %w", verb, ticket, err)
 	}
 	return id, nil
 }
@@ -351,11 +335,9 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 
 	var intents []VerbIntent
 	for _, row := range rows {
-		var payload string
-		if verb == plan.VerbLaunch {
-			payload = string(row.Payload)
-		} else if err := json.Unmarshal(row.Payload, &payload); err != nil {
-			return nil, fmt.Errorf("decode %s intent payload for %s: %w", verb, row.TicketID, err)
+		payload, err := decodeIntentPayload(verb, row.TicketID, row.Payload)
+		if err != nil {
+			return nil, err
 		}
 		intents = append(intents, VerbIntent{
 			ID: row.ID, TicketID: row.TicketID, Payload: payload, HoldUntil: row.HoldUntil.Time,
@@ -364,22 +346,33 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 	return intents, nil
 }
 
+func decodeIntentPayload(verb plan.Verb, ticket string, raw []byte) (string, error) {
+	if verb == plan.VerbLaunch {
+		return string(raw), nil
+	}
+	var payload string
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", fmt.Errorf("decode %s intent payload for %s: %w", verb, ticket, err)
+	}
+	return payload, nil
+}
+
 func (s *Store) PendingIntents(ctx context.Context) (map[plan.TicketURL][]plan.Intent, error) {
+	rows, err := s.q.PendingIntents(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select pending intents: %w", err)
+	}
 	byTicket := map[plan.TicketURL][]plan.Intent{}
-	for _, verb := range plan.AllVerbs() {
-		pending, err := s.PendingVerbIntents(ctx, verb)
+	for _, row := range rows {
+		verb := plan.Verb(row.Verb)
+		payload, err := decodeIntentPayload(verb, row.TicketID, row.Payload)
 		if err != nil {
 			return nil, err
 		}
-		for _, p := range pending {
-			url := plan.TicketURL(p.TicketID)
-			byTicket[url] = append(byTicket[url], plan.Intent{
-				ID: p.ID, Ticket: url, Verb: verb, Payload: p.Payload, HoldUntil: p.HoldUntil,
-			})
-		}
-	}
-	for _, intents := range byTicket {
-		slices.SortFunc(intents, func(a, b plan.Intent) int { return cmp.Compare(a.ID, b.ID) })
+		url := plan.TicketURL(row.TicketID)
+		byTicket[url] = append(byTicket[url], plan.Intent{
+			ID: row.ID, Ticket: url, Verb: verb, Payload: payload, HoldUntil: row.HoldUntil.Time,
+		})
 	}
 	return byTicket, nil
 }
@@ -403,29 +396,6 @@ func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) e
 		ID:         id,
 	})
 	return matchedRow(n, err, fmt.Sprintf("consume intent %d", id))
-}
-
-// ActiveLaunchHashes excludes cancelled launches.
-func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, error) {
-	rows, err := s.q.ActiveLaunchHashes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select active launch hashes: %w", err)
-	}
-
-	hashes := map[string]string{}
-	for _, row := range rows {
-		hashes[row.TicketID] = row.PromptHash
-	}
-	return hashes, nil
-}
-
-// RunIDsForTicket orders run IDs oldest first.
-func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
-	ids, err := s.q.RunIDsForTicket(ctx, notNull(ticketID))
-	if err != nil {
-		return nil, fmt.Errorf("select run ids for %s: %w", ticketID, err)
-	}
-	return ids, nil
 }
 
 type SessionRun struct {

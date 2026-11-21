@@ -55,24 +55,6 @@ func (q *Queries) GetTicketFeature(ctx context.Context, url string) (string, err
 	return feature, err
 }
 
-const hasEvent = `-- name: HasEvent :one
-SELECT EXISTS (
-    SELECT 1 FROM events WHERE ticket_id = $1 AND kind = $2
-) AS found
-`
-
-type HasEventParams struct {
-	TicketID sql.NullString
-	Kind     string
-}
-
-func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasEvent, arg.TicketID, arg.Kind)
-	var found bool
-	err := row.Scan(&found)
-	return found, err
-}
-
 const hasEventDetail = `-- name: HasEventDetail :one
 SELECT EXISTS (
     SELECT 1 FROM events
@@ -173,6 +155,39 @@ func (q *Queries) ListEvents(ctx context.Context, maxRows int32) ([]ListEventsRo
 			&i.Kind,
 			&i.Detail,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecordedEvents = `-- name: ListRecordedEvents :many
+SELECT DISTINCT ticket_id, kind FROM events
+WHERE kind IN (SELECT jsonb_array_elements_text($1::jsonb)) AND ticket_id IS NOT NULL
+`
+
+type ListRecordedEventsRow struct {
+	TicketID sql.NullString
+	Kind     string
+}
+
+func (q *Queries) ListRecordedEvents(ctx context.Context, kinds json.RawMessage) ([]ListRecordedEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecordedEvents, kinds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecordedEventsRow
+	for rows.Next() {
+		var i ListRecordedEventsRow
+		if err := rows.Scan(&i.TicketID, &i.Kind); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -48,15 +48,8 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
 	if err != nil {
 		return fmt.Errorf("encode launch intent payload for %s: %w", l.Ticket, err)
 	}
-	err = s.q.QueueLaunchIntent(ctx, ccdb.QueueLaunchIntentParams{
-		At:       l.At.UTC(),
-		TicketID: l.Ticket,
-		Payload:  payload,
-	})
-	if err != nil {
-		return fmt.Errorf("queue launch intent for %s: %w", l.Ticket, err)
-	}
-	return nil
+	_, err = queueIntent(ctx, s.q, l.At, l.Ticket, string(plan.VerbLaunch), payload, time.Time{})
+	return err
 }
 
 // ApplyLaunchIntents groups unconsumed launch intents and marks them consumed atomically.
@@ -147,8 +140,7 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 	return nil
 }
 
-// LaunchMemberships includes cancelled tickets until they are relaunched.
-func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.LaunchMembership, error) {
+func (s *Store) launchMemberships(ctx context.Context) (map[plan.TicketURL]plan.LaunchMembership, error) {
 	rows, err := s.q.ListLaunchMemberships(ctx, maxLaunchMemberships)
 	if err != nil {
 		return nil, fmt.Errorf("select launch memberships: %w", err)

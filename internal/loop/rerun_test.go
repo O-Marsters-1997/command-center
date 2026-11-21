@@ -42,7 +42,7 @@ func TestReRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			f := newPushFixture(t)
-			firstRunID, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+			firstRunID, _, err := f.Store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 				Ticket: f.Ticket.URL, Kind: "agent", PromptHash: "hash-1",
 			})
 			if err != nil {

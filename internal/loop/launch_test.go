@@ -62,7 +62,7 @@ func newRunFixture(t *testing.T) *runFixture {
 
 func (f *runFixture) spawn(t *testing.T, pgid int, baseline, logPath string) int64 {
 	t.Helper()
-	runID, err := f.store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := f.store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: f.ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {

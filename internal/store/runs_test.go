@@ -36,7 +36,7 @@ func seedOneTicket(t *testing.T, store *storepkg.Store) {
 
 func insertAgentRun(t *testing.T, store *storepkg.Store) int64 {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -378,24 +378,6 @@ func TestStore_QueueVerbIntent(t *testing.T) {
 	})
 }
 
-func TestStore_ActiveLaunchHashes(t *testing.T) {
-	t.Parallel()
-	store := openStore(t)
-	seedOneTicket(t, store)
-	queueLaunch(t, store, storepkg.LaunchRequest{
-		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow,
-	})
-	applyLaunches(t, store, testNow.Add(time.Second))
-
-	hashes, err := store.ActiveLaunchHashes(t.Context())
-	if err != nil {
-		t.Fatalf("ActiveLaunchHashes: %v", err)
-	}
-	if diff := cmp.Diff(map[string]string{"sandbox://CC-1": "hash-1"}, hashes); diff != "" {
-		t.Errorf("ActiveLaunchHashes() mismatch (-want +got):\n%s", diff)
-	}
-}
-
 func TestStore_PendingIntents(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -454,16 +436,13 @@ func TestStore_PendingIntents(t *testing.T) {
 	}
 }
 
-func TestStore_LatestSessionID(t *testing.T) {
+func TestStore_InsertSessionRunSkeleton(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	store := openStore(t)
 	seedOneTicket(t, store)
 	const ticket = "sandbox://CC-1"
 
-	if _, err := store.LatestSessionID(ctx, ticket); !errors.Is(err, storepkg.ErrNotFound) {
-		t.Fatalf("LatestSessionID(no runs) error = %v, want ErrNotFound", err)
-	}
 	_, agentSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket, Kind: "agent", PromptHash: "hash", Session: storepkg.RunSession{StartNew: true},
 	})
@@ -472,18 +451,6 @@ func TestStore_LatestSessionID(t *testing.T) {
 	}
 	if agentSession == "" {
 		t.Fatal("InsertSessionRunSkeleton(StartNew) session = \"\", want an id")
-	}
-	if _, err := store.InsertCutFailedRun(ctx, storepkg.RunSkeleton{Ticket: ticket}, testNow); err != nil {
-		t.Fatalf("InsertCutFailedRun: %v", err)
-	}
-	if _, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket, Kind: "command", Step: "check", Session: storepkg.RunSession{StartNew: true},
-	}); err != nil {
-		t.Fatalf("InsertSessionRunSkeleton(command): %v", err)
-	}
-	if got, err := store.LatestSessionID(ctx, ticket); err != nil || got != agentSession {
-		t.Errorf("LatestSessionID() after agent, cut failure and command runs = %q, %v, want %q",
-			got, err, agentSession)
 	}
 	_, followSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: agentSession, Message: "go on"},
@@ -507,7 +474,7 @@ func TestStore_AutoHistories(t *testing.T) {
 	}
 	followUp := func(t *testing.T, store *storepkg.Store, tip string, cause plan.FollowUpCause) {
 		t.Helper()
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: string(url), Kind: plan.RunKindFollowUp, BaselineSHA: tip, PromptHash: "h", Cause: cause,
 		})
 		if err != nil {
@@ -522,13 +489,13 @@ func TestStore_AutoHistories(t *testing.T) {
 		followUp(t, store, "tip-1", plan.CauseCIFailed)
 		followUp(t, store, "tip-2", plan.CauseNone)
 		followUp(t, store, "tip-3", plan.CauseCIFailed)
-		got, err := store.AutoHistories(t.Context())
+		in, err := store.PlanInput(t.Context())
 		if err != nil {
-			t.Fatalf("AutoHistories: %v", err)
+			t.Fatalf("PlanInput: %v", err)
 		}
 		want := map[plan.TicketURL]plan.AutoHistory{url: {Rounds: 2, LastTip: "tip-3"}}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("AutoHistories() mismatch (-want +got):\n%s", diff)
+		if diff := cmp.Diff(want, in.Auto); diff != "" {
+			t.Errorf("PlanInput().Auto mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -542,12 +509,12 @@ func TestStore_AutoHistories(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("AppendEvent: %v", err)
 		}
-		got, err := store.AutoHistories(t.Context())
+		in, err := store.PlanInput(t.Context())
 		if err != nil {
-			t.Fatalf("AutoHistories: %v", err)
+			t.Fatalf("PlanInput: %v", err)
 		}
-		if len(got) != 0 {
-			t.Errorf("AutoHistories() after green = %+v, want none", got)
+		if len(in.Auto) != 0 {
+			t.Errorf("PlanInput().Auto after green = %+v, want none", in.Auto)
 		}
 	})
 }
