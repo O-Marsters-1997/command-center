@@ -21,7 +21,8 @@ func (c LaunchCandidate) eligible() bool {
 }
 
 func (c LaunchCandidate) command() bool {
-	return c.Next.Kind == NextRun && c.Next.Step.IsSome() && c.Next.Step.Unwrap().Command
+	step, ok := c.Next.Step.Get()
+	return c.Next.Kind == NextRun && ok && step.Command
 }
 
 func LaunchPlan(candidates []LaunchCandidate, load Load, caps Caps, spendPaused bool) []TicketURL {

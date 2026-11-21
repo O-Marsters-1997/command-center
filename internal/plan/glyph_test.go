@@ -39,6 +39,24 @@ func TestState_Glyph(t *testing.T) {
 	}
 }
 
+func TestOpenGlyph(t *testing.T) {
+	t.Parallel()
+
+	tests := map[plan.GlyphWord]bool{
+		plan.GlyphFailed: true, plan.GlyphAttention: true, plan.GlyphRunning: true,
+		plan.GlyphPending: true, plan.GlyphChecking: true, plan.GlyphReady: true, plan.GlyphBlocked: true,
+		plan.GlyphDone: false, plan.GlyphUnknown: false,
+	}
+	for glyph, want := range tests {
+		t.Run(string(glyph), func(t *testing.T) {
+			t.Parallel()
+			if got := plan.OpenGlyph(glyph); got != want {
+				t.Errorf("OpenGlyph(%q) = %t, want %t", glyph, got, want)
+			}
+		})
+	}
+}
+
 func TestRailGroup(t *testing.T) {
 	t.Parallel()
 

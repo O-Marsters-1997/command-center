@@ -11,7 +11,8 @@ import (
 type Outcome int
 
 const (
-	OutcomePush Outcome = iota
+	OutcomeUnknown Outcome = iota
+	OutcomePush
 	OutcomeFailed
 	OutcomeCutFailed
 	OutcomeAsked
@@ -34,7 +35,7 @@ func (o Outcome) String() string {
 	case OutcomePassed:
 		return "passed"
 	default:
-		return "failed"
+		return "unknown"
 	}
 }
 

@@ -3,6 +3,8 @@ package plan
 import (
 	"maps"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
 type CheckState struct {
@@ -13,6 +15,22 @@ type CheckState struct {
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at"`
 	Attempt     int       `json:"attempt"`
+}
+
+func (c CheckState) Passed() bool { return ToVerdictCheckState(c) == verdict.Success }
+
+func (c CheckState) Failed() bool { return ToVerdictCheckState(c) == verdict.Failure }
+
+func (c CheckState) Glyph() GlyphWord {
+	switch ToVerdictCheckState(c) {
+	case verdict.Success, verdict.Skipped:
+		return GlyphDone
+	case verdict.Failure:
+		return GlyphFailed
+	case verdict.Pending:
+		return GlyphRunning
+	}
+	return GlyphRunning
 }
 
 type PR struct {

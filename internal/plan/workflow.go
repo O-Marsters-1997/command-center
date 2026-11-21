@@ -40,7 +40,8 @@ type StepRun struct {
 type NextKind int
 
 const (
-	NextRun NextKind = iota
+	NextNone NextKind = iota
+	NextRun
 	NextDone
 	NextPark
 )
@@ -92,7 +93,7 @@ func (w Workflow) Next(pass []StepRun, hasVerify bool) Next {
 		return runStep(forward[0], 0)
 	}
 	if slices.ContainsFunc(pass, func(r StepRun) bool { return r.Alive }) {
-		return Next{Kind: NextRun}
+		return Next{Kind: NextNone}
 	}
 
 	rounds := 0

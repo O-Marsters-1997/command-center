@@ -35,11 +35,7 @@ func (l *Loop) autoMessage(auto plan.AutoFollowUp, entry plan.Entry, checks map[
 	if auto.Cause == plan.CauseVerifyFailed {
 		return plan.ComposeFixVerify(l.tailOf(auto.LogPath))
 	}
-	var red []plan.RedCheck
-	for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
-		red = append(red, plan.RedCheck{Name: name, DetailsURL: checks[name].DetailsURL})
-	}
-	return plan.ComposeFixCI(red)
+	return plan.ComposeFixCI(entry.RedChecks(checks))
 }
 
 func (l *Loop) rerunFailedChecks(ctx context.Context, snap plan.Snapshot, byURL map[plan.TicketURL]store.Ticket) {

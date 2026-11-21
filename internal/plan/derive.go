@@ -122,7 +122,29 @@ type Entry struct {
 }
 
 func (e Entry) HoldsWorktree() bool {
-	return e.Run.IsSome() && !e.Run.Unwrap().Alive && e.Run.Unwrap().Outcome == option.Some(OutcomeAsked)
+	run, ok := e.Run.Get()
+	return ok && !run.Alive && run.Outcome == option.Some(OutcomeAsked)
+}
+
+func (e Entry) Verdict() option.Option[verdict.Result] {
+	run, ok := e.Run.Get()
+	if !ok {
+		return option.None[verdict.Result]()
+	}
+	return run.Verdict
+}
+
+func (e Entry) RedChecks(checks map[string]CheckState) []RedCheck {
+	res, ok := e.Verdict().Get()
+	if !ok {
+		return nil
+	}
+	red := make([]RedCheck, len(res.RedLeaves))
+	for i, name := range res.RedLeaves {
+		red[i] = RedCheck{Name: name, DetailsURL: checks[name].DetailsURL}
+	}
+	slices.SortFunc(red, func(a, b RedCheck) int { return cmp.Compare(a.Name, b.Name) })
+	return red
 }
 
 type Snapshot struct {
@@ -294,7 +316,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			HasRun:            run.IsSome(),
 			ConflictedBase:    conflictedBase,
 			Next:              next,
-			InFlight:          run.IsSome() && next.Kind == NextRun && next.Step.IsSome(),
+			InFlight:          run.IsSome() && next.Kind == NextRun,
 			RedBlocker:        redBlocker,
 		})
 		if in.Runs[t.URL].Pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
@@ -311,17 +333,18 @@ func (r Rules) Derive(in Input) Snapshot {
 
 		pr := in.Obs.PRs[t.Ref()]
 		gating := GatingBlockers(t, byURL)
-		draftWhy, readyToUndraft := draftReason(pr, gating, prs, run)
 		snap.byURL[t.URL] = len(snap.Entries)
 		entry := Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
-			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
 			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
 			Next: next, Workflow: membership.Workflow, Raise: raise,
 		}
+		draftWhy, readyToUndraft := draftReason(pr, gating, prs, entry.Verdict())
+		entry.DraftReason = draftWhy
+		entry.ReadyToUndraft = readyToUndraft && pr.State == Open
 		if state == Parked {
 			entry.LockedBehind = lockedBehind(t.URL, unlocks, byURL, prs)
 		}
@@ -471,12 +494,12 @@ func branchNumber(branch string) (int, bool) {
 }
 
 func draftReason(
-	pr PR, gating []Ticket, prs map[string]PRState, run option.Option[RunFact],
+	pr PR, gating []Ticket, prs map[string]PRState, v option.Option[verdict.Result],
 ) (reason string, ready bool) {
 	if !pr.IsDraft {
 		return "", false
 	}
-	reviewMe := run.IsSome() && run.Unwrap().Verdict.IsSome() && run.Unwrap().Verdict.Unwrap().Kind == verdict.ReviewMe
+	reviewMe := v.UnwrapOr(verdict.Result{}).Kind == verdict.ReviewMe
 	draft, gateReason := DraftGate(gating, prs, reviewMe)
 	if !draft {
 		return "ready to un-draft; the last gh pr ready call has not taken effect yet", true
