@@ -55,11 +55,13 @@ func (l *Loop) event(ctx context.Context, ticketURL string, kind store.EventKind
 
 var errIntentPending = errors.New("intent stays pending")
 
-func (l *Loop) eachIntent(ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent) error) error {
-	return l.consumeEach(ctx, snap.Intents(verb), fn)
+func (l *Loop) eachIntent(
+	ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent) (handled, error),
+) error {
+	return l.consumeEach(withSnapshot(ctx, snap), snap.Intents(verb), fn)
 }
 
-func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(plan.Intent) error) error {
+func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(plan.Intent) (handled, error)) error {
 	pending, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return fmt.Errorf("list pending %s intents: %w", verb, err)
@@ -73,19 +75,26 @@ func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(pl
 	return l.consumeEach(ctx, intents, fn)
 }
 
-func (l *Loop) consumeEach(ctx context.Context, intents []plan.Intent, fn func(plan.Intent) error) error {
+func (l *Loop) consumeEach(
+	ctx context.Context, intents []plan.Intent, fn func(plan.Intent) (handled, error),
+) error {
 	now := l.clock.Now()
 	for _, intent := range intents {
 		if intent.HeldAt(now) {
 			continue
 		}
-		switch err := fn(intent); {
+		state := ticketState(ctx, intent.Ticket)
+		result, err := fn(intent)
+		switch {
 		case errors.Is(err, errIntentPending):
 			continue
 		case err != nil:
 			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
+		consumption := store.Consumption{
+			At: l.clock.Now(), Outcome: result.outcome, Detail: result.detail, Run: result.run, TicketState: state,
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, consumption); err != nil {
 			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
 	}
@@ -372,8 +381,8 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
-	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) error {
-		return l.importFeature(ctx, string(intent.Ticket), intent.Payload)
+	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) (handled, error) {
+		return succeeded, l.importFeature(ctx, string(intent.Ticket), intent.Payload)
 	})
 }
 
@@ -445,7 +454,8 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 		case err != nil:
 			return fmt.Errorf("edit %s: %w", intent.TicketID, err)
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+		consumption := store.Consumption{At: now, Outcome: plan.IntentDone}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, consumption); err != nil {
 			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.TicketID, err)
 		}
 	}
@@ -461,15 +471,15 @@ func (l *Loop) cancelRun(t *tick, ticketURL string, pgid int) error {
 }
 
 func (l *Loop) applyKillIntents(ctx context.Context, t *tick) error {
-	return l.eachPendingIntent(ctx, plan.VerbKill, func(intent plan.Intent) error {
+	return l.eachPendingIntent(ctx, plan.VerbKill, func(intent plan.Intent) (handled, error) {
 		latest, err := l.store.LatestRunsByTicket(ctx)
 		if err != nil {
-			return fmt.Errorf("latest runs: %w", err)
+			return handled{}, fmt.Errorf("latest runs: %w", err)
 		}
 		if run, ok := latest[intent.Ticket]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
-			return l.cancelRun(t, string(intent.Ticket), run.Pgid.Unwrap())
+			return succeeded, l.cancelRun(t, string(intent.Ticket), run.Pgid.Unwrap())
 		}
-		return nil
+		return failedWith("no run is alive"), nil
 	})
 }
 
@@ -789,7 +799,7 @@ func (l *Loop) launchEligible(
 		if entry.Run.IsSome() {
 			err = l.advancePass(ctx, t, byTicket[ticketURL], entry)
 		} else {
-			err = l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Ticket, entry.Unlock.BaseBranch, entry.PromptHash,
+			_, err = l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Ticket, entry.Unlock.BaseBranch, entry.PromptHash,
 				l.startOf(entry, t.obs))
 		}
 		if err != nil {
@@ -846,7 +856,7 @@ func eachEntry(snap plan.Snapshot, keep func(plan.Entry) bool, fn func(plan.Entr
 func (l *Loop) cutAndSpawn(
 	ctx context.Context, t *tick, ticket store.Ticket, launched plan.Ticket, baseBranch, promptHash string,
 	begin start,
-) error {
+) (plan.RunID, error) {
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
 
@@ -860,37 +870,39 @@ func (l *Loop) cutAndSpawn(
 			Ticket: ticket.URL, PromptHash: promptHash,
 			Step: begin.step.Name, Workflow: begin.workflow.Name, WorkflowHash: begin.workflow.Hash,
 		}
-		if _, insertErr := l.store.InsertCutFailedRun(ctx, failed, l.clock.Now()); insertErr != nil {
-			return errors.Join(
+		failedID, insertErr := l.store.InsertCutFailedRun(ctx, failed, l.clock.Now())
+		if insertErr != nil {
+			return 0, errors.Join(
 				fmt.Errorf("cut %s: %w", branch, err),
 				fmt.Errorf("record failed cut of %s: %w", branch, insertErr),
 			)
 		}
-		return l.event(ctx, ticket.URL, store.EventCutFailed, err.Error())
+		return plan.RunID(failedID), l.event(ctx, ticket.URL, store.EventCutFailed, err.Error())
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, branch)
 	if err != nil {
-		return fmt.Errorf("read baseline for %s: %w", ticket.URL, err)
+		return 0, fmt.Errorf("read baseline for %s: %w", ticket.URL, err)
 	}
 
 	worktrees, err := git.WorktreePaths(ctx, repoPath)
 	if err != nil {
-		return fmt.Errorf("list worktrees after cutting %s: %w", branch, err)
+		return 0, fmt.Errorf("list worktrees after cutting %s: %w", branch, err)
 	}
 	worktreePath, ok := worktrees[branch]
 	if !ok {
-		return fmt.Errorf("cut of %s reported success but git worktree list does not show it", branch)
+		return 0, fmt.Errorf("cut of %s reported success but git worktree list does not show it", branch)
 	}
 
-	if err := l.spawnRun(ctx, t, spawnSpec{
+	runID, err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
 		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, launched, begin.step, nil), choice: launched.Choice,
 		workflow: begin.workflow, step: begin.step, verify: begin.verify,
-	}); err != nil {
-		return fmt.Errorf("spawn agent in %s: %w", worktreePath, err)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("spawn agent in %s: %w", worktreePath, err)
 	}
-	return nil
+	return runID, nil
 }
 
 func agentPrompt(ticket store.Ticket, launched plan.Ticket) string {
@@ -924,35 +936,66 @@ func (spec spawnSpec) session() store.RunSession {
 	}
 }
 
-func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
-	ticket := spec.ticket
+func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (plan.RunID, error) {
+	spec = l.withDefaultStep(spec)
+	runID, sessionID, err := l.insertSkeleton(ctx, spec)
+	if err != nil {
+		return 0, err
+	}
+	return plan.RunID(runID), l.launchRun(ctx, t, spec, runID, sessionID)
+}
+
+func (l *Loop) withDefaultStep(spec spawnSpec) spawnSpec {
 	if spec.workflow.Name == "" {
 		spec.workflow = l.workflows[config.DefaultWorkflow]
 		if spec.step.Name == "" {
 			spec.step = spec.workflow.Steps[0]
 		}
 	}
-	step := spec.step
-	choice := spec.choice
-	switch {
-	case step.Command:
-		if spec.kind != plan.RunKindVerify {
-			spec.kind = plan.RunKindCommand
-		}
-		choice = plan.AgentChoice{}
-	case step.Model != "":
-		choice = plan.AgentChoice{Model: step.Model}
-	case choice.Model == "":
-		choice.Model = config.AgentModel
-	}
-	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
-		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash,
+	return spec
+}
+
+func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64, sessionID string, err error) {
+	choice := spec.agentChoice()
+	runID, sessionID, err = l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
+		Ticket: spec.ticket.URL, Kind: spec.runKind(), BaselineSHA: spec.baseline, PromptHash: spec.hash,
 		Choice: choice, Session: spec.session(), Cause: spec.cause,
-		Step: step.Name, Workflow: spec.workflow.Name, WorkflowHash: spec.workflow.Hash,
+		Step: spec.step.Name, Workflow: spec.workflow.Name, WorkflowHash: spec.workflow.Hash,
 	})
 	if err != nil {
-		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
+		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", spec.ticket.URL, err)
 	}
+	return runID, sessionID, nil
+}
+
+func (spec spawnSpec) runKind() plan.RunKind {
+	if spec.step.Command && spec.kind != plan.RunKindVerify {
+		return plan.RunKindCommand
+	}
+	return spec.kind
+}
+
+func (spec spawnSpec) agentChoice() plan.AgentChoice {
+	switch {
+	case spec.step.Command:
+		return plan.AgentChoice{}
+	case spec.step.Model != "":
+		return plan.AgentChoice{Model: spec.step.Model}
+	}
+	choice := spec.choice
+	if choice.Model == "" {
+		choice.Model = config.AgentModel
+	}
+	return choice
+}
+
+func (l *Loop) launchRun(
+	ctx context.Context, t *tick, spec spawnSpec, runID int64, sessionID string,
+) (err error) {
+	ticket := spec.ticket
+	step := spec.step
+	choice := spec.agentChoice()
+	spec.kind = spec.runKind()
 
 	prompt := spec.prompt
 	canAsk := len(step.Tools) == 0 || slices.Contains(step.Tools, "Write")

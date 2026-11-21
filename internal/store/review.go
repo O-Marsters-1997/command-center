@@ -57,6 +57,7 @@ func (s *Store) RequestChanges(
 		}
 		if _, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 			At: at.UTC(), TicketID: string(ticket), Verb: string(plan.VerbFollowUp), Payload: raw,
+			QueuedBy: string(plan.QueuedByOwner),
 		}); err != nil {
 			return fmt.Errorf("queue follow-up intent: %w", err)
 		}

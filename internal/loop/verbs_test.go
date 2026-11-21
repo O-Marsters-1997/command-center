@@ -201,6 +201,11 @@ func TestRemoveWorktree(t *testing.T) {
 		if !hasEvent(events, "worktree_removed", "") {
 			t.Error("no worktree_removed event")
 		}
+		rec := intentOf(t, f.store, plan.VerbRemoveWorktree)
+		if rec.QueuedBy != plan.QueuedByLoop || rec.Outcome != plan.IntentDone {
+			t.Errorf("auto removal record = queued by %q, outcome %q, want %q and %q",
+				rec.QueuedBy, rec.Outcome, plan.QueuedByLoop, plan.IntentDone)
+		}
 	})
 
 	t.Run("removes once when the verb and the loop both queued it", func(t *testing.T) {
@@ -309,6 +314,10 @@ func TestRemoveWorktree(t *testing.T) {
 		}
 		if refusals != 1 {
 			t.Errorf("remove_worktree_refused events = %d, want 1", refusals)
+		}
+		rec := intentOf(t, f.store, plan.VerbRemoveWorktree)
+		if rec.Outcome != plan.IntentFailed || !strings.Contains(rec.Detail, "forge refused") {
+			t.Errorf("refused removal record = outcome %q, detail %q, want failed with the forge error", rec.Outcome, rec.Detail)
 		}
 	})
 

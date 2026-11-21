@@ -84,12 +84,21 @@ type LaunchRequest struct {
 }
 
 type VerbRequest struct {
-	Ticket  string
-	Verb    plan.Verb
-	Payload string
-	At      time.Time
+	Ticket   string
+	Verb     plan.Verb
+	Payload  string
+	At       time.Time
+	QueuedBy plan.QueuedBy
 
 	HoldUntil time.Time
+}
+
+type Consumption struct {
+	At          time.Time
+	Outcome     plan.IntentOutcome
+	Detail      string
+	Run         option.Option[plan.RunID]
+	TicketState plan.State
 }
 
 type FollowUpPayload struct {

@@ -249,7 +249,7 @@ func TestChangesPage(t *testing.T) {
 						consumer <- err
 						return
 					}
-					consumer <- st.ConsumeVerbIntent(t.Context(), intents[0].ID, testNow)
+					consumer <- st.ConsumeVerbIntent(t.Context(), intents[0].ID, storepkg.Consumption{At: testNow})
 					return
 				}
 			}

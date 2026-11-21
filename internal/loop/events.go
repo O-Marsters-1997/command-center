@@ -102,7 +102,7 @@ func (l *Loop) retargetOne(
 	if err := l.event(ctx, url, store.EventRetargeted, detail); err != nil {
 		return fmt.Errorf("record retarget: %w", err)
 	}
-	if err := l.refreshOne(ctx, snap, obs, t, row, false); err != nil {
+	if _, err := l.refreshOne(ctx, snap, obs, t, row, false); err != nil {
 		return fmt.Errorf("refresh after retarget: %w", err)
 	}
 	return nil

@@ -19,13 +19,19 @@ type Event struct {
 }
 
 type Intent struct {
-	ID         int64
-	At         time.Time
-	TicketID   string
-	Verb       string
-	Payload    json.RawMessage
-	ConsumedAt sql.NullTime
-	HoldUntil  sql.NullTime
+	ID          int64
+	At          time.Time
+	TicketID    string
+	Verb        string
+	Payload     json.RawMessage
+	ConsumedAt  sql.NullTime
+	HoldUntil   sql.NullTime
+	QueuedBy    string
+	Outcome     sql.NullString
+	Detail      sql.NullString
+	FinishedAt  sql.NullTime
+	RunID       sql.NullInt64
+	TicketState sql.NullString
 }
 
 type Launch struct {
@@ -115,8 +121,8 @@ type Run struct {
 	Step          string
 	Workflow      string
 	WorkflowHash  string
-	Cause         sql.NullString
 	Prompt        sql.NullString
+	Cause         sql.NullString
 }
 
 type Ticket struct {

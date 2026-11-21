@@ -321,12 +321,17 @@ func queueVerbIntent(ctx context.Context, q *ccdb.Queries, v VerbRequest) (int64
 	if !v.HoldUntil.IsZero() {
 		holdUntil = notNullTime(v.HoldUntil.UTC())
 	}
+	queuedBy := v.QueuedBy
+	if queuedBy == "" {
+		queuedBy = plan.QueuedByOwner
+	}
 	id, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:        v.At.UTC(),
 		TicketID:  v.Ticket,
 		Verb:      string(v.Verb),
 		Payload:   encoded,
 		HoldUntil: holdUntil,
+		QueuedBy:  string(queuedBy),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
@@ -397,12 +402,63 @@ func (s *Store) WithdrawHeldIntent(ctx context.Context, id int64, now time.Time)
 	return nil
 }
 
-func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
-	n, err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
-		ConsumedAt: notNullTime(at.UTC()),
-		ID:         id,
-	})
+func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, c Consumption) error {
+	at := notNullTime(c.At.UTC())
+	params := ccdb.ConsumeVerbIntentParams{ConsumedAt: at, ID: id}
+	if c.Outcome != plan.IntentInProgress {
+		params.Outcome = notNull(string(c.Outcome))
+		params.FinishedAt = at
+	}
+	if c.Detail != "" {
+		params.Detail = notNull(c.Detail)
+	}
+	if c.Run.IsSome() {
+		params.RunID = sql.NullInt64{Int64: int64(c.Run.Unwrap()), Valid: true}
+	}
+	if c.TicketState != plan.StateUnknown {
+		params.TicketState = notNull(c.TicketState.String())
+	}
+	n, err := s.q.ConsumeVerbIntent(ctx, params)
 	return matchedRow(n, err, fmt.Sprintf("consume intent %d", id))
+}
+
+func (s *Store) IntentHistory(ctx context.Context, since time.Time) ([]plan.IntentRecord, error) {
+	rows, err := s.q.IntentHistory(ctx, since.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("select intent history: %w", err)
+	}
+	var records []plan.IntentRecord
+	for _, row := range rows {
+		verb, err := plan.ParseVerb(row.Verb)
+		if err != nil {
+			return nil, fmt.Errorf("decode verb of intent %d: %w", row.ID, err)
+		}
+		if !verb.IsRowVerb() {
+			continue
+		}
+		rec := plan.IntentRecord{
+			ID: row.ID, Ticket: plan.TicketURL(row.TicketID), Verb: verb, QueuedBy: plan.QueuedBy(row.QueuedBy),
+			At: row.At, HoldUntil: row.HoldUntil.Time, ConsumedAt: optionalTime(row.ConsumedAt),
+			FinishedAt: optionalTime(row.FinishedAt), Outcome: plan.IntentOutcome(row.Outcome), Detail: row.Detail,
+		}
+		if row.RunID.Valid {
+			rec.Run = option.Some(plan.RunID(row.RunID.Int64))
+		}
+		if row.TicketState != "" {
+			if rec.TicketState, err = plan.ParseState(row.TicketState); err != nil {
+				return nil, fmt.Errorf("decode state of intent %d: %w", row.ID, err)
+			}
+		}
+		records = append(records, rec)
+	}
+	return records, nil
+}
+
+func optionalTime(t sql.NullTime) option.Option[time.Time] {
+	if !t.Valid {
+		return option.None[time.Time]()
+	}
+	return option.Some(t.Time)
 }
 
 // ActiveLaunchHashes excludes cancelled launches.

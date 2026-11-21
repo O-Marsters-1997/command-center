@@ -269,7 +269,8 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 		store := openStore(t)
 		seedOneTicket(t, store)
 		intent := queueKill(t, store)
-		if err := store.ConsumeVerbIntent(t.Context(), intent.ID, testNow.Add(time.Second)); err != nil {
+		consumption := storepkg.Consumption{At: testNow.Add(time.Second)}
+		if err := store.ConsumeVerbIntent(t.Context(), intent.ID, consumption); err != nil {
 			t.Fatalf("ConsumeVerbIntent: %v", err)
 		}
 		after, err := store.PendingVerbIntents(t.Context(), plan.VerbKill)
@@ -285,10 +286,11 @@ func TestStore_ConsumeVerbIntent(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
 		intent := queueKill(t, store)
-		if err := store.ConsumeVerbIntent(t.Context(), intent.ID, testNow); err != nil {
+		consumption := storepkg.Consumption{At: testNow}
+		if err := store.ConsumeVerbIntent(t.Context(), intent.ID, consumption); err != nil {
 			t.Fatalf("first ConsumeVerbIntent: %v", err)
 		}
-		if err := store.ConsumeVerbIntent(t.Context(), intent.ID, testNow); !errors.Is(err, storepkg.ErrNotFound) {
+		if err := store.ConsumeVerbIntent(t.Context(), intent.ID, consumption); !errors.Is(err, storepkg.ErrNotFound) {
 			t.Errorf("second ConsumeVerbIntent(%d) error = %v, want ErrNotFound", intent.ID, err)
 		}
 	})
@@ -328,12 +330,131 @@ func TestStore_WithdrawHeldIntent(t *testing.T) {
 		if !errors.Is(err, storepkg.ErrIntentTooLate) {
 			t.Errorf("WithdrawHeldIntent past hold error = %v, want ErrIntentTooLate", err)
 		}
-		if err := store.ConsumeVerbIntent(t.Context(), id, testNow.Add(6*time.Second)); err != nil {
+		consumption := storepkg.Consumption{At: testNow.Add(6 * time.Second)}
+		if err := store.ConsumeVerbIntent(t.Context(), id, consumption); err != nil {
 			t.Fatalf("ConsumeVerbIntent: %v", err)
 		}
 		err = store.WithdrawHeldIntent(t.Context(), id, testNow.Add(time.Second))
 		if !errors.Is(err, storepkg.ErrIntentTooLate) {
 			t.Errorf("WithdrawHeldIntent after consume error = %v, want ErrIntentTooLate", err)
+		}
+	})
+}
+
+func TestStore_IntentHistory(t *testing.T) {
+	t.Parallel()
+	const ticket = "sandbox://CC-1"
+	queue := func(t *testing.T, store *storepkg.Store, req storepkg.VerbRequest) int64 {
+		t.Helper()
+		req.Ticket, req.At = ticket, testNow
+		id, err := store.QueueVerbIntent(t.Context(), req)
+		if err != nil {
+			t.Fatalf("QueueVerbIntent(%s): %v", req.Verb, err)
+		}
+		return id
+	}
+	history := func(t *testing.T, store *storepkg.Store, since time.Time) map[int64]plan.IntentRecord {
+		t.Helper()
+		records, err := store.IntentHistory(t.Context(), since)
+		if err != nil {
+			t.Fatalf("IntentHistory: %v", err)
+		}
+		byID := map[int64]plan.IntentRecord{}
+		for _, r := range records {
+			byID[r.ID] = r
+		}
+		return byID
+	}
+	at := testNow.Add(time.Second)
+
+	t.Run("a refusal and a success end with their outcome and detail", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		refused := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbResolve})
+		aborted := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbAbort})
+		consume := func(id int64, c storepkg.Consumption) {
+			t.Helper()
+			if err := store.ConsumeVerbIntent(t.Context(), id, c); err != nil {
+				t.Fatalf("ConsumeVerbIntent(%d): %v", id, err)
+			}
+		}
+		consume(refused, storepkg.Consumption{
+			At: at, Outcome: plan.IntentFailed, Detail: "no conflict is recorded", TicketState: plan.NeedsYou,
+		})
+		consume(aborted, storepkg.Consumption{At: at, Outcome: plan.IntentDone, TicketState: plan.NeedsYou})
+
+		got := history(t, store, testNow)
+		rec := got[refused]
+		if rec.Outcome != plan.IntentFailed || rec.Detail != "no conflict is recorded" ||
+			rec.TicketState != plan.NeedsYou || rec.QueuedBy != plan.QueuedByOwner ||
+			!rec.FinishedAt.UnwrapOr(time.Time{}).Equal(at) {
+			t.Errorf("refused resolve record = %+v, want failed with its refusal, state and finish time", rec)
+		}
+		if got[aborted].Outcome != plan.IntentDone || got[aborted].FinishedAt.IsNone() {
+			t.Errorf("abort record = %+v, want done and finished", got[aborted])
+		}
+	})
+
+	t.Run("an agent verb is consumed with its run and no outcome", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		seedOneTicket(t, store)
+		id := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbReRun})
+		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{Ticket: ticket, Kind: plan.RunKindAgent})
+		if err != nil {
+			t.Fatalf("InsertRunSkeleton: %v", err)
+		}
+		c := storepkg.Consumption{At: at, Run: option.Some(plan.RunID(runID))}
+		if err := store.ConsumeVerbIntent(t.Context(), id, c); err != nil {
+			t.Fatalf("ConsumeVerbIntent: %v", err)
+		}
+		rec := history(t, store, testNow.Add(time.Hour))[id]
+		if rec.Run != option.Some(plan.RunID(runID)) || rec.Outcome != plan.IntentInProgress || rec.FinishedAt.IsSome() {
+			t.Errorf("re-run record = %+v, want run %d, no outcome, unfinished", rec, runID)
+		}
+	})
+
+	t.Run("undo inside the hold leaves a withdrawn row", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		id := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbKill, HoldUntil: testNow.Add(5 * time.Second)})
+		if err := store.WithdrawHeldIntent(t.Context(), id, at); err != nil {
+			t.Fatalf("WithdrawHeldIntent: %v", err)
+		}
+		rec := history(t, store, testNow)[id]
+		if rec.Outcome != plan.IntentWithdrawn || rec.ConsumedAt.IsNone() || rec.FinishedAt.IsNone() {
+			t.Errorf("withdrawn record = %+v, want withdrawn, consumed and finished", rec)
+		}
+	})
+
+	t.Run("a loop-queued removal is stored as the loop's", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		id := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbRemoveWorktree, QueuedBy: plan.QueuedByLoop})
+		if got := history(t, store, testNow)[id].QueuedBy; got != plan.QueuedByLoop {
+			t.Errorf("QueuedBy = %q, want %q", got, plan.QueuedByLoop)
+		}
+	})
+
+	t.Run("it leaves out column verbs and finished rows older than since", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		tracked := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbTrack})
+		old := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbAbort})
+		finished := storepkg.Consumption{At: at, Outcome: plan.IntentDone}
+		if err := store.ConsumeVerbIntent(t.Context(), old, finished); err != nil {
+			t.Fatalf("ConsumeVerbIntent: %v", err)
+		}
+		pending := queue(t, store, storepkg.VerbRequest{Verb: plan.VerbFollowUp})
+		got := history(t, store, testNow.Add(time.Hour))
+		if _, ok := got[tracked]; ok {
+			t.Errorf("history includes the track intent %d, want only row verbs", tracked)
+		}
+		if _, ok := got[old]; ok {
+			t.Errorf("history includes finished intent %d queued before since", old)
+		}
+		if _, ok := got[pending]; !ok {
+			t.Errorf("history omits pending intent %d, want in-progress rows always", pending)
 		}
 	})
 }
@@ -445,7 +566,7 @@ func TestStore_PendingIntents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
-	if err := store.ConsumeVerbIntent(ctx, kills[0].ID, testNow.Add(time.Minute)); err != nil {
+	if err := store.ConsumeVerbIntent(ctx, kills[0].ID, storepkg.Consumption{At: testNow.Add(time.Minute)}); err != nil {
 		t.Fatalf("ConsumeVerbIntent(%d): %v", kills[0].ID, err)
 	}
 	want["sandbox://CC-1"] = want["sandbox://CC-1"][1:]

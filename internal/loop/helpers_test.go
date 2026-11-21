@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/treepad"
 	"github.com/google/go-cmp/cmp"
@@ -33,6 +34,21 @@ import (
 var discardLog = slog.New(slog.DiscardHandler)
 
 func branchRef(repo, branch string) plan.BranchRef { return plan.BranchRef{Repo: repo, Branch: branch} }
+
+func intentOf(t *testing.T, store *storepkg.Store, verb plan.Verb) plan.IntentRecord {
+	t.Helper()
+	records, err := store.IntentHistory(t.Context(), time.Unix(0, 0))
+	if err != nil {
+		t.Fatalf("IntentHistory: %v", err)
+	}
+	for _, r := range records {
+		if r.Verb == verb {
+			return r
+		}
+	}
+	t.Fatalf("IntentHistory() = %+v, want a %s intent", records, verb)
+	return plan.IntentRecord{}
+}
 
 func openStore(t *testing.T) *storepkg.Store {
 	t.Helper()

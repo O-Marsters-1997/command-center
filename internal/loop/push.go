@@ -16,7 +16,7 @@ import (
 func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	for _, p := range snap.Pushable(obs) {
 		e, _ := snap.Entry(p.Ticket)
-		if err := l.pushOne(ctx, e, p, obs); err != nil {
+		if _, err := l.pushOne(ctx, e, p, obs); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 	}
@@ -24,62 +24,64 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 }
 
 func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbRetryPush, func(intent plan.Intent) error {
+	return l.eachIntent(ctx, snap, plan.VerbRetryPush, func(intent plan.Intent) (handled, error) {
 		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
 		p, ok := snap.Push(intent.Ticket, obs)
 		if !ok {
-			return nil
+			return failedWith("there is nothing to push"), nil
 		}
-		if err := l.pushOne(ctx, e, p, obs); err != nil {
-			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
+		result, err := l.pushOne(ctx, e, p, obs)
+		if err != nil {
+			return handled{}, fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
-		return nil
+		return result, nil
 	})
 }
 
 func (l *Loop) applyRaiseIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbRaise, func(intent plan.Intent) error {
+	return l.eachIntent(ctx, snap, plan.VerbRaise, func(intent plan.Intent) (handled, error) {
 		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
 		url := string(intent.Ticket)
 		if e.State != plan.AwaitingPR {
-			return l.event(ctx, url, store.EventRaiseRefused, fmt.Sprintf("the ticket is %s, not awaiting PR", e.State))
+			return l.refuse(ctx, url, store.EventRaiseRefused, fmt.Sprintf("the ticket is %s, not awaiting PR", e.State))
 		}
 		p, ok := snap.Push(intent.Ticket, obs)
 		if !ok || string(p.LocalTip) != intent.Payload {
-			return l.event(ctx, url, store.EventRaiseRefused, "the tip has moved since you reviewed it")
+			return l.refuse(ctx, url, store.EventRaiseRefused, "the tip has moved since you reviewed it")
 		}
-		if err := l.pushOne(ctx, e, p, obs); err != nil {
-			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
+		result, err := l.pushOne(ctx, e, p, obs)
+		if err != nil {
+			return handled{}, fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
-		return nil
+		return result, nil
 	})
 }
 
 func (l *Loop) applyAdoptHeadIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbAdoptHead, func(intent plan.Intent) error {
+	return l.eachIntent(ctx, snap, plan.VerbAdoptHead, func(intent plan.Intent) (handled, error) {
 		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
 		pr := obs.PRs[e.Ticket.Ref()]
 		if pr.State != plan.Open || pr.HeadOid == "" {
-			return nil
+			return failedWith("the ticket has no open PR"), nil
 		}
 		if worktree := obs.Worktrees[e.Ticket.Ref()]; worktree != "" && obs.HeadDescends[e.Ticket.Ref()] {
 			if err := git.MergeFFOnly(ctx, worktree, "origin/"+e.Ticket.Branch); err != nil {
-				return fmt.Errorf("bring %s up to its remote head: %w", e.Ticket.Branch, err)
+				return handled{}, fmt.Errorf("bring %s up to its remote head: %w", e.Ticket.Branch, err)
 			}
 		}
 		base := e.Unlock.BaseBranch
 		baseSHA, err := git.RevParse(ctx, l.checkout(e.Ticket.Repo), "origin/"+base)
 		if err != nil {
-			return fmt.Errorf("resolve origin/%s: %w", base, err)
+			return handled{}, fmt.Errorf("resolve origin/%s: %w", base, err)
 		}
 		push := store.Push{
 			Ticket: intent.Ticket, Tip: pr.HeadOid, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
@@ -88,9 +90,10 @@ func (l *Loop) applyAdoptHeadIntents(ctx context.Context, snap plan.Snapshot, ob
 			push.Protected = e.LastPush.Unwrap().Protected
 		}
 		if err := l.store.RecordPush(ctx, push); err != nil {
-			return fmt.Errorf("record adopted head of %s: %w", e.Ticket.Branch, err)
+			return handled{}, fmt.Errorf("record adopted head of %s: %w", e.Ticket.Branch, err)
 		}
-		return l.event(ctx, string(intent.Ticket), store.EventPushed, fmt.Sprintf("adopted remote head %s", pr.HeadOid))
+		adopted := fmt.Sprintf("adopted remote head %s", pr.HeadOid)
+		return succeeded, l.event(ctx, string(intent.Ticket), store.EventPushed, adopted)
 	})
 }
 
@@ -125,7 +128,7 @@ func pushBranch(ctx context.Context, repoPath, branch string, tip plan.SHA, rest
 	return wrapGit("force-push restacked "+branch, git.PushRestacked(ctx, repoPath, branch, recordedTip))
 }
 
-func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.Observation) error {
+func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.Observation) (handled, error) {
 	t := e.Ticket
 	url := string(t.URL)
 	base := e.Unlock.BaseBranch
@@ -133,7 +136,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 
 	stats, err := git.DiffStat(ctx, repoPath, "origin/"+base, t.Branch)
 	if err != nil {
-		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
+		return handled{}, fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
 	changed := make([]string, len(stats))
 	counts := make(map[string]git.FileStat, len(stats))
@@ -147,9 +150,9 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	if denied := plan.Denied(matches); len(denied) > 0 {
 		detail, err := json.Marshal(denied)
 		if err != nil {
-			return fmt.Errorf("encode denied paths: %w", err)
+			return handled{}, fmt.Errorf("encode denied paths: %w", err)
 		}
-		return l.event(ctx, url, store.EventPushRefused, string(detail))
+		return l.refuse(ctx, url, store.EventPushRefused, string(detail))
 	}
 
 	var lastPushed plan.SHA
@@ -157,7 +160,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 		lastPushed = e.LastPush.Unwrap().PushedTip
 	}
 	if err := pushBranch(ctx, repoPath, t.Branch, lastPushed, p.Force); err != nil {
-		return l.event(ctx, url, store.EventPushFailed, err.Error())
+		return l.refuse(ctx, url, store.EventPushFailed, err.Error())
 	}
 
 	protected := plan.Protected(matches)
@@ -175,24 +178,24 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 		}
 		worktree := obs.Worktrees[t.Ref()]
 		if err := l.forge.Create(ctx, worktree, base, body, p.OpensAsDraft, labels); err != nil {
-			return l.event(ctx, url, store.EventPushFailed, err.Error())
+			return l.refuse(ctx, url, store.EventPushFailed, err.Error())
 		}
 	} else if section != "" && !sameProtectedPaths(protected, e.LastPush) {
 		if err := l.forge.Comment(ctx, repoPath, t.Branch, section); err != nil {
-			return l.event(ctx, url, store.EventPushFailed, err.Error())
+			return l.refuse(ctx, url, store.EventPushFailed, err.Error())
 		}
 	}
 
 	baseSHA, err := git.RevParse(ctx, repoPath, "origin/"+base)
 	if err != nil {
-		return fmt.Errorf("resolve origin/%s: %w", base, err)
+		return handled{}, fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
 	push := store.Push{
 		Ticket: plan.TicketURL(url), Tip: p.LocalTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
 		Protected: protected,
 	}
 	if err := l.store.RecordPush(ctx, push); err != nil {
-		return fmt.Errorf("record push of %s: %w", t.Branch, err)
+		return handled{}, fmt.Errorf("record push of %s: %w", t.Branch, err)
 	}
-	return l.event(ctx, url, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", p.LocalTip, base))
+	return succeeded, l.event(ctx, url, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", p.LocalTip, base))
 }

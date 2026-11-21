@@ -268,6 +268,29 @@ func TestPush(t *testing.T) {
 		if len(pending) != 0 {
 			t.Errorf("PendingVerbIntents(retry-push) = %+v, want none", pending)
 		}
+		if rec := intentOf(t, f.Store, plan.VerbRetryPush); rec.Outcome != plan.IntentDone {
+			t.Errorf("retry-push outcome = %q, want %q", rec.Outcome, plan.IntentDone)
+		}
+	})
+
+	t.Run("a retry-push whose create fails ends failed with the error", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingCreate{f.Forge}))
+		f.tick(t)
+		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: f.Ticket.URL, Verb: plan.VerbRetryPush, At: testAt.Add(time.Second),
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent(retry-push): %v", err)
+		}
+		f.tick(t)
+
+		rec := intentOf(t, f.Store, plan.VerbRetryPush)
+		if rec.Outcome != plan.IntentFailed || !strings.Contains(rec.Detail, "forge refused") {
+			t.Errorf("retry-push record = outcome %q, detail %q, want failed with the forge error", rec.Outcome, rec.Detail)
+		}
 	})
 
 	t.Run("a ticket whose branch was removed ticks without error", func(t *testing.T) {

@@ -81,6 +81,11 @@ func TestResolve(t *testing.T) {
 		if !hasEventIn(t, c.store, storepkg.EventResolveStarted, pair) {
 			t.Errorf("Events() has no resolve_started for %q", pair)
 		}
+		run := latest[plan.TicketURL(c.f.child.URL)].ID
+		rec := intentOf(t, c.store, plan.VerbResolve)
+		if rec.Run != option.Some(run) || rec.Outcome != plan.IntentInProgress {
+			t.Errorf("resolve record = run %v, outcome %q, want the spawned run %d and no outcome", rec.Run, rec.Outcome, run)
+		}
 	})
 
 	t.Run("refuses a second resolve at the same pair of tips", func(t *testing.T) {
@@ -104,6 +109,10 @@ func TestResolve(t *testing.T) {
 		}
 		if !hasEventIn(t, c.store, storepkg.EventResolveRefused, "already ran") {
 			t.Error("Events() has no resolve_refused saying a resolve already ran")
+		}
+		rec := intentOf(t, c.store, plan.VerbResolve)
+		if rec.Outcome != plan.IntentFailed || !strings.Contains(rec.Detail, "already ran") {
+			t.Errorf("resolve record = outcome %q, detail %q, want failed with the refusal", rec.Outcome, rec.Detail)
 		}
 	})
 
