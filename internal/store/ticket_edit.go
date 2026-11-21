@@ -60,30 +60,22 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 			return fmt.Errorf("read feature for %s: %w", ticketURL, err)
 		}
 		if feature != "" {
-			intended, err := featureTicketsWithOverride(ctx, q, feature, blockedByOverride{URL: ticketURL, BlockedBy: blockedBy})
+			intended, err := featureTicketsWithOverride(ctx, q, feature, ticketBlockedBy{URL: ticketURL, BlockedBy: blockedBy})
 			if err != nil {
 				return err
 			}
 			obs, _, err := lastObservation(ctx, q)
 			if err != nil {
-				return fmt.Errorf("read observation for closure check: %w", err)
-			}
-			featureOf, isMerged, err := closureLookups(ctx, q, intended, obs)
-			if err != nil {
 				return err
 			}
-			violation, err := closeUnderBlockedBy(feature, intended, featureOf, isMerged)
-			if err != nil {
+			if err := checkClosure(ctx, q, feature, intended, obs); err != nil {
 				return err
-			}
-			if violation != nil {
-				return violation
 			}
 		}
 
-		blob, err := encodeBlockedBy(blockedBy)
+		blob, err := encodeBlockedBy(ticketURL, blockedBy)
 		if err != nil {
-			return fmt.Errorf("encode blocked_by for %s: %w", ticketURL, err)
+			return err
 		}
 		n, err := q.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL})
 		return matchedRow(n, err, "edit ticket "+ticketURL)

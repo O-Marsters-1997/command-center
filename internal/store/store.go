@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/fs"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,6 +25,8 @@ import (
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+var ErrNotFound = errors.New("store: not found")
 
 const (
 	maxOpenConns     = 10
@@ -46,24 +47,35 @@ type Store struct {
 	q  *ccdb.Queries
 }
 
-type Option func(*sql.DB)
+type openConfig struct {
+	skipMigrate  bool
+	maxOpenConns int
+}
+
+type OpenOption func(*openConfig)
 
 // MaxOpenConns sets the store pool's concurrent connection limit.
-func MaxOpenConns(n int) Option { return func(db *sql.DB) { db.SetMaxOpenConns(n) } }
+func MaxOpenConns(n int) OpenOption { return func(c *openConfig) { c.maxOpenConns = n } }
+
+func SkipMigrate() OpenOption { return func(c *openConfig) { c.skipMigrate = true } }
 
 // Migrations exposes the embedded migrations used to key test database templates.
 func Migrations() fs.FS { return migrations }
 
 // OpenStore connects and migrates the database unless opened from a prepared test template.
-func OpenStore(dsn string, opts ...Option) (*Store, error) {
+func OpenStore(dsn string, opts ...OpenOption) (*Store, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
 	defer cancel()
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
+	oc := openConfig{maxOpenConns: maxOpenConns}
+	for _, opt := range opts {
+		opt(&oc)
+	}
 
-	if !strings.HasPrefix(cfg.Database, "cc_test_") || cfg.RuntimeParams["application_name"] != "cc-cctest-clone" {
+	if !oc.skipMigrate {
 		migrateDB := stdlib.OpenDB(*cfg)
 		if err := migrate(ctx, migrateDB); err != nil {
 			return nil, errors.Join(err, migrateDB.Close())
@@ -77,12 +89,9 @@ func OpenStore(dsn string, opts ...Option) (*Store, error) {
 		cfg.RuntimeParams["statement_timeout"] = strconv.FormatInt(statementTimeout.Milliseconds(), 10)
 	}
 	db := stdlib.OpenDB(*cfg)
-	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxOpenConns(oc.maxOpenConns)
 	db.SetMaxIdleConns(maxIdleConns)
 	db.SetConnMaxLifetime(connMaxLifetime)
-	for _, opt := range opts {
-		opt(db)
-	}
 	if err := db.PingContext(ctx); err != nil {
 		return nil, errors.Join(fmt.Errorf("ping pool: %w", err), db.Close())
 	}
@@ -125,9 +134,9 @@ func (s *Store) Close() error {
 func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
 	rows := make([]ticketRow, 0, len(tickets))
 	for _, t := range tickets {
-		blockedBy, err := encodeBlockedBy(t.BlockedBy)
+		blockedBy, err := encodeBlockedBy(t.URL, t.BlockedBy)
 		if err != nil {
-			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+			return err
 		}
 		row := ticketRow{
 			URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: blockedBy, Source: t.Source,
@@ -174,11 +183,6 @@ func lastPerURL(rows []ticketRow) []ticketRow {
 		unique = append(unique, row)
 	}
 	return unique
-}
-
-type blockedByUpdate struct {
-	URL       string          `json:"url"`
-	BlockedBy json.RawMessage `json:"blocked_by"`
 }
 
 func encodeJSON(what string, v any) (json.RawMessage, error) {
@@ -229,9 +233,9 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			Feature:  row.Feature,
 			SyncedAt: row.SyncedAt.Time,
 		}
-		blockedBy, err := decodeBlockedBy(row.BlockedBy)
+		blockedBy, err := decodeBlockedBy(row.URL, row.BlockedBy)
 		if err != nil {
-			return nil, fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+			return nil, err
 		}
 		t.BlockedBy = blockedBy
 		tickets = append(tickets, t)
@@ -248,8 +252,6 @@ func (e *FeatureConflictError) Error() string {
 	return fmt.Sprintf("ticket %s already belongs to feature %q, refusing to import it into %q",
 		e.URL, e.Existing, e.Importing)
 }
-
-func (e *FeatureConflictError) refusedTicket() string { return e.URL }
 
 // ImportTickets refreshes tracker rows, preserving seeded branch and blockers while pruning merged blockers.
 func (s *Store) ImportTickets(
@@ -289,9 +291,9 @@ func (s *Store) ImportRepoTickets(
 
 			returned[t.URL] = true
 			var blockedBy []byte
-			blockedBy, err = encodeBlockedBy(t.BlockedBy)
+			blockedBy, err = encodeBlockedBy(t.URL, t.BlockedBy)
 			if err != nil {
-				return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+				return err
 			}
 			rows = append(rows, ticketRow{
 				URL: t.URL, Repo: t.Repo, Source: t.Source, Feature: feature, Title: t.Title, Body: t.Body,
@@ -313,7 +315,7 @@ func (s *Store) ImportRepoTickets(
 		}
 		obs, _, err := lastObservation(ctx, qtx)
 		if err != nil {
-			return fmt.Errorf("read observation for blocker repair: %w", err)
+			return err
 		}
 
 		intended := make([]ticketBlockedBy, 0, len(returned))
@@ -322,22 +324,14 @@ func (s *Store) ImportRepoTickets(
 				continue
 			}
 			var blockedBy []string
-			blockedBy, err = decodeBlockedBy(row.BlockedBy)
+			blockedBy, err = decodeBlockedBy(row.URL, row.BlockedBy)
 			if err != nil {
-				return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+				return err
 			}
 			intended = append(intended, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
 		}
-		featureOf, isMerged, err := closureLookups(ctx, qtx, intended, obs)
-		if err != nil {
+		if err = checkClosure(ctx, qtx, feature, intended, obs); err != nil {
 			return err
-		}
-		violation, err := closeUnderBlockedBy(feature, intended, featureOf, isMerged)
-		if err != nil {
-			return err
-		}
-		if violation != nil {
-			return violation
 		}
 
 		dropped := []string{}
@@ -382,11 +376,11 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 	if err != nil {
 		return fmt.Errorf("list tickets for blocker repair: %w", err)
 	}
-	updates := []blockedByUpdate{}
+	updates := []ticketBlockedBy{}
 	for _, row := range rows {
-		blockedBy, err := decodeBlockedBy(row.BlockedBy)
+		blockedBy, err := decodeBlockedBy(row.URL, row.BlockedBy)
 		if err != nil {
-			return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+			return err
 		}
 		pruned := make([]string, 0, len(blockedBy))
 		changed := false
@@ -400,11 +394,7 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 		if !changed {
 			continue
 		}
-		blob, err := encodeBlockedBy(pruned)
-		if err != nil {
-			return fmt.Errorf("encode blocked_by for %s: %w", row.URL, err)
-		}
-		updates = append(updates, blockedByUpdate{URL: row.URL, BlockedBy: blob})
+		updates = append(updates, ticketBlockedBy{URL: row.URL, BlockedBy: pruned})
 	}
 	if len(updates) == 0 {
 		return nil
@@ -454,18 +444,18 @@ func matchedRow(n int64, err error, what string) error {
 	return nil
 }
 
-func encodeBlockedBy(urls []string) ([]byte, error) {
+func encodeBlockedBy(url string, urls []string) ([]byte, error) {
 	blob, err := json.Marshal(nonNil(urls))
 	if err != nil {
-		return nil, fmt.Errorf("marshal blocked_by: %w", err)
+		return nil, fmt.Errorf("encode blocked_by for %s: %w", url, err)
 	}
 	return blob, nil
 }
 
-func decodeBlockedBy(raw []byte) ([]string, error) {
+func decodeBlockedBy(url string, raw []byte) ([]string, error) {
 	var urls []string
 	if err := json.Unmarshal(raw, &urls); err != nil {
-		return nil, fmt.Errorf("unmarshal blocked_by: %w", err)
+		return nil, fmt.Errorf("decode blocked_by for %s: %w", url, err)
 	}
 	return urls, nil
 }
@@ -475,14 +465,6 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-func notNull(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: true}
-}
-
-func notNullTime(t time.Time) sql.NullTime {
-	return sql.NullTime{Time: t, Valid: true}
 }
 
 const (
@@ -496,7 +478,7 @@ const (
 func (s *Store) checkingTicks(ctx context.Context) (map[plan.TicketURL]int, error) {
 	ticks := map[plan.TicketURL]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
-		return nil, fmt.Errorf("read %s meta: %w", metaCheckingTicks, err)
+		return nil, err
 	}
 	return ticks, nil
 }
@@ -504,53 +486,41 @@ func (s *Store) checkingTicks(ctx context.Context) (map[plan.TicketURL]int, erro
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.TicketURL) error {
 	ticks, err := s.checkingTicks(ctx)
 	if err != nil {
-		return fmt.Errorf("read checking ticks: %w", err)
+		return err
 	}
 	for _, url := range ticketURLs {
 		ticks[url]++
 	}
-	if err := s.putMeta(ctx, metaCheckingTicks, ticks); err != nil {
-		return fmt.Errorf("write %s meta: %w", metaCheckingTicks, err)
-	}
-	return nil
+	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
 func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL) error {
 	ticks, err := s.checkingTicks(ctx)
 	if err != nil {
-		return fmt.Errorf("read checking ticks: %w", err)
+		return err
 	}
 	if _, ok := ticks[ticketID]; !ok {
 		return nil
 	}
 	delete(ticks, ticketID)
-	if err := s.putMeta(ctx, metaCheckingTicks, ticks); err != nil {
-		return fmt.Errorf("write %s meta: %w", metaCheckingTicks, err)
-	}
-	return nil
+	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
 func (s *Store) lastVerdicts(ctx context.Context) (map[string]string, error) {
 	verdicts := map[string]string{}
 	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
-		return nil, fmt.Errorf("read %s meta: %w", metaLastVerdicts, err)
+		return nil, err
 	}
 	return verdicts, nil
 }
 
 func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string) error {
-	if err := s.putMeta(ctx, metaLastVerdicts, verdicts); err != nil {
-		return fmt.Errorf("write %s meta: %w", metaLastVerdicts, err)
-	}
-	return nil
+	return s.putMeta(ctx, metaLastVerdicts, verdicts)
 }
 
 // SaveObservation replaces the persisted observation after a successful tick.
 func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error {
-	if err := s.putMeta(ctx, metaObservation, obs); err != nil {
-		return fmt.Errorf("write %s meta: %w", metaObservation, err)
-	}
-	return nil
+	return s.putMeta(ctx, metaObservation, obs)
 }
 
 func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, error) {
@@ -560,15 +530,12 @@ func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, er
 func lastObservation(ctx context.Context, q *ccdb.Queries) (plan.Observation, bool, error) {
 	var obs plan.Observation
 	found, err := getMeta(ctx, q, metaObservation, &obs)
-	if err != nil {
-		return obs, found, fmt.Errorf("read %s meta: %w", metaObservation, err)
-	}
-	return obs, found, nil
+	return obs, found, err
 }
 
 func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	if err := s.putMeta(ctx, metaLastError, tickErr); err != nil {
-		return fmt.Errorf("write %s meta: %w", metaLastError, err)
+		return err
 	}
 	if err := s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message}); err != nil {
 		return fmt.Errorf("append tick error event: %w", err)
@@ -581,7 +548,7 @@ func (s *Store) LastError(ctx context.Context) (option.Option[TickError], error)
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
 	if err != nil {
-		return option.None[TickError](), fmt.Errorf("read %s meta: %w", metaLastError, err)
+		return option.None[TickError](), err
 	}
 	if !found {
 		return option.None[TickError](), nil
@@ -596,20 +563,13 @@ type ImportError struct {
 	Message string    `json:"message"`
 }
 
-type importRefusal interface {
-	error
-	refusedTicket() string
-}
-
 // RecordImportRefusal persists the last import refusal and appends an audit event.
-func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal importRefusal, now time.Time) error {
-	importErr := ImportError{At: now, Feature: feature, Message: refusal.Error()}
+func (s *Store) RecordImportRefusal(ctx context.Context, feature, ticketURL, message string, now time.Time) error {
+	importErr := ImportError{At: now, Feature: feature, Message: message}
 	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
-		return fmt.Errorf("write %s meta: %w", metaImportError, err)
+		return err
 	}
-	err := s.AppendEvent(ctx, Event{
-		At: now, TicketURL: refusal.refusedTicket(), Kind: EventImportRefused, Detail: refusal.Error(),
-	})
+	err := s.AppendEvent(ctx, Event{At: now, TicketURL: ticketURL, Kind: EventImportRefused, Detail: message})
 	if err != nil {
 		return fmt.Errorf("append import refusal event: %w", err)
 	}
@@ -621,7 +581,7 @@ func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) 
 	var importErr ImportError
 	found, err := s.getMeta(ctx, metaImportError, &importErr)
 	if err != nil {
-		return importErr, found, fmt.Errorf("read %s meta: %w", metaImportError, err)
+		return importErr, found, err
 	}
 	return importErr, found, nil
 }
@@ -638,7 +598,7 @@ type Event struct {
 func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	err := s.q.AppendEvent(ctx, ccdb.AppendEventParams{
 		At:       e.At.UTC(),
-		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
+		TicketID: nullIfEmpty(e.TicketURL),
 		Kind:     string(e.Kind),
 		Detail:   e.Detail,
 	})
@@ -650,7 +610,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 
 func (s *Store) HasEventDetail(ctx context.Context, ticketURL string, kind EventKind, detail string) (bool, error) {
 	found, err := s.q.HasEventDetail(ctx, ccdb.HasEventDetailParams{
-		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
+		TicketID: nullIfEmpty(ticketURL),
 		Kind:     string(kind),
 		Detail:   detail,
 	})
@@ -683,7 +643,7 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 
 func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID int64, limit int) ([]Event, error) {
 	rows, err := s.q.ListTicketEventsAfter(ctx, ccdb.ListTicketEventsAfterParams{
-		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
+		TicketID: nullIfEmpty(ticketURL),
 		AfterID:  afterID,
 		MaxRows:  int32(limit),
 	})

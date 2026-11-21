@@ -91,7 +91,7 @@ func appConfig(t *testing.T) string {
 
 func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	t.Helper()
-	db, err := store.OpenStore(dsn, store.MaxOpenConns(4))
+	db, err := store.OpenStore(dsn, store.MaxOpenConns(4), store.SkipMigrate())
 	if err != nil {
 		t.Fatalf("OpenStore(%s): %v", dsn, err)
 	}

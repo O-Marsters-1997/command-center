@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"slices"
 	"strings"
@@ -78,7 +77,7 @@ func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 		Name: r.Name, State: string(r.Phase),
 		RefusalKind: nullIfEmpty(string(r.RefusalKind)), Refusal: nullIfEmpty(r.Refusal),
 		SettingsSource: nullIfEmpty(r.SettingsSource),
-		SettingsReadAt: sql.NullTime{Time: r.SettingsReadAt.UTC(), Valid: !r.SettingsReadAt.IsZero()},
+		SettingsReadAt: nullTime(r.SettingsReadAt),
 	})
 	return matchedRow(n, err, fmt.Sprintf("set repo %s phase %s", r.Name, r.Phase))
 }
@@ -106,8 +105,4 @@ func (s *Store) TrackPending(ctx context.Context, repo string) (bool, error) {
 		return false, fmt.Errorf("select pending track intents: %w", err)
 	}
 	return slices.ContainsFunc(intents, func(i VerbIntent) bool { return strings.EqualFold(i.TicketID, repo) }), nil
-}
-
-func nullIfEmpty(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: s != ""}
 }
