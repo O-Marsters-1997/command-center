@@ -33,6 +33,9 @@ func writeFile(t *testing.T, content string) string {
 func agentScript(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "agent.sh")
+	// A parallel fork can inherit the write fd: https://github.com/golang/go/issues/22315
+	syscall.ForkLock.RLock()
+	defer syscall.ForkLock.RUnlock()
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o755); err != nil {
 		t.Fatalf("WriteFile(agent script): %v", err)
 	}
