@@ -67,6 +67,81 @@ func TestSnapshot_AutoFollowUps(t *testing.T) {
 	}
 }
 
+func TestSnapshot_AutoRemovals(t *testing.T) {
+	t.Parallel()
+	first := ticket("1", "cc-1")
+
+	tests := []struct {
+		name     string
+		pr       plan.PRState
+		worktree bool
+		intents  []plan.Intent
+		held     []plan.Intent
+		refusals map[plan.TicketURL]string
+		want     []plan.TicketURL
+	}{
+		{name: "merged with a worktree", pr: plan.Merged, worktree: true, want: []plan.TicketURL{first.URL}},
+		{name: "open pull request", pr: plan.Open, worktree: true},
+		{name: "worktree already gone", pr: plan.Merged},
+		{name: "intent pending", pr: plan.Merged, worktree: true,
+			intents: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
+		{name: "intent held for undo", pr: plan.Merged, worktree: true,
+			held: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
+		{name: "removal refused before", pr: plan.Merged, worktree: true,
+			refusals: map[plan.TicketURL]string{first.URL: "worktree is dirty"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			obs := plan.NewObservation(time.Time{})
+			obs.PRs[key(first.Branch)] = plan.PR{Number: 1, State: tt.pr}
+			if tt.worktree {
+				obs.Worktrees[key(first.Branch)] = "/wt/cc-1"
+			}
+			snap := derive(plan.Rules{}, plan.Input{
+				Tickets: []plan.Ticket{first}, Obs: obs,
+				Runs:     map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
+				Intents:  map[plan.TicketURL][]plan.Intent{first.URL: tt.intents},
+				Held:     map[plan.TicketURL][]plan.Intent{first.URL: tt.held},
+				Removals: tt.refusals,
+			})
+			if diff := cmp.Diff(tt.want, snap.AutoRemovals(), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("AutoRemovals() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSnapshot_Undoable(t *testing.T) {
+	t.Parallel()
+	first := ticket("1", "cc-1")
+
+	tests := []struct {
+		name string
+		pr   plan.PRState
+		url  plan.TicketURL
+		want bool
+	}{
+		{name: "open pull request", pr: plan.Open, url: first.URL, want: true},
+		{name: "merged pull request", pr: plan.Merged, url: first.URL},
+		{name: "unknown ticket", pr: plan.Open, url: "sandbox://missing"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			obs := plan.NewObservation(time.Time{})
+			obs.PRs[key(first.Branch)] = plan.PR{Number: 1, State: tt.pr}
+			snap := derive(plan.Rules{}, plan.Input{
+				Tickets: []plan.Ticket{first}, Obs: obs,
+				Runs: map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
+			})
+			if got := snap.Undoable(tt.url); got != tt.want {
+				t.Errorf("Undoable(%q) = %t, want %t", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSnapshot_AutoFollowUps_VerifyFailed(t *testing.T) {
 	t.Parallel()
 	first := ticket("1", "cc-1")

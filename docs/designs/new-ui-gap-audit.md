@@ -101,8 +101,8 @@ and the token system (21). Everything else can follow the migration.
 ### 3. Settle, auto-settle on merge, Undo — partial
 
 - **Evidence:**
-  - Auto-settle is effectively there: `PRMerged` (`plan.go:250-251`) offers only
-    `remove-worktree` (`verbs.go:46-47`).
+  - Auto-settle is there: the loop removes a merged ticket's worktree without a verb
+    ([ADR 25](../adr/0025-merged-work-removes-its-worktree.md)).
   - There is no stored acknowledgement, dismiss or archive for a non-merged ticket. `launches.state`
     is launch-level.
 - **Overlap:** ADR 15 and ADR 11. A manual settle is a stored human fact, not a derived state, so it

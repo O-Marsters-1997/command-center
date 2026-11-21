@@ -71,6 +71,25 @@ func parkExhausted(state State, reason Reason, history AutoHistory) (State, Reas
 	return Parked, Reason(fmt.Sprintf("still failing after %d automatic follow-ups: %s", history.Rounds, reason))
 }
 
+func (s Snapshot) AutoRemovals() []TicketURL {
+	var out []TicketURL
+	for _, e := range s.Entries {
+		_, present := s.obs.Worktrees[e.Ticket.Ref()]
+		_, refused := s.refusals[e.Ticket.URL]
+		queued := len(s.intents[e.Ticket.URL]) + len(s.held[e.Ticket.URL])
+		if e.State != PRMerged || !present || refused || queued > 0 {
+			continue
+		}
+		out = append(out, e.Ticket.URL)
+	}
+	return out
+}
+
+func (s Snapshot) Undoable(url TicketURL) bool {
+	e, ok := s.Entry(url)
+	return ok && e.State != PRMerged
+}
+
 type Rerun struct {
 	Ticket     TicketURL
 	DetailsURL string

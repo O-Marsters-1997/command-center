@@ -787,6 +787,38 @@ func testVerbFromSession(t *testing.T) {
 		}
 	})
 
+	t.Run("remove-worktree on a merged session offers no undo", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomePush,
+		})
+		obs := plan.Observation{
+			ObservedAt: testNow,
+			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
+			PRs: map[plan.BranchRef]plan.PR{
+				branchRef("acme/web", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow},
+			},
+		}
+		if err := st.SaveObservation(t.Context(), obs); err != nil {
+			t.Fatalf("SaveObservation: %v", err)
+		}
+
+		queued := htmltest.Parse(t, do(t, newServer(st, testNow), http.MethodPost, "/verb", req{
+			Form:   url.Values{"verb": {"remove-worktree"}, "ticket": {sessionTicket}, "from": {"session"}},
+			Header: http.Header{"Hx-Request": {"true"}},
+		}).Body)
+		if undo := queued.Find(`.toast form[hx-post="/verb/undo"]`); len(undo) != 0 {
+			t.Errorf("htmx POST /verb remove-worktree on a merged session offers undo: %s", undo[0].HTML())
+		}
+		pending, err := st.PendingVerbIntents(t.Context(), plan.VerbRemoveWorktree)
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(remove-worktree): %v", err)
+		}
+		if len(pending) != 1 || !pending[0].HoldUntil.IsZero() {
+			t.Errorf("pending remove-worktree intents = %+v, want one with no hold", pending)
+		}
+	})
+
 	t.Run("a plain verb redirects back to the session", func(t *testing.T) {
 		t.Parallel()
 		st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})

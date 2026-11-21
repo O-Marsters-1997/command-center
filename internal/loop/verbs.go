@@ -243,16 +243,28 @@ func (l *Loop) reRunOne(
 }
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
+	handled := map[plan.TicketURL]bool{}
 	return l.eachIntent(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent) error {
 		e, ok := snap.Entry(intent.Ticket)
-		if !ok {
+		if !ok || handled[intent.Ticket] {
 			return nil
 		}
+		handled[intent.Ticket] = true
 		if err := l.removeWorktreeOne(ctx, e, snap.Removal(e.Ticket.URL), obs); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		return nil
 	})
+}
+
+func (l *Loop) queueAutoRemovals(ctx context.Context, snap plan.Snapshot) error {
+	for _, url := range snap.AutoRemovals() {
+		request := store.VerbRequest{Ticket: string(url), Verb: plan.VerbRemoveWorktree, At: l.clock.Now()}
+		if _, err := l.store.QueueVerbIntent(ctx, request); err != nil {
+			return fmt.Errorf("queue removal of %s: %w", url, err)
+		}
+	}
+	return nil
 }
 
 func (l *Loop) removeWorktreeOne(

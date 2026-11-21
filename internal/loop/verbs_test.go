@@ -106,6 +106,11 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
 	}
+	return f.tick(t, obs, at)
+}
+
+func (f removeWorktreeFixture) tick(t *testing.T, obs plan.Observation, at time.Time) error {
+	t.Helper()
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	worktreeOption := loop.WithWorktrees(git.Library{})
 	switch {
@@ -161,6 +166,149 @@ func TestRemoveWorktree(t *testing.T) {
 		}
 		if len(tickets) != 0 {
 			t.Errorf("tickets = %+v, want the merged ticket's row dropped from the fleet", tickets)
+		}
+	})
+
+	t.Run("queues and removes a merged worktree without a verb", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoveWorktreeFixture(t, "cc-1")
+		obs := plan.Observation{
+			Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+		}
+
+		if err := f.tick(t, obs, f.at.Add(time.Second)); err != nil {
+			t.Fatalf("RunOnce (queue): %v", err)
+		}
+		pending, err := f.store.PendingIntents(t.Context())
+		if err != nil {
+			t.Fatalf("PendingIntents(): %v", err)
+		}
+		if got := pending[plan.TicketURL(f.ticket.URL)]; len(got) != 1 || got[0].Verb != plan.VerbRemoveWorktree {
+			t.Fatalf("pending intents = %+v, want one remove-worktree", got)
+		}
+
+		if err := f.tick(t, obs, f.at.Add(2*time.Second)); err != nil {
+			t.Fatalf("RunOnce (remove): %v", err)
+		}
+		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
+			t.Errorf("worktree still exists at %s", f.worktreePath)
+		}
+		events, err := f.store.Events(t.Context())
+		if err != nil {
+			t.Fatalf("Events(): %v", err)
+		}
+		if !hasEvent(events, "worktree_removed", "") {
+			t.Error("no worktree_removed event")
+		}
+	})
+
+	t.Run("removes once when the verb and the loop both queued it", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoveWorktreeFixture(t, "cc-1")
+		obs := plan.Observation{
+			Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+		}
+		at := f.at.Add(time.Second)
+		for range 2 {
+			if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+				Ticket: f.ticket.URL, Verb: plan.VerbRemoveWorktree, At: at,
+			}); err != nil {
+				t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
+			}
+		}
+
+		if err := f.tick(t, obs, at); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+
+		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
+			t.Errorf("worktree still exists at %s", f.worktreePath)
+		}
+		events, err := f.store.Events(t.Context())
+		if err != nil {
+			t.Fatalf("Events(): %v", err)
+		}
+		if hasEvent(events, storepkg.EventRemoveWorktreeRefused, "") {
+			t.Error("the duplicate intent recorded a refusal")
+		}
+		pending, err := f.store.PendingIntents(t.Context())
+		if err != nil {
+			t.Fatalf("PendingIntents(): %v", err)
+		}
+		if got := pending[plan.TicketURL(f.ticket.URL)]; len(got) != 0 {
+			t.Errorf("pending intents = %+v, want both consumed", got)
+		}
+	})
+
+	t.Run("leaves a removal held for undo alone", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoveWorktreeFixture(t, "cc-1")
+		obs := plan.Observation{
+			Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+		}
+		at := f.at.Add(time.Second)
+		if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: f.ticket.URL, Verb: plan.VerbRemoveWorktree, At: at, HoldUntil: at.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent(%q, held remove-worktree): %v", f.ticket.URL, err)
+		}
+
+		if err := f.tick(t, obs, at); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+
+		if _, err := os.Stat(f.worktreePath); err != nil {
+			t.Errorf("worktree while the removal is held: %v, want it preserved", err)
+		}
+		pending, err := f.store.PendingIntents(t.Context())
+		if err != nil {
+			t.Fatalf("PendingIntents(): %v", err)
+		}
+		if got := pending[plan.TicketURL(f.ticket.URL)]; len(got) != 1 {
+			t.Errorf("pending intents = %+v, want only the held one", got)
+		}
+	})
+
+	t.Run("leaves a refused auto-removal in place and never requeues it", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoveWorktreeFixture(t, "cc-1")
+		f.failRemove = true
+		obs := plan.Observation{
+			Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+		}
+
+		for i := range 3 {
+			if err := f.tick(t, obs, f.at.Add(time.Duration(i+1)*time.Second)); err != nil {
+				t.Fatalf("RunOnce (tick %d): %v", i+1, err)
+			}
+		}
+
+		if _, err := os.Stat(f.worktreePath); err != nil {
+			t.Errorf("worktree after refused removal: %v, want it preserved", err)
+		}
+		pending, err := f.store.PendingIntents(t.Context())
+		if err != nil {
+			t.Fatalf("PendingIntents(): %v", err)
+		}
+		if got := pending[plan.TicketURL(f.ticket.URL)]; len(got) != 0 {
+			t.Errorf("pending intents after a refusal = %+v, want none requeued", got)
+		}
+		events, err := f.store.Events(t.Context())
+		if err != nil {
+			t.Fatalf("Events(): %v", err)
+		}
+		refusals := 0
+		for _, e := range events {
+			if e.Kind == storepkg.EventRemoveWorktreeRefused {
+				refusals++
+			}
+		}
+		if refusals != 1 {
+			t.Errorf("remove_worktree_refused events = %d, want 1", refusals)
 		}
 	})
 
