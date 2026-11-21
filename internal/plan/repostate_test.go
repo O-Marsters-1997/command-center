@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -27,6 +28,56 @@ func TestNormaliseRemote(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFullName(t *testing.T) {
+	t.Parallel()
+
+	for _, remote := range []string{
+		"git@github.com:O-Marsters-1997/command-center.git",
+		"https://github.com/O-Marsters-1997/command-center",
+		"ssh://git@github.com/O-Marsters-1997/command-center.git/",
+	} {
+		t.Run(remote, func(t *testing.T) {
+			t.Parallel()
+			got, err := plan.FullName(remote)
+			if err != nil || got != "O-Marsters-1997/command-center" {
+				t.Errorf("FullName(%q) = %q, %v, want O-Marsters-1997/command-center, nil", remote, got, err)
+			}
+		})
+	}
+
+	t.Run("errors", func(t *testing.T) {
+		t.Parallel()
+		for _, remote := range []string{
+			"", "/tmp/remote.git", "https://github.com/o", "https://host/a/b/c", "git@github.com:../evil.git",
+			"https://github.com/o/..", "githuB.Com:0/.git.git", "git@github.com:owner/repo.git.git",
+			"https://github.com/owner/repo.git.git",
+		} {
+			if got, err := plan.FullName(remote); err == nil {
+				t.Errorf("FullName(%q) = %q, want an error", remote, got)
+			}
+		}
+	})
+}
+
+var githubFullName = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
+
+func FuzzFullName(f *testing.F) {
+	f.Fuzz(func(t *testing.T, remote string) {
+		fullName, err := plan.FullName(remote)
+		if err != nil {
+			return
+		}
+		normal := plan.NormaliseRemote(remote)
+		if !strings.HasPrefix(normal, "github.com/") ||
+			!githubFullName.MatchString(strings.TrimPrefix(normal, "github.com/")) {
+			return
+		}
+		if normal != plan.NormaliseRemote("https://github.com/"+fullName) {
+			t.Errorf("FullName(%q) = %q, which does not name the same GitHub remote", remote, fullName)
+		}
+	})
 }
 
 func TestRepoRefusal(t *testing.T) {

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 )
 
 func Init(tb testing.TB) string {
@@ -39,13 +41,9 @@ func WithOrigin(tb testing.TB) (repo, origin string) {
 
 func Run(tb testing.TB, dir string, args ...string) string {
 	tb.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	out, err := command.Output(tb.Context(), dir, "git", args...)
 	if err != nil {
-		tb.Fatalf("git %v in %s: %v: %s", args, dir, err, stderr.String())
+		tb.Fatalf("run git: %v", err)
 	}
 	return strings.TrimSpace(string(out))
 }
@@ -67,16 +65,12 @@ func Commit(tb testing.TB, dir, file, body string) (sha string) {
 // HasRef reports whether ref resolves; a git failure other than exit 1 fails tb.
 func HasRef(tb testing.TB, dir, ref string) bool {
 	tb.Helper()
-	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", ref)
-	cmd.Dir = dir
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	if _, err := cmd.Output(); err != nil {
+	if _, err := command.Output(tb.Context(), dir, "git", "rev-parse", "--verify", "--quiet", ref); err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && exit.ExitCode() == 1 {
 			return false
 		}
-		tb.Fatalf("resolve ref %q in %s: %v: %s", ref, dir, err, stderr.String())
+		tb.Fatalf("resolve ref %q: %v", ref, err)
 	}
 	return true
 }

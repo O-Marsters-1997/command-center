@@ -49,17 +49,28 @@ func isNetworkTimeout(err error) bool {
 }
 
 func (c CLI) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	out, err := command.OrExec(c.Exec).Output(ctx, command.DefaultTimeout, dir, "gh", args...)
-	if err != nil {
-		return nil, fmt.Errorf("run gh: %w", err)
+	exec := c.Exec
+	if exec == nil {
+		exec = command.OutputWithin
 	}
-	return out, nil
+	return exec(ctx, command.DefaultTimeout, dir, "gh", args...)
 }
 
 func Decode[T any](raw []byte) (T, error) {
 	var decoded T
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return decoded, fmt.Errorf("decode %T: %w", decoded, err)
+	}
+	return decoded, nil
+}
+
+func DecodePage[T any](raw []byte) ([]T, error) {
+	decoded, err := Decode[[]T](raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(decoded) >= ListLimit {
+		return nil, &FullPageError{Limit: ListLimit}
 	}
 	return decoded, nil
 }

@@ -324,6 +324,19 @@ func TestRevParse(t *testing.T) {
 	}
 }
 
+func TestSucceeds(t *testing.T) {
+	t.Parallel()
+
+	_, err := git.Succeeds(t.Context(), gittest.Init(t), "merge-base", "--is-ancestor", "nope", "HEAD")
+	cmdErr, ok := errors.AsType[*command.Error](err)
+	if !ok {
+		t.Fatalf("Succeeds(unresolved ref) error = %v, want *command.Error", err)
+	}
+	if _, nested := errors.AsType[*command.Error](cmdErr.Unwrap()); nested {
+		t.Errorf("Succeeds(unresolved ref) error = %v, names the git command more than once", err)
+	}
+}
+
 func TestCommitsSince(t *testing.T) {
 	t.Parallel()
 

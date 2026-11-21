@@ -20,7 +20,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/rogpeppe/go-internal/testscript"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -260,7 +259,7 @@ func trackRepos(ts *testscript.TestScript, blocks []map[string]any) {
 	for _, block := range blocks {
 		name, _ := block["name"].(string)
 		remote, _ := block["remote"].(string)
-		fullName, err := git.FullName(remote)
+		fullName, err := plan.FullName(remote)
 		ts.Check(err)
 		checkout := config.CheckoutPath(ts.Getenv("CC_DATA_DIR"), fullName)
 		if _, err := os.Lstat(checkout); errors.Is(err, os.ErrNotExist) {
