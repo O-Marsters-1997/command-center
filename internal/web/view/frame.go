@@ -67,7 +67,12 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 		return frame{}, fmt.Errorf("load activities: %w", err)
 	}
 	applyActivities(f.rows, activities, now)
+	history, err := r.store.IntentHistory(ctx, now.Add(-trayHistory))
+	if err != nil {
+		return frame{}, fmt.Errorf("load intent history: %w", err)
+	}
 	f.chrome = r.buildChrome(f)
+	f.chrome.Tray = buildTray(history, f.in.Runs, now)
 	f.chrome.scopeToProject(f.project)
 	f.chrome.ScopeMenu = scopeChoices(ScopeList(projects, f.repos), f.project.Name, p.Repo)
 	f.chrome.RefusedRepos = refusedRepos(f.repos)

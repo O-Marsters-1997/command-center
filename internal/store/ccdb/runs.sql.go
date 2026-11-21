@@ -218,7 +218,7 @@ SELECT id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
   COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
   COALESCE(ticket_state, '')::text AS ticket_state
 FROM intents
-WHERE at >= $1 OR finished_at IS NULL
+WHERE verb <> 'edit_ticket' AND (at >= $1 OR finished_at IS NULL)
 ORDER BY id DESC
 `
 
