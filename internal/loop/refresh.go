@@ -51,7 +51,7 @@ func (l *Loop) refreshOne(
 	url := string(ticket.URL)
 	branch := ticket.Branch
 	refuse := func(detail string) error {
-		if !requested {
+		if !requested || snap.Conflict(ticket.URL).IsSome() {
 			return nil
 		}
 		return l.event(ctx, url, store.EventRefreshRefused, detail)
