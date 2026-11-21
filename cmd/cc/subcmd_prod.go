@@ -2,10 +2,8 @@
 
 package main
 
-import (
-	"github.com/O-Marsters-1997/command-center/internal/app"
-)
+import "github.com/O-Marsters-1997/command-center/internal/app"
 
-func subcmd(args []string) command { return openSubcmd(args) }
+func e2eCommands() map[string]command { return nil }
 
-func appOptions() []app.Option { return nil }
+func appSeams() app.Seams { return app.Seams{} }

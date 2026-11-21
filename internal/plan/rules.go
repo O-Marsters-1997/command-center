@@ -6,7 +6,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
-const SettingsFile = ".command-centre.toml"
+const (
+	SettingsFile  = ".command-centre.toml"
+	TrackerGitHub = "github"
+)
 
 type RaiseMode string
 
@@ -45,6 +48,10 @@ type Daemon struct {
 	MaxVerifies  int
 	SpendLimit5h int
 	Workflows    map[string]Workflow
+}
+
+func (d Daemon) Derive(in Input) Snapshot {
+	return RulesFor(d, in.Obs).Derive(in)
 }
 
 func RulesFor(daemon Daemon, obs Observation) Rules {

@@ -4,7 +4,7 @@
 {{template "shellContent" .}}
 <h1>Launch a feature</h1>
 <div id="launch-modal">
-{{- if .Launch}}{{template "launchDialog" .Launch -}}
+{{- if .Launch.IsSome}}{{template "launchDialog" .Launch.Unwrap -}}
 {{- else -}}
 <dialog class="launch-dialog launch-dialog-picker" open aria-labelledby="launch-dialog-title">
 <header class="launch-head">

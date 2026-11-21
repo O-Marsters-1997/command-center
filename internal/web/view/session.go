@@ -221,13 +221,9 @@ type RawLog struct {
 func (r *Reader) Session(
 	ctx context.Context, now time.Time, ref SessionRef, raw option.Option[RawFilter],
 ) (SessionPage, error) {
-	board, err := r.Board(ctx, now, Params{})
+	board, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
-		return SessionPage{}, fmt.Errorf("load board: %w", err)
-	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return SessionPage{}, ErrSessionNotFound
+		return SessionPage{}, err
 	}
 	ticketURL := row.URL
 
@@ -241,11 +237,7 @@ func (r *Reader) Session(
 			pendingMessages = append(pendingMessages, store.DecodeFollowUpPayload(intent.Payload).Message)
 		}
 	}
-	snap, err := r.Snapshot(ctx, now)
-	if err != nil {
-		return SessionPage{}, fmt.Errorf("load snapshot: %w", err)
-	}
-	entry, _ := snap.Entry(plan.TicketURL(ticketURL))
+	entry, _ := board.snap.Entry(plan.TicketURL(ticketURL))
 	model := cmp.Or(entry.Ticket.Choice.Model, config.AgentModel)
 	models := config.AgentModels()
 	if !slices.Contains(models, model) {
@@ -295,12 +287,8 @@ func (r *Reader) Session(
 	if raw.IsNone() {
 		turns = buildTurns(row, runs)
 	}
-	fits, err := r.store.FitFactors(ctx, now)
-	if err != nil {
-		return SessionPage{}, fmt.Errorf("load fit factors: %w", err)
-	}
 	steps, selected := buildSteps(runs, stepInputs{
-		live: worked, alive: row.Alive, factor: fits[agentlog.SevenDay].Factor, pick: ref.Run,
+		live: worked, alive: row.Alive, factor: board.split[agentlog.SevenDay].Fit.Factor, pick: ref.Run,
 	})
 	picked := slices.IndexFunc(runs, func(run store.SessionRun) bool { return plan.RunID(run.ID) == ref.Run })
 	if picked >= 0 && raw.IsNone() {

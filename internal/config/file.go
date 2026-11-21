@@ -69,18 +69,16 @@ func resolve(f fileConfig, env Env) (Config, error) {
 	return cfg, nil
 }
 
-const agentCommandEnv = "CC_AGENT_COMMAND"
-
 func agentCommandFrom(configured []string, env Env) ([]string, error) {
 	if env.AgentCommand == "" {
 		return configured, nil
 	}
 	var argv []string
 	if err := json.Unmarshal([]byte(env.AgentCommand), &argv); err != nil {
-		return nil, fmt.Errorf("%s is not a JSON array of strings: %w", agentCommandEnv, err)
+		return nil, fmt.Errorf("%s is not a JSON array of strings: %w", AgentCommandEnv, err)
 	}
 	if len(argv) == 0 {
-		return nil, fmt.Errorf("%s is an empty array", agentCommandEnv)
+		return nil, fmt.Errorf("%s is an empty array", AgentCommandEnv)
 	}
 	return argv, nil
 }

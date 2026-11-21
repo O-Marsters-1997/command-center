@@ -51,5 +51,5 @@ func Load(path string, env Env) (Config, error) {
 }
 
 func CheckoutPath(dataDir, fullName string) string {
-	return filepath.Join(dataDir, "repos", filepath.FromSlash(fullName))
+	return filepath.Join(dataDir, reposDirName, filepath.FromSlash(fullName))
 }

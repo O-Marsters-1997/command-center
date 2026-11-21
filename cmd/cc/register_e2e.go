@@ -7,15 +7,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
-func subcmd(args []string) command {
-	if cmd := register.Lookup(args); cmd != nil {
-		return cmd
+func e2eCommands() map[string]command {
+	cmds := map[string]command{}
+	for name, cmd := range register.Commands() {
+		cmds[name] = cmd
 	}
-	return openSubcmd(args)
+	return cmds
 }
 
-func appOptions() []app.Option {
-	return []app.Option{
-		app.WithValidator(register.SandboxValidate), app.WithRemoteSource(register.SandboxRemote),
-	}
-}
+func appSeams() app.Seams { return register.Seams() }

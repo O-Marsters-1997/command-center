@@ -234,7 +234,6 @@ func TestBuildRail(t *testing.T) {
 				row.Verbs = []plan.Verb{plan.VerbRemoveWorktree}
 				row.PendingVerbs = tt.pending
 				row.Refusal = tt.refusal
-				row.Warning = "ready-to-merge on a non-main base (main): would squash into the parent branch"
 
 				item := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
 

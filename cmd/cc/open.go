@@ -19,13 +19,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func openSubcmd(args []string) command {
-	if len(args) == 0 || args[0] != "open" {
-		return nil
-	}
-	return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
-		return open(ctx, configPath, env, os.Stdout, os.Stderr)
-	}
+func openSubcmd(ctx context.Context, _ *slog.Logger, configPath string, env config.Env, _ []string) error {
+	return open(ctx, configPath, env, os.Stdout, os.Stderr)
 }
 
 func open(ctx context.Context, configPath string, env config.Env, stdout, stderr io.Writer) error {

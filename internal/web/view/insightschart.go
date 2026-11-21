@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"fmt"
-	"slices"
 	"strconv"
+	"time"
 )
 
 const (
@@ -71,14 +72,11 @@ func buildInsightsChart(resp InsightsResponse) InsightsChart {
 	chart.MedianPath = polyline(len(medians), scaleX, func(i int) float64 { return scaleY(medians[i]) })
 
 	for i, p := range resp.Points {
-		name := p.Title
-		if name == "" {
-			name = p.Ticket
-		}
 		chart.Dots[i] = insightsDot{
 			X: scaleX(i), Y: scaleY(p.PctWeek),
 			Title: fmt.Sprintf("%s: %.2f%% week (agent %.2f, follow-up %.2f), merged %s",
-				name, p.PctWeek, p.AgentPctWeek, p.FollowUpPctWeek, p.MergedAt),
+				cmp.Or(p.Title, p.Ticket), p.PctWeek, p.AgentPctWeek, p.FollowUpPctWeek,
+				p.MergedAt.UTC().Format(time.RFC3339)),
 		}
 	}
 
@@ -94,14 +92,7 @@ func buildInsightsChart(resp InsightsResponse) InsightsChart {
 func rollingMedian(values []float64, window int) []float64 {
 	medians := make([]float64, len(values))
 	for i := range values {
-		slice := slices.Clone(values[max(0, i-window+1) : i+1])
-		slices.Sort(slice)
-		mid := len(slice) / 2
-		if len(slice)%2 == 0 {
-			medians[i] = (slice[mid-1] + slice[mid]) / 2
-		} else {
-			medians[i] = slice[mid]
-		}
+		medians[i] = median(values[max(0, i-window+1) : i+1])
 	}
 	return medians
 }

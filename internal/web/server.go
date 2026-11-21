@@ -40,7 +40,6 @@ var templateFiles embed.FS
 
 var templates = template.Must(template.New("").
 	Funcs(template.FuncMap{
-		"percent":     view.PercentOf,
 		"pathEscape":  url.PathEscape,
 		"queryEscape": url.QueryEscape,
 	}).
@@ -114,7 +113,6 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/raise", s.handle(s.handleRaise))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
-	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", s.handle(s.handleLog))
@@ -323,7 +321,7 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 		if err != nil {
 			return withStatus(http.StatusBadRequest, err)
 		}
-		page.Launch = &modal
+		page.Launch = option.Some(modal)
 	}
 	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "launch_picker.tmpl", page)
@@ -732,7 +730,7 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		page.Search = &search
+		page.Search = option.Some(search)
 	}
 	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "repos.tmpl", page)
@@ -919,12 +917,4 @@ func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) erro
 	}
 	data.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "insights.tmpl", data)
-}
-
-func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) error {
-	resp, err := s.view.Insights(r.Context(), s.now(), r.URL.Query())
-	if err != nil {
-		return fmt.Errorf("load insights: %w", err)
-	}
-	return writeJSON(w, resp)
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -66,7 +67,7 @@ func (m LaunchModal) EffortList() string {
 type LaunchPicker struct {
 	Chrome
 	Features []LaunchFeature
-	Launch   *LaunchModal
+	Launch   option.Option[LaunchModal]
 }
 
 type LaunchFeature struct {
@@ -78,14 +79,12 @@ type LaunchFeature struct {
 }
 
 func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker, error) {
-	chrome, err := r.Chrome(ctx, now, Params{})
+	f, err := r.loadFrame(ctx, now, Params{})
 	if err != nil {
-		return LaunchPicker{}, fmt.Errorf("load chrome: %w", err)
+		return LaunchPicker{}, fmt.Errorf("load frame: %w", err)
 	}
-	in, err := r.loadCandidateInputs(ctx, now)
-	if err != nil {
-		return LaunchPicker{}, fmt.Errorf("load candidate inputs: %w", err)
-	}
+	chrome := f.chrome
+	in := candidateInputs{tickets: f.tickets, snap: f.snap, marks: f.projects}
 	byFeature := map[string][]string{}
 	for _, t := range in.tickets {
 		if t.Feature != "" {

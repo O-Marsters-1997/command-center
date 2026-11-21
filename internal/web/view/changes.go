@@ -78,21 +78,12 @@ type changeSet struct {
 }
 
 func (r *Reader) loadChanges(ctx context.Context, now time.Time, ref SessionRef, dataDir string) (changeSet, error) {
-	board, err := r.Board(ctx, now, Params{})
+	board, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
-		return changeSet{}, fmt.Errorf("load board: %w", err)
+		return changeSet{}, err
 	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return changeSet{}, ErrSessionNotFound
-	}
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return changeSet{}, fmt.Errorf("load plan input: %w", err)
-	}
-	in.Now = now
-	snap := plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in)
-	entry, ok := snap.Entry(plan.TicketURL(row.URL))
+	in := board.in
+	entry, ok := board.snap.Entry(plan.TicketURL(row.URL))
 	if !ok {
 		return changeSet{}, ErrSessionNotFound
 	}
@@ -247,15 +238,21 @@ func linePrefix(k git.LineKind) string {
 }
 
 func (r *Reader) SessionTicket(ctx context.Context, now time.Time, ref SessionRef) (plan.TicketURL, error) {
-	board, err := r.Board(ctx, now, Params{})
+	_, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
-		return "", fmt.Errorf("load board: %w", err)
-	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return "", ErrSessionNotFound
+		return "", err
 	}
 	return plan.TicketURL(row.URL), nil
+}
+
+func (r *Reader) SessionSnapshot(
+	ctx context.Context, now time.Time, ref SessionRef,
+) (plan.TicketURL, plan.Snapshot, error) {
+	board, row, err := r.sessionRow(ctx, now, ref)
+	if err != nil {
+		return "", plan.Snapshot{}, err
+	}
+	return plan.TicketURL(row.URL), board.snap, nil
 }
 
 type RaiseResult struct {
@@ -264,19 +261,11 @@ type RaiseResult struct {
 }
 
 func (r *Reader) RaiseResult(ctx context.Context, now time.Time, ref SessionRef) (RaiseResult, error) {
-	board, err := r.Board(ctx, now, Params{})
-	if err != nil {
-		return RaiseResult{}, fmt.Errorf("load board: %w", err)
-	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return RaiseResult{}, ErrSessionNotFound
-	}
-	snap, err := r.Snapshot(ctx, now)
+	board, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
 		return RaiseResult{}, err
 	}
-	entry, ok := snap.Entry(plan.TicketURL(row.URL))
+	entry, ok := board.snap.Entry(plan.TicketURL(row.URL))
 	if !ok {
 		return RaiseResult{}, ErrSessionNotFound
 	}
