@@ -158,7 +158,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.recordRepoProblems(ctx, snap); err != nil {
 		return l.failTick(ctx, fmt.Errorf("record repo problems: %w", err))
 	}
-	return l.failTick(ctx, l.act(ctx, snap.Skipping(snap.SkippedRepos()), t, byURL))
+	return l.failTick(ctx, l.act(ctx, snap.Skipping(), t, byURL))
 }
 
 func (l *Loop) failTick(ctx context.Context, err error) error {
@@ -263,7 +263,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	if err != nil {
 		return fmt.Errorf("derive for push: %w", err)
 	}
-	pushable := snap.Skipping(snap.SkippedRepos())
+	pushable := snap.Skipping()
 	if err := l.timed(&t.timing.Push, func() error { return l.pushPushable(ctx, pushable, t.obs) }); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}

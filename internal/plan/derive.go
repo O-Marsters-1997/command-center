@@ -159,7 +159,8 @@ func (s Snapshot) LaunchAfter(spawned []TicketURL) []TicketURL {
 	return LaunchPlan(s.launch, load, s.caps, s.spendPaused)
 }
 
-func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
+func (s Snapshot) Skipping() Snapshot {
+	repos := s.SkippedRepos()
 	if len(repos) == 0 {
 		return s
 	}
