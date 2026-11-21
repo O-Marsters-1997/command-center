@@ -75,13 +75,7 @@ func (b Board) LaunchCount() int {
 }
 
 func (b Board) OpenCount() int {
-	open := 0
-	for _, r := range rowsIn(b.Groups) {
-		if sectionKey(r.Glyph) != SectionDone {
-			open++
-		}
-	}
-	return open
+	return openCount(rowsIn(b.Groups))
 }
 
 func (b Board) FeatureCount() int {

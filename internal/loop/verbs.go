@@ -106,7 +106,7 @@ func (l *Loop) followUpOne(
 		spec.prompt = plan.ComposeMessage(promptText, outcome)
 		spec.resumeSessionID = sessionID
 	}
-	if launched.State == plan.CIFailed || launched.State == plan.Parked {
+	if launched.State.FailingChecks() {
 		logs, err := l.failedLogs(ctx, ticket, launched, t.obs)
 		if err != nil {
 			return err
@@ -125,22 +125,18 @@ func (l *Loop) followUpOne(
 func (l *Loop) failedLogs(
 	ctx context.Context, ticket store.Ticket, entry plan.Entry, obs plan.Observation,
 ) (string, error) {
-	if entry.Run.IsNone() || entry.Run.Unwrap().Verdict.IsNone() {
-		return "", nil
-	}
-	checks := obs.PRs[ticket.Ref()].Checks
 	var b strings.Builder
-	for _, name := range entry.Run.Unwrap().Verdict.Unwrap().RedLeaves {
+	for _, c := range entry.RedChecks(obs.PRs[ticket.Ref()].Checks) {
 		b.WriteString("\n\n")
-		log, err := l.forge.FailedLog(ctx, l.checkout(ticket.Repo), checks[name].DetailsURL)
+		log, err := l.forge.FailedLog(ctx, l.checkout(ticket.Repo), c.DetailsURL)
 		if err != nil {
-			b.WriteString(plan.ComposeCILogUnavailable(name))
-			if eventErr := l.event(ctx, ticket.URL, store.EventCILogUnavailable, name+": "+err.Error()); eventErr != nil {
+			b.WriteString(plan.ComposeCILogUnavailable(c.Name))
+			if eventErr := l.event(ctx, ticket.URL, store.EventCILogUnavailable, c.Name+": "+err.Error()); eventErr != nil {
 				return "", eventErr
 			}
 			continue
 		}
-		b.WriteString(plan.ComposeCILog(name, log))
+		b.WriteString(plan.ComposeCILog(c.Name, log))
 	}
 	return b.String(), nil
 }

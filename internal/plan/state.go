@@ -100,6 +100,10 @@ func (s State) spec() stateSpec {
 
 func (s State) String() string { return s.spec().name }
 
+func (s State) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
+func (s State) FailingChecks() bool { return s == CIFailed || s == Parked }
+
 func (s State) Label() string { return s.spec().label }
 
 func (s State) Glyph() GlyphWord { return s.spec().glyph }

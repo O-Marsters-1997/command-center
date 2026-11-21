@@ -213,17 +213,18 @@ func Status(f Facts) (State, Reason) {
 }
 
 func statusFromRun(latest option.Option[RunFact], unlock Unlock, raise RaiseMode) (State, Reason, bool) {
-	if latest.IsNone() {
-		return 0, "", false
+	run, ok := latest.Get()
+	if !ok {
+		return StateUnknown, "", false
 	}
-	run := latest.Unwrap()
 	if run.Alive {
 		return Running, "agent running", true
 	}
-	if run.Outcome.IsNone() {
-		return 0, "", false
+	outcome, ok := run.Outcome.Get()
+	if !ok {
+		return StateUnknown, "", false
 	}
-	switch run.Outcome.Unwrap() {
+	switch outcome {
 	case OutcomePush:
 		state, reason := statusFromPush(run, unlock, raise)
 		return state, reason, true
@@ -243,27 +244,34 @@ func statusFromRun(latest option.Option[RunFact], unlock Unlock, raise RaiseMode
 			return state, reason, true
 		}
 		fallthrough
+	case OutcomeUnknown:
+		fallthrough
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
 	}
 }
 
 func statusFromNext(next option.Option[Next]) (State, Reason, bool) {
-	if next.IsNone() {
-		return 0, "", false
+	n, ok := next.Get()
+	if !ok {
+		return StateUnknown, "", false
 	}
-	n := next.Unwrap()
-	switch {
-	case n.Kind == NextPark:
+	switch n.Kind {
+	case NextPark:
 		return Failed, n.Reason, true
-	case n.Kind == NextRun && n.Step.IsSome():
-		reason := fmt.Sprintf("next step: %s", n.Step.Unwrap().Name)
+	case NextRun:
+		step, ok := n.Step.Get()
+		if !ok {
+			break
+		}
+		reason := fmt.Sprintf("next step: %s", step.Name)
 		if n.Round > 0 {
 			reason += fmt.Sprintf(" (fix round %d)", n.Round)
 		}
 		return Queued, Reason(reason), true
+	case NextNone, NextDone:
 	}
-	return 0, "", false
+	return StateUnknown, "", false
 }
 
 func firstLine(s string) Reason {

@@ -143,9 +143,9 @@ func (s SessionPage) Empty() bool {
 	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
 }
 
-func (s SessionPage) Running() bool { return s.Row.State == plan.Running.String() }
+func (s SessionPage) Running() bool { return s.Row.State == plan.Running }
 
-func (s SessionPage) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
+func (s SessionPage) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput }
 
 type Turn struct {
 	You string

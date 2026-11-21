@@ -26,6 +26,9 @@ var sectionOrder = []Section{
 }
 
 func sectionKey(glyph plan.GlyphWord) SectionKey {
+	if !plan.OpenGlyph(glyph) {
+		return SectionDone
+	}
 	switch glyph {
 	case plan.GlyphFailed, plan.GlyphAttention:
 		return SectionNeedsYou
@@ -36,7 +39,6 @@ func sectionKey(glyph plan.GlyphWord) SectionKey {
 	case plan.GlyphBlocked:
 		return SectionBlocked
 	case plan.GlyphDone, plan.GlyphUnknown:
-		return SectionDone
 	}
 	return SectionDone
 }
@@ -83,7 +85,7 @@ func filterSections(sections []Section, filter SectionKey) []Section {
 func openCount(rows []Row) int {
 	n := 0
 	for _, r := range rows {
-		if sectionKey(r.Glyph) != SectionDone {
+		if plan.OpenGlyph(r.Glyph) {
 			n++
 		}
 	}

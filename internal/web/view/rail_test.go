@@ -171,7 +171,7 @@ func TestBuildRail(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				row := railRow("3", "billing", plan.GlyphAttention)
-				row.State = plan.AwaitingInput.String()
+				row.State = plan.AwaitingInput
 				row.Detail = "Which database?"
 				row.Verbs = tt.verbs
 
@@ -191,7 +191,7 @@ func TestBuildRail(t *testing.T) {
 		failed := railRow("1", "billing", plan.GlyphFailed)
 		failed.Updated, failed.Last = updated, "Tests are red."
 		asked := railRow("2", "billing", plan.GlyphAttention)
-		asked.State, asked.Detail = plan.AwaitingInput.String(), "Which database?"
+		asked.State, asked.Detail = plan.AwaitingInput, "Which database?"
 		asked.Verbs = []plan.Verb{plan.VerbFollowUp}
 		asked.Updated, asked.Last = updated, "Which database?"
 

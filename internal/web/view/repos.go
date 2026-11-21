@@ -184,7 +184,7 @@ func repoStatus(state BannerState, steps []CheckStep) string {
 func openByRepo(rows []Row) map[string]int {
 	open := make(map[string]int)
 	for _, row := range rows {
-		if row.Glyph != plan.GlyphDone {
+		if plan.OpenGlyph(row.Glyph) {
 			open[row.Repo]++
 		}
 	}

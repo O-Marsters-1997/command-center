@@ -88,7 +88,7 @@ func TestWorkflow_Next(t *testing.T) {
 		{
 			name: "a live run means no next step", hasVerify: true,
 			pass: []plan.StepRun{run("setup", passed), live},
-			kind: plan.NextRun,
+			kind: plan.NextNone,
 		},
 		{name: "empty pass skips command steps without a verify command", kind: plan.NextRun, step: "implement"},
 		{

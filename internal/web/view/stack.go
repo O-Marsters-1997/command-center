@@ -87,7 +87,7 @@ func buildStack(board Board, row Row) Stack {
 		members = append(members, r)
 		blocking[plan.TicketURL(r.URL)] = plan.TicketURLs(r.BlockedBy)
 		s.Total++
-		if r.State == plan.Merged.String() {
+		if r.State == plan.PRMerged {
 			s.Merged++
 		}
 	}

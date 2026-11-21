@@ -24,7 +24,7 @@ type Row struct {
 	Project        string           `json:"-"`
 	ProjectHue     int              `json:"-"`
 	Title          string           `json:"title"`
-	State          string           `json:"state"`
+	State          plan.State       `json:"state"`
 	Reason         string           `json:"reason"`
 	Label          string           `json:"label"`
 	Detail         string           `json:"detail"`
@@ -56,7 +56,7 @@ type Row struct {
 	ChecksPassed   int              `json:"checks_passed"`
 	ChecksTotal    int              `json:"checks_total"`
 	Checks         []Check          `json:"-"`
-	RedChecks      []Check          `json:"-"`
+	RedChecks      []plan.RedCheck  `json:"-"`
 	SpendPctWeek   float64          `json:"-"`
 	Protected      []plan.PathMatch `json:"protected"`
 
@@ -68,11 +68,8 @@ type Row struct {
 }
 
 type Check struct {
-	Name       string
-	Status     string
-	Conclusion string
-	DetailsURL string
-	Elapsed    string
+	plan.CheckState
+	Elapsed string
 }
 
 func (r Row) Ticket() string { return ticketRef(r.URL) }
@@ -115,19 +112,12 @@ func (r Row) ProtectedLinks() []ProtectedLink {
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
 func (r Row) FixCI() bool {
-	failing := r.State == plan.CIFailed.String() || r.State == plan.Parked.String()
-	return failing && r.FollowUpAvailable() && len(r.RedChecks) > 0
+	return r.State.FailingChecks() && r.FollowUpAvailable() && len(r.RedChecks) > 0
 }
 
-func (r Row) FixCIPrompt() string {
-	red := make([]plan.RedCheck, len(r.RedChecks))
-	for i, c := range r.RedChecks {
-		red[i] = plan.RedCheck{Name: c.Name, DetailsURL: c.DetailsURL}
-	}
-	return plan.ComposeFixCI(red)
-}
+func (r Row) FixCIPrompt() string { return plan.ComposeFixCI(r.RedChecks) }
 
-func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput.String() }
+func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput }
 
 // DetailID supplies the selector and id required by htmx's hx-target and hx-preserve.
 func (r Row) DetailID() string {
@@ -162,10 +152,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		latestRun := in.Runs[url]
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
 		pr := in.Obs.PRs[t.Ref()]
-		var redLeaves []string
-		if e.Run.IsSome() && e.Run.Unwrap().Verdict.IsSome() {
-			redLeaves = e.Run.Unwrap().Verdict.Unwrap().RedLeaves
-		}
 		question := ""
 		if e.State == plan.AwaitingInput {
 			question = latestRun.Question
@@ -187,7 +173,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Project:        projects[t.Repo].Name,
 			ProjectHue:     projects[t.Repo].Hue,
 			Title:          cmp.Or(in.Obs.Titles[url], pr.Title),
-			State:          e.State.String(),
+			State:          e.State,
 			Reason:         string(e.Reason),
 			Label:          e.State.Label(),
 			Detail:         detailOf(string(e.Reason)),
@@ -208,7 +194,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			LogPath:        e.LogPath,
 			Refusal:        refusal,
 			Checks:         sortedChecks(pr.Checks),
-			RedChecks:      redChecksFor(redLeaves, pr.Checks),
+			RedChecks:      e.RedChecks(pr.Checks),
 			Blocking:       urlStrings(e.Unlock.Blocking),
 			LockedBehind:   e.LockedBehind,
 			Protected:      e.LastPush.UnwrapOr(plan.PushRow{}).Protected,
@@ -217,7 +203,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 
 	for i := range rows {
 		for _, c := range rows[i].Checks {
-			if c.Conclusion == "SUCCESS" {
+			if c.Passed() {
 				rows[i].ChecksPassed++
 			}
 		}
@@ -235,9 +221,8 @@ func sortedChecks(checks map[string]plan.CheckState) []Check {
 	out := make([]Check, 0, len(checks))
 	for _, name := range slices.Sorted(maps.Keys(checks)) {
 		cs := checks[name]
-		out = append(out, Check{
-			Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL, Elapsed: checkElapsed(cs),
-		})
+		cs.Name = name
+		out = append(out, Check{CheckState: cs, Elapsed: checkElapsed(cs)})
 	}
 	return out
 }
@@ -247,23 +232,6 @@ func checkElapsed(cs plan.CheckState) string {
 		return ""
 	}
 	return formatShort(cs.CompletedAt.Sub(cs.StartedAt))
-}
-
-func redChecksFor(redLeaves []string, checks map[string]plan.CheckState) []Check {
-	if len(redLeaves) == 0 {
-		return nil
-	}
-	red := make(map[string]bool, len(redLeaves))
-	for _, name := range redLeaves {
-		red[name] = true
-	}
-	out := make([]Check, 0, len(redLeaves))
-	for _, c := range sortedChecks(checks) {
-		if red[c.Name] {
-			out = append(out, c)
-		}
-	}
-	return out
 }
 
 func urlStrings(urls []plan.TicketURL) []string {
