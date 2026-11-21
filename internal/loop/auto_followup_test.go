@@ -47,7 +47,7 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 	t.Run("starts one follow-up with the failed log and never a second for the same tip", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		f.Forge.Logs = map[string]string{ghtest.FailedRunURL: "boom\n"}
+		f.Forge.Seed(ghtest.Seed{Logs: map[string]string{ghtest.FailedRunURL: "boom\n"}})
 		f.seedAutoCIFailed(t, 0)
 		fake := &runnertest.Runner{}
 		f.reset(testAt, fake)

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
@@ -20,6 +21,15 @@ import (
 )
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func openPRs(t *testing.T, forge *ghtest.Forge) map[string]gh.PR {
+	t.Helper()
+	snap, err := forge.List(t.Context(), "/repo", nil)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	return snap.ByBranch
+}
 
 func newLoop(
 	st *storepkg.Store, observe loop.ObserveFunc, clock loop.Clock, cfg config.Config, ws config.Workspace,
@@ -178,9 +188,11 @@ func newPushFixture(t *testing.T, opts ...loop.Option) *pushFixture {
 	ticket := sandboxTicket("1")
 	storetest.Tickets(t, st, ticket)
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+	forge := &ghtest.Forge{}
+	forge.Seed(ghtest.Seed{Checkouts: map[string]string{worktree: "cc-1"}})
 	f := &pushFixture{
 		Repo: repo, Origin: filepath.Join(root, "remote.git"), Worktree: worktree,
-		Store: st, Ticket: ticket, Forge: &ghtest.Forge{}, root: root, cfg: cfg, ws: ws,
+		Store: st, Ticket: ticket, Forge: forge, root: root, cfg: cfg, ws: ws,
 		Obs: &plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktree},
 			PRs: map[plan.BranchRef]plan.PR{}},
 	}

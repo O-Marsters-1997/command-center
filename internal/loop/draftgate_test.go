@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -17,6 +19,7 @@ import (
 
 func (f *pushFixture) seedDraftGate(t *testing.T) {
 	t.Helper()
+	f.Forge.Seed(ghtest.Seed{PRs: []gh.PR{{Number: 1, HeadRef: "cc-1", State: gh.Open, IsDraft: true}}})
 	f.Ticket.BlockedBy = []string{"sandbox://PLA-40"}
 	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
 	storetest.Tickets(t, f.Store, f.Ticket, blocker)
@@ -64,6 +67,9 @@ func TestDraftGate(t *testing.T) {
 		if got := len(f.Forge.Calls("Ready")); got != 1 {
 			t.Errorf("Ready calls across ten ticks = %d, want 1", got)
 		}
+		if pr := openPRs(t, f.Forge)["cc-1"]; pr.IsDraft {
+			t.Errorf("PR on cc-1 = %+v, want it readied", pr)
+		}
 	})
 
 	t.Run("a failed Ready is retried next tick without a verb", func(t *testing.T) {
@@ -101,8 +107,8 @@ func TestDraftGate(t *testing.T) {
 		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 		f.tick(t)
 
-		if got := f.Forge.Calls("Create"); len(got) != 1 || !got[0].Draft {
-			t.Errorf("Create calls = %+v, want one draft", got)
+		if pr, ok := openPRs(t, f.Forge)["cc-1"]; !ok || !pr.IsDraft {
+			t.Errorf("PR on cc-1 = %+v, %v, want a draft", pr, ok)
 		}
 	})
 }

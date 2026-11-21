@@ -34,13 +34,14 @@ func TestRerunFailedChecks(t *testing.T) {
 		st := openStore(t)
 		trackRepo(t, st, "repo", filepath.Join(root, "remote.git"))
 		storetest.Tickets(t, st, sandboxTicket("1"))
-		forge := &ghtest.Forge{Snapshot: gh.Snapshot{ByBranch: map[string]gh.PR{"cc-1": {
+		forge := &ghtest.Forge{}
+		forge.Seed(ghtest.Seed{PRs: []gh.PR{{
 			Number: 1, HeadRef: "cc-1", State: gh.Open, Checks: map[string]gh.CheckState{
 				"Lint":   failedCheck(lintRun),
 				"Test":   {Status: "COMPLETED", Conclusion: "SUCCESS", DetailsURL: passedRun},
 				"Status": failedCheck("https://example.com/status/1"),
 			},
-		}}}}
+		}}})
 
 		obs, err := loop.NewObserver(st, forge, cfg)(t.Context())
 		if err != nil {
@@ -65,11 +66,12 @@ func TestRerunFailedChecks(t *testing.T) {
 		st := openStore(t)
 		trackRepo(t, st, "repo", filepath.Join(root, "remote.git"))
 		storetest.Tickets(t, st, sandboxTicket("1"))
-		forge := &ghtest.Forge{Snapshot: gh.Snapshot{ByBranch: map[string]gh.PR{"cc-1": {
+		forge := &ghtest.Forge{}
+		forge.Seed(ghtest.Seed{PRs: []gh.PR{{
 			Number: 1, HeadRef: "cc-1", State: gh.Open, Checks: map[string]gh.CheckState{
 				"Lint": failedCheck(lintRun), "Build": failedCheck(buildRun),
 			},
-		}}}}
+		}}})
 		observe := loop.NewObserver(st, forge, cfg)
 
 		for range 3 {

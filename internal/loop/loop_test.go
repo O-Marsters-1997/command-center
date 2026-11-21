@@ -285,6 +285,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		root, repoPath := repoWithOrigin(t)
 		forge := &ghtest.Forge{}
 		worktreePath := cutWorktree(t, repoPath, "cc-1")
+		forge.Seed(ghtest.Seed{Checkouts: map[string]string{worktreePath: "cc-1"}})
 		baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 		gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
 		store := openStore(t)
@@ -314,8 +315,8 @@ func TestLoop_RunOnce(t *testing.T) {
 		if !gittest.HasRef(t, filepath.Join(root, "remote.git"), "refs/heads/cc-1") {
 			t.Error("origin has no cc-1, want the run disposed this tick pushed")
 		}
-		if got := len(forge.Calls("Create")); got != 1 {
-			t.Errorf("Create calls = %d, want 1", got)
+		if _, ok := openPRs(t, forge)["cc-1"]; !ok {
+			t.Error("forge has no PR on cc-1, want one for the pushed run")
 		}
 	})
 
@@ -425,13 +426,17 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		gittest.Commit(t, spawns[0].WorktreePath, "x.go", "package x\n")
 		fake.Exit(1, 0)
-		tick(4)
-		creates := forge.Calls("Create")
-		if len(creates) != 1 {
-			t.Fatalf("Create calls = %+v, want one", creates)
-		}
 		branch := gittest.Run(t, spawns[0].WorktreePath, "branch", "--show-current")
-		forge.SetSnapshot(gh.Snapshot{ByBranch: map[string]gh.PR{branch: {
+		forge.Seed(ghtest.Seed{Checkouts: map[string]string{spawns[0].WorktreePath: branch}})
+		tick(4)
+		listed, err := forge.List(t.Context(), root, []string{branch})
+		if err != nil {
+			t.Fatalf("List() error = %v", err)
+		}
+		if _, ok := listed.ByBranch[branch]; !ok {
+			t.Fatalf("List() = %+v, want a PR for %s", listed.ByBranch, branch)
+		}
+		forge.Seed(ghtest.Seed{PRs: []gh.PR{{
 			Number: 1, HeadRef: branch, State: gh.Open,
 			HeadOid: gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/"+branch),
 			Checks:  map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},

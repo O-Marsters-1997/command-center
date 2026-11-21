@@ -17,7 +17,7 @@ import (
 type failingFailedLog struct{ *ghtest.Forge }
 
 func (f failingFailedLog) FailedLog(_ context.Context, repo, detailsURL string) (string, error) {
-	f.Record(ghtest.Call{Method: "FailedLog", Repo: repo, Body: detailsURL})
+	f.Record(ghtest.Call{Method: "FailedLog", Repo: repo, URL: detailsURL})
 	return "", fmt.Errorf("fake gh: run view failed: %w", errForge)
 }
 
@@ -43,7 +43,7 @@ func TestFollowUpCILog(t *testing.T) {
 	t.Run("carries the failed log into the spawn", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		f.Forge.Logs = map[string]string{ghtest.FailedRunURL: "build broke: undefined x\n"}
+		f.Forge.Seed(ghtest.Seed{Logs: map[string]string{ghtest.FailedRunURL: "build broke: undefined x\n"}})
 		f.seedCIFailed(t, ghtest.FailedRunURL)
 		fake := &runnertest.Runner{}
 		f.reset(testAt, fake)
