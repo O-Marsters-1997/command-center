@@ -3,7 +3,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
 {{- end}}
 
 {{define "activityRow" -}}
-<details id="act-{{.ID}}" class="border-b border-border-soft" data-row>
+<details id="act-{{.ID}}" class="border-b border-border-soft" hx-preserve="true" data-row>
   <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-2 py-1 hover:bg-surface-2 md:grid-cols-[3.5rem_auto_9rem_9rem_minmax(0,1fr)_9rem_5rem_4rem] md:gap-y-1">
     <time class="hidden text-xs text-muted md:block" datetime="{{.Queued.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.Queued.Format "15:04"}}</time>
     <span class="glyph" data-glyph="{{.Glyph}}" title="{{.Outcome}}"></span>
@@ -64,7 +64,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
       {{- end}}
     </div>
     {{- if not .Days}}
-    <p class="text-muted" role="status">{{.Empty}}{{if .Params.Filtered}} <a href="{{.ClearPath}}" {{template "activityNav" .ClearPath}}>Clear filters</a>{{end}}</p>
+    <p class="text-muted" role="status">{{.Empty}}{{if .Params.Filtered}} <a href="{{.ClearPath}}" {{template "nav" .ClearPath}}>Clear filters</a>{{end}}</p>
     {{- end}}
     {{- range .Days}}
     <section id="day-{{.Key}}" aria-labelledby="day-h-{{.Key}}">
