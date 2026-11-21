@@ -18,7 +18,7 @@ func (l *Loop) spawnVerifies(
 		if !ok || !held || len(argv) == 0 {
 			continue
 		}
-		err := l.spawnRun(ctx, t, spawnSpec{
+		_, err := l.spawnRun(ctx, t, spawnSpec{
 			ticket: ticket, worktree: worktree, baseline: string(v.Tip), kind: plan.RunKindVerify,
 			step: plan.Step{Name: "verify", Command: true}, verify: argv,
 		})

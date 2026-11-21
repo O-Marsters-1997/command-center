@@ -23,7 +23,7 @@ func (l *Loop) applyAutoFollowUps(
 			continue
 		}
 		picked := store.FollowUpPayload{Message: l.autoMessage(auto, entry, t.obs.PRs[ticket.Ref()].Checks)}
-		err := l.followUpOne(ctx, snap, t, ticket, picked, auto.Cause)
+		_, err := l.followUpOne(ctx, snap, t, ticket, picked, auto.Cause)
 		if err != nil && !errors.Is(err, errIntentPending) {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}

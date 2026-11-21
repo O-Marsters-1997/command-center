@@ -12,22 +12,24 @@ import (
 )
 
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
+	ctx = withSnapshot(ctx, snap)
 	for _, r := range snap.Refreshes() {
 		e, _ := snap.Entry(r.Ticket)
-		if err := l.refreshOne(ctx, snap, obs, e.Ticket, r.Row, r.Requested); err != nil {
+		result, err := l.refreshOne(ctx, snap, obs, e.Ticket, r.Row, r.Requested)
+		if err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		if r.Requested {
-			if err := l.consumeAll(ctx, ticketIntents(snap, r.Ticket)); err != nil {
+			if err := l.consumeAll(ctx, ticketIntents(snap, r.Ticket), result); err != nil {
 				return err
 			}
 		}
 	}
-	return l.consumeAll(ctx, orphanIntents(snap))
+	return l.consumeAll(ctx, orphanIntents(snap), failedWith(untrackedTicket))
 }
 
-func (l *Loop) consumeAll(ctx context.Context, intents []plan.Intent) error {
-	return l.consumeEach(ctx, intents, func(plan.Intent) error { return nil })
+func (l *Loop) consumeAll(ctx context.Context, intents []plan.Intent, result handled) error {
+	return l.consumeEach(ctx, intents, func(plan.Intent) (handled, error) { return result, nil })
 }
 
 func ticketIntents(snap plan.Snapshot, url plan.TicketURL) []plan.Intent {
@@ -47,14 +49,14 @@ func conflictDetail(branchTip, baseTip plan.SHA, mergeErr error) string {
 
 func (l *Loop) refreshOne(
 	ctx context.Context, snap plan.Snapshot, obs plan.Observation, ticket plan.Ticket, row plan.PushRow, requested bool,
-) error {
+) (handled, error) {
 	url := string(ticket.URL)
 	branch := ticket.Branch
-	refuse := func(detail string) error {
+	refuse := func(detail string) (handled, error) {
 		if !requested || snap.Conflict(ticket.URL).IsSome() {
-			return nil
+			return failedWith(detail), nil
 		}
-		return l.event(ctx, url, store.EventRefreshRefused, detail)
+		return l.refuse(ctx, url, store.EventRefreshRefused, detail)
 	}
 
 	entry, _ := snap.Entry(ticket.URL)
@@ -66,11 +68,11 @@ func (l *Loop) refreshOne(
 		return refuse(refusal)
 	}
 	if obs.MidMerge[ticket.Ref()] {
-		return nil
+		return failedWith("a merge is already in progress"), nil
 	}
 
 	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
-		return l.event(ctx, url, store.EventRefreshRefused, err.Error())
+		return l.refuse(ctx, url, store.EventRefreshRefused, err.Error())
 	}
 
 	unlock := entry.Unlock
@@ -80,22 +82,22 @@ func (l *Loop) refreshOne(
 	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, obs)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return fmt.Errorf("advance %s: %w", url, ctxErr)
+			return handled{}, fmt.Errorf("advance %s: %w", url, ctxErr)
 		}
 		conflicted, midErr := git.MidMerge(ctx, worktreePath)
 		if midErr != nil {
-			return fmt.Errorf("check %s for a conflict: %w", worktreePath, errors.Join(err, midErr))
+			return handled{}, fmt.Errorf("check %s for a conflict: %w", worktreePath, errors.Join(err, midErr))
 		}
 		if !conflicted {
-			return fmt.Errorf("advance %s: %w", url, err)
+			return handled{}, fmt.Errorf("advance %s: %w", url, err)
 		}
 		if restacked {
 			if err := l.event(ctx, url, store.EventRestacked, detail+", conflicted"); err != nil {
-				return fmt.Errorf("record restack of %s: %w", url, err)
+				return handled{}, fmt.Errorf("record restack of %s: %w", url, err)
 			}
 		}
 		baseTip := obs.BranchTips[plan.BranchRef{Repo: ticket.Repo, Branch: unlock.BaseBranch}]
-		return l.event(ctx, url, store.EventRefreshConflicted,
+		return failedWith("merge conflict with origin/" + unlock.BaseBranch), l.event(ctx, url, store.EventRefreshConflicted,
 			conflictDetail(obs.BranchTips[ticket.Ref()], baseTip, err))
 	}
 
@@ -104,9 +106,9 @@ func (l *Loop) refreshOne(
 		kind = store.EventRestacked
 	}
 	if err := l.event(ctx, url, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
-		return fmt.Errorf("record %s of %s: %w", kind, url, err)
+		return handled{}, fmt.Errorf("record %s of %s: %w", kind, url, err)
 	}
-	return nil
+	return succeeded, nil
 }
 
 func advanceOnto(

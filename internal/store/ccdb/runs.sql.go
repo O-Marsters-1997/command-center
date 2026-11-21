@@ -88,16 +88,31 @@ func (q *Queries) AutoHistories(ctx context.Context) ([]AutoHistoriesRow, error)
 }
 
 const consumeVerbIntent = `-- name: ConsumeVerbIntent :execrows
-UPDATE intents SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL
+UPDATE intents SET consumed_at = $1, outcome = $2, detail = $3,
+  finished_at = $4, run_id = $5, ticket_state = $6
+WHERE id = $7 AND consumed_at IS NULL
 `
 
 type ConsumeVerbIntentParams struct {
-	ConsumedAt sql.NullTime
-	ID         int64
+	ConsumedAt  sql.NullTime
+	Outcome     sql.NullString
+	Detail      sql.NullString
+	FinishedAt  sql.NullTime
+	RunID       sql.NullInt64
+	TicketState sql.NullString
+	ID          int64
 }
 
 func (q *Queries) ConsumeVerbIntent(ctx context.Context, arg ConsumeVerbIntentParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, consumeVerbIntent, arg.ConsumedAt, arg.ID)
+	result, err := q.db.ExecContext(ctx, consumeVerbIntent,
+		arg.ConsumedAt,
+		arg.Outcome,
+		arg.Detail,
+		arg.FinishedAt,
+		arg.RunID,
+		arg.TicketState,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -196,6 +211,66 @@ func (q *Queries) IntentConsumed(ctx context.Context, id int64) (bool, error) {
 	var consumed bool
 	err := row.Scan(&consumed)
 	return consumed, err
+}
+
+const intentHistory = `-- name: IntentHistory :many
+SELECT id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
+  COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
+  COALESCE(ticket_state, '')::text AS ticket_state
+FROM intents
+WHERE at >= $1 OR finished_at IS NULL
+ORDER BY id DESC
+`
+
+type IntentHistoryRow struct {
+	ID          int64
+	TicketID    string
+	Verb        string
+	QueuedBy    string
+	At          time.Time
+	HoldUntil   sql.NullTime
+	ConsumedAt  sql.NullTime
+	FinishedAt  sql.NullTime
+	Outcome     string
+	Detail      string
+	RunID       sql.NullInt64
+	TicketState string
+}
+
+func (q *Queries) IntentHistory(ctx context.Context, since time.Time) ([]IntentHistoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, intentHistory, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntentHistoryRow
+	for rows.Next() {
+		var i IntentHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Verb,
+			&i.QueuedBy,
+			&i.At,
+			&i.HoldUntil,
+			&i.ConsumedAt,
+			&i.FinishedAt,
+			&i.Outcome,
+			&i.Detail,
+			&i.RunID,
+			&i.TicketState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const latestRunLog = `-- name: LatestRunLog :one
@@ -573,8 +648,10 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 }
 
 const queueVerbIntent = `-- name: QueueVerbIntent :one
-INSERT INTO intents (at, ticket_id, verb, payload, hold_until)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO intents (at, ticket_id, verb, payload, hold_until, queued_by)
+VALUES (
+    $1, $2, $3, $4, $5, $6
+)
 RETURNING id
 `
 
@@ -584,6 +661,7 @@ type QueueVerbIntentParams struct {
 	Verb      string
 	Payload   json.RawMessage
 	HoldUntil sql.NullTime
+	QueuedBy  string
 }
 
 func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) (int64, error) {
@@ -593,6 +671,7 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 		arg.Verb,
 		arg.Payload,
 		arg.HoldUntil,
+		arg.QueuedBy,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -790,16 +869,17 @@ func (q *Queries) TicketActivities(ctx context.Context) ([]TicketActivitiesRow, 
 }
 
 const withdrawHeldIntent = `-- name: WithdrawHeldIntent :execrows
-DELETE FROM intents WHERE id = $1 AND consumed_at IS NULL AND hold_until > $2
+UPDATE intents SET outcome = 'withdrawn', consumed_at = $1, finished_at = $1
+WHERE id = $2 AND consumed_at IS NULL AND hold_until > $1
 `
 
 type WithdrawHeldIntentParams struct {
-	ID  int64
 	Now sql.NullTime
+	ID  int64
 }
 
 func (q *Queries) WithdrawHeldIntent(ctx context.Context, arg WithdrawHeldIntentParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, withdrawHeldIntent, arg.ID, arg.Now)
+	result, err := q.db.ExecContext(ctx, withdrawHeldIntent, arg.Now, arg.ID)
 	if err != nil {
 		return 0, err
 	}

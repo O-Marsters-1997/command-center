@@ -100,6 +100,11 @@ func TestReRun(t *testing.T) {
 			if summary.Outcome.IsSome() {
 				t.Error("the freshly spawned re-run must not already have an outcome")
 			}
+			rec := intentOf(t, f.Store, plan.VerbReRun)
+			if rec.Run != option.Some(summary.ID) || rec.Outcome != plan.IntentInProgress {
+				t.Errorf("re-run record = run %v, outcome %q, want the spawned run %d and no outcome",
+					rec.Run, rec.Outcome, summary.ID)
+			}
 			if events := f.events(t, "re_run_refused"); len(events) != 0 {
 				t.Errorf("re-run refusals = %+v, want none", events)
 			}

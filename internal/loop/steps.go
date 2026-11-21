@@ -130,11 +130,12 @@ func (l *Loop) advancePass(
 		return fmt.Errorf("read baseline for %s: %w", ticket.URL, err)
 	}
 	step := entry.Next.Step.Unwrap()
-	return l.spawnRun(ctx, t, spawnSpec{
+	_, err = l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktree, baseline: baseline, hash: summary.PromptHash,
 		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, entry.Ticket, step, pass), choice: entry.Ticket.Choice,
 		workflow: w, step: step, verify: verify,
 	})
+	return err
 }
 
 func (l *Loop) passBaseline(

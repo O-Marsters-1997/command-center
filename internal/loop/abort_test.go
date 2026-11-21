@@ -2,6 +2,7 @@ package loop_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -159,6 +160,9 @@ func TestAbort(t *testing.T) {
 				t.Errorf("merge_aborted = %v, refresh_conflicted events = %d, want true and %d",
 					hasEvent(events, "merge_aborted", ""), conflicts, tt.wantConflicts)
 			}
+			if rec := intentOf(t, c.store, plan.VerbAbort); rec.Outcome != plan.IntentDone {
+				t.Errorf("abort outcome = %q, want %q", rec.Outcome, plan.IntentDone)
+			}
 		})
 	}
 
@@ -181,6 +185,10 @@ func TestAbort(t *testing.T) {
 		}
 		if !hasEventIn(t, c.store, "merge_abort_failed", "a run is alive") {
 			t.Error("Events() has no merge_abort_failed naming the live run")
+		}
+		rec := intentOf(t, c.store, plan.VerbAbort)
+		if rec.Outcome != plan.IntentFailed || !strings.Contains(rec.Detail, "a run is alive") {
+			t.Errorf("abort record = outcome %q, detail %q, want failed naming the live run", rec.Outcome, rec.Detail)
 		}
 	})
 }
