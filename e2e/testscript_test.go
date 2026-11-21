@@ -123,36 +123,47 @@ func ccWait(ts *testscript.TestScript, neg bool, args []string) {
 			ts.Fatalf("cc-wait: count must be a positive integer: %q", args[2])
 		}
 	}
+	matching := func(body []byte) int {
+		seen := 0
+		if pattern == nil {
+			return seen
+		}
+		for _, line := range strings.Split(string(body), "\n") {
+			if pattern.MatchString(line) {
+				seen++
+			}
+		}
+		return seen
+	}
+	waitLog(ts, path,
+		func(body []byte) bool { return pattern == nil || matching(body) >= want },
+		func(body []byte) string {
+			patternText := ""
+			if len(args) >= 2 {
+				patternText = args[1]
+			}
+			return fmt.Sprintf("cc-wait %s pattern %q: saw %d matching lines, want %d within 30s",
+				args[0], patternText, matching(body), want)
+		})
+}
+
+func waitLog(ts *testscript.TestScript, path string, done func(body []byte) bool, timeout func(body []byte) string) {
 	deadline := time.NewTimer(30 * time.Second)
 	defer deadline.Stop()
 	poll := time.NewTicker(5 * time.Millisecond)
 	defer poll.Stop()
 	for {
 		body, err := os.ReadFile(path)
-		seen := 0
-		if err == nil {
-			if pattern == nil {
-				return
-			}
-			for _, line := range strings.Split(string(body), "\n") {
-				if pattern.MatchString(line) {
-					seen++
-				}
-			}
-			if seen >= want {
-				return
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			ts.Fatalf("cc-wait %s: %v", args[0], err)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			ts.Fatalf("read %s: %v", path, err)
+		}
+		if err == nil && done(body) {
+			return
 		}
 		select {
 		case <-poll.C:
 		case <-deadline.C:
-			patternText := ""
-			if len(args) >= 2 {
-				patternText = args[1]
-			}
-			ts.Fatalf("cc-wait %s pattern %q: saw %d matching lines, want %d within 30s", args[0], patternText, seen, want)
+			ts.Fatalf("%s", timeout(body))
 		}
 	}
 }
@@ -321,20 +332,11 @@ func ccDaemon(ts *testscript.TestScript, neg bool, args []string) {
 		_ = logFile.Close()
 	})
 
-	poll := time.NewTicker(5 * time.Millisecond)
-	defer poll.Stop()
-	deadline := time.After(30 * time.Second)
-	for {
-		body, err := os.ReadFile(logPath)
-		if err == nil && strings.Contains(string(body), daemonReady) {
-			return
-		}
-		select {
-		case <-poll.C:
-		case <-deadline:
-			ts.Fatalf("cc did not log %q within the deadline:\n%s", daemonReady, body)
-		}
-	}
+	waitLog(ts, logPath,
+		func(body []byte) bool { return strings.Contains(string(body), daemonReady) },
+		func(body []byte) string {
+			return fmt.Sprintf("cc did not log %q within the deadline:\n%s", daemonReady, body)
+		})
 }
 
 func setup(env *testscript.Env) error {
