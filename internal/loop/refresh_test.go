@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -776,6 +777,31 @@ func TestRefresh(t *testing.T) {
 		}
 		if hasEventIn(t, c.store, "refresh_conflicted", "") {
 			t.Error("Events() has refresh_conflicted, want none: the worktree is not mid-merge")
+		}
+	})
+
+	t.Run("a requested refresh of a mid-merge worktree keeps the recorded conflict for resolve", func(t *testing.T) {
+		t.Parallel()
+		root, repoPath := repoWithOrigin(t)
+		fake := &runnertest.Runner{}
+		c := newConflictFixtureWith(t, root, repoPath, testAt, fake, nil)
+		c.tick(t)
+		c.tick(t)
+
+		if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+			Ticket: c.f.child.URL, Verb: plan.VerbRefresh, At: testAt.Add(time.Hour),
+		}); err != nil {
+			t.Fatalf("QueueVerbIntent(refresh): %v", err)
+		}
+		c.tick(t)
+		c.queueResolve(t)
+		c.tick(t)
+
+		if hasEventIn(t, c.store, storepkg.EventRefreshRefused, "") {
+			t.Error("Events() has refresh_refused, want none: it would hide the recorded conflict")
+		}
+		if got := len(fake.Spawns()); got != 1 {
+			t.Errorf("spawns after refresh then resolve = %d, want 1", got)
 		}
 	})
 }
