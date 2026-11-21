@@ -39,6 +39,33 @@ func Merged(tb testing.TB, st *store.Store, url string, at time.Time) {
 	}
 }
 
+func Verb(tb testing.TB, st *store.Store, v store.VerbRequest) int64 {
+	tb.Helper()
+	id, err := st.QueueVerbIntent(tb.Context(), v)
+	if err != nil {
+		tb.Fatalf("QueueVerbIntent(%s, %s): %v", v.Ticket, v.Verb, err)
+	}
+	return id
+}
+
+func Events(tb testing.TB, st *store.Store, kind store.EventKind) []store.Event {
+	tb.Helper()
+	all, err := st.Events(tb.Context())
+	if err != nil {
+		tb.Fatalf("Events: %v", err)
+	}
+	if kind == "" {
+		return all
+	}
+	var selected []store.Event
+	for _, e := range all {
+		if e.Kind == kind {
+			selected = append(selected, e)
+		}
+	}
+	return selected
+}
+
 type PushedOpts struct {
 	URL, Tip, Base, BaseTip string
 	At                      time.Time

@@ -209,6 +209,22 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 	return rec.Body.String()
 }
 
+func runOnce(t *testing.T, lp *loop.Loop) {
+	t.Helper()
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+}
+
+func hasEvent(events []storepkg.Event, kind storepkg.EventKind, detailSubstring string) bool {
+	for _, e := range events {
+		if e.Kind == kind && strings.Contains(e.Detail, detailSubstring) {
+			return true
+		}
+	}
+	return false
+}
+
 func runGitAllowingFailure(t *testing.T, dir string, args ...string) ([]byte, error) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
