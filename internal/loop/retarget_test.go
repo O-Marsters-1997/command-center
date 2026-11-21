@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
@@ -65,6 +66,12 @@ func squashParentIntoMain(t *testing.T, root, repoPath string) {
 	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 }
 
+func forgeWithChildPR() *ghtest.Forge {
+	forge := &ghtest.Forge{}
+	forge.Seed(ghtest.Seed{PRs: []gh.PR{{Number: 2, HeadRef: "child", BaseRef: "parent", State: gh.Open}}})
+	return forge
+}
+
 func isAncestor(t *testing.T, repoPath, commit, ref string) bool {
 	t.Helper()
 	ancestor, err := git.Ancestor(t.Context(), repoPath, commit, ref)
@@ -81,7 +88,7 @@ func TestRetarget(t *testing.T) {
 		t.Run("github has it on "+childBaseRef, func(t *testing.T) {
 			t.Parallel()
 			root, repoPath := repoWithOrigin(t)
-			forge := &ghtest.Forge{}
+			forge := forgeWithChildPR()
 			store := openStore(t)
 			at := testAt
 
@@ -129,7 +136,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a second tick over a retargeted row appends no duplicate push row", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -158,7 +165,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("refresh on a retargeted row merges origin/main, never the deleted parent", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -188,7 +195,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a failed retarget is recorded and retried next tick", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -224,7 +231,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a retarget onto main whose content conflicts ends refresh_conflicted", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -274,7 +281,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a squash-merged parent is restacked away instead of merged back", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -326,7 +333,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a base branch rewritten under a row is restacked onto, not merged back", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -360,7 +367,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a rewrite the app did not perform is never force-pushed", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -390,7 +397,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a conflicted restack still licenses the lease after a hand resolution", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -453,7 +460,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("a retarget whose refresh declines leaves the row stale", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		at := testAt
 
@@ -510,7 +517,7 @@ func TestRetarget(t *testing.T) {
 	t.Run("skips a ticket awaiting input until it leaves that state", func(t *testing.T) {
 		t.Parallel()
 		root, repoPath := repoWithOrigin(t)
-		forge := &ghtest.Forge{}
+		forge := forgeWithChildPR()
 		store := openStore(t)
 		f := newStackedFixture(t, repoPath, store, testAt)
 		dispositionAs(t, store, f.child.URL, plan.OutcomeAsked, testAt.Add(time.Second))

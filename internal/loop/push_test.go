@@ -72,9 +72,9 @@ func TestPush(t *testing.T) {
 		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 			t.Fatal("origin has no cc-1, want it pushed")
 		}
-		calls := f.Forge.Calls("Create")
-		if len(calls) != 1 || calls[0].Repo != f.Worktree || calls[0].Base != "main" || calls[0].Draft {
-			t.Errorf("Create calls = %+v, want one non-draft PR on main from the worktree", calls)
+		pr, ok := openPRs(t, f.Forge)["cc-1"]
+		if !ok || pr.BaseRef != "main" || pr.IsDraft {
+			t.Errorf("PR on cc-1 = %+v, %v, want a non-draft PR on main", pr, ok)
 		}
 		if f.pushedTip(t) == "" {
 			t.Error("LastPushedTips() has no tip, want the push recorded")
@@ -211,8 +211,8 @@ func TestPush(t *testing.T) {
 		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 			t.Error("origin has no cc-1, want it pushed")
 		}
-		if got := len(f.Forge.Calls("Create")); got != 0 {
-			t.Errorf("Create calls = %d, want 0", got)
+		if got := openPRs(t, f.Forge); len(got) != 0 {
+			t.Errorf("PRs = %+v, want none", got)
 		}
 		if f.pushedTip(t) == "" {
 			t.Error("LastPushedTips() has no tip, want the push recorded")
