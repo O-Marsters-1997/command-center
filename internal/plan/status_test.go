@@ -9,6 +9,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
+var noBlockers = plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+
 func TestStatus(t *testing.T) {
 	t.Parallel()
 
@@ -16,7 +18,9 @@ func TestStatus(t *testing.T) {
 	t.Run("push pending names the blocker holding the push", statusPushPendingNamesTheBlocker)
 	t.Run("cancelled for a member with no run", statusCancelledWithNoRun)
 	t.Run("never cancelled once it has run", statusNeverCancelledOnceRun)
-	t.Run("with a latest run", statusWithLatestRun)
+	t.Run("latest run outcome", statusLatestRunOutcome)
+	t.Run("latest run verdict", statusLatestRunVerdict)
+	t.Run("latest run precedence", statusLatestRunPrecedence)
 	t.Run("merged outranks a later run's own disposition", statusMergedOverALaterRun)
 	t.Run("failed without a merged PR", statusFailedWithoutAMergedPR)
 	t.Run("an undisposed run is not failed", statusUndisposedRunNotFailed)
@@ -45,13 +49,13 @@ func statusBeforeAnyRun(t *testing.T) {
 		},
 		{
 			name:       "unlocked and unauthorised derives ready",
-			unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+			unlock:     noBlockers,
 			want:       plan.Ready,
 			wantReason: "no blockers",
 		},
 		{
 			name:       "unlocked and authorised derives queued waiting for a slot",
-			unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+			unlock:     noBlockers,
 			authorised: true,
 			want:       plan.Queued,
 			wantReason: "waiting for a slot",
@@ -103,7 +107,7 @@ func statusPushPendingNamesTheBlocker(t *testing.T) {
 		t.Errorf("Status(facts) = %v, %q, want the unlock reason", state, reason)
 	}
 
-	free := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	free := noBlockers
 	state, reason = plan.Status(plan.Facts{Unlock: free, LatestRun: run})
 	if state != plan.PushPending || reason != "agent finished with commits, waiting to push" {
 		t.Errorf("Status(facts) = %v, %q, want today's push pending reason", state, reason)
@@ -123,7 +127,7 @@ func statusCancelledWithNoRun(t *testing.T) {
 	t.Parallel()
 
 	state, reason := plan.Status(plan.Facts{
-		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		Unlock:          noBlockers,
 		Authorised:      true,
 		CancelledMember: true,
 	})
@@ -139,7 +143,7 @@ func statusNeverCancelledOnceRun(t *testing.T) {
 	t.Parallel()
 
 	state, _ := plan.Status(plan.Facts{
-		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		Unlock:          noBlockers,
 		LatestRun:       option.Some(plan.RunFact{Alive: true}),
 		CancelledMember: true,
 	})
@@ -148,18 +152,17 @@ func statusNeverCancelledOnceRun(t *testing.T) {
 	}
 }
 
-func statusWithLatestRun(t *testing.T) {
+type latestRunCase struct {
+	name      string
+	latestRun option.Option[plan.RunFact]
+	wantState plan.State
+	reasonHas []string
+}
+
+func statusLatestRunOutcome(t *testing.T) {
 	t.Parallel()
 
-	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
-
-	tests := []struct {
-		name         string
-		latestRun    option.Option[plan.RunFact]
-		wantState    plan.State
-		reasonHas    string
-		reasonHasLog string
-	}{
+	tests := []latestRunCase{
 		{
 			name:      "an alive run derives running regardless of unlock or authorisation",
 			latestRun: option.Some(plan.RunFact{Alive: true}),
@@ -170,9 +173,8 @@ func statusWithLatestRun(t *testing.T) {
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomeFailed), LogPath: "/state/runs/7.jsonl",
 			}),
-			wantState:    plan.Failed,
-			reasonHas:    "no commits",
-			reasonHasLog: "/state/runs/7.jsonl",
+			wantState: plan.Failed,
+			reasonHas: []string{"no commits", "/state/runs/7.jsonl"},
 		},
 		{
 			name: "a dead run with commits derives push pending",
@@ -188,7 +190,7 @@ func statusWithLatestRun(t *testing.T) {
 				Question: "Which database?\nPostgres or SQLite.",
 			}),
 			wantState: plan.AwaitingInput,
-			reasonHas: "Which database?",
+			reasonHas: []string{"Which database?"},
 		},
 		{
 			name: "a continued run derives queued while the resume is pending",
@@ -196,7 +198,7 @@ func statusWithLatestRun(t *testing.T) {
 				Alive: false, Outcome: option.Some(plan.OutcomeContinued),
 			}),
 			wantState: plan.Queued,
-			reasonHas: "resuming with your message",
+			reasonHas: []string{"resuming with your message"},
 		},
 		{
 			name: "a failed cut derives failed",
@@ -204,7 +206,7 @@ func statusWithLatestRun(t *testing.T) {
 				Alive: false, Outcome: option.Some(plan.OutcomeCutFailed),
 			}),
 			wantState: plan.Failed,
-			reasonHas: "cutting the worktree failed",
+			reasonHas: []string{"cutting the worktree failed"},
 		},
 		{
 			name: "a refused push derives push refused, naming every denied path and rule",
@@ -213,7 +215,7 @@ func statusWithLatestRun(t *testing.T) {
 				PushDenied: []plan.PathMatch{{Path: ".env.local", Rule: ".env*"}, {Path: ".npmrc", Rule: ".npmrc"}},
 			}),
 			wantState: plan.PushRefused,
-			reasonHas: "push refused: .env.local (.env*), .npmrc (.npmrc)",
+			reasonHas: []string{"push refused: .env.local (.env*), .npmrc (.npmrc)"},
 		},
 		{
 			name: "a refused push recorded as a bare path derives a reason without a rule",
@@ -222,7 +224,7 @@ func statusWithLatestRun(t *testing.T) {
 				PushDenied: []plan.PathMatch{{Path: ".mergify.yml"}},
 			}),
 			wantState: plan.PushRefused,
-			reasonHas: "push refused: .mergify.yml",
+			reasonHas: []string{"push refused: .mergify.yml"},
 		},
 		{
 			name: "a push or PR-create failure derives push failed",
@@ -232,12 +234,27 @@ func statusWithLatestRun(t *testing.T) {
 			wantState: plan.PushFailed,
 		},
 		{
+			name: "commits with no push attempt yet still derives push pending",
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush),
+			}),
+			wantState: plan.PushPending,
+		},
+	}
+	checkLatestRun(t, tests)
+}
+
+func statusLatestRunVerdict(t *testing.T) {
+	t.Parallel()
+
+	tests := []latestRunCase{
+		{
 			name: "an open PR with no verdict yet derives checking",
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 			}),
 			wantState: plan.Checking,
-			reasonHas: "no verdict yet",
+			reasonHas: []string{"no verdict yet"},
 		},
 		{
 			name: "an open PR with a checking verdict derives checking, naming the verdict's reason",
@@ -246,7 +263,7 @@ func statusWithLatestRun(t *testing.T) {
 				Verdict: option.Some(verdict.Result{Kind: verdict.Checking, Reason: "check config changed"}),
 			}),
 			wantState: plan.Checking,
-			reasonHas: "check config changed",
+			reasonHas: []string{"check config changed"},
 		},
 		{
 			name: "an open PR with a review-me verdict derives review me",
@@ -255,7 +272,7 @@ func statusWithLatestRun(t *testing.T) {
 				Verdict: option.Some(verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"}),
 			}),
 			wantState: plan.ReviewMe,
-			reasonHas: "every required check passed",
+			reasonHas: []string{"every required check passed"},
 		},
 		{
 			name: "an open PR with a needs-you verdict derives needs you over push facts alone",
@@ -264,15 +281,50 @@ func statusWithLatestRun(t *testing.T) {
 				Verdict: option.Some(verdict.Result{Kind: verdict.NeedsYou, Reason: "a required check failed"}),
 			}),
 			wantState: plan.NeedsYou,
-			reasonHas: "a required check failed",
+			reasonHas: []string{"a required check failed"},
 		},
 		{
-			name: "commits with no push attempt yet still derives push pending",
+			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
 			latestRun: option.Some(plan.RunFact{
-				Alive: false, Outcome: option.Some(plan.OutcomePush),
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{
+					Kind:   verdict.WaitingOnProducerDeploy,
+					Reason: "every required check passed except the compat check",
+				}),
 			}),
-			wantState: plan.PushPending,
+			wantState: plan.WaitingOnProducerDeploy,
+			reasonHas: []string{"except the compat check"},
 		},
+		{
+			name: "a base-moved verdict derives base moved even over a needs-you check reading",
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{
+					Kind:   verdict.BaseMoved,
+					Reason: "base moved: the parent advanced past what this branch was cut from",
+				}),
+			}),
+			wantState: plan.BaseMoved,
+			reasonHas: []string{"the parent advanced"},
+		},
+		{
+			name: "a refused fast-forward derives needs you naming the reason, outranking base moved",
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.BaseMoved}), RefreshRefused: true,
+				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
+			}),
+			wantState: plan.NeedsYou,
+			reasonHas: []string{"not a fast-forward"},
+		},
+	}
+	checkLatestRun(t, tests)
+}
+
+func statusLatestRunPrecedence(t *testing.T) {
+	t.Parallel()
+
+	tests := []latestRunCase{
 		{
 			name: "the pull request having merged outranks an open-PR verdict",
 			latestRun: option.Some(plan.RunFact{
@@ -289,40 +341,6 @@ func statusWithLatestRun(t *testing.T) {
 			wantState: plan.Withdrawn,
 		},
 		{
-			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
-			latestRun: option.Some(plan.RunFact{
-				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
-				Verdict: option.Some(verdict.Result{
-					Kind:   verdict.WaitingOnProducerDeploy,
-					Reason: "every required check passed except the compat check",
-				}),
-			}),
-			wantState: plan.WaitingOnProducerDeploy,
-			reasonHas: "except the compat check",
-		},
-		{
-			name: "a base-moved verdict derives base moved even over a needs-you check reading",
-			latestRun: option.Some(plan.RunFact{
-				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
-				Verdict: option.Some(verdict.Result{
-					Kind:   verdict.BaseMoved,
-					Reason: "base moved: the parent advanced past what this branch was cut from",
-				}),
-			}),
-			wantState: plan.BaseMoved,
-			reasonHas: "the parent advanced",
-		},
-		{
-			name: "a refused fast-forward derives needs you naming the reason, outranking base moved",
-			latestRun: option.Some(plan.RunFact{
-				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
-				Verdict: option.Some(verdict.Result{Kind: verdict.BaseMoved}), RefreshRefused: true,
-				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
-			}),
-			wantState: plan.NeedsYou,
-			reasonHas: "not a fast-forward",
-		},
-		{
 			name: "an unresolved merge derives refresh conflicted over base moved and a refused fast-forward",
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
@@ -330,7 +348,7 @@ func statusWithLatestRun(t *testing.T) {
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			}),
 			wantState: plan.RefreshConflicted,
-			reasonHas: "mid-merge",
+			reasonHas: []string{"mid-merge"},
 		},
 		{
 			name: "an unresolved merge outranks a push failure, whose re-run would spawn into it",
@@ -353,7 +371,7 @@ func statusWithLatestRun(t *testing.T) {
 				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
 			}),
 			wantState: plan.ConflictsWithMain,
-			reasonHas: "no longer merges cleanly into main",
+			reasonHas: []string{"no longer merges cleanly into main"},
 		},
 		{
 			name: "conflicts with main outranks a refused fast-forward and a base-moved verdict",
@@ -386,7 +404,7 @@ func statusWithLatestRun(t *testing.T) {
 				ConflictingPeer: "cc-9-lower-ref",
 			}),
 			wantState: plan.PushPending,
-			reasonHas: "cc-9-lower-ref",
+			reasonHas: []string{"cc-9-lower-ref"},
 		},
 		{
 			name: "conflicts with main outranks a conflicting peer",
@@ -405,23 +423,26 @@ func statusWithLatestRun(t *testing.T) {
 				Verdict:         option.Some(verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"}),
 			}),
 			wantState: plan.PushPending,
-			reasonHas: "cc-9-lower-ref",
+			reasonHas: []string{"cc-9-lower-ref"},
 		},
 	}
+	checkLatestRun(t, tests)
+}
 
+func checkLatestRun(t *testing.T, tests []latestRunCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			state, reason := plan.Status(plan.Facts{Unlock: unlocked, Authorised: false, LatestRun: tt.latestRun})
+			state, reason := plan.Status(plan.Facts{Unlock: noBlockers, Authorised: false, LatestRun: tt.latestRun})
 			if state != tt.wantState {
 				t.Errorf("Status(facts) state = %v, want %v (reason %q)", state, tt.wantState, reason)
 			}
-			if tt.reasonHas != "" && !strings.Contains(string(reason), tt.reasonHas) {
-				t.Errorf("Status(facts) reason = %q, want it to contain %q", reason, tt.reasonHas)
-			}
-			if tt.reasonHasLog != "" && !strings.Contains(string(reason), tt.reasonHasLog) {
-				t.Errorf("Status(facts) reason = %q, want it to contain %q", reason, tt.reasonHasLog)
+			for _, want := range tt.reasonHas {
+				if !strings.Contains(string(reason), want) {
+					t.Errorf("Status(facts) reason = %q, want it to contain %q", reason, want)
+				}
 			}
 		})
 	}
@@ -430,7 +451,7 @@ func statusWithLatestRun(t *testing.T) {
 func statusMergedOverALaterRun(t *testing.T) {
 	t.Parallel()
 
-	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	unlocked := noBlockers
 
 	tests := []struct {
 		name      string
@@ -474,7 +495,7 @@ func statusMergedOverALaterRun(t *testing.T) {
 func statusFailedWithoutAMergedPR(t *testing.T) {
 	t.Parallel()
 
-	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	unlocked := noBlockers
 	state, _ := plan.Status(plan.Facts{
 		Unlock: unlocked, Authorised: false,
 		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomeFailed)}),
@@ -488,7 +509,7 @@ func statusUndisposedRunNotFailed(t *testing.T) {
 	t.Parallel()
 
 	state, _ := plan.Status(plan.Facts{
-		Unlock:    plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		Unlock:    noBlockers,
 		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.None[plan.Outcome]()}),
 	})
 	if state == plan.Failed {
@@ -500,7 +521,7 @@ func statusNoLatestRun(t *testing.T) {
 	t.Parallel()
 
 	state, reason := plan.Status(plan.Facts{
-		Unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		Unlock:     noBlockers,
 		Authorised: false,
 	})
 	if state != plan.Ready || reason != "no blockers" {

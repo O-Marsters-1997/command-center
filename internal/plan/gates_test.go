@@ -118,11 +118,11 @@ func TestSnapshot_Retargets(t *testing.T) {
 		name string
 		prs  map[plan.BranchRef]plan.PR
 		row  plan.PushRow
-		want bool
+		want []plan.Retarget
 	}{
 		{name: "base merged, child open", prs: map[plan.BranchRef]plan.PR{
 			key(base.Branch): {State: plan.Merged}, key(child.Branch): {State: plan.Open},
-		}, row: row, want: true},
+		}, row: row, want: []plan.Retarget{{Ticket: child.URL, Row: row}}},
 		{name: "base still open", prs: openPRs(base, child), row: row},
 		{name: "child closed", prs: map[plan.BranchRef]plan.PR{
 			key(base.Branch): {State: plan.Merged}, key(child.Branch): {State: plan.Closed},
@@ -139,11 +139,7 @@ func TestSnapshot_Retargets(t *testing.T) {
 				Obs:     plan.Observation{PRs: tt.prs},
 				Verdict: plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{child.URL: tt.row}},
 			})
-			var want []plan.Retarget
-			if tt.want {
-				want = []plan.Retarget{{Ticket: child.URL, Row: tt.row}}
-			}
-			if diff := cmp.Diff(want, snap.Retargets()); diff != "" {
+			if diff := cmp.Diff(tt.want, snap.Retargets()); diff != "" {
 				t.Errorf("Retargets() mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -201,22 +197,24 @@ func TestSnapshot_Pushable(t *testing.T) {
 		return map[plan.TicketURL]plan.RunSummary{tk.URL: {Outcome: option.Some(outcome)}}
 	}
 
+	manual := plan.Rules{Raise: map[string]plan.RaiseMode{tk.Repo: plan.RaiseManual}}
+	verify := plan.Rules{Verify: map[string]bool{tk.Repo: true}}
+
 	tests := []struct {
-		name   string
-		in     plan.Input
-		alive  bool
-		noTip  bool
-		manual bool
-		verify bool
-		want   []plan.Push
+		name  string
+		rules plan.Rules
+		in    plan.Input
+		alive bool
+		noTip bool
+		want  []plan.Push
 	}{
 		{name: "never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, want: []plan.Push{pushed}},
-		{name: "manual repo, never pushed", in: plan.Input{Runs: run(plan.OutcomePush)}, manual: true},
+		{name: "manual repo, never pushed", rules: manual, in: plan.Input{Runs: run(plan.OutcomePush)}},
 		{
-			name:   "manual repo, tip moved past last push",
-			in:     plan.Input{Runs: run(plan.OutcomePush), Verdict: lastPush("abc")},
-			manual: true,
-			want:   []plan.Push{pushed},
+			name:  "manual repo, tip moved past last push",
+			rules: manual,
+			in:    plan.Input{Runs: run(plan.OutcomePush), Verdict: lastPush("abc")},
+			want:  []plan.Push{pushed},
 		},
 		{name: "outcome is not push", in: plan.Input{Runs: run(plan.OutcomeAsked)}},
 		{name: "no run", in: plan.Input{}},
@@ -235,33 +233,34 @@ func TestSnapshot_Pushable(t *testing.T) {
 			},
 		},
 		{
-			name: "verify pending after a refresh",
+			name:  "verify pending after a refresh",
+			rules: verify,
 			in: plan.Input{
 				Runs:      run(plan.OutcomePush),
 				Refreshes: map[plan.TicketURL]plan.RefreshFact{tk.URL: {Advanced: true}},
 			},
-			verify: true,
 		},
 		{
-			name: "verify alive",
+			name:  "verify alive",
+			rules: verify,
 			in: plan.Input{
 				Runs:     run(plan.OutcomePush),
 				Verifies: map[plan.TicketURL]plan.VerifyFact{tk.URL: {Tip: "def", Alive: true}},
 			},
-			verify: true,
 		},
 		{
-			name: "verify failed for the tip",
+			name:  "verify failed for the tip",
+			rules: verify,
 			in: plan.Input{
 				Runs: run(plan.OutcomePush),
 				Verifies: map[plan.TicketURL]plan.VerifyFact{
 					tk.URL: {Tip: "def", Outcome: option.Some(plan.OutcomeFailed)},
 				},
 			},
-			verify: true,
 		},
 		{
-			name: "verify passed for the tip",
+			name:  "verify passed for the tip",
+			rules: verify,
 			in: plan.Input{
 				Runs:      run(plan.OutcomePush),
 				Refreshes: map[plan.TicketURL]plan.RefreshFact{tk.URL: {Advanced: true}},
@@ -269,19 +268,18 @@ func TestSnapshot_Pushable(t *testing.T) {
 					tk.URL: {Tip: "def", Outcome: option.Some(plan.OutcomePassed)},
 				},
 			},
-			verify: true,
-			want:   []plan.Push{pushed},
+			want: []plan.Push{pushed},
 		},
 		{
-			name: "verify failed for an older tip",
+			name:  "verify failed for an older tip",
+			rules: verify,
 			in: plan.Input{
 				Runs: run(plan.OutcomePush),
 				Verifies: map[plan.TicketURL]plan.VerifyFact{
 					tk.URL: {Tip: "old", Outcome: option.Some(plan.OutcomeFailed)},
 				},
 			},
-			verify: true,
-			want:   []plan.Push{pushed},
+			want: []plan.Push{pushed},
 		},
 		{name: "tip unchanged since last push", in: plan.Input{Runs: run(plan.OutcomePush), Verdict: lastPush("def")}},
 		{
@@ -308,14 +306,7 @@ func TestSnapshot_Pushable(t *testing.T) {
 			obs.Runs[tk.URL] = plan.RunObservation{Alive: tt.alive}
 			tt.in.Tickets = []plan.Ticket{tk}
 			tt.in.Obs = obs
-			rules := plan.Rules{}
-			if tt.verify {
-				rules.Verify = map[string]bool{tk.Repo: true}
-			}
-			if tt.manual {
-				rules.Raise = map[string]plan.RaiseMode{tk.Repo: plan.RaiseManual}
-			}
-			got := derive(rules, tt.in).Pushable(obs)
+			got := derive(tt.rules, tt.in).Pushable(obs)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Pushable() mismatch (-want +got):\n%s", diff)
 			}
@@ -356,12 +347,10 @@ func TestSnapshot_Refreshes(t *testing.T) {
 		childTip plan.SHA
 		fact     plan.RefreshFact
 		intents  []plan.Intent
-		unpushed bool
 		want     []plan.Refresh
 	}{
 		{name: "base moved", baseTip: "b1", want: []plan.Refresh{{Ticket: child.URL, Row: row}}},
 		{name: "base unmoved", baseTip: "b0"},
-		{name: "never pushed", baseTip: "b1", unpushed: true},
 		{name: "tried and refused", baseTip: "b1", fact: plan.RefreshFact{Tried: true, Refused: true}},
 		{name: "conflict at the same tips", baseTip: "b1", childTip: "c1", fact: conflictAt("c1", "b1")},
 		{
@@ -395,15 +384,27 @@ func TestSnapshot_Refreshes(t *testing.T) {
 				Refreshes: map[plan.TicketURL]plan.RefreshFact{child.URL: tt.fact},
 				Intents:   map[plan.TicketURL][]plan.Intent{child.URL: tt.intents},
 			}
-			if tt.unpushed {
-				in.Verdict = plan.VerdictFacts{}
-			}
 			snap := derive(plan.Rules{}, in)
 			if diff := cmp.Diff(tt.want, snap.Refreshes()); diff != "" {
 				t.Errorf("Refreshes() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+
+	t.Run("never pushed", func(t *testing.T) {
+		t.Parallel()
+		snap := derive(plan.Rules{}, plan.Input{
+			Tickets: []plan.Ticket{base, child},
+			Runs:    map[plan.TicketURL]plan.RunSummary{child.URL: pushedRun()},
+			Obs: plan.Observation{
+				PRs:        openPRs(base, child),
+				BranchTips: map[plan.BranchRef]plan.SHA{key(base.Branch): "b1"},
+			},
+		})
+		if got := snap.Refreshes(); len(got) != 0 {
+			t.Errorf("Refreshes() = %v, want none", got)
+		}
+	})
 }
 
 func TestSnapshot_RepoGates(t *testing.T) {

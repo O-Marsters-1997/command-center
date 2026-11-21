@@ -21,7 +21,7 @@ func TestPreview(t *testing.T) {
 	}{
 		{
 			name:      "an unlocked row starts now",
-			unlock:    plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+			unlock:    noBlockers,
 			slice:     map[plan.TicketURL]bool{},
 			wantLabel: plan.Now,
 		},
@@ -41,7 +41,7 @@ func TestPreview(t *testing.T) {
 		},
 		{
 			name:           "a ticket already in an active launch is refused, naming that launch",
-			unlock:         plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+			unlock:         noBlockers,
 			slice:          map[plan.TicketURL]bool{},
 			activeLaunchID: 3,
 			wantLabel:      plan.Refused,

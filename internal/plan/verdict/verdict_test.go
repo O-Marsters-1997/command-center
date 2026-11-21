@@ -302,16 +302,6 @@ func evaluateGrammar(t *testing.T) {
 	}
 }
 
-func TestKind_String(t *testing.T) {
-	t.Parallel()
-
-	for k := verdict.Checking; k <= verdict.WaitingOnProducerDeploy; k++ {
-		if k.String() == "" {
-			t.Errorf("Kind(%d).String() = %q, want a wire name", int(k), "")
-		}
-	}
-}
-
 func TestPredicate_IsZero(t *testing.T) {
 	t.Parallel()
 

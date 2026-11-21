@@ -71,23 +71,25 @@ func TestSnapshot_AutoRemovals(t *testing.T) {
 	t.Parallel()
 	first := ticket("1", "cc-1")
 
+	checkedOut := map[plan.BranchRef]string{key(first.Branch): "/wt/cc-1"}
+
 	tests := []struct {
-		name     string
-		pr       plan.PRState
-		worktree bool
-		intents  []plan.Intent
-		held     []plan.Intent
-		refusals map[plan.TicketURL]string
-		want     []plan.TicketURL
+		name      string
+		pr        plan.PRState
+		worktrees map[plan.BranchRef]string
+		intents   []plan.Intent
+		held      []plan.Intent
+		refusals  map[plan.TicketURL]string
+		want      []plan.TicketURL
 	}{
-		{name: "merged with a worktree", pr: plan.Merged, worktree: true, want: []plan.TicketURL{first.URL}},
-		{name: "open pull request", pr: plan.Open, worktree: true},
+		{name: "merged with a worktree", pr: plan.Merged, worktrees: checkedOut, want: []plan.TicketURL{first.URL}},
+		{name: "open pull request", pr: plan.Open, worktrees: checkedOut},
 		{name: "worktree already gone", pr: plan.Merged},
-		{name: "intent pending", pr: plan.Merged, worktree: true,
+		{name: "intent pending", pr: plan.Merged, worktrees: checkedOut,
 			intents: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
-		{name: "intent held for undo", pr: plan.Merged, worktree: true,
+		{name: "intent held for undo", pr: plan.Merged, worktrees: checkedOut,
 			held: []plan.Intent{{ID: 1, Ticket: first.URL, Verb: plan.VerbRemoveWorktree}}},
-		{name: "removal refused before", pr: plan.Merged, worktree: true,
+		{name: "removal refused before", pr: plan.Merged, worktrees: checkedOut,
 			refusals: map[plan.TicketURL]string{first.URL: "worktree is dirty"}},
 	}
 	for _, tt := range tests {
@@ -95,9 +97,7 @@ func TestSnapshot_AutoRemovals(t *testing.T) {
 			t.Parallel()
 			obs := plan.NewObservation(time.Time{})
 			obs.PRs[key(first.Branch)] = plan.PR{Number: 1, State: tt.pr}
-			if tt.worktree {
-				obs.Worktrees[key(first.Branch)] = "/wt/cc-1"
-			}
+			obs.Worktrees = tt.worktrees
 			snap := derive(plan.Rules{}, plan.Input{
 				Tickets: []plan.Ticket{first}, Obs: obs,
 				Runs:     map[plan.TicketURL]plan.RunSummary{first.URL: {Outcome: option.Some(plan.OutcomePush)}},
