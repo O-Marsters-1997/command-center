@@ -1420,6 +1420,13 @@
     font-size: var(--text-xs);
   }
 
+  .rail-link > .rail-ref {
+    order: 0;
+    min-width: 3ch;
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
   .rail-title {
     flex: 1;
     min-width: 0;

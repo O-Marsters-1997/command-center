@@ -3,6 +3,7 @@
 {{define "railItem"}}
 <a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
+  <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
   {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
   <span class="rail-state sr-only">{{.Label}}</span>
@@ -13,6 +14,7 @@
 {{define "railWaitingItem"}}
 <a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
+  <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
   {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
   <span class="rail-state">{{.Label}}</span>
