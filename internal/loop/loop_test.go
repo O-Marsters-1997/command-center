@@ -407,8 +407,8 @@ func TestLoop_RunOnce(t *testing.T) {
 		fake := &runnertest.Runner{}
 		lp := newLoopWithDeps(loop.Deps{
 			Store: store, Observe: loop.NewObserver(store, forge, cfg), Clock: fixedClock(at), Config: cfg, Workspace: ws,
-			Runner: fake, Tracker: resolve,
-		}, loop.WithForge(forge))
+			Runner: fake,
+		}, loop.WithForge(forge), loop.WithTracker(resolve))
 		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: "project:x", Verb: plan.VerbImport, At: at})
 		authoriseTicket(t, store, issue.URL, composeHash(issue.URL), at)
 		tick := func(n int) {

@@ -11,7 +11,7 @@ import (
 
 type Kind string
 
-const GitHub Kind = "github"
+const GitHub = Kind(plan.TrackerGitHub)
 
 type Feature string
 
