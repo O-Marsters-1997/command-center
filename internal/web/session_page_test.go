@@ -118,17 +118,10 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
 	storetest.Tickets(t, store, ticket)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+		Pgid: 4242, StartedAt: startedAt, LogPath: logPath,
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: logPath,
-	}); err != nil {
-		t.Fatalf("RecordSpawn(%d): %v", runID, err)
-	}
 	obs := plan.Observation{
 		ObservedAt: now,
 		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
@@ -150,17 +143,13 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 func writeLog(t *testing.T, n int) string {
 	t.Helper()
 
-	path := filepath.Join(t.TempDir(), "run.jsonl")
 	var b strings.Builder
 	for i := 1; i <= n; i++ {
 		fmt.Fprintf(&b, `{"type":"assistant","timestamp":"2026-08-20T12:00:%02dZ",`+
 			`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"step %d"}}]}}`+"\n",
 			i%60, i)
 	}
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		t.Fatalf("WriteFile(%s): %v", path, err)
-	}
-	return path
+	return writeRunLog(t, b.String())
 }
 
 func sessionPagePath(ticketURL string) string { return view.SessionPath(ticketURL) }
@@ -345,15 +334,11 @@ func TestSessionPage(t *testing.T) {
 
 	t.Run("the raw tab tables the log and filters it by kind and text", func(t *testing.T) {
 		t.Parallel()
-		logPath := filepath.Join(t.TempDir(), "run.jsonl")
-		log := `{"type":"system","subtype":"init"}` + "\n" +
-			`{"type":"assistant","timestamp":"2026-08-20T12:00:01Z","message":{"content":[` +
-			`{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"go vet"}}]}}` + "\n" +
-			`{"type":"user","message":{"content":[` +
-			`{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"vet: bad"}]}}` + "\n"
-		if err := os.WriteFile(logPath, []byte(log), 0o600); err != nil {
-			t.Fatalf("WriteFile(%q): %v", logPath, err)
-		}
+		logPath := writeRunLog(t, `{"type":"system","subtype":"init"}`+"\n"+
+			`{"type":"assistant","timestamp":"2026-08-20T12:00:01Z","message":{"content":[`+
+			`{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"go vet"}}]}}`+"\n"+
+			`{"type":"user","message":{"content":[`+
+			`{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"vet: bad"}]}}`+"\n")
 		st := detailStore(t, logPath, testNow, testNow)
 
 		tests := []struct {

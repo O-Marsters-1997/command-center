@@ -21,35 +21,15 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
-	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
-	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton(%q): %v", ticketURL, err)
-	}
-	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn(%d): %v", runID, err)
-	}
-	return runID
-}
-
 func seededRunning(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	store := seededStore(t, testNow)
-	seedRun(t, store, "sandbox://CC-1")
-	obs, _, err := store.LastObservation(t.Context())
-	if err != nil {
-		t.Fatalf("LastObservation: %v", err)
-	}
-	obs.Runs = map[plan.TicketURL]plan.RunObservation{"sandbox://CC-1": {Alive: true}}
-	if err := store.SaveObservation(t.Context(), obs); err != nil {
-		t.Fatalf("SaveObservation: %v", err)
-	}
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: "sandbox://CC-1", Kind: "agent", PromptHash: "hash-1",
+		Pgid: 4242, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
+		Alive: true, ObservedAt: testNow,
+	})
 	return store
 }
 
@@ -57,13 +37,11 @@ func seededFailed(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	store := seededStore(t, testNow)
-	runID := seedRun(t, store, "sandbox://CC-1")
-	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
-		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(1),
-		Cost: option.None[float64](), EndedAt: testNow,
-	}); err != nil {
-		t.Fatalf("RecordDisposition(%d): %v", runID, err)
-	}
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: "sandbox://CC-1", Kind: "agent", PromptHash: "hash-1",
+		Pgid: 4242, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
+		Outcome: option.Some(plan.OutcomeFailed), ExitCode: option.Some(1), EndedAt: testNow,
+	})
 	return store
 }
 
@@ -145,27 +123,13 @@ func pendingMutationIntentCount(t *testing.T, store *storepkg.Store) int {
 func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
-	ctx := t.Context()
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+		Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+		Alive: true, ObservedAt: now,
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn(%d): %v", runID, err)
-	}
-	obs := plan.Observation{
-		ObservedAt: now,
-		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
-	}
-	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatalf("SaveObservation: %v", err)
-	}
 	return store
 }
 
