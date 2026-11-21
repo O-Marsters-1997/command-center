@@ -41,10 +41,15 @@ func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 	if err != nil {
 		return Banner{}, fmt.Errorf("track pending: %w", err)
 	}
-	repo, known, err := r.KnownRepo(ctx, scope)
+	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return Banner{}, fmt.Errorf("load known repo: %w", err)
+		return Banner{}, fmt.Errorf("load repos: %w", err)
 	}
+	repo, known := knownRepo(repos, scope)
+	return bannerOf(scope, pending, repo, known), nil
+}
+
+func bannerOf(scope string, pending bool, repo store.Repo, known bool) Banner {
 	b := Banner{Repo: scope}
 	switch {
 	case pending:
@@ -58,7 +63,7 @@ func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 	b.Glyph, b.Text = bannerWords(b.State, repo)
 	b.Steps = checkSteps(b.State, repo)
 	b.Defaults = b.State == BannerReady && repo.SettingsSource != string(config.SourceFile)
-	return b, nil
+	return b
 }
 
 func bannerState(repo store.Repo) BannerState {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -66,7 +67,7 @@ type LogDetail struct {
 	StreamPath string
 	Worked     workedLine
 	Summary    WorkedSummary
-	Final      *LogLine
+	Final      option.Option[LogLine]
 }
 
 type LogSource struct {
@@ -110,7 +111,7 @@ func BuildLogDetail(src LogSource, params Params) LogDetail {
 	gridChecks(detail.Phases, src.Checks)
 	if final != "" {
 		line := sayLine(final)
-		detail.Final = &line
+		detail.Final = option.Some(line)
 	}
 	return detail
 }

@@ -16,60 +16,49 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-const defaultBaseBranch = "main"
-
 type Row struct {
-	URL             string           `json:"url"`
-	Ref             string           `json:"ref"`
-	Repo            string           `json:"-"`
-	Feature         string           `json:"-"`
-	Project         string           `json:"-"`
-	ProjectHue      int              `json:"-"`
-	Title           string           `json:"title"`
-	State           string           `json:"state"`
-	Reason          string           `json:"reason"`
-	Label           string           `json:"label"`
-	Detail          string           `json:"detail"`
-	Updated         Age              `json:"-"`
-	Last            string           `json:"-"`
-	Question        string           `json:"-"`
-	Glyph           plan.GlyphWord   `json:"glyph"`
-	Alive           bool             `json:"alive"`
-	Verbs           []plan.Verb      `json:"-"`
-	Branch          string           `json:"-"`
-	BlockedBy       []string         `json:"-"`
-	PendingVerbs    []plan.Verb      `json:"-"`
-	Base            string           `json:"-"`
-	BaseVerdict     string           `json:"-"`
-	StackDepth      int              `json:"-"`
-	MergeOrder      int              `json:"-"`
-	Warning         string           `json:"-"`
-	Refusal         string           `json:"-"`
-	Blocking        []string         `json:"blocking"`
-	LockedBehind    int              `json:"-"`
-	After           []string         `json:"after"`
-	Unlocks         []string         `json:"-"`
-	Worktree        string           `json:"-"`
-	PRNumber        int              `json:"pr_number"`
-	PRState         string           `json:"-"`
-	PRURL           string           `json:"-"`
-	Pgid            string           `json:"-"`
-	Elapsed         string           `json:"elapsed"`
-	ElapsedSeconds  int              `json:"-"`
-	ElapsedPercent  int              `json:"-"`
-	LogPath         string           `json:"-"`
-	SpendTokens     int              `json:"-"`
-	ChecksPassed    int              `json:"checks_passed"`
-	ChecksTotal     int              `json:"checks_total"`
-	Checks          []Check          `json:"-"`
-	RedChecks       []Check          `json:"-"`
-	Draft           bool             `json:"-"`
-	DraftReason     string           `json:"-"`
-	AgentPctWeek    float64          `json:"-"`
-	FollowUpPctWeek float64          `json:"-"`
-	SpendPctWeek    float64          `json:"-"`
-	TicketOpen      bool             `json:"-"`
-	Protected       []plan.PathMatch `json:"protected"`
+	URL            string           `json:"url"`
+	Ref            string           `json:"ref"`
+	Repo           string           `json:"-"`
+	Feature        string           `json:"-"`
+	Project        string           `json:"-"`
+	ProjectHue     int              `json:"-"`
+	Title          string           `json:"title"`
+	State          string           `json:"state"`
+	Reason         string           `json:"reason"`
+	Label          string           `json:"label"`
+	Detail         string           `json:"detail"`
+	Updated        Age              `json:"-"`
+	Last           string           `json:"-"`
+	Question       string           `json:"-"`
+	Glyph          plan.GlyphWord   `json:"glyph"`
+	Alive          bool             `json:"alive"`
+	Verbs          []plan.Verb      `json:"-"`
+	Branch         string           `json:"-"`
+	BlockedBy      []string         `json:"-"`
+	PendingVerbs   []plan.Verb      `json:"-"`
+	Base           string           `json:"-"`
+	StackDepth     int              `json:"-"`
+	MergeOrder     int              `json:"-"`
+	Refusal        string           `json:"-"`
+	Blocking       []string         `json:"blocking"`
+	LockedBehind   int              `json:"-"`
+	After          []string         `json:"after"`
+	Unlocks        []string         `json:"-"`
+	Worktree       string           `json:"-"`
+	PRNumber       int              `json:"pr_number"`
+	PRURL          string           `json:"-"`
+	Pgid           string           `json:"-"`
+	Elapsed        string           `json:"elapsed"`
+	ElapsedSeconds int              `json:"-"`
+	LogPath        string           `json:"-"`
+	SpendTokens    int              `json:"-"`
+	ChecksPassed   int              `json:"checks_passed"`
+	ChecksTotal    int              `json:"checks_total"`
+	Checks         []Check          `json:"-"`
+	RedChecks      []Check          `json:"-"`
+	SpendPctWeek   float64          `json:"-"`
+	Protected      []plan.PathMatch `json:"protected"`
 
 	Launchable  bool         `json:"-"`
 	Buttons     []VerbButton `json:"-"`
@@ -163,7 +152,6 @@ func applyViewState(rows []Row, params Params) {
 
 func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, projects map[string]ProjectMark) []Row {
 	rows := make([]Row, 0, len(tickets))
-	verdictLabelByBranch := make(map[string]string, len(tickets))
 	baseByBranch := make(map[string]string, len(tickets))
 	for _, t := range tickets {
 		url := plan.TicketURL(t.URL)
@@ -172,7 +160,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			continue
 		}
 		latestRun := in.Runs[url]
-		verdictLabelByBranch[t.Branch] = runVerdictLabel(e.Run)
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
 		pr := in.Obs.PRs[t.Ref()]
 		var redLeaves []string
@@ -214,20 +201,16 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Base:           e.Unlock.BaseBranch,
 			Worktree:       in.Obs.Worktrees[t.Ref()],
 			PRNumber:       pr.Number,
-			PRState:        pr.State.String(),
 			PRURL:          pr.URL,
 			Pgid:           pgid,
 			Elapsed:        elapsed,
 			ElapsedSeconds: elapsedSeconds,
 			LogPath:        e.LogPath,
-			Warning:        cmp.Or(readyToMergeWarning(pr), refusal),
 			Refusal:        refusal,
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
 			Blocking:       urlStrings(e.Unlock.Blocking),
 			LockedBehind:   e.LockedBehind,
-			Draft:          pr.IsDraft,
-			DraftReason:    e.DraftReason,
 			Protected:      e.LastPush.UnwrapOr(plan.PushRow{}).Protected,
 		})
 	}
@@ -240,27 +223,12 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		}
 		rows[i].ChecksTotal = len(rows[i].Checks)
 	}
-	longestElapsed := 0
-	for _, r := range rows {
-		longestElapsed = max(longestElapsed, r.ElapsedSeconds)
-	}
 	for i := range rows {
-		if rows[i].Base != "" && rows[i].Base != defaultBaseBranch {
-			rows[i].BaseVerdict = verdictLabelByBranch[rows[i].Base]
-		}
 		rows[i].StackDepth = plan.StackDepth(rows[i].Branch, baseByBranch)
 		rows[i].MergeOrder = rows[i].StackDepth + 1
-		rows[i].ElapsedPercent = PercentOf(rows[i].ElapsedSeconds, longestElapsed)
 	}
 	nameDependencies(rows, in.Tickets)
 	return rows
-}
-
-func PercentOf(part, total int) int {
-	if total <= 0 {
-		return 0
-	}
-	return part * 100 / total
 }
 
 func sortedChecks(checks map[string]plan.CheckState) []Check {
@@ -441,14 +409,6 @@ func pendingVerbs(intents []plan.Intent) []plan.Verb {
 		verbs[i] = intent.Verb
 	}
 	return verbs
-}
-
-func readyToMergeWarning(pr plan.PR) string {
-	if !plan.StackedReadyToMergeWarning(pr.BaseRef, pr.Labels) {
-		return ""
-	}
-	return fmt.Sprintf(
-		"ready-to-merge on a non-main base (%s): would squash into the parent branch, checks unseen", pr.BaseRef)
 }
 
 func removalWarning(s plan.State, detail string) string {

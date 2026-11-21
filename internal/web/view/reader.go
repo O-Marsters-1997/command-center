@@ -51,6 +51,23 @@ type Board struct {
 	TicketCount      int
 	WaveCount        int
 	Launch           option.Option[LaunchModal]
+
+	in    plan.Input
+	snap  plan.Snapshot
+	repos []store.Repo
+	split map[agentlog.Window]windowSplit
+}
+
+func (r *Reader) sessionRow(ctx context.Context, now time.Time, ref SessionRef) (Board, Row, error) {
+	board, err := r.Board(ctx, now, Params{})
+	if err != nil {
+		return Board{}, Row{}, fmt.Errorf("load board: %w", err)
+	}
+	row, ok := board.rowFor(ref)
+	if !ok {
+		return Board{}, Row{}, ErrSessionNotFound
+	}
+	return board, row, nil
 }
 
 func (b Board) LaunchCount() int {
@@ -125,7 +142,7 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = now
-	return plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in), nil
+	return plan.Daemon{Workflows: config.Workflows()}.Derive(in), nil
 }
 
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
@@ -182,6 +199,10 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Tabs:             filterTabs(sections, params),
 		BoardPath:        params.BoardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
+		in:               f.in,
+		snap:             f.snap,
+		repos:            f.repos,
+		split:            f.split,
 	}, nil
 }
 

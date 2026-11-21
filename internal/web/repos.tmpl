@@ -132,7 +132,7 @@
     hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
 </form>
 <div id="repo-results" class="track-menu">
-{{with .Search}}{{template "repoResults" .}}{{end}}
+{{if .Search.IsSome}}{{template "repoResults" .Search.Unwrap}}{{end}}
 </div>
 </div>
 <p class="text-muted text-xs mt-1 mb-3">Search runs as this machine's <code>gh</code> identity.</p>
