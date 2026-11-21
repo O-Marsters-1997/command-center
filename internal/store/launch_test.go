@@ -49,11 +49,11 @@ func readEvents(t *testing.T, store *storepkg.Store) []storepkg.Event {
 
 func readMemberships(t *testing.T, store *storepkg.Store) map[plan.TicketURL]plan.LaunchMembership {
 	t.Helper()
-	memberships, err := store.LaunchMemberships(t.Context())
+	in, err := store.PlanInput(t.Context())
 	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
+		t.Fatalf("PlanInput: %v", err)
 	}
-	return memberships
+	return in.Memberships
 }
 
 func launchMemberHashes(t *testing.T, dsn string) map[string]string {

@@ -23,7 +23,7 @@ func (n *recordingNotifier) Notify(_ context.Context, title, _ string) error {
 func (f *pushFixture) seedAutoCIFailed(t *testing.T, autoRounds int) {
 	t.Helper()
 	for range autoRounds {
-		if _, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		if _, _, err := f.Store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: f.Ticket.URL, Kind: plan.RunKindFollowUp, BaselineSHA: "older-tip", PromptHash: "h",
 			Cause: plan.CauseCIFailed,
 		}); err != nil {
@@ -62,11 +62,11 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 		if !strings.Contains(spawns[0].Prompt, "boom") {
 			t.Errorf("prompt = %q, want it to carry the failed log", spawns[0].Prompt)
 		}
-		histories, err := f.Store.AutoHistories(t.Context())
+		in, err := f.Store.PlanInput(t.Context())
 		if err != nil {
-			t.Fatalf("AutoHistories: %v", err)
+			t.Fatalf("PlanInput: %v", err)
 		}
-		if got := histories[plan.TicketURL(f.Ticket.URL)]; got.Rounds != 1 || got.LastTip == "" {
+		if got := in.Auto[plan.TicketURL(f.Ticket.URL)]; got.Rounds != 1 || got.LastTip == "" {
 			t.Errorf("auto history = %+v, want one round with a tip", got)
 		}
 	})

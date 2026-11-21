@@ -85,9 +85,27 @@ func TestStore_PlanInput(t *testing.T) {
 
 	t.Run("Recorded reports which transition events exist", func(t *testing.T) {
 		t.Parallel()
-		st := newStore(t)
-		appendEvents(t, st, storepkg.Event{At: testNow, TicketURL: ticket.URL, Kind: storepkg.EventPROpened})
-		want := map[plan.TicketURL]plan.Recorded{url: {Opened: true}}
+		st := openStore(t)
+		tickets := []storepkg.Ticket{
+			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+			{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
+			{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
+			{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4"},
+		}
+		storetest.Tickets(t, st, tickets...)
+		appendEvents(t, st,
+			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened},
+			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPROpened},
+			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPRMerged},
+			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-2", Kind: storepkg.EventParked},
+			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-3", Kind: storepkg.EventRestacked},
+		)
+		want := map[plan.TicketURL]plan.Recorded{
+			"sandbox://CC-1": {Opened: true, Merged: true},
+			"sandbox://CC-2": {Parked: true},
+			"sandbox://CC-3": {},
+			"sandbox://CC-4": {},
+		}
 		if diff := cmp.Diff(want, read(t, st).Recorded); diff != "" {
 			t.Errorf("PlanInput().Recorded mismatch (-want +got):\n%s", diff)
 		}

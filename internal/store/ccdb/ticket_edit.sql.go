@@ -8,7 +8,6 @@ package ccdb
 import (
 	"context"
 	"encoding/json"
-	"time"
 )
 
 const editTicket = `-- name: EditTicket :execrows
@@ -60,19 +59,4 @@ func (q *Queries) PendingEditTicketIntents(ctx context.Context) ([]PendingEditTi
 		return nil, err
 	}
 	return items, nil
-}
-
-const queueEditTicketIntent = `-- name: QueueEditTicketIntent :exec
-INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'edit_ticket', $3)
-`
-
-type QueueEditTicketIntentParams struct {
-	At       time.Time
-	TicketID string
-	Payload  json.RawMessage
-}
-
-func (q *Queries) QueueEditTicketIntent(ctx context.Context, arg QueueEditTicketIntentParams) error {
-	_, err := q.db.ExecContext(ctx, queueEditTicketIntent, arg.At, arg.TicketID, arg.Payload)
-	return err
 }

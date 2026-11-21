@@ -67,7 +67,7 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 			t.Fatalf("WriteFile(1.prompt): %v", err)
 		}
 	}
-	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := st.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: sessionTicket, Kind: opts.Kind, PromptHash: "hash", Step: "implement",
 		Session: storepkg.RunSession{StartNew: true},
 	})

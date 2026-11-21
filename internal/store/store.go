@@ -475,8 +475,7 @@ const (
 	metaLastVerdicts  = "last_verdicts"
 )
 
-// CheckingTicks counts successful ticks while each ticket awaits a CI verdict, not wall time.
-func (s *Store) CheckingTicks(ctx context.Context) (map[plan.TicketURL]int, error) {
+func (s *Store) checkingTicks(ctx context.Context) (map[plan.TicketURL]int, error) {
 	ticks := map[plan.TicketURL]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
 		return nil, err
@@ -485,7 +484,7 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[plan.TicketURL]int, erro
 }
 
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.TicketURL) error {
-	ticks, err := s.CheckingTicks(ctx)
+	ticks, err := s.checkingTicks(ctx)
 	if err != nil {
 		return err
 	}
@@ -496,7 +495,7 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.Ti
 }
 
 func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL) error {
-	ticks, err := s.CheckingTicks(ctx)
+	ticks, err := s.checkingTicks(ctx)
 	if err != nil {
 		return err
 	}
@@ -507,8 +506,7 @@ func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL)
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
-// LastVerdicts returns the latest recorded CI verdict per ticket URL.
-func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
+func (s *Store) lastVerdicts(ctx context.Context) (map[string]string, error) {
 	verdicts := map[string]string{}
 	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
 		return nil, err
@@ -608,17 +606,6 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 		return fmt.Errorf("append event %s: %w", e.Kind, err)
 	}
 	return nil
-}
-
-func (s *Store) HasEvent(ctx context.Context, ticketURL string, kind EventKind) (bool, error) {
-	found, err := s.q.HasEvent(ctx, ccdb.HasEventParams{
-		TicketID: nullIfEmpty(ticketURL),
-		Kind:     string(kind),
-	})
-	if err != nil {
-		return false, fmt.Errorf("has event %s for %s: %w", kind, ticketURL, err)
-	}
-	return found, nil
 }
 
 func (s *Store) HasEventDetail(ctx context.Context, ticketURL string, kind EventKind, detail string) (bool, error) {

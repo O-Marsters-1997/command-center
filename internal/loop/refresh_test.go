@@ -124,7 +124,7 @@ func advanceParentPastTheConflict(t *testing.T, repoPath string, f stackedFixtur
 
 func dispositionAs(t *testing.T, store *storepkg.Store, ticketURL string, outcome plan.Outcome, at time.Time) {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -183,10 +183,7 @@ func TestRefresh(t *testing.T) {
 			t.Errorf("events = %+v, want a pushed event naming the merge commit %s", events, childHead)
 		}
 
-		pushes, err := store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes(): %v", err)
-		}
+		pushes := planInput(t, store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 			t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s", got, parentTip1)
 		}
@@ -252,10 +249,7 @@ func TestRefresh(t *testing.T) {
 			t.Errorf("parent worktree does not contain main's own advance after refresh: %v", err)
 		}
 
-		pushes, err := store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes(): %v", err)
-		}
+		pushes := planInput(t, store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.parent.URL)].BaseSHAAtPush; string(got) != mainTip1 {
 			t.Errorf("parent's recorded base sha = %s, want the advanced main tip %s", got, mainTip1)
 		}
@@ -644,10 +638,7 @@ func TestRefresh(t *testing.T) {
 		if row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL); row.State == "Refresh conflicted" {
 			t.Errorf("child state after hand resolution = %q, want it cleared", row.State)
 		}
-		pushes, err := c.store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes(): %v", err)
-		}
+		pushes := planInput(t, c.store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(c.f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 			t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s", got, parentTip1)
 		}

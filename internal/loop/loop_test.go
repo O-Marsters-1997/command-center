@@ -148,10 +148,7 @@ func TestLoop_RunOnce(t *testing.T) {
 			runner.ProcessRunner{})
 		runOnce(t, lp)
 
-		memberships, err := store.LaunchMemberships(ctx)
-		if err != nil {
-			t.Fatalf("LaunchMemberships: %v", err)
-		}
+		memberships := planInput(t, store).Memberships
 		if memberships["sandbox://CC-1"].LaunchID == 0 {
 			t.Error("LaunchMemberships()[sandbox://CC-1].LaunchID = 0, want the queued launch applied")
 		}
@@ -186,10 +183,7 @@ func TestLoop_RunOnce(t *testing.T) {
 			t.Fatalf("RunOnce(failing observe) error = %v, want %v", err, boom)
 		}
 
-		memberships, err := store.LaunchMemberships(ctx)
-		if err != nil {
-			t.Fatalf("LaunchMemberships: %v", err)
-		}
+		memberships := planInput(t, store).Memberships
 		if len(memberships) != 0 {
 			t.Errorf("LaunchMemberships() = %+v, want none applied by a failed observe", memberships)
 		}
@@ -246,12 +240,8 @@ func TestLoop_RunOnce(t *testing.T) {
 		}
 		runOnce(t, ok)
 
-		ticks, err := store.CheckingTicks(ctx)
-		if err != nil {
-			t.Fatalf("CheckingTicks: %v", err)
-		}
-		if got := ticks["sandbox://CC-1"]; got != 4 {
-			t.Errorf("CheckingTicks()[sandbox://CC-1] = %d after 4 good and 50 failed observes, want 4", got)
+		if got, want := planInput(t, store).Verdict.CheckingFor["sandbox://CC-1"], 4*storepkg.TickPeriod; got != want {
+			t.Errorf("CheckingFor[sandbox://CC-1] = %v after 4 good and 50 failed observes, want %v", got, want)
 		}
 	})
 
@@ -302,7 +292,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 			t.Fatalf("UpsertTickets: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		})
 		if err != nil {
@@ -363,7 +353,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 			t.Fatalf("UpsertTickets: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		})
 		if err != nil {
