@@ -48,6 +48,10 @@ type Daemon struct {
 	Workflows    map[string]Workflow
 }
 
+func (d Daemon) Derive(in Input) Snapshot {
+	return RulesFor(d, in.Obs).Derive(in)
+}
+
 func RulesFor(daemon Daemon, obs Observation) Rules {
 	n := len(obs.Settings) + len(obs.SettingsErrors)
 	rules := Rules{

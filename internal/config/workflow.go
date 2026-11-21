@@ -5,6 +5,8 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
+	"sync"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -49,6 +51,10 @@ func v1() plan.Workflow {
 
 // Workflows returns every built-in workflow, each with its hash set.
 func Workflows() map[string]plan.Workflow {
+	return maps.Clone(builtinWorkflows())
+}
+
+var builtinWorkflows = sync.OnceValue(func() map[string]plan.Workflow {
 	builtin := []plan.Workflow{
 		{Name: DefaultWorkflow, Steps: []plan.Step{{Name: "implement"}}},
 		v1(),
@@ -59,7 +65,7 @@ func Workflows() map[string]plan.Workflow {
 		out[w.Name] = w
 	}
 	return out
-}
+})
 
 func hashWorkflow(w plan.Workflow) string {
 	w.Hash = ""

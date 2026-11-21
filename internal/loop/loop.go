@@ -294,7 +294,7 @@ func (l *Loop) derive(ctx context.Context, t *tick) (plan.Snapshot, error) {
 	in.Intents, in.Held = splitHeld(in.Intents, in.Now)
 	in.Obs = t.obs
 	in.Prev = t.prev
-	return l.rules(t.obs).Derive(in), nil
+	return l.daemon().Derive(in), nil
 }
 
 func splitHeld(
@@ -314,14 +314,13 @@ func splitHeld(
 	return released, held
 }
 
-func (l *Loop) rules(obs plan.Observation) plan.Rules {
-	daemon := plan.Daemon{
+func (l *Loop) daemon() plan.Daemon {
+	return plan.Daemon{
 		MaxAgents:    l.cfg.MaxAgents,
 		MaxVerifies:  l.cfg.MaxVerifies,
 		SpendLimit5h: l.cfg.SpendLimit5h,
 		Workflows:    l.workflows,
 	}
-	return plan.RulesFor(daemon, obs)
 }
 
 func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error {

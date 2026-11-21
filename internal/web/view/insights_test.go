@@ -102,11 +102,18 @@ func TestNewInsightsPage(t *testing.T) {
 
 	t.Run("merged rows run newest first in the response's timezone", func(t *testing.T) {
 		t.Parallel()
+		paris, err := time.LoadLocation("Europe/Paris")
+		if err != nil {
+			t.Fatalf("LoadLocation(Europe/Paris): %v", err)
+		}
 		resp := view.InsightsResponse{
-			Timezone: "Europe/Paris",
+			Loc: paris,
 			Points: []view.InsightsPoint{
-				{Ticket: "A", Feature: "f", MergedAt: "2026-08-19T23:30:00Z", PctWeek: 3, AgentPctWeek: 2, FollowUpPctWeek: 1},
-				{Ticket: "B", Title: "Bee", MergedAt: "2026-08-20T08:00:00Z", PctWeek: 1, AgentPctWeek: 1},
+				{
+					Ticket: "A", Feature: "f", MergedAt: time.Date(2026, 8, 19, 23, 30, 0, 0, time.UTC),
+					PctWeek: 3, AgentPctWeek: 2, FollowUpPctWeek: 1,
+				},
+				{Ticket: "B", Title: "Bee", MergedAt: time.Date(2026, 8, 20, 8, 0, 0, 0, time.UTC), PctWeek: 1, AgentPctWeek: 1},
 			},
 		}
 		got := view.NewInsightsPage(view.Chrome{}, resp, testNow).Merged

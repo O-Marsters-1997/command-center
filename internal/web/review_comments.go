@@ -77,13 +77,9 @@ func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) er
 	ctx := r.Context()
 	ref := sessionRef(r)
 	now := s.clock.Now()
-	ticket, err := s.view.SessionTicket(ctx, now, ref)
+	ticket, snap, err := s.view.SessionSnapshot(ctx, now, ref)
 	if err != nil {
 		return fmt.Errorf("resolve ticket: %w", err)
-	}
-	snap, err := s.view.Snapshot(ctx, now)
-	if err != nil {
-		return fmt.Errorf("load snapshot: %w", err)
 	}
 	if !snap.Offers(ticket, plan.VerbFollowUp) {
 		entry, _ := snap.Entry(ticket)
@@ -117,13 +113,9 @@ func (s *Server) handleRaise(w http.ResponseWriter, r *http.Request) error {
 	if tip == "" {
 		return errorf(http.StatusBadRequest, "sha is required to raise")
 	}
-	ticket, err := s.view.SessionTicket(ctx, now, ref)
+	ticket, snap, err := s.view.SessionSnapshot(ctx, now, ref)
 	if err != nil {
 		return fmt.Errorf("resolve ticket: %w", err)
-	}
-	snap, err := s.view.Snapshot(ctx, now)
-	if err != nil {
-		return fmt.Errorf("load snapshot: %w", err)
 	}
 	if !snap.Offers(ticket, plan.VerbRaise) {
 		entry, _ := snap.Entry(ticket)
