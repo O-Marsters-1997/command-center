@@ -354,8 +354,11 @@ func planPR(pr gh.PR) plan.PR {
 
 func (l *Loop) rereadLocalTips(ctx context.Context, obs plan.Observation) {
 	for key := range obs.Worktrees {
-		if tip, err := git.BranchTip(ctx, l.checkout(key.Repo), key.Branch); err == nil {
-			obs.LocalTips[key] = plan.SHA(tip)
+		tip, err := git.BranchTip(ctx, l.checkout(key.Repo), key.Branch)
+		if err != nil {
+			l.logger.Warn("reread local tip", "repo", key.Repo, "branch", key.Branch, "err", err)
+			continue
 		}
+		obs.LocalTips[key] = plan.SHA(tip)
 	}
 }

@@ -226,6 +226,7 @@ var statusMap = []struct {
 	{view.ErrSessionNotFound, http.StatusNotFound},
 	{view.ErrNoLocalTip, http.StatusNotFound},
 	{view.ErrNoSuchLine, http.StatusBadRequest},
+	{plan.ErrUnknownTicket, http.StatusBadRequest},
 }
 
 func statusOf(err error) int {
@@ -319,7 +320,7 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 	if requested := r.URL.Query()["ticket"]; len(requested) > 0 {
 		modal, err := s.launchModal(r.Context(), s.clock.Now(), "", requested)
 		if err != nil {
-			return withStatus(http.StatusBadRequest, err)
+			return err
 		}
 		page.Launch = option.Some(modal)
 	}
@@ -465,7 +466,7 @@ func (s *Server) launchModal(
 	}
 	modal, err := s.view.TicketModal(ctx, now, tickets)
 	if err != nil {
-		return view.LaunchModal{}, withStatus(http.StatusBadRequest, err)
+		return view.LaunchModal{}, fmt.Errorf("load ticket modal: %w", err)
 	}
 	return modal, nil
 }
@@ -514,7 +515,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	launchContext := strings.TrimSpace(r.FormValue("context"))
 	base, err := snap.Preview(plan.TicketURLs(requested), "")
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return fmt.Errorf("preview launch: %w", err)
 	}
 	for _, row := range base {
 		ticketURL := string(row.Ticket.URL)
@@ -525,7 +526,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	}
 	rows, err := snap.Preview(plan.TicketURLs(requested), launchContext)
 	if err != nil {
-		return withStatus(http.StatusBadRequest, err)
+		return fmt.Errorf("preview launch with context: %w", err)
 	}
 	hashes := make(map[string]string, len(rows))
 	for _, row := range rows {
