@@ -16,8 +16,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-const defaultBaseBranch = "main"
-
 type Row struct {
 	URL            string           `json:"url"`
 	Ref            string           `json:"ref"`
