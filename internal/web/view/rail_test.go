@@ -90,7 +90,7 @@ func TestBuildRail(t *testing.T) {
 		rows[len(rows)-3].Worktree = "/wt"
 		rows[8].Worktree = "/wt"
 
-		rail := view.BuildRail(rows, testNow, view.RailParams{Open: []string{"feature:billing"}})
+		rail := view.BuildRail(rows, testNow, view.RailParams{Closed: []string{"feature:idle"}})
 
 		if diff := cmp.Diff([]string{"#1", "#12"}, refs(rail.NeedsYou)); diff != "" {
 			t.Errorf("BuildRail().NeedsYou mismatch (-want +got):\n%s", diff)
@@ -110,7 +110,7 @@ func TestBuildRail(t *testing.T) {
 			t.Errorf("billing.WaitingLine() = %q, want %q", got, want)
 		}
 		if !billing.Open {
-			t.Error("BuildRail(open=feature:billing) billing.Open = false, want true")
+			t.Error("BuildRail(closed=feature:idle) billing.Open = false, want true")
 		}
 		if diff := cmp.Diff([]string{"#5"}, refs(rail.Settled.Items)); diff != "" {
 			t.Errorf("BuildRail().Settled mismatch (-want +got):\n%s", diff)
@@ -352,8 +352,21 @@ func TestBuildRail(t *testing.T) {
 		}
 	})
 
+	t.Run("a settled item carries its merged PR's URL", func(t *testing.T) {
+		t.Parallel()
+		row := railRow("5", "billing", plan.GlyphDone)
+		row.Worktree, row.PRURL = "/wt", "https://github.com/acme/web/pull/5"
+
+		rail := view.BuildRail([]view.Row{row}, testNow, view.RailParams{})
+
+		if len(rail.Settled.Items) != 1 || rail.Settled.Items[0].PRURL != row.PRURL {
+			t.Errorf("BuildRail().Settled.Items = %+v, want one item with PRURL %q", rail.Settled.Items, row.PRURL)
+		}
+	})
+
 	t.Run("survivors are forced open only under a query", func(t *testing.T) {
 		t.Parallel()
+		closed := []string{"feature:billing", "settled"}
 		tests := []struct {
 			query    string
 			wantOpen bool
@@ -364,7 +377,7 @@ func TestBuildRail(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.query, func(t *testing.T) {
 				t.Parallel()
-				rail := view.BuildRail(searchRows(), testNow, view.RailParams{Query: tt.query})
+				rail := view.BuildRail(searchRows(), testNow, view.RailParams{Query: tt.query, Closed: closed})
 
 				if rail.Query != tt.query || rail.Features[0].Open != tt.wantOpen || rail.Settled.Open != tt.wantOpen {
 					t.Errorf("BuildRail(%q) = {Query: %q, feature open: %v, settled open: %v}, want {%q %v %v}",

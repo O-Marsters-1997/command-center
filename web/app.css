@@ -1289,7 +1289,86 @@
   .rail-slot {
     flex: 1;
     min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto;
+  }
+
+  .rail-settled {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 30px;
+    padding: 0 var(--space-1) 0 var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .rail-settled .glyph {
+    flex: none;
+  }
+
+  .rail-settled .rail-title {
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  .rail-settled .rail-title:hover {
+    color: var(--color-fg-2);
+    text-decoration: underline;
+  }
+
+  .rail-settled-act {
+    flex: none;
+    margin: 0;
+  }
+
+  .rail-broom {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-meta);
+    cursor: pointer;
+  }
+
+  .rail-broom:hover {
+    background: var(--color-surface-3);
+    color: var(--color-fg-2);
+  }
+
+  .rail-broom[data-refused] {
+    color: color-mix(in oklab, var(--color-s-failed), var(--color-ink) 12%);
+  }
+
+  .rail-broom .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .rail-broom[data-pending] .icon {
+    animation: rail-broom-spin 1s linear infinite;
+  }
+
+  @keyframes rail-broom-spin {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail-broom[data-pending] .icon {
+      animation: none;
+    }
+  }
+
+  .rail-card .rail-reason,
+  .rail-card .rail-refusal {
+    overflow-wrap: anywhere;
   }
 
   .rail-group + .rail-group {

@@ -15,7 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
-const RailOpenSeparator = "|"
+const RailClosedSeparator = "|"
 const ticketsPath = "/tickets"
 
 type Home struct {
@@ -73,6 +73,7 @@ type RailItem struct {
 	Updated   Age
 	Last      string
 	Protected bool
+	PRURL     string
 }
 
 type RailFeature struct {
@@ -115,7 +116,7 @@ type RailHealth struct {
 
 type RailParams struct {
 	Sel     string
-	Open    []string
+	Closed  []string
 	Query   string
 	Project string
 	Repo    string
@@ -182,7 +183,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
 			Project: r.Mark(), Label: r.Label,
 			Detail: r.Detail, Path: scope.withScope(cmp.Or(SessionPath(r.URL), ticketsPath)),
-			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0, Refusal: r.Refusal,
+			Updated: r.Updated, Last: r.Last, Protected: len(r.Protected) > 0, Refusal: r.Refusal, PRURL: r.PRURL,
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Detail != ""
@@ -201,7 +202,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 		}
 		return it
 	}
-	open := func(key string) bool { return slices.Contains(params.Open, key) }
+	open := func(key string) bool { return !slices.Contains(params.Closed, key) }
 	byRepoThenRef := func(a, b RailItem) int {
 		return cmp.Or(cmp.Compare(a.Repo, b.Repo), cmp.Compare(refNumber(a.URL), refNumber(b.URL)), cmp.Compare(a.URL, b.URL))
 	}

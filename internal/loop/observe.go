@@ -342,7 +342,7 @@ func planPR(pr gh.PR) plan.PR {
 		Number: pr.Number, HeadRef: pr.HeadRef, HeadOid: plan.SHA(pr.HeadOid), BaseRef: pr.BaseRef,
 		BaseOid:     plan.SHA(pr.BaseOid),
 		AuthorLogin: pr.AuthorLogin, IsDraft: pr.IsDraft, State: plan.PRState(pr.State),
-		Checks: checks, Labels: pr.Labels, MergedAt: pr.MergedAt,
+		Checks: checks, Labels: pr.Labels, MergedAt: pr.MergedAt, Title: pr.Title, URL: pr.URL,
 	}
 }
 
