@@ -86,7 +86,7 @@ func TestEnvFrom(t *testing.T) {
 		t.Parallel()
 		vars := map[string]string{
 			"HOME": "/home/olly", "XDG_CONFIG_HOME": "/xdg", "CC_DATA_DIR": "/data",
-			"CC_DATABASE_URL": "postgres://x", "CC_AGENT_COMMAND": `["a"]`, "TZ": "Europe/Paris",
+			"CC_DATABASE_URL": "postgres://x", "CC_AGENT_COMMAND": `["a"]`,
 		}
 		got, err := config.EnvFrom(func(key string) string { return vars[key] })
 		if err != nil {
@@ -94,7 +94,7 @@ func TestEnvFrom(t *testing.T) {
 		}
 		want := config.Env{
 			DataDir: "/data", DatabaseURL: "postgres://x", AgentCommand: `["a"]`,
-			Home: "/home/olly", UserConfigDir: "/xdg", TZ: "Europe/Paris",
+			Home: "/home/olly", UserConfigDir: "/xdg",
 		}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("EnvFrom(vars) mismatch (-want +got):\n%s", diff)

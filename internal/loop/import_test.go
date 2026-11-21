@@ -22,8 +22,8 @@ func importLoop(store *storepkg.Store, at time.Time, tickets ...tracker.Ticket) 
 	resolve := trackertest.ByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})
 	return newLoopWithDeps(loop.Deps{
 		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: config.Config{}, Workspace: config.Workspace{},
-		Runner: runner.ProcessRunner{}, Tracker: resolve,
-	})
+		Runner: runner.ProcessRunner{},
+	}, loop.WithTracker(resolve))
 }
 
 func TestImport(t *testing.T) {
@@ -114,8 +114,8 @@ func TestImport(t *testing.T) {
 		})
 		lp := newLoopWithDeps(loop.Deps{
 			Store: store, Observe: noOpObserve, Clock: fixedClock(testAt), Config: config.Config{},
-			Workspace: config.Workspace{}, Runner: runner.ProcessRunner{}, Tracker: resolve,
-		})
+			Workspace: config.Workspace{}, Runner: runner.ProcessRunner{},
+		}, loop.WithTracker(resolve))
 		importRepo := func(repo string) []string {
 			t.Helper()
 			intent := storepkg.VerbRequest{Ticket: "project:x", Verb: "import", Payload: repo, At: testAt}

@@ -6,7 +6,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
-const SettingsFile = ".command-centre.toml"
+const (
+	SettingsFile  = ".command-centre.toml"
+	TrackerGitHub = "github"
+)
 
 type RaiseMode string
 

@@ -49,7 +49,7 @@ func newLoopWithDeps(deps loop.Deps, opts ...loop.Option) *loop.Loop {
 		deps.Logger = discardLog
 	}
 	deps.Observe = completeObserve
-	return loop.New(deps, opts...)
+	return loop.New(deps, append([]loop.Option{loop.WithForge(&ghtest.Forge{})}, opts...)...)
 }
 
 type loopFixture struct {
