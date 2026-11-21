@@ -107,6 +107,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /launch", s.handle(s.handleLaunchPicker))
 	mux.Handle("GET /board", s.handle(s.renderBoard))
 	mux.Handle("GET /rail", s.handle(s.handleRail))
+	mux.Handle("GET /activity/tray", s.handle(s.handleActivityTray))
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
@@ -116,6 +117,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/request", s.handle(s.handleRequestChanges))
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/raise", s.handle(s.handleRaise))
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
+	mux.Handle("GET /activity", s.handle(s.handleActivity))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
@@ -364,6 +366,14 @@ func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("load rail: %w", err)
 	}
 	return renderFragment(w, r, "/", "rail", rail)
+}
+
+func (s *Server) handleActivityTray(w http.ResponseWriter, r *http.Request) error {
+	tray, err := s.view.Tray(r.Context(), s.clock.Now())
+	if err != nil {
+		return fmt.Errorf("load tray: %w", err)
+	}
+	return renderFragment(w, r, "/", "trayFragment", tray)
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
@@ -641,6 +651,9 @@ func (s *Server) handleVerbUndo(w http.ResponseWriter, r *http.Request) error {
 		toast = "Too late to undo " + string(verb)
 	case err != nil:
 		return fmt.Errorf("withdraw verb intent: %w", err)
+	}
+	if r.FormValue("from") == "tray" && hx.IsRequest(r) {
+		return s.handleActivityTray(w, r)
 	}
 	return s.afterSessionVerb(w, r, ticketURL, verb, toast, 0)
 }

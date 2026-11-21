@@ -108,15 +108,15 @@ func (l *Loop) recordTickError(ctx context.Context, message string) error {
 }
 
 func (l *Loop) applyTrackIntents(ctx context.Context) error {
-	return l.eachPendingIntent(ctx, plan.VerbTrack, func(intent plan.Intent) error {
+	return l.eachPendingIntent(ctx, plan.VerbTrack, func(intent plan.Intent) (handled, error) {
 		repos, err := l.store.Repos(ctx)
 		if err != nil {
-			return fmt.Errorf("list repos: %w", err)
+			return handled{}, fmt.Errorf("list repos: %w", err)
 		}
 		repo := store.Repo{Name: string(intent.Ticket), TrackedAt: l.clock.Now()}
 		if i := slices.IndexFunc(repos, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo.Name) }); i >= 0 {
 			if repos[i].Phase == plan.RepoReady {
-				return nil
+				return succeeded, nil
 			}
 			repo = repos[i]
 		}
@@ -125,17 +125,17 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 			remote, err := l.remoteOf(ctx, repo.Name)
 			if err != nil {
 				if upsertErr := l.store.UpsertRepo(ctx, refuse(repo, plan.RefusalClone, err.Error())); upsertErr != nil {
-					return fmt.Errorf("refuse %s: %w", repo.Name, upsertErr)
+					return handled{}, fmt.Errorf("refuse %s: %w", repo.Name, upsertErr)
 				}
-				return nil
+				return failedWith(err.Error()), nil
 			}
 			repo.Remote = remote
 		}
 		repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoCloning, plan.RefusalUnknown, ""
 		if err := l.store.UpsertRepo(ctx, repo); err != nil {
-			return fmt.Errorf("start cloning %s: %w", repo.Name, err)
+			return handled{}, fmt.Errorf("start cloning %s: %w", repo.Name, err)
 		}
-		return nil
+		return succeeded, nil
 	})
 }
 

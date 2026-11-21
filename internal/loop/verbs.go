@@ -19,23 +19,23 @@ import (
 )
 
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntentEntry(ctx, snap, plan.VerbAbort, func(_ plan.Intent, e plan.Entry) error {
+	return l.eachIntentEntry(ctx, snap, plan.VerbAbort, func(_ plan.Intent, e plan.Entry) (handled, error) {
 		return l.abortOne(ctx, e.Ticket, obs)
 	})
 }
 
-func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation) error {
+func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation) (handled, error) {
 	url := string(ticket.URL)
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
-		return l.event(ctx, url, store.EventMergeAbortFailed, refusal)
+		return l.refuse(ctx, url, store.EventMergeAbortFailed, refusal)
 	}
 	if err := git.MergeAbort(ctx, worktreePath); err != nil {
-		return l.event(ctx, url, store.EventMergeAbortFailed, err.Error())
+		return l.refuse(ctx, url, store.EventMergeAbortFailed, err.Error())
 	}
 
 	delete(obs.MidMerge, ticket.Ref())
-	return l.event(ctx, url, store.EventMergeAborted, "")
+	return succeeded, l.event(ctx, url, store.EventMergeAborted, "")
 }
 
 func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, refusal string) {
@@ -52,10 +52,10 @@ func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, re
 func (l *Loop) applyFollowUpIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntentEntry(ctx, snap, plan.VerbFollowUp, func(intent plan.Intent, e plan.Entry) error {
+	return l.eachIntentEntry(ctx, snap, plan.VerbFollowUp, func(intent plan.Intent, e plan.Entry) (handled, error) {
 		ticket, ok := byURL[e.Ticket.URL]
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
 		picked := store.DecodeFollowUpPayload(intent.Payload)
 		return l.followUpOne(ctx, snap, t, ticket, picked, plan.CauseNone)
@@ -65,20 +65,20 @@ func (l *Loop) applyFollowUpIntents(
 func (l *Loop) followUpOne(
 	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket,
 	picked store.FollowUpPayload, cause plan.FollowUpCause,
-) error {
+) (handled, error) {
 	promptText := picked.Message
 	url := plan.TicketURL(ticket.URL)
 	if t.obs.Runs[url].Alive {
-		return errIntentPending
+		return handled{}, errIntentPending
 	}
 	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), t.obs)
 	if refusal != "" {
-		return l.event(ctx, ticket.URL, store.EventFollowUpRefused, refusal)
+		return l.refuse(ctx, ticket.URL, store.EventFollowUpRefused, refusal)
 	}
 
 	baselineSHA, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return err
+		return handled{}, err
 	}
 	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
@@ -96,7 +96,7 @@ func (l *Loop) followUpOne(
 	session, _ := snap.Session(url)
 	sessionID, err := l.resumableSession(session)
 	if err != nil {
-		return fmt.Errorf("find resumable session: %w", err)
+		return handled{}, fmt.Errorf("find resumable session: %w", err)
 	}
 	if sessionID != "" {
 		outcome := plan.OutcomeFailed
@@ -109,17 +109,18 @@ func (l *Loop) followUpOne(
 	if launched.State.FailingChecks() {
 		logs, err := l.failedLogs(ctx, ticket, launched, t.obs)
 		if err != nil {
-			return err
+			return handled{}, err
 		}
 		spec.prompt += logs
 	}
-	if err := l.spawnRun(ctx, t, spec); err != nil {
-		return fmt.Errorf("spawn follow-up: %w", err)
+	runID, err := l.spawnRun(ctx, t, spec)
+	if err != nil {
+		return handled{}, fmt.Errorf("spawn follow-up: %w", err)
 	}
 	if slices.Contains(t.spawned, url) {
 		t.obs.MarkAlive(url)
 	}
-	return nil
+	return spawned(runID), nil
 }
 
 func (l *Loop) failedLogs(
@@ -162,74 +163,82 @@ func (l *Loop) resumableSession(sessionID string) (string, error) {
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
-	return l.eachPendingIntent(ctx, plan.VerbCancel, func(intent plan.Intent) error {
+	return l.eachPendingIntent(ctx, plan.VerbCancel, func(intent plan.Intent) (handled, error) {
 		ticketID := string(intent.Ticket)
 		switch err := l.store.DisarmTicket(ctx, ticketID); {
 		case errors.Is(err, store.ErrArmedDependent):
-			return l.event(ctx, ticketID, store.EventLaunchCancelled, "disarm refused: "+err.Error())
+			return l.refuse(ctx, ticketID, store.EventLaunchCancelled, "disarm refused: "+err.Error())
 		case err != nil:
-			return fmt.Errorf("disarm ticket: %w", err)
+			return handled{}, fmt.Errorf("disarm ticket: %w", err)
 		}
-		return l.event(ctx, ticketID, store.EventLaunchCancelled, "ticket disarmed")
+		return succeeded, l.event(ctx, ticketID, store.EventLaunchCancelled, "ticket disarmed")
 	})
 }
 
 func (l *Loop) applyReRunIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntentEntry(ctx, snap, plan.VerbReRun, func(_ plan.Intent, entry plan.Entry) error {
+	return l.eachIntentEntry(ctx, snap, plan.VerbReRun, func(_ plan.Intent, entry plan.Entry) (handled, error) {
 		ticket, ok := byURL[entry.Ticket.URL]
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
 		baseBranch := entry.Unlock.BaseBranch
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		return l.reRunOne(ctx, t, ticket, entry, baseBranch)
+		runID, err := l.reRunOne(ctx, t, ticket, entry, baseBranch)
+		if err != nil {
+			return handled{}, err
+		}
+		return spawned(runID), nil
 	})
 }
 
 func (l *Loop) reRunOne(
 	ctx context.Context, t *tick, ticket store.Ticket, entry plan.Entry, baseBranch string,
-) error {
+) (plan.RunID, error) {
 	launched, promptHash := entry.Ticket, entry.PromptHash
 	begin := l.startOf(entry, t.obs)
 	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, l.checkout(ticket.Repo), ticket.Branch); err != nil {
-			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
+			return 0, fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		if err := l.cutAndSpawn(ctx, t, ticket, launched, baseBranch, promptHash, begin); err != nil {
-			return fmt.Errorf("re-cut %s: %w", ticket.Branch, err)
+		runID, err := l.cutAndSpawn(ctx, t, ticket, launched, baseBranch, promptHash, begin)
+		if err != nil {
+			return 0, fmt.Errorf("re-cut %s: %w", ticket.Branch, err)
 		}
-		return nil
+		return runID, nil
 	}
 
 	baselineSHA, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if err := l.spawnRun(ctx, t, begin.spec(ticket, launched, worktreePath, baselineSHA, promptHash, nil)); err != nil {
-		return fmt.Errorf("spawn re-run in %s: %w", worktreePath, err)
+	runID, err := l.spawnRun(ctx, t, begin.spec(ticket, launched, worktreePath, baselineSHA, promptHash, nil))
+	if err != nil {
+		return 0, fmt.Errorf("spawn re-run in %s: %w", worktreePath, err)
 	}
-	return nil
+	return runID, nil
 }
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	handled := map[plan.TicketURL]bool{}
-	return l.eachIntentEntry(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent, e plan.Entry) error {
-		if handled[intent.Ticket] {
-			return nil
+	seen := map[plan.TicketURL]bool{}
+	return l.eachIntentEntry(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent, e plan.Entry) (handled, error) {
+		if seen[intent.Ticket] {
+			return succeeded, nil
 		}
-		handled[intent.Ticket] = true
+		seen[intent.Ticket] = true
 		return l.removeWorktreeOne(ctx, e, snap.Removal(e.Ticket.URL), obs)
 	})
 }
 
 func (l *Loop) queueAutoRemovals(ctx context.Context, snap plan.Snapshot) error {
 	for _, url := range snap.AutoRemovals() {
-		request := store.VerbRequest{Ticket: string(url), Verb: plan.VerbRemoveWorktree, At: l.clock.Now()}
+		request := store.VerbRequest{
+			Ticket: string(url), Verb: plan.VerbRemoveWorktree, At: l.clock.Now(), QueuedBy: plan.QueuedByLoop,
+		}
 		if _, err := l.store.QueueVerbIntent(ctx, request); err != nil {
 			return fmt.Errorf("queue removal of %s: %w", url, err)
 		}
@@ -239,11 +248,11 @@ func (l *Loop) queueAutoRemovals(ctx context.Context, snap plan.Snapshot) error 
 
 func (l *Loop) removeWorktreeOne(
 	ctx context.Context, e plan.Entry, removal plan.Removal, obs plan.Observation,
-) error {
+) (handled, error) {
 	ticket := e.Ticket
 	url := string(ticket.URL)
-	refuse := func(detail string) error {
-		return l.event(ctx, url, store.EventRemoveWorktreeRefused, detail)
+	refuse := func(detail string) (handled, error) {
+		return l.refuse(ctx, url, store.EventRemoveWorktreeRefused, detail)
 	}
 
 	if removal.Refusal != "" {
@@ -258,7 +267,7 @@ func (l *Loop) removeWorktreeOne(
 		var refusal string
 		var err error
 		if forced, refusal, err = l.removeWorktree(ctx, ticket, removal); err != nil {
-			return err
+			return handled{}, err
 		}
 		if refusal != "" {
 			return refuse(refusal)
@@ -274,14 +283,14 @@ func (l *Loop) removeWorktreeOne(
 		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
 	if err := l.event(ctx, url, store.EventWorktreeRemoved, detail); err != nil {
-		return fmt.Errorf("record worktree removed: %w", err)
+		return handled{}, fmt.Errorf("record worktree removed: %w", err)
 	}
 	runs, err := l.store.WithdrawTicket(ctx, url, l.clock.Now(), merged)
 	if err != nil {
-		return fmt.Errorf("withdraw %s: %w", url, err)
+		return handled{}, fmt.Errorf("withdraw %s: %w", url, err)
 	}
 	l.pruneRunLogs(runs)
-	return nil
+	return succeeded, nil
 }
 
 func (l *Loop) removeWorktree(

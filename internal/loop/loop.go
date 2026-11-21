@@ -54,26 +54,29 @@ func (l *Loop) event(ctx context.Context, ticketURL string, kind store.EventKind
 
 var errIntentPending = errors.New("intent stays pending")
 
-func (l *Loop) eachIntent(ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent) error) error {
-	return l.consumeEach(ctx, snap.Intents(verb), fn)
+func (l *Loop) eachIntent(
+	ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent) (handled, error),
+) error {
+	return l.consumeEach(withSnapshot(ctx, snap), snap.Intents(verb), fn)
 }
 
 func (l *Loop) eachIntentEntry(
-	ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent, plan.Entry) error,
+	ctx context.Context, snap plan.Snapshot, verb plan.Verb, fn func(plan.Intent, plan.Entry) (handled, error),
 ) error {
-	return l.eachIntent(ctx, snap, verb, func(intent plan.Intent) error {
+	return l.eachIntent(ctx, snap, verb, func(intent plan.Intent) (handled, error) {
 		e, ok := snap.Entry(intent.Ticket)
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
-		if err := fn(intent, e); err != nil {
-			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
+		result, err := fn(intent, e)
+		if err != nil {
+			return handled{}, fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
-		return nil
+		return result, nil
 	})
 }
 
-func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(plan.Intent) error) error {
+func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(plan.Intent) (handled, error)) error {
 	pending, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return fmt.Errorf("list pending %s intents: %w", verb, err)
@@ -87,19 +90,26 @@ func (l *Loop) eachPendingIntent(ctx context.Context, verb plan.Verb, fn func(pl
 	return l.consumeEach(ctx, intents, fn)
 }
 
-func (l *Loop) consumeEach(ctx context.Context, intents []plan.Intent, fn func(plan.Intent) error) error {
+func (l *Loop) consumeEach(
+	ctx context.Context, intents []plan.Intent, fn func(plan.Intent) (handled, error),
+) error {
 	now := l.clock.Now()
 	for _, intent := range intents {
 		if intent.HeldAt(now) {
 			continue
 		}
-		switch err := fn(intent); {
+		state := ticketState(ctx, intent.Ticket)
+		result, err := fn(intent)
+		switch {
 		case errors.Is(err, errIntentPending):
 			continue
 		case err != nil:
 			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
+		consumption := store.Consumption{
+			At: l.clock.Now(), Outcome: result.outcome, Detail: result.detail, Run: result.run, TicketState: state,
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, consumption); err != nil {
 			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.Ticket, err)
 		}
 	}

@@ -28,15 +28,15 @@ func (l *Loop) cancelRun(t *tick, ticketURL string, pgid int) error {
 }
 
 func (l *Loop) applyKillIntents(ctx context.Context, t *tick) error {
-	return l.eachPendingIntent(ctx, plan.VerbKill, func(intent plan.Intent) error {
+	return l.eachPendingIntent(ctx, plan.VerbKill, func(intent plan.Intent) (handled, error) {
 		latest, err := l.store.LatestRunsByTicket(ctx)
 		if err != nil {
-			return fmt.Errorf("latest runs: %w", err)
+			return handled{}, fmt.Errorf("latest runs: %w", err)
 		}
 		if run, ok := latest[intent.Ticket]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
-			return l.cancelRun(t, string(intent.Ticket), run.Pgid.Unwrap())
+			return succeeded, l.cancelRun(t, string(intent.Ticket), run.Pgid.Unwrap())
 		}
-		return nil
+		return failedWith("no run is alive"), nil
 	})
 }
 

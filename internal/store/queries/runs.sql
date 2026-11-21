@@ -76,12 +76,31 @@ WHERE r.cause IS NOT NULL
 GROUP BY r.ticket_id;
 
 -- name: QueueVerbIntent :one
-INSERT INTO intents (at, ticket_id, verb, payload, hold_until)
-VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload), sqlc.narg(hold_until))
+INSERT INTO intents (at, ticket_id, verb, payload, hold_until, queued_by)
+VALUES (
+    sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.narg(payload), sqlc.narg(hold_until), sqlc.arg(queued_by)
+)
 RETURNING id;
 
 -- name: WithdrawHeldIntent :execrows
-DELETE FROM intents WHERE id = sqlc.arg(id) AND consumed_at IS NULL AND hold_until > sqlc.arg(now);
+UPDATE intents SET outcome = 'withdrawn', consumed_at = sqlc.arg(now), finished_at = sqlc.arg(now)
+WHERE id = sqlc.arg(id) AND consumed_at IS NULL AND hold_until > sqlc.arg(now);
+
+-- name: IntentHistory :many
+SELECT id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
+  COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
+  COALESCE(ticket_state, '')::text AS ticket_state
+FROM intents
+WHERE verb <> 'edit_ticket' AND (at >= sqlc.arg(since) OR finished_at IS NULL)
+ORDER BY id DESC;
+
+-- name: LatestRowIntents :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
+  COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
+  COALESCE(ticket_state, '')::text AS ticket_state
+FROM intents
+WHERE verb = ANY(string_to_array(sqlc.arg(verbs)::text, ','))
+ORDER BY ticket_id, id DESC;
 
 -- name: IntentConsumed :one
 SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = sqlc.arg(id);
@@ -95,7 +114,9 @@ SELECT id, ticket_id, verb, COALESCE(payload, 'null'::jsonb) AS payload, hold_un
 WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id;
 
 -- name: ConsumeVerbIntent :execrows
-UPDATE intents SET consumed_at = sqlc.arg(consumed_at) WHERE id = sqlc.arg(id) AND consumed_at IS NULL;
+UPDATE intents SET consumed_at = sqlc.arg(consumed_at), outcome = sqlc.narg(outcome), detail = sqlc.narg(detail),
+  finished_at = sqlc.narg(finished_at), run_id = sqlc.narg(run_id), ticket_state = sqlc.narg(ticket_state)
+WHERE id = sqlc.arg(id) AND consumed_at IS NULL;
 
 -- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = sqlc.arg(ticket_id) ORDER BY id;

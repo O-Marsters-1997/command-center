@@ -191,7 +191,7 @@ func consumeTrack(t *testing.T, st *storepkg.Store) {
 		t.Fatalf("PendingVerbIntents(track): %v", err)
 	}
 	for _, intent := range intents {
-		if err := st.ConsumeVerbIntent(t.Context(), intent.ID, testNow); err != nil {
+		if err := st.ConsumeVerbIntent(t.Context(), intent.ID, storepkg.Consumption{At: testNow}); err != nil {
 			t.Fatalf("ConsumeVerbIntent(%d): %v", intent.ID, err)
 		}
 	}

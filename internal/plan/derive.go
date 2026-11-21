@@ -90,6 +90,7 @@ type Input struct {
 	LastVerdicts map[TicketURL]string
 	Verdict      VerdictFacts
 	Intents      map[TicketURL][]Intent
+	Latest       map[TicketURL]IntentRecord
 	Held         map[TicketURL][]Intent
 	Removals     map[TicketURL]string
 	FiveHour     float64
@@ -103,6 +104,7 @@ type Entry struct {
 	Unlock         Unlock
 	State          State
 	Reason         Reason
+	Intent         option.Option[IntentStatus]
 	Run            option.Option[RunFact]
 	Elapsed        option.Option[time.Duration]
 	LogPath        string
@@ -341,6 +343,9 @@ func (r Rules) Derive(in Input) Snapshot {
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
 			Next: next, Workflow: membership.Workflow, Raise: raise,
+		}
+		if rec, ok := in.Latest[t.URL]; ok {
+			entry.Intent = railIntent(rec, in.Runs[t.URL], state, in.Now)
 		}
 		draftWhy, readyToUndraft := draftReason(pr, gating, prs, entry.Verdict())
 		entry.DraftReason = draftWhy

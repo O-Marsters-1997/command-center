@@ -129,7 +129,8 @@ func (l *Loop) advancePass(
 		return err
 	}
 	begin := start{workflow: w, step: entry.Next.Step.Unwrap(), verify: verify}
-	return l.spawnRun(ctx, t, begin.spec(ticket, entry.Ticket, worktree, baseline, summary.PromptHash, pass))
+	_, err = l.spawnRun(ctx, t, begin.spec(ticket, entry.Ticket, worktree, baseline, summary.PromptHash, pass))
+	return err
 }
 
 func (l *Loop) passBaseline(

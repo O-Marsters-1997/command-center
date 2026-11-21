@@ -1,0 +1,90 @@
+{{define "activityNav" -}}
+hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-swap="outerHTML" hx-push-url="true"
+{{- end}}
+
+{{define "activityRow" -}}
+<details id="act-{{.ID}}" class="border-b border-border-soft" hx-preserve="true" data-row>
+  <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-2 py-1 hover:bg-surface-2 md:grid-cols-[3.5rem_auto_9rem_9rem_minmax(0,1fr)_9rem_5rem_4rem] md:gap-y-1">
+    <time class="hidden text-xs text-muted md:block" datetime="{{.Queued.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.Queued.Format "15:04"}}</time>
+    <span class="glyph" data-glyph="{{.Glyph}}" title="{{.Outcome}}"></span>
+    <span class="min-w-0 truncate font-medium md:col-auto">{{.Action}}{{if .Auto}} <span class="flag">auto</span>{{end}} <span class="font-mono text-xs text-muted md:hidden">{{.Ref}}</span></span>
+    <span class="hidden truncate font-mono text-xs text-muted md:block">{{.Ref}}</span>
+    <span class="col-span-3 col-start-1 row-start-2 min-w-0 truncate text-sm md:col-span-1 md:col-start-auto md:row-start-auto">{{.Title}}{{with .Detail}}{{if eq $.Outcome "failed"}} <span class="text-[var(--color-s-failed)]">{{.}}</span>{{else}} <span class="text-muted">{{.}}</span>{{end}}{{end}}</span>
+    <span class="hidden truncate text-xs text-muted md:block">{{.Feature}}</span>
+    <span class="col-start-3 row-start-1 text-right text-xs md:col-start-auto md:row-start-auto">{{.Outcome}}</span>
+    <span class="hidden text-right text-xs text-muted md:block">{{.Duration}}</span>
+  </summary>
+  <div class="px-2 pb-3 pl-10 text-sm">
+    <ol class="m-0 list-none p-0">
+      {{- range .Trail}}
+      <li class="flex gap-3"><span class="w-12 text-right font-mono text-xs text-muted">{{$.Offset .}}</span><span>{{.Phase}}{{with .Outcome}} · {{.}}{{end}}</span></li>
+      {{- end}}
+    </ol>
+    {{with .Session}}<a class="mt-2 inline-block" href="{{.}}" {{template "nav" .}}>Open session ›</a>{{end}}
+  </div>
+</details>
+{{- end}}
+
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<h1>Activity</h1>
+<p class="page-purpose">What was asked of command centre and how it ended, over the last 30 days.</p>
+{{with .ReadError}}<p class="banner ribbon" data-glyph="failed" role="alert">{{.}}</p>{{end}}
+<form id="activity-filters" action="/activity" method="get" role="search"
+  hx-get="/activity" hx-target="#activity-results" hx-select="#activity-results" hx-swap="outerHTML" hx-push-url="true"
+  hx-sync="this:replace" hx-trigger="change, input changed delay:250ms from:#activity-q">
+  <div class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border-soft bg-surface py-2">
+    <input id="activity-q" class="min-h-[30px] min-w-0 flex-1 rounded-sm border border-border px-2 text-sm" type="search" name="q" value="{{.Params.Query}}" placeholder="Search ref, title, feature, detail  /" aria-label="Search activity" data-key="/" autocomplete="off">
+    <select class="select" name="verb" aria-label="Action">
+      <option value="">All actions</option>
+      {{range .Verbs}}<option value="{{.}}"{{if eq . $.Params.Verb}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <select class="select" name="project" aria-label="Project">
+      <option value="">All projects</option>
+      {{range .ScopeMenu}}{{if .Avatar}}<option value="{{.Value}}"{{if eq .Value $.Params.Project}} selected{{end}}>{{.Label}}</option>{{end}}{{end}}
+    </select>
+    <select class="select" name="feature" aria-label="Feature">
+      <option value="">All features</option>
+      {{range .Features}}<option value="{{.}}"{{if eq . $.Params.Feature}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <select class="select" name="range" aria-label="Time">
+      <option value="">Any time</option>
+      <option value="today"{{if eq .Params.Range "today"}} selected{{end}}>Today</option>
+      <option value="7d"{{if eq .Params.Range "7d"}} selected{{end}}>Last 7 days</option>
+      <option value="30d"{{if eq .Params.Range "30d"}} selected{{end}}>Last 30 days</option>
+    </select>
+    <noscript><button type="submit" class="btn btn-sm">Apply</button></noscript>
+  </div>
+  <div id="activity-results">
+    <div class="pill-tabs mt-3 mb-3 self-start" role="radiogroup" aria-label="Outcome">
+      {{- range .Tabs}}
+      <label class="pill-tab cursor-pointer"{{if .Current}} aria-current="page"{{end}}><input class="sr-only" type="radio" name="outcome" value="{{.Value}}"{{if .Current}} checked{{end}}>{{.Label}} <span class="section-count">{{.Count}}</span></label>
+      {{- end}}
+    </div>
+    {{- if not .Days}}
+    <p class="text-muted" role="status">{{.Empty}}{{if .Params.Filtered}} <a href="{{.ClearPath}}" {{template "nav" .ClearPath}}>Clear filters</a>{{end}}</p>
+    {{- end}}
+    {{- range .Days}}
+    <section id="day-{{.Key}}" aria-labelledby="day-h-{{.Key}}">
+      <h2 id="day-h-{{.Key}}" class="flex h-[34px] items-center gap-3 border-b border-border-soft px-2 text-sm font-medium text-fg-2">{{.Label}}
+        <span class="segbar" aria-hidden="true">
+          {{- range .Tallies}}{{if .Count}}<span class="segbar-segment" data-glyph="{{.Glyph}}" style="flex-grow: {{.Count}}"></span>{{end}}{{end -}}
+        </span>
+        <span class="ml-auto flex gap-3 text-xs font-normal">{{range .Tallies}}{{if .Count}}<span class="glyph glyph-{{.Glyph}}">{{.Count}} {{.Label}}</span>{{end}}{{end}}</span>
+      </h2>
+      {{range .Rows}}{{template "activityRow" .}}
+      {{end -}}
+    </section>
+    {{- end}}
+    {{- if .Total}}
+    <nav class="mt-3 flex items-center gap-3 text-sm" aria-label="pages">
+      {{with .NewerPath}}<a class="btn btn-sm" href="{{.}}" {{template "activityNav" .}}>‹ Newer</a>{{else}}<span class="btn btn-sm opacity-50" aria-disabled="true">‹ Newer</span>{{end}}
+      <span class="text-muted">{{.First}}–{{.Last}} of {{.Total}} · page {{.Page}} of {{.Pages}}</span>
+      {{with .OlderPath}}<a class="btn btn-sm" href="{{.}}" {{template "activityNav" .}}>Older ›</a>{{else}}<span class="btn btn-sm opacity-50" aria-disabled="true">Older ›</span>{{end}}
+    </nav>
+    {{- end}}
+  </div>
+</form>
+{{template "shellEnd" .}}

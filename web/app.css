@@ -1420,6 +1420,13 @@
     font-size: var(--text-xs);
   }
 
+  .rail-link > .rail-ref {
+    order: 0;
+    min-width: 3ch;
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
   .rail-title {
     flex: 1;
     min-width: 0;
@@ -1552,7 +1559,6 @@
     margin: 0;
   }
 
-  .rail-queued,
   .rail-refusal {
     display: flex;
     align-items: center;
@@ -1566,7 +1572,6 @@
     color: color-mix(in oklab, var(--color-s-failed), var(--color-ink) 12%);
   }
 
-  .rail-card .rail-queued,
   .rail-card .rail-refusal {
     margin: 0;
     padding: 6px 0 0 22px;

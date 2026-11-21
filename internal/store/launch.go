@@ -45,7 +45,7 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
 	if err != nil {
 		return fmt.Errorf("encode launch intent payload for %s: %w", l.Ticket, err)
 	}
-	_, err = queueIntent(ctx, s.q, l.At, l.Ticket, string(plan.VerbLaunch), payload, time.Time{})
+	_, err = queueIntent(ctx, s.q, l.At, l.Ticket, string(plan.VerbLaunch), payload, time.Time{}, plan.QueuedByOwner)
 	return err
 }
 

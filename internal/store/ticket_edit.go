@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
@@ -21,7 +22,7 @@ func (s *Store) QueueEditTicketIntent(ctx context.Context, e EditRequest) error 
 	if err != nil {
 		return fmt.Errorf("encode edit ticket intent payload for %s: %w", e.Ticket, err)
 	}
-	_, err = queueIntent(ctx, s.q, e.At, e.Ticket, "edit_ticket", payload, time.Time{})
+	_, err = queueIntent(ctx, s.q, e.At, e.Ticket, "edit_ticket", payload, time.Time{}, plan.QueuedByOwner)
 	return err
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -262,18 +263,23 @@ func queueVerbIntent(ctx context.Context, q *ccdb.Queries, v VerbRequest) (int64
 			return 0, fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
 		}
 	}
-	return queueIntent(ctx, q, v.At, v.Ticket, string(v.Verb), encoded, v.HoldUntil)
+	return queueIntent(ctx, q, v.At, v.Ticket, string(v.Verb), encoded, v.HoldUntil, v.QueuedBy)
 }
 
 func queueIntent(
 	ctx context.Context, q *ccdb.Queries, at time.Time, ticket, verb string, raw []byte, hold time.Time,
+	queuedBy plan.QueuedBy,
 ) (int64, error) {
+	if queuedBy == "" {
+		queuedBy = plan.QueuedByOwner
+	}
 	id, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:        at.UTC(),
 		TicketID:  ticket,
 		Verb:      verb,
 		Payload:   raw,
 		HoldUntil: nullTime(hold),
+		QueuedBy:  string(queuedBy),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("queue %s intent for %s: %w", verb, ticket, err)
@@ -353,12 +359,91 @@ func (s *Store) WithdrawHeldIntent(ctx context.Context, id int64, now time.Time)
 	return nil
 }
 
-func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
-	n, err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
-		ConsumedAt: notNullTime(at.UTC()),
-		ID:         id,
-	})
+func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, c Consumption) error {
+	at := notNullTime(c.At.UTC())
+	params := ccdb.ConsumeVerbIntentParams{ConsumedAt: at, ID: id}
+	if c.Outcome != plan.IntentInProgress {
+		params.Outcome = notNull(string(c.Outcome))
+		params.FinishedAt = at
+	}
+	if c.Detail != "" {
+		params.Detail = notNull(c.Detail)
+	}
+	if c.Run.IsSome() {
+		params.RunID = sql.NullInt64{Int64: int64(c.Run.Unwrap()), Valid: true}
+	}
+	if c.TicketState != plan.StateUnknown {
+		params.TicketState = notNull(c.TicketState.String())
+	}
+	n, err := s.q.ConsumeVerbIntent(ctx, params)
 	return matchedRow(n, err, fmt.Sprintf("consume intent %d", id))
+}
+
+func (s *Store) IntentHistory(ctx context.Context, since time.Time) ([]plan.IntentRecord, error) {
+	rows, err := s.q.IntentHistory(ctx, since.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("select intent history: %w", err)
+	}
+	var records []plan.IntentRecord
+	for _, row := range rows {
+		verb, err := plan.ParseVerb(row.Verb)
+		if err != nil {
+			return nil, fmt.Errorf("decode verb of intent %d: %w", row.ID, err)
+		}
+		if !verb.IsRowVerb() {
+			continue
+		}
+		rec, err := intentRecord(row, verb)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, rec)
+	}
+	return records, nil
+}
+
+func (s *Store) LatestRowIntents(ctx context.Context) (map[plan.TicketURL]plan.IntentRecord, error) {
+	var verbs []string
+	for _, verb := range plan.AllVerbs() {
+		if verb.IsRowVerb() {
+			verbs = append(verbs, string(verb))
+		}
+	}
+	rows, err := s.q.LatestRowIntents(ctx, strings.Join(verbs, ","))
+	if err != nil {
+		return nil, fmt.Errorf("select latest row intents: %w", err)
+	}
+	latest := make(map[plan.TicketURL]plan.IntentRecord, len(rows))
+	for _, row := range rows {
+		verb, err := plan.ParseVerb(row.Verb)
+		if err != nil {
+			return nil, fmt.Errorf("decode verb of intent %d: %w", row.ID, err)
+		}
+		rec, err := intentRecord(ccdb.IntentHistoryRow(row), verb)
+		if err != nil {
+			return nil, err
+		}
+		latest[rec.Ticket] = rec
+	}
+	return latest, nil
+}
+
+func intentRecord(row ccdb.IntentHistoryRow, verb plan.Verb) (plan.IntentRecord, error) {
+	rec := plan.IntentRecord{
+		ID: row.ID, Ticket: plan.TicketURL(row.TicketID), Verb: verb, QueuedBy: plan.QueuedBy(row.QueuedBy),
+		At: row.At, HoldUntil: row.HoldUntil.Time, ConsumedAt: optTime(row.ConsumedAt),
+		FinishedAt: optTime(row.FinishedAt), Outcome: plan.IntentOutcome(row.Outcome), Detail: row.Detail,
+	}
+	if row.RunID.Valid {
+		rec.Run = option.Some(plan.RunID(row.RunID.Int64))
+	}
+	if row.TicketState != "" {
+		var err error
+		if rec.TicketState, err = plan.ParseState(row.TicketState); err != nil {
+			return plan.IntentRecord{}, fmt.Errorf("decode state of intent %d: %w", row.ID, err)
+		}
+	}
+	return rec, nil
 }
 
 type SessionRun struct {

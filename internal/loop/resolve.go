@@ -12,10 +12,10 @@ import (
 func (l *Loop) applyResolveIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntentEntry(ctx, snap, plan.VerbResolve, func(_ plan.Intent, e plan.Entry) error {
+	return l.eachIntentEntry(ctx, snap, plan.VerbResolve, func(_ plan.Intent, e plan.Entry) (handled, error) {
 		ticket, ok := byURL[e.Ticket.URL]
 		if !ok {
-			return nil
+			return failedWith(untrackedTicket), nil
 		}
 		return l.resolveOne(ctx, snap, t, ticket, byURL)
 	})
@@ -23,9 +23,11 @@ func (l *Loop) applyResolveIntents(
 
 func (l *Loop) resolveOne(
 	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, byURL map[plan.TicketURL]store.Ticket,
-) error {
+) (handled, error) {
 	url := plan.TicketURL(ticket.URL)
-	refuse := func(reason string) error { return l.event(ctx, ticket.URL, store.EventResolveRefused, reason) }
+	refuse := func(reason string) (handled, error) {
+		return l.refuse(ctx, ticket.URL, store.EventResolveRefused, reason)
+	}
 
 	if !snap.Offers(url, plan.VerbResolve) {
 		return refuse("the ticket is not refresh conflicted")
@@ -42,14 +44,14 @@ func (l *Loop) resolveOne(
 	pair := fmt.Sprintf("%s %s", at.BranchTip, at.BaseTip)
 	tried, err := l.store.HasEventDetail(ctx, ticket.URL, store.EventResolveStarted, pair)
 	if err != nil {
-		return fmt.Errorf("check earlier resolve of %s: %w", ticket.URL, err)
+		return handled{}, fmt.Errorf("check earlier resolve of %s: %w", ticket.URL, err)
 	}
 	if tried {
 		return refuse(fmt.Sprintf("a resolve already ran at %s", pair))
 	}
 	paths, err := git.ConflictedPaths(ctx, worktreePath)
 	if err != nil {
-		return fmt.Errorf("read conflicts in %s: %w", worktreePath, err)
+		return handled{}, fmt.Errorf("read conflicts in %s: %w", worktreePath, err)
 	}
 	if len(paths) == 0 {
 		return refuse(fmt.Sprintf("no conflicted paths in %s", worktreePath))
@@ -69,16 +71,17 @@ func (l *Loop) resolveOne(
 
 	baseline, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return err
+		return handled{}, err
 	}
 	if err := l.event(ctx, ticket.URL, store.EventResolveStarted, pair); err != nil {
-		return err
+		return handled{}, err
 	}
-	if err := l.spawnRun(ctx, t, spawnSpec{
+	runID, err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baseline,
 		kind: plan.RunKindResolve, prompt: plan.ComposeResolve(brief), choice: entry.Ticket.Choice,
-	}); err != nil {
-		return fmt.Errorf("spawn resolve in %s: %w", worktreePath, err)
+	})
+	if err != nil {
+		return handled{}, fmt.Errorf("spawn resolve in %s: %w", worktreePath, err)
 	}
-	return nil
+	return spawned(runID), nil
 }

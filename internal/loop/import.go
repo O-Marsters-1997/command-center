@@ -12,8 +12,8 @@ import (
 )
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
-	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) error {
-		return l.importFeature(ctx, string(intent.Ticket), intent.Payload)
+	return l.eachPendingIntent(ctx, plan.VerbImport, func(intent plan.Intent) (handled, error) {
+		return succeeded, l.importFeature(ctx, string(intent.Ticket), intent.Payload)
 	})
 }
 
@@ -93,7 +93,8 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 		case err != nil:
 			return fmt.Errorf("edit %s: %w", intent.TicketID, err)
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+		consumption := store.Consumption{At: now, Outcome: plan.IntentDone}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, consumption); err != nil {
 			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.TicketID, err)
 		}
 	}
