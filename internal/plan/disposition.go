@@ -34,9 +34,9 @@ func (o Outcome) String() string {
 		return "continued"
 	case OutcomePassed:
 		return "passed"
-	default:
-		return "unknown"
+	case OutcomeUnknown:
 	}
+	return "unknown"
 }
 
 func (o Outcome) Glyph() GlyphWord {
@@ -45,7 +45,7 @@ func (o Outcome) Glyph() GlyphWord {
 		return GlyphDone
 	case OutcomeAsked:
 		return GlyphAttention
-	case OutcomeFailed, OutcomeCutFailed:
+	case OutcomeFailed, OutcomeCutFailed, OutcomeUnknown:
 		return GlyphFailed
 	}
 	return GlyphFailed
