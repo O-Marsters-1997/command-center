@@ -49,53 +49,12 @@ func NewObserver(st *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc
 			part, err := observeRepo(ctx, forge, read, prevObs)
 			if err != nil {
 				obs.RepoErrors[repo.Name] = err.Error()
-				carryForward(&obs, prevObs, repo.Name)
+				obs.CarryForward(prevObs, repo.Name)
 				continue
 			}
-			mergeObservation(&obs, part)
+			obs.Merge(part)
 		}
 		return obs, nil
-	}
-}
-
-func mergeObservation(dst *plan.Observation, src plan.Observation) {
-	maps.Copy(dst.PRs, src.PRs)
-	maps.Copy(dst.Worktrees, src.Worktrees)
-	maps.Copy(dst.MergifyHash, src.MergifyHash)
-	maps.Copy(dst.BranchTips, src.BranchTips)
-	maps.Copy(dst.LocalTips, src.LocalTips)
-	maps.Copy(dst.MidMerge, src.MidMerge)
-	maps.Copy(dst.Titles, src.Titles)
-	maps.Copy(dst.ConflictsWithBase, src.ConflictsWithBase)
-	maps.Copy(dst.ConflictsWithPeer, src.ConflictsWithPeer)
-	maps.Copy(dst.HeadDescends, src.HeadDescends)
-	maps.Copy(dst.Settings, src.Settings)
-	maps.Copy(dst.SettingsErrors, src.SettingsErrors)
-	maps.Copy(dst.SettingsSources, src.SettingsSources)
-}
-
-func carryForward(dst *plan.Observation, prev plan.Observation, repo string) {
-	keep := func(key plan.BranchRef) bool { return key.Repo == repo }
-	copyKeyed(dst.PRs, prev.PRs, keep)
-	copyKeyed(dst.Worktrees, prev.Worktrees, keep)
-	copyKeyed(dst.BranchTips, prev.BranchTips, keep)
-	copyKeyed(dst.LocalTips, prev.LocalTips, keep)
-	copyKeyed(dst.MidMerge, prev.MidMerge, keep)
-	copyKeyed(dst.ConflictsWithBase, prev.ConflictsWithBase, keep)
-	copyKeyed(dst.ConflictsWithPeer, prev.ConflictsWithPeer, keep)
-	copyKeyed(dst.HeadDescends, prev.HeadDescends, keep)
-	copyKeyed(dst.Titles, prev.Titles, func(plan.TicketURL) bool { return true })
-	named := func(key string) bool { return key == repo }
-	copyKeyed(dst.MergifyHash, prev.MergifyHash, named)
-	copyKeyed(dst.Settings, prev.Settings, named)
-	copyKeyed(dst.SettingsErrors, prev.SettingsErrors, named)
-}
-
-func copyKeyed[K comparable, V any](dst, src map[K]V, keep func(K) bool) {
-	for key, value := range src {
-		if _, taken := dst[key]; !taken && keep(key) {
-			dst[key] = value
-		}
 	}
 }
 
@@ -118,113 +77,130 @@ func pushedTipsFor(tickets []store.Ticket, repo string, tips map[plan.TicketURL]
 func observeRepo(
 	ctx context.Context, forge gh.Forge, read repoRead, prevObs plan.Observation,
 ) (plan.Observation, error) {
-	name, path, branches := read.name, read.path, read.branches
 	obs := plan.NewObservation(time.Time{})
-	if err := git.Fetch(ctx, path); err != nil {
+	if err := git.Fetch(ctx, read.path); err != nil {
 		return plan.Observation{}, fmt.Errorf("fetch: %w", err)
 	}
 
-	settings, source, settingsErr := readRepoSettings(ctx, path)
+	settings, source, settingsErr := readRepoSettings(ctx, read.path)
 	if settingsErr != nil {
-		obs.SettingsErrors[name] = settingsErr.Error()
+		obs.SettingsErrors[read.name] = settingsErr.Error()
 	} else {
-		obs.Settings[name] = settings
-		obs.SettingsSources[name] = string(source)
+		obs.Settings[read.name] = settings
+		obs.SettingsSources[read.name] = string(source)
 	}
 
-	snapshot, err := forge.List(ctx, path, branches)
+	if err := observePullRequests(ctx, forge, read, &obs); err != nil {
+		return plan.Observation{}, err
+	}
+	if err := observeTips(ctx, read, prevObs, &obs); err != nil {
+		return plan.Observation{}, err
+	}
+	if err := observeWorktrees(ctx, read, &obs); err != nil {
+		return plan.Observation{}, err
+	}
+
+	if settings.MergifySHA != "" {
+		hash, err := mergifyHash(ctx, read.path)
+		if err != nil {
+			return plan.Observation{}, fmt.Errorf("hash .mergify.yml for %s: %w", read.name, err)
+		}
+		obs.MergifyHash[read.name] = hash
+	}
+	return obs, nil
+}
+
+func observePullRequests(ctx context.Context, forge gh.Forge, read repoRead, obs *plan.Observation) error {
+	snapshot, err := forge.List(ctx, read.path, read.branches)
 	if err != nil {
-		return plan.Observation{}, fmt.Errorf("list pull requests: %w", err)
+		return fmt.Errorf("list pull requests: %w", err)
 	}
 	for branch, pr := range snapshot.ByBranch {
 		if pr.State == gh.Open {
-			if pr.Checks, err = withAttempts(ctx, forge, path, pr.Checks); err != nil {
-				return plan.Observation{}, fmt.Errorf("read check attempts for %s: %w", branch, err)
+			if pr.Checks, err = withAttempts(ctx, forge, read.path, pr.Checks); err != nil {
+				return fmt.Errorf("read check attempts for %s: %w", branch, err)
 			}
 		}
-		ref := plan.BranchRef{Repo: name, Branch: branch}
+		ref := plan.BranchRef{Repo: read.name, Branch: branch}
 		obs.PRs[ref] = planPR(pr)
 		pushed := read.pushed[branch]
 		if pr.State != gh.Open || pushed == "" || pr.HeadOid == "" || plan.SHA(pr.HeadOid) == pushed {
 			continue
 		}
-		descends, err := git.AncestorIfPresent(ctx, path, string(pushed), pr.HeadOid)
+		descends, err := git.AncestorIfPresent(ctx, read.path, string(pushed), pr.HeadOid)
 		if err != nil {
-			return plan.Observation{}, fmt.Errorf("check %s descends from %s: %w", branch, pushed, err)
+			return fmt.Errorf("check %s descends from %s: %w", branch, pushed, err)
 		}
 		obs.HeadDescends[ref] = descends
 	}
-	titles, err := forge.IssueTitles(ctx, path)
+	titles, err := forge.IssueTitles(ctx, read.path)
 	if err != nil {
-		return plan.Observation{}, fmt.Errorf("list issue titles: %w", err)
+		return fmt.Errorf("list issue titles: %w", err)
 	}
 	for url, title := range titles {
 		obs.Titles[plan.TicketURL(url)] = title
 	}
+	return nil
+}
 
-	mainTip, mainPresent, err := git.TipIfPresent(ctx, path, "origin/"+plan.DefaultBaseBranch)
+func observeTips(ctx context.Context, read repoRead, prevObs plan.Observation, obs *plan.Observation) error {
+	mainTip, mainPresent, err := git.TipIfPresent(ctx, read.path, "origin/"+plan.DefaultBaseBranch)
 	if err != nil {
-		return plan.Observation{}, fmt.Errorf("read tip of origin/%s: %w", plan.DefaultBaseBranch, err)
+		return fmt.Errorf("read tip of origin/%s: %w", plan.DefaultBaseBranch, err)
 	}
 	if mainPresent {
-		obs.BranchTips[plan.BranchRef{Repo: name, Branch: plan.DefaultBaseBranch}] = plan.SHA(mainTip)
+		obs.BranchTips[plan.BranchRef{Repo: read.name, Branch: plan.DefaultBaseBranch}] = plan.SHA(mainTip)
 	}
-	for _, branch := range branches {
-		tip, present, err := git.TipIfPresent(ctx, path, "origin/"+branch)
+	for _, branch := range read.branches {
+		tip, present, err := git.TipIfPresent(ctx, read.path, "origin/"+branch)
 		if err != nil {
-			return plan.Observation{}, fmt.Errorf("read tip of origin/%s: %w", branch, err)
+			return fmt.Errorf("read tip of origin/%s: %w", branch, err)
 		}
 		if !present {
 			continue
 		}
-		ref := plan.BranchRef{Repo: name, Branch: branch}
+		ref := plan.BranchRef{Repo: read.name, Branch: branch}
 		obs.BranchTips[ref] = plan.SHA(tip)
 		if !mainPresent {
 			continue
 		}
-		clean, err := git.MergesCleanly(ctx, path, mainTip, tip)
+		clean, err := git.MergesCleanly(ctx, read.path, mainTip, tip)
 		if err != nil {
-			return plan.Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
-				branch, plan.DefaultBaseBranch, err)
+			return fmt.Errorf("check whether %s merges into %s: %w", branch, plan.DefaultBaseBranch, err)
 		}
 		obs.ConflictsWithBase[ref] = !clean
 	}
 
 	scan := peerScan{
-		repoPath: path, repo: name, branches: branches, tips: obs.BranchTips,
+		repoPath: read.path, repo: read.name, branches: read.branches, tips: obs.BranchTips,
 		prev: prevObs, into: obs.ConflictsWithPeer, merges: git.MergesCleanly,
 	}
 	if err := recordPeerConflicts(ctx, scan); err != nil {
-		return plan.Observation{}, fmt.Errorf("record peer conflicts: %w", err)
+		return fmt.Errorf("record peer conflicts: %w", err)
 	}
+	return nil
+}
 
-	worktrees, err := git.WorktreePaths(ctx, path)
+func observeWorktrees(ctx context.Context, read repoRead, obs *plan.Observation) error {
+	worktrees, err := git.WorktreePaths(ctx, read.path)
 	if err != nil {
-		return plan.Observation{}, fmt.Errorf("list worktrees: %w", err)
+		return fmt.Errorf("list worktrees: %w", err)
 	}
 	for branch, wtPath := range worktrees {
-		ref := plan.BranchRef{Repo: name, Branch: branch}
+		ref := plan.BranchRef{Repo: read.name, Branch: branch}
 		obs.Worktrees[ref] = wtPath
-		tip, err := git.BranchTip(ctx, path, branch)
+		tip, err := git.BranchTip(ctx, read.path, branch)
 		if err != nil {
-			return plan.Observation{}, fmt.Errorf("read local tip of %s: %w", branch, err)
+			return fmt.Errorf("read local tip of %s: %w", branch, err)
 		}
 		obs.LocalTips[ref] = plan.SHA(tip)
 		mid, err := git.MidMerge(ctx, wtPath)
 		if err != nil {
-			return plan.Observation{}, fmt.Errorf("check mid-merge for %s: %w", branch, err)
+			return fmt.Errorf("check mid-merge for %s: %w", branch, err)
 		}
 		obs.MidMerge[ref] = mid
 	}
-
-	if settings.MergifySHA != "" {
-		hash, err := mergifyHash(ctx, path)
-		if err != nil {
-			return plan.Observation{}, fmt.Errorf("hash .mergify.yml for %s: %w", name, err)
-		}
-		obs.MergifyHash[name] = hash
-	}
-	return obs, nil
+	return nil
 }
 
 func withAttempts(

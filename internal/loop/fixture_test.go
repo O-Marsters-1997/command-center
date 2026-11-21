@@ -138,9 +138,7 @@ func (f *loopFixture) AuthoriseAll(t *testing.T) {
 
 func (f *loopFixture) Tick(t *testing.T) {
 	t.Helper()
-	if err := f.Loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
+	runOnce(t, f.Loop)
 }
 
 func (f *loopFixture) Latest(t *testing.T) map[string]plan.RunSummary {
@@ -198,24 +196,7 @@ func (f *pushFixture) reset(at time.Time, rn runner.Runner, opts ...loop.Option)
 
 func (f *pushFixture) tick(t *testing.T) {
 	t.Helper()
-	if err := f.Loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-}
-
-func (f *pushFixture) events(t *testing.T, kind storepkg.EventKind) []storepkg.Event {
-	t.Helper()
-	all, err := f.Store.Events(t.Context())
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	var selected []storepkg.Event
-	for _, event := range all {
-		if event.Kind == kind {
-			selected = append(selected, event)
-		}
-	}
-	return selected
+	runOnce(t, f.Loop)
 }
 
 func (f *pushFixture) head(t *testing.T, dir, ref string) string {

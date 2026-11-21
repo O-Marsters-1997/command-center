@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 func parseString(t *testing.T, log string) agentlog.Run {
@@ -166,10 +167,10 @@ func TestParse(t *testing.T) {
 				Lines: 23,
 				Start: time.Date(2026, 8, 25, 10, 56, 4, 185*int(time.Millisecond), time.UTC),
 				End:   1573296 * time.Millisecond,
-				Result: &agentlog.Result{
+				Result: option.Some(agentlog.Result{
 					Outcome: "success", Duration: 561464 * time.Millisecond,
 					Turns: 42, CostUSD: 8.288799200000001,
-				},
+				}),
 				Phases: []agentlog.Phase{
 					{
 						Turns: 1, Spend: 0.38171008,
@@ -213,7 +214,8 @@ func TestParse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if diff := cmp.Diff(tt.want, parseFixture(t, tt.fixture), cmpopts.EquateApprox(0, 1e-12)); diff != "" {
+			equalResult := cmpopts.EquateComparable(option.Option[agentlog.Result]{})
+			if diff := cmp.Diff(tt.want, parseFixture(t, tt.fixture), cmpopts.EquateApprox(0, 1e-12), equalResult); diff != "" {
 				t.Errorf("Parse(%s) mismatch (-want +got):\n%s", tt.fixture, diff)
 			}
 		})

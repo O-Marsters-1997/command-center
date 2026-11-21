@@ -75,13 +75,6 @@ func queueTrack(t *testing.T, st *storepkg.Store, repo string) {
 	}
 }
 
-func runOnce(t *testing.T, lp *loop.Loop) {
-	t.Helper()
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce() error = %v", err)
-	}
-}
-
 func TestTrack(t *testing.T) {
 	t.Parallel()
 

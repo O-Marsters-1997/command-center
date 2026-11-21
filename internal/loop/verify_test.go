@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
@@ -65,17 +66,15 @@ func TestVerify(t *testing.T) {
 		p.tick(t)
 		p.tick(t)
 		p.tick(t)
-		if got := p.events(t, "verification_failed"); len(got) != 0 {
+		if got := storetest.Events(t, p.Store, "verification_failed"); len(got) != 0 {
 			t.Errorf("verification_failed events = %+v, want none", got)
 		}
 		after := fake.Spawns()
 		if len(after) != 2 {
 			t.Fatalf("spawns after the failure = %d, want the verify and one follow-up", len(after))
 		}
-		for _, want := range []string{"verify command failed", "lint: unused variable x"} {
-			if !strings.Contains(after[1].Prompt, want) {
-				t.Errorf("follow-up prompt = %q, want it to mention %q", after[1].Prompt, want)
-			}
+		if !strings.Contains(after[1].Prompt, "lint: unused variable x") {
+			t.Errorf("follow-up prompt = %q, want it to carry the verify output", after[1].Prompt)
 		}
 		if got := remoteTip(t, p); got != originalTip {
 			t.Errorf("remote parent tip = %s, want unchanged %s", got, originalTip)

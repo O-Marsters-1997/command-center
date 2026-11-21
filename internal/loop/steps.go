@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -125,16 +124,12 @@ func (l *Loop) advancePass(
 	for i := range pass {
 		pass[i].Handoff = l.readHandoff(pass[i].ID)
 	}
-	baseline, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
+	baseline, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return fmt.Errorf("read baseline for %s: %w", ticket.URL, err)
+		return err
 	}
-	step := entry.Next.Step.Unwrap()
-	return l.spawnRun(ctx, t, spawnSpec{
-		ticket: ticket, worktree: worktree, baseline: baseline, hash: summary.PromptHash,
-		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, entry.Ticket, step, pass), choice: entry.Ticket.Choice,
-		workflow: w, step: step, verify: verify,
-	})
+	begin := start{workflow: w, step: entry.Next.Step.Unwrap(), verify: verify}
+	return l.spawnRun(ctx, t, begin.spec(ticket, entry.Ticket, worktree, baseline, summary.PromptHash, pass))
 }
 
 func (l *Loop) passBaseline(

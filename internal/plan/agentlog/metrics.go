@@ -37,28 +37,13 @@ func ParseLastMessage(logPath string) (option.Option[string], error) {
 
 // ParseMetrics reads Claude stream-json usage, rejecting logs with no parseable lines.
 func ParseMetrics(logPath string) (RunMetrics, error) {
-	reader := newRequestReader()
-	var (
-		model   string
-		settled option.Option[RequestUsage]
-		metrics RunMetrics
-		decoded int
-	)
-	err := forEachLine(logPath, func(parsed logLine, last time.Time) {
-		decoded++
-		if parsed.Message.Model != "" {
-			model = parsed.Message.Model
-		}
+	var metrics RunMetrics
+	requests, settled, decoded, err := readUsage(logPath, func(parsed logLine, added bool) {
 		if parsed.Type == "result" {
-			request := requestUsage(model, last, parsed.Usage)
-			if parsed.CostUSD != nil {
-				request.CostUSD = option.Some(*parsed.CostUSD)
-			}
-			settled = option.Some(request)
 			metrics.Wall = option.Some(time.Duration(parsed.DurationMS) * time.Millisecond)
 			return
 		}
-		if _, added := reader.add(parsed); added && parsed.ParentToolUseID == "" {
+		if added && parsed.ParentToolUseID == "" {
 			metrics.Turns++
 		}
 		if parsed.Type != "assistant" {
@@ -80,8 +65,8 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 	if decoded == 0 {
 		return RunMetrics{}, fmt.Errorf("agent log %s: %w", logPath, ErrNoParseableLines)
 	}
-	metrics.Requests = reader.requests
-	totals := reader.requests
+	metrics.Requests = requests
+	totals := requests
 	if settled.IsSome() {
 		metrics.CostUSD = settled.Unwrap().CostUSD
 		totals = []RequestUsage{settled.Unwrap()}

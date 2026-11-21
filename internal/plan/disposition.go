@@ -66,7 +66,7 @@ func ParseOutcome(s string) (Outcome, error) {
 const emptyQuestion = "(the agent asked without writing a question)"
 
 func Asked(kind RunKind, questionFile option.Option[string]) option.Option[string] {
-	if kind != RunKindAgent && kind != RunKindFollowUp || questionFile.IsNone() {
+	if !kind.Steerable() || questionFile.IsNone() {
 		return option.None[string]()
 	}
 	question := strings.TrimSpace(strings.ToValidUTF8(questionFile.Unwrap(), ""))

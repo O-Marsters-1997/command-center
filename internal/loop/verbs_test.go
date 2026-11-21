@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,6 +18,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 type removeWorktreeFixture struct {
@@ -101,11 +101,7 @@ func runLogFilesExist(runsDir string, runID int64) bool {
 func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Observation) error {
 	t.Helper()
 	at := f.at.Add(time.Second)
-	if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-		Ticket: f.ticket.URL, Verb: "remove-worktree", At: at,
-	}); err != nil {
-		t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
-	}
+	storetest.Verb(t, f.store, storepkg.VerbRequest{Ticket: f.ticket.URL, Verb: "remove-worktree", At: at})
 	return f.tick(t, obs, at)
 }
 
@@ -142,16 +138,13 @@ func TestRemoveWorktree(t *testing.T) {
 		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 			t.Errorf("worktree still exists at %s", f.worktreePath)
 		}
-		if err := exec.Command("git", "-C", f.repoPath, "rev-parse", "--verify", "refs/heads/cc-1").Run(); err == nil {
+		if gittest.HasRef(t, f.repoPath, "refs/heads/cc-1") {
 			t.Error("the local branch still exists after remove-worktree")
 		}
 		if runLogFilesExist(f.ws.RunsDir, f.runID) {
 			t.Error("run log files were not pruned")
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if !hasEvent(events, "worktree_removed", "") {
 			t.Error("no worktree_removed event")
 		}
@@ -194,10 +187,7 @@ func TestRemoveWorktree(t *testing.T) {
 		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 			t.Errorf("worktree still exists at %s", f.worktreePath)
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if !hasEvent(events, "worktree_removed", "") {
 			t.Error("no worktree_removed event")
 		}
@@ -212,11 +202,7 @@ func TestRemoveWorktree(t *testing.T) {
 		}
 		at := f.at.Add(time.Second)
 		for range 2 {
-			if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-				Ticket: f.ticket.URL, Verb: plan.VerbRemoveWorktree, At: at,
-			}); err != nil {
-				t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
-			}
+			storetest.Verb(t, f.store, storepkg.VerbRequest{Ticket: f.ticket.URL, Verb: plan.VerbRemoveWorktree, At: at})
 		}
 
 		if err := f.tick(t, obs, at); err != nil {
@@ -226,10 +212,7 @@ func TestRemoveWorktree(t *testing.T) {
 		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 			t.Errorf("worktree still exists at %s", f.worktreePath)
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if hasEvent(events, storepkg.EventRemoveWorktreeRefused, "") {
 			t.Error("the duplicate intent recorded a refusal")
 		}
@@ -250,11 +233,9 @@ func TestRemoveWorktree(t *testing.T) {
 			PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 		}
 		at := f.at.Add(time.Second)
-		if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, f.store, storepkg.VerbRequest{
 			Ticket: f.ticket.URL, Verb: plan.VerbRemoveWorktree, At: at, HoldUntil: at.Add(time.Minute),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, held remove-worktree): %v", f.ticket.URL, err)
-		}
+		})
 
 		if err := f.tick(t, obs, at); err != nil {
 			t.Fatalf("RunOnce: %v", err)
@@ -297,17 +278,7 @@ func TestRemoveWorktree(t *testing.T) {
 		if got := pending[plan.TicketURL(f.ticket.URL)]; len(got) != 0 {
 			t.Errorf("pending intents after a refusal = %+v, want none requeued", got)
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
-		refusals := 0
-		for _, e := range events {
-			if e.Kind == storepkg.EventRemoveWorktreeRefused {
-				refusals++
-			}
-		}
-		if refusals != 1 {
+		if refusals := len(storetest.Events(t, f.store, storepkg.EventRemoveWorktreeRefused)); refusals != 1 {
 			t.Errorf("remove_worktree_refused events = %d, want 1", refusals)
 		}
 	})
@@ -325,10 +296,7 @@ func TestRemoveWorktree(t *testing.T) {
 			t.Fatalf("RunOnce: %v", err)
 		}
 
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if !hasEvent(events, "worktree_removed", "") || hasEvent(events, "remove_worktree_refused", "") {
 			t.Errorf("events = %+v, want worktree_removed and no refusal", events)
 		}
@@ -374,10 +342,7 @@ func TestRemoveWorktree(t *testing.T) {
 			t.Fatalf("RunOnce: %v", err)
 		}
 
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if hasEvent(events, "remove_worktree_refused", "no worktree for cc-1") {
 			t.Error("a merged ticket with no observed worktree must not refuse")
 		}
@@ -444,10 +409,7 @@ func TestRemoveWorktree(t *testing.T) {
 		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 			t.Error("the worktree should already be torn down before the issue close is even attempted")
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if !hasEvent(events, "remove_worktree_refused", "forge refused") {
 			t.Error("no remove_worktree_refused event naming the issue close failure")
 		}
@@ -474,10 +436,7 @@ func TestRemoveWorktree(t *testing.T) {
 		if _, err := os.Stat(f.worktreePath); err != nil {
 			t.Errorf("worktree after failed remove: %v, want it preserved", err)
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if !hasEvent(events, "remove_worktree_refused", "forge refused") {
 			t.Errorf("events = %+v, want a refused remove", events)
 		}
@@ -516,10 +475,7 @@ func TestRemoveWorktree(t *testing.T) {
 		if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 			t.Error("a branch at its last pushed tip, with the remote ref pruned, must still be removable")
 		}
-		events, err := f.store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, f.store, "")
 		if !hasEvent(events, "worktree_removed", "forced") {
 			t.Error("no worktree_removed event recording that removal was forced")
 		}
@@ -534,50 +490,48 @@ func TestRemoveWorktree(t *testing.T) {
 
 	t.Run("at the merged head despite a stale recorded push", func(t *testing.T) {
 		t.Parallel()
-		for _, tt := range []struct {
-			name      string
-			advance   bool
-			wantFound bool
-		}{
-			{name: "tip equals the merged head", wantFound: false},
-			{name: "tip ahead of the merged head", advance: true, wantFound: true},
-		} {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-				f := newRemoveWorktreeFixture(t, "cc-1")
-				head := gittest.Run(t, f.worktreePath, "rev-parse", "HEAD")
-				stale := storepkg.Push{
-					Ticket: plan.TicketURL(f.ticket.URL), Tip: "stale", BaseSHA: "basesha", BaseBranch: "main", At: f.at,
-				}
-				if err := f.store.RecordPush(t.Context(), stale); err != nil {
-					t.Fatalf("RecordPush(%q): %v", f.ticket.URL, err)
-				}
-				gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
-				if tt.advance {
-					gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "after the merged head")
-				}
+		removeAtMergedHead := func(t *testing.T, advance bool) (worktreeKept, refusedUnpushed bool) {
+			t.Helper()
+			f := newRemoveWorktreeFixture(t, "cc-1")
+			head := gittest.Run(t, f.worktreePath, "rev-parse", "HEAD")
+			stale := storepkg.Push{
+				Ticket: plan.TicketURL(f.ticket.URL), Tip: "stale", BaseSHA: "basesha", BaseBranch: "main", At: f.at,
+			}
+			if err := f.store.RecordPush(t.Context(), stale); err != nil {
+				t.Fatalf("RecordPush(%q): %v", f.ticket.URL, err)
+			}
+			gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
+			if advance {
+				gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "after the merged head")
+			}
 
-				obs := plan.Observation{
-					Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
-					PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged, HeadOid: plan.SHA(head)}},
-				}
-				if err := f.requestRemoveWorktree(t, obs); err != nil {
-					t.Fatalf("RunOnce: %v", err)
-				}
+			obs := plan.Observation{
+				Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+				PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged, HeadOid: plan.SHA(head)}},
+			}
+			if err := f.requestRemoveWorktree(t, obs); err != nil {
+				t.Fatalf("RunOnce: %v", err)
+			}
 
-				_, err := os.Stat(f.worktreePath)
-				if gotFound := err == nil; gotFound != tt.wantFound {
-					t.Errorf("worktree present = %v, want %v", gotFound, tt.wantFound)
-				}
-				events, err := f.store.Events(t.Context())
-				if err != nil {
-					t.Fatalf("Events(): %v", err)
-				}
-				if refused := hasEvent(events, "remove_worktree_refused", "unpushed"); refused != tt.wantFound {
-					t.Errorf("refused for unpushed commits = %v, want %v", refused, tt.wantFound)
-				}
-			})
+			_, err := os.Stat(f.worktreePath)
+			return err == nil, hasEvent(storetest.Events(t, f.store, ""), "remove_worktree_refused", "unpushed")
 		}
+
+		t.Run("tip equals the merged head", func(t *testing.T) {
+			t.Parallel()
+			kept, refused := removeAtMergedHead(t, false)
+			if kept || refused {
+				t.Errorf("worktree present = %v, refused for unpushed commits = %v, want it removed unrefused", kept, refused)
+			}
+		})
+
+		t.Run("tip ahead of the merged head", func(t *testing.T) {
+			t.Parallel()
+			kept, refused := removeAtMergedHead(t, true)
+			if !kept || !refused {
+				t.Errorf("worktree present = %v, refused for unpushed commits = %v, want it kept and refused", kept, refused)
+			}
+		})
 	})
 
 	t.Run("refusals", func(t *testing.T) {
@@ -648,10 +602,7 @@ func TestRemoveWorktree(t *testing.T) {
 				if _, err := os.Stat(f.worktreePath); err != nil {
 					t.Fatalf("a refused worktree must never be removed: %v", err)
 				}
-				events, err := f.store.Events(t.Context())
-				if err != nil {
-					t.Fatalf("Events(): %v", err)
-				}
+				events := storetest.Events(t, f.store, "")
 				if !hasEvent(events, "remove_worktree_refused", tt.reason) {
 					t.Errorf("no remove_worktree_refused event naming %q", tt.reason)
 				}

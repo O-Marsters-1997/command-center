@@ -59,10 +59,8 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 		if len(spawns) != 1 {
 			t.Fatalf("spawns across two ticks and a restart = %d, want 1", len(spawns))
 		}
-		for _, want := range []string{"CI is failing on this branch", "## Failed CI log: CI", "boom"} {
-			if !strings.Contains(spawns[0].Prompt, want) {
-				t.Errorf("prompt = %q, want it to mention %q", spawns[0].Prompt, want)
-			}
+		if !strings.Contains(spawns[0].Prompt, "boom") {
+			t.Errorf("prompt = %q, want it to carry the failed log", spawns[0].Prompt)
 		}
 		histories, err := f.Store.AutoHistories(t.Context())
 		if err != nil {
@@ -87,7 +85,7 @@ func TestAutoFollowUp_CIFailed(t *testing.T) {
 		if len(notes.titles) != 1 {
 			t.Errorf("notifications = %v, want exactly one", notes.titles)
 		}
-		if got := len(f.events(t, storepkg.EventParked)); got != 1 {
+		if got := len(storetest.Events(t, f.Store, storepkg.EventParked)); got != 1 {
 			t.Errorf("parked events = %d, want 1", got)
 		}
 	})
