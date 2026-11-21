@@ -18,18 +18,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-const heldWorktreeRefusal = plan.HeldWorktreeRefusal
-
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbAbort, func(intent plan.Intent) error {
-		e, ok := snap.Entry(intent.Ticket)
-		if !ok {
-			return nil
-		}
-		if err := l.abortOne(ctx, e.Ticket, obs); err != nil {
-			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
-		}
-		return nil
+	return l.eachIntentEntry(ctx, snap, plan.VerbAbort, func(_ plan.Intent, e plan.Entry) error {
+		return l.abortOne(ctx, e.Ticket, obs)
 	})
 }
 
@@ -61,16 +52,13 @@ func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, re
 func (l *Loop) applyFollowUpIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntent(ctx, snap, plan.VerbFollowUp, func(intent plan.Intent) error {
-		ticket, ok := l.ticket(byURL, string(intent.Ticket))
+	return l.eachIntentEntry(ctx, snap, plan.VerbFollowUp, func(intent plan.Intent, e plan.Entry) error {
+		ticket, ok := byURL[e.Ticket.URL]
 		if !ok {
 			return nil
 		}
 		picked := store.DecodeFollowUpPayload(intent.Payload)
-		if err := l.followUpOne(ctx, snap, t, ticket, picked, plan.CauseNone); err != nil {
-			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
-		}
-		return nil
+		return l.followUpOne(ctx, snap, t, ticket, picked, plan.CauseNone)
 	})
 }
 
@@ -88,9 +76,9 @@ func (l *Loop) followUpOne(
 		return l.event(ctx, ticket.URL, store.EventFollowUpRefused, refusal)
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
+	baselineSHA, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
+		return err
 	}
 	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
@@ -111,10 +99,9 @@ func (l *Loop) followUpOne(
 		return fmt.Errorf("find resumable session: %w", err)
 	}
 	if sessionID != "" {
-		entry, _ := snap.Entry(url)
 		outcome := plan.OutcomeFailed
-		if entry.Run.IsSome() {
-			outcome = entry.Run.Unwrap().Outcome.UnwrapOr(plan.OutcomeFailed)
+		if launched.Run.IsSome() {
+			outcome = launched.Run.Unwrap().Outcome.UnwrapOr(plan.OutcomeFailed)
 		}
 		spec.prompt = plan.ComposeMessage(promptText, outcome)
 		spec.resumeSessionID = sessionID
@@ -194,20 +181,16 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 func (l *Loop) applyReRunIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntent(ctx, snap, plan.VerbReRun, func(intent plan.Intent) error {
-		ticket, ok := l.ticket(byURL, string(intent.Ticket))
+	return l.eachIntentEntry(ctx, snap, plan.VerbReRun, func(_ plan.Intent, entry plan.Entry) error {
+		ticket, ok := byURL[entry.Ticket.URL]
 		if !ok {
 			return nil
 		}
-		entry, _ := snap.Entry(plan.TicketURL(ticket.URL))
 		baseBranch := entry.Unlock.BaseBranch
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		if err := l.reRunOne(ctx, t, ticket, entry, baseBranch); err != nil {
-			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
-		}
-		return nil
+		return l.reRunOne(ctx, t, ticket, entry, baseBranch)
 	})
 }
 
@@ -216,10 +199,9 @@ func (l *Loop) reRunOne(
 ) error {
 	launched, promptHash := entry.Ticket, entry.PromptHash
 	begin := l.startOf(entry, t.obs)
-	repoPath := l.checkout(ticket.Repo)
 	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
-		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
+		if err := git.DeleteBranchIfExists(ctx, l.checkout(ticket.Repo), ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
 		if err := l.cutAndSpawn(ctx, t, ticket, launched, baseBranch, promptHash, begin); err != nil {
@@ -228,15 +210,11 @@ func (l *Loop) reRunOne(
 		return nil
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
+	baselineSHA, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
+		return err
 	}
-	if err := l.spawnRun(ctx, t, spawnSpec{
-		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: plan.RunKindAgent, prompt: stepPrompt(ticket, launched, begin.step, nil), choice: launched.Choice,
-		workflow: begin.workflow, step: begin.step, verify: begin.verify,
-	}); err != nil {
+	if err := l.spawnRun(ctx, t, begin.spec(ticket, launched, worktreePath, baselineSHA, promptHash, nil)); err != nil {
 		return fmt.Errorf("spawn re-run in %s: %w", worktreePath, err)
 	}
 	return nil
@@ -244,16 +222,12 @@ func (l *Loop) reRunOne(
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	handled := map[plan.TicketURL]bool{}
-	return l.eachIntent(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent) error {
-		e, ok := snap.Entry(intent.Ticket)
-		if !ok || handled[intent.Ticket] {
+	return l.eachIntentEntry(ctx, snap, plan.VerbRemoveWorktree, func(intent plan.Intent, e plan.Entry) error {
+		if handled[intent.Ticket] {
 			return nil
 		}
 		handled[intent.Ticket] = true
-		if err := l.removeWorktreeOne(ctx, e, snap.Removal(e.Ticket.URL), obs); err != nil {
-			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
-		}
-		return nil
+		return l.removeWorktreeOne(ctx, e, snap.Removal(e.Ticket.URL), obs)
 	})
 }
 
@@ -281,38 +255,17 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	merged := obs.PRs[ticket.Ref()].State == plan.Merged
-
 	repoPath := l.checkout(ticket.Repo)
-	_, worktreePresent := obs.Worktrees[ticket.Ref()]
 
 	forced := false
-	if worktreePresent {
-		provenTips := make([]string, len(removal.ProvenTips))
-		for i, tip := range removal.ProvenTips {
-			provenTips[i] = string(tip)
+	if _, present := obs.Worktrees[ticket.Ref()]; present {
+		var refusal string
+		var err error
+		if forced, refusal, err = l.removeWorktree(ctx, ticket, removal); err != nil {
+			return err
 		}
-		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, provenTips...)
-		if err != nil {
-			return fmt.Errorf("check unpushed commits for %s: %w", url, err)
-		}
-		switch state {
-		case git.RemovableByMerged:
-		case git.RemovableByForce:
-			forced = true
-		case git.NotRemovable:
-			return refuse("worktree holds unpushed commits")
-		case git.RemovalUnknown:
-			return fmt.Errorf("check unpushed commits for %s: removal state is unknown", url)
-		}
-
-		err = l.worktrees.Remove(ctx, repoPath, ticket.Branch)
-		switch {
-		case errors.Is(err, treepad.ErrPostHook):
-			l.logger.Warn("post hook failed after removing worktree", "ticket", url, "err", err)
-		case errors.Is(err, treepad.ErrDirty):
-			return refuse("worktree is dirty")
-		case err != nil:
-			return refuse(err.Error())
+		if refusal != "" {
+			return refuse(refusal)
 		}
 	}
 
@@ -333,6 +286,41 @@ func (l *Loop) removeWorktreeOne(
 	}
 	l.pruneRunLogs(runs)
 	return nil
+}
+
+func (l *Loop) removeWorktree(
+	ctx context.Context, ticket plan.Ticket, removal plan.Removal,
+) (forced bool, refusal string, err error) {
+	url := string(ticket.URL)
+	repoPath := l.checkout(ticket.Repo)
+	provenTips := make([]string, len(removal.ProvenTips))
+	for i, tip := range removal.ProvenTips {
+		provenTips[i] = string(tip)
+	}
+	state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, provenTips...)
+	if err != nil {
+		return false, "", fmt.Errorf("check unpushed commits for %s: %w", url, err)
+	}
+	switch state {
+	case git.RemovableByMerged:
+	case git.RemovableByForce:
+		forced = true
+	case git.NotRemovable:
+		return false, "worktree holds unpushed commits", nil
+	case git.RemovalUnknown:
+		return false, "", fmt.Errorf("check unpushed commits for %s: removal state is unknown", url)
+	}
+
+	err = l.worktrees.Remove(ctx, repoPath, ticket.Branch)
+	switch {
+	case errors.Is(err, treepad.ErrPostHook):
+		l.logger.Warn("post hook failed after removing worktree", "ticket", url, "err", err)
+	case errors.Is(err, treepad.ErrDirty):
+		return false, "worktree is dirty", nil
+	case err != nil:
+		return false, err.Error(), nil
+	}
+	return forced, "", nil
 }
 
 func (l *Loop) pruneRunLogs(ids []plan.RunID) {

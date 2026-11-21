@@ -54,11 +54,6 @@ _Avoid_: Sibling (implies shared blockers, which peership does not require), nei
 The one label derived for a ticket each tick, from `plan.Status`.
 _Avoid_: Status (reserved for `plan.Status`, the function that derives it), phase
 
-**Unattended**:
-A property of a state: the loop advances it without you. Its opposite is a state parked until you
-act. Rendered as a filled disc against a ring.
-_Avoid_: Owned, mine, blocked-on-you
-
 **Reason**:
 The sentence `plan.Status` returns beside a state, naming the blocker where there is one.
 _Avoid_: Why, message, description
@@ -235,7 +230,7 @@ _Avoid_: Header, nav
 >
 > **Dev:** "So do I press a **verb** on all four?"
 >
-> **Operator:** "Only the blocker. The other three are **unattended** — filled discs. The loop moves
+> **Operator:** "Only the blocker. The other three are unattended — filled discs. The loop moves
 > them the moment the blocker's PR opens. Ring means it's parked until you act, and only the failed
 > one has a ring."
 >

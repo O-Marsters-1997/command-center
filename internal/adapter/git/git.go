@@ -66,10 +66,10 @@ func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
 
 func DeleteBranchIfExists(ctx context.Context, repoPath, branch string) error {
 	exists, err := refExists(ctx, repoPath, "refs/heads/"+branch)
-	if err != nil || !exists {
-		if err != nil {
-			return fmt.Errorf("check branch %s: %w", branch, err)
-		}
+	if err != nil {
+		return fmt.Errorf("check branch %s: %w", branch, err)
+	}
+	if !exists {
 		return nil
 	}
 	_, err = git(ctx, repoPath, "branch", "-D", branch)
@@ -89,10 +89,10 @@ func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
 
 func TipIfPresent(ctx context.Context, repoPath, ref string) (sha string, present bool, err error) {
 	out, ok, err := gitRun(ctx, repoPath, "rev-parse", "--verify", "-q", ref)
-	if err != nil || !ok {
-		if err != nil {
-			return "", false, fmt.Errorf("resolve tip %s: %w", ref, err)
-		}
+	if err != nil {
+		return "", false, fmt.Errorf("resolve tip %s: %w", ref, err)
+	}
+	if !ok {
 		return "", false, nil
 	}
 	return strings.TrimSpace(string(out)), true, nil
@@ -274,10 +274,10 @@ func ConflictedPaths(ctx context.Context, worktreePath string) ([]string, error)
 
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	merging, err := refExists(ctx, worktreePath, "MERGE_HEAD")
-	if err != nil || merging {
-		if err != nil {
-			return false, fmt.Errorf("check merge head: %w", err)
-		}
+	if err != nil {
+		return false, fmt.Errorf("check merge head: %w", err)
+	}
+	if merging {
 		return true, nil
 	}
 	rebasing, err := midRebase(ctx, worktreePath)
@@ -322,8 +322,11 @@ func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
 func AncestorIfPresent(ctx context.Context, repoPath, commit, ref string) (bool, error) {
 	for _, c := range []string{commit, ref} {
 		ok, err := refExists(ctx, repoPath, c+"^{commit}")
-		if err != nil || !ok {
-			return false, err
+		if err != nil {
+			return false, fmt.Errorf("check commit %s: %w", c, err)
+		}
+		if !ok {
+			return false, nil
 		}
 	}
 	return Ancestor(ctx, repoPath, commit, ref)
@@ -337,10 +340,7 @@ func refExists(ctx context.Context, worktreePath, ref string) (bool, error) {
 // an error rather than a negative answer.
 func Succeeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
 	_, ok, err := gitRun(ctx, repoPath, args...)
-	if err != nil {
-		return false, fmt.Errorf("run git query: %w", err)
-	}
-	return ok, nil
+	return ok, err
 }
 
 func gitRun(ctx context.Context, repoPath string, args ...string) (stdout []byte, ok bool, err error) {
@@ -350,17 +350,13 @@ func gitRun(ctx context.Context, repoPath string, args ...string) (stdout []byte
 		return out, false, nil
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("run git status query: %w", err)
+		return nil, false, err
 	}
 	return out, true, nil
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
-	out, err := command.Output(ctx, repoPath, "git", args...)
-	if err != nil {
-		return nil, fmt.Errorf("run git in %s: %w", repoPath, err)
-	}
-	return out, nil
+	return command.Output(ctx, repoPath, "git", args...)
 }
 
 func lines(out []byte) []string {

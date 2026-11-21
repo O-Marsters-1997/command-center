@@ -10,6 +10,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestRecordOpenedEvents(t *testing.T) {
@@ -50,12 +51,8 @@ func TestRecordOpenedEvents(t *testing.T) {
 				if err := lp.RunOnce(ctx); err != nil {
 					t.Fatalf("RunOnce tick %d: %v", tick, err)
 				}
-				events, err := store.Events(ctx)
-				if err != nil {
-					t.Fatalf("Events: %v", err)
-				}
 				var got []openedEvent
-				for _, event := range openedEvents(events) {
+				for _, event := range storetest.Events(t, store, "pr_opened") {
 					got = append(got, openedEvent{URL: event.TicketURL, Detail: event.Detail})
 				}
 				var want []openedEvent
@@ -68,14 +65,4 @@ func TestRecordOpenedEvents(t *testing.T) {
 			}
 		})
 	}
-}
-
-func openedEvents(events []storepkg.Event) []storepkg.Event {
-	var opened []storepkg.Event
-	for _, e := range events {
-		if e.Kind == "pr_opened" {
-			opened = append(opened, e)
-		}
-	}
-	return opened
 }

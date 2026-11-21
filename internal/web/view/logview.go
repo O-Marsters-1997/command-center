@@ -201,7 +201,7 @@ func wholeLines(path string) ([]byte, int64, error) {
 }
 
 func takeFinalAnswer(run *agentlog.Run) string {
-	if run.Result == nil || len(run.Phases) == 0 {
+	if run.Result.IsNone() || len(run.Phases) == 0 {
 		return ""
 	}
 	last := &run.Phases[len(run.Phases)-1]

@@ -17,30 +17,7 @@ const (
 	waitDelay      = 2 * time.Second
 )
 
-type Executor interface {
-	Output(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error)
-}
-
-type Exec struct{}
-
-func (Exec) Output(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error) {
-	return OutputWithin(ctx, timeout, dir, name, args...)
-}
-
-type ExecutorFunc func(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error)
-
-func (f ExecutorFunc) Output(
-	ctx context.Context, timeout time.Duration, dir, name string, args ...string,
-) ([]byte, error) {
-	return f(ctx, timeout, dir, name, args...)
-}
-
-func OrExec(e Executor) Executor {
-	if e == nil {
-		return Exec{}
-	}
-	return e
-}
+type Executor func(ctx context.Context, timeout time.Duration, dir, name string, args ...string) ([]byte, error)
 
 // Error carries the command, working directory and stderr of a failed process.
 type Error struct {

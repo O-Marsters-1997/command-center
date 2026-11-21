@@ -74,9 +74,7 @@ func TestRerunFailedChecks(t *testing.T) {
 
 		for range 3 {
 			lp := newLoop(st, observe, fixedClock(testAt), cfg, ws, &runnertest.Runner{}, loop.WithForge(forge))
-			if err := lp.RunOnce(t.Context()); err != nil {
-				t.Fatalf("RunOnce: %v", err)
-			}
+			runOnce(t, lp)
 		}
 		if n := len(forge.Calls("Rerun")); n != 1 {
 			t.Errorf("Rerun calls across three ticks and restarts = %d, want 1", n)
