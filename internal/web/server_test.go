@@ -21,14 +21,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
-	t.Helper()
-	return storetest.Run(t, store, storetest.RunOpts{
-		TicketURL: ticketURL, Kind: "agent", PromptHash: "hash-1",
-		Pgid: 4242, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
-	})
-}
-
 func seededRunning(t *testing.T) *storepkg.Store {
 	t.Helper()
 
