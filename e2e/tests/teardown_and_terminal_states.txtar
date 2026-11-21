@@ -38,6 +38,7 @@ exec cc tick --count 1
 
 # CC-7's re-run pushed its commits through the very same push step a fresh launch uses.
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-7-x
+cp scratch.txt $WORK/repo-cc-1-x/scratch.txt
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-3-x
 exec cc request GET /events
@@ -53,10 +54,8 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4-x
 exec cc request GET /tickets
 stdout 'data-ref="#CC-1"[\s\S]*?title="Merged"'
 
-# remove-worktree refuses a dirty worktree: the library's ErrDirty (docs/adr/0007-cc-proves-what-tp-cannot.md)
-# stops the removal, so the file is left, nothing is removed.
-cp scratch.txt $WORK/repo-cc-1-x/scratch.txt
-exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/teardown/issues/CC-1'
+# The merge queued an automatic removal that refused the dirty worktree: the library's ErrDirty
+# (docs/adr/0007-cc-proves-what-tp-cannot.md) leaves the file, nothing is removed.
 exec cc tick --count 1
 exists $WORK/repo-cc-1-x
 exec cc request GET /events
