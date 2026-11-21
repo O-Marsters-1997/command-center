@@ -319,6 +319,16 @@ func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
 	return Succeeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
 }
 
+func AncestorIfPresent(ctx context.Context, repoPath, commit, ref string) (bool, error) {
+	for _, c := range []string{commit, ref} {
+		ok, err := refExists(ctx, repoPath, c+"^{commit}")
+		if err != nil || !ok {
+			return false, err
+		}
+	}
+	return Ancestor(ctx, repoPath, commit, ref)
+}
+
 func refExists(ctx context.Context, worktreePath, ref string) (bool, error) {
 	return Succeeds(ctx, worktreePath, "rev-parse", "--verify", "-q", ref)
 }

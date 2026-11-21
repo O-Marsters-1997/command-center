@@ -61,6 +61,39 @@ func (l *Loop) applyRaiseIntents(ctx context.Context, snap plan.Snapshot, obs pl
 	})
 }
 
+func (l *Loop) applyAdoptHeadIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
+	return l.eachIntent(ctx, snap, plan.VerbAdoptHead, func(intent plan.Intent) error {
+		e, ok := snap.Entry(intent.Ticket)
+		if !ok {
+			return nil
+		}
+		pr := obs.PRs[e.Ticket.Ref()]
+		if pr.State != plan.Open || pr.HeadOid == "" {
+			return nil
+		}
+		if worktree := obs.Worktrees[e.Ticket.Ref()]; worktree != "" && obs.HeadDescends[e.Ticket.Ref()] {
+			if err := git.MergeFFOnly(ctx, worktree, "origin/"+e.Ticket.Branch); err != nil {
+				return fmt.Errorf("bring %s up to its remote head: %w", e.Ticket.Branch, err)
+			}
+		}
+		base := e.Unlock.BaseBranch
+		baseSHA, err := git.RevParse(ctx, l.checkout(e.Ticket.Repo), "origin/"+base)
+		if err != nil {
+			return fmt.Errorf("resolve origin/%s: %w", base, err)
+		}
+		push := store.Push{
+			Ticket: intent.Ticket, Tip: pr.HeadOid, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
+		}
+		if e.LastPush.IsSome() {
+			push.Protected = e.LastPush.Unwrap().Protected
+		}
+		if err := l.store.RecordPush(ctx, push); err != nil {
+			return fmt.Errorf("record adopted head of %s: %w", e.Ticket.Branch, err)
+		}
+		return l.event(ctx, string(intent.Ticket), store.EventPushed, fmt.Sprintf("adopted remote head %s", pr.HeadOid))
+	})
+}
+
 func sameProtectedPaths(now []plan.PathMatch, last option.Option[plan.PushRow]) bool {
 	var before []plan.PathMatch
 	if last.IsSome() {

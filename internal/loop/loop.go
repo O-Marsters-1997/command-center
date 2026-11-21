@@ -188,6 +188,9 @@ func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ti
 	if err := l.tickCheckingWaits(ctx, tickets); err != nil {
 		return nil, fmt.Errorf("tick checking waits: %w", err)
 	}
+	if err := l.restartWaitsOnNewHeads(ctx, tickets, t); err != nil {
+		return nil, fmt.Errorf("restart checking waits: %w", err)
+	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
 		return nil, fmt.Errorf("apply launch intents: %w", err)
 	}
@@ -238,6 +241,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[p
 	}
 	if err := l.timed(&t.timing.Refresh, func() error { return l.applyRefreshIntents(ctx, snap, t.obs) }); err != nil {
 		return fmt.Errorf("refresh: %w", err)
+	}
+	if err := l.applyAdoptHeadIntents(ctx, snap, t.obs); err != nil {
+		return fmt.Errorf("adopt head: %w", err)
 	}
 	l.rereadLocalTips(ctx, t.obs)
 	if err := l.applyRetryPushIntents(ctx, snap, t.obs); err != nil {
@@ -788,6 +794,19 @@ func (l *Loop) launchEligible(
 		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", ticketURL, err)
+		}
+	}
+	return nil
+}
+
+func (l *Loop) restartWaitsOnNewHeads(ctx context.Context, tickets []store.Ticket, t *tick) error {
+	for _, tk := range tickets {
+		ref := plan.BranchRef{Repo: tk.Repo, Branch: tk.Branch}
+		if !t.obs.HeadDescends[ref] || t.obs.PRs[ref].HeadOid == t.prev.PRs[ref].HeadOid {
+			continue
+		}
+		if err := l.store.ResetCheckingTicks(ctx, plan.TicketURL(tk.URL)); err != nil {
+			return fmt.Errorf("reset checking ticks for %s: %w", tk.URL, err)
 		}
 	}
 	return nil

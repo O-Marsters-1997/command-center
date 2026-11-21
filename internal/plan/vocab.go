@@ -22,6 +22,7 @@ const (
 	VerbImport         Verb = "import"
 	VerbTrack          Verb = "track"
 	VerbRaise          Verb = "raise"
+	VerbAdoptHead      Verb = "adopt-head"
 )
 
 type RunKind string
@@ -72,7 +73,7 @@ var (
 	allVerbs = []Verb{
 		VerbLaunch, VerbKill, VerbReRun, VerbRetryPush, VerbRemoveWorktree, VerbCancel,
 		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbImport, VerbTrack,
-		VerbRaise,
+		VerbRaise, VerbAdoptHead,
 	}
 	allRunKinds     = []RunKind{RunKindAgent, RunKindFollowUp, RunKindCommand, RunKindResolve, RunKindVerify}
 	allRepoPhases   = []RepoPhase{RepoCloning, RepoReady, RepoRefused}
@@ -98,7 +99,7 @@ func ParseRefusalKind(s string) (RefusalKind, error) {
 func (v Verb) IsRowVerb() bool {
 	switch v {
 	case VerbKill, VerbReRun, VerbRetryPush, VerbRemoveWorktree, VerbCancel,
-		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbRaise:
+		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbRaise, VerbAdoptHead:
 		return true
 	case VerbUnknown, VerbLaunch, VerbImport, VerbTrack:
 		return false

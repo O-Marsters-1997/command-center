@@ -550,8 +550,8 @@ func (r Rules) ApplyVerdict(t Ticket, obs Observation, vf VerdictFacts) option.O
 
 	result := verdict.Evaluate(predicate, verdict.Input{
 		Checks:       verdictChecks(pr.Checks),
-		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
-		StackedBase:  pushRow.BaseBranch != "",
+		HeadOidMatch: pushRow.PushedTip != "" && (pr.HeadOid == pushRow.PushedTip || obs.HeadDescends[t.Ref()]),
+		StackedBase:  pushRow.BaseBranch != "" && pushRow.BaseBranch != DefaultBaseBranch,
 		BaseSHAMatch: obs.BranchTips[BranchRef{Repo: t.Repo, Branch: pushRow.BaseBranch}] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
