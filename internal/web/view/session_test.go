@@ -149,4 +149,49 @@ func TestReader_Session(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("leads the kept prompt with its first words", func(t *testing.T) {
+		t.Parallel()
+		const ticketURL = "https://github.com/acme/web/issues/1"
+		ctx := t.Context()
+		st := cctest.Store(t)
+		storetest.Tickets(t, st, store.Ticket{URL: ticketURL, Repo: "acme/web", Branch: "cc-1"})
+
+		dir := t.TempDir()
+		logPath := filepath.Join(dir, "1.jsonl")
+		text := "\n  Implement the rail so that every feature group folds\tand  unfolds on demand today\n## Ticket\n"
+		if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte(text), 0o600); err != nil {
+			t.Fatalf("WriteFile(1.prompt): %v", err)
+		}
+		runID, _, err := st.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
+			Ticket: ticketURL, Kind: plan.RunKindAgent, PromptHash: "hash", Session: store.RunSession{StartNew: true},
+		})
+		if err != nil {
+			t.Fatalf("InsertSessionRunSkeleton(%q): %v", ticketURL, err)
+		}
+		if err := st.RecordSpawn(ctx, store.Spawn{
+			RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
+		}); err != nil {
+			t.Fatalf("RecordSpawn(%d): %v", runID, err)
+		}
+		obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{ticketURL: {}}}
+		if err := st.SaveObservation(ctx, obs); err != nil {
+			t.Fatalf("SaveObservation: %v", err)
+		}
+
+		reader := view.NewReader(st, 0, 0)
+		ref := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
+		page, err := reader.Session(ctx, testNow, ref, option.None[view.RawFilter]())
+		if err != nil {
+			t.Fatalf("Session(acme/web/1): %v", err)
+		}
+		want := view.Prompt{
+			Text: text,
+			Lead: "Implement the rail so that every feature group folds and…",
+			Kept: true,
+		}
+		if diff := cmp.Diff(want, page.Prompt); diff != "" {
+			t.Errorf("Session(acme/web/1) prompt mismatch (-want +got):\n%s", diff)
+		}
+	})
 }

@@ -52,7 +52,6 @@ type SessionPage struct {
 	Models          []string
 	Efforts         []plan.Effort
 	Launched        option.Option[Age]
-	Worked          option.Option[WorkedSummary]
 	Steps           []StepCell
 	Selected        option.Option[StepCell]
 	stepsPath       string
@@ -156,6 +155,7 @@ type Turn struct {
 
 type Prompt struct {
 	Text string
+	Lead string
 	Kept bool
 }
 
@@ -289,9 +289,7 @@ func (r *Reader) Session(
 	}
 	worked := option.None[WorkedSummary]()
 	if row.Log.Worked.Label != "" {
-		summary := row.Log.Summary
-		summary.SpendPctWeek = row.SpendPctWeek
-		worked = option.Some(summary)
+		worked = option.Some(row.Log.Summary)
 	}
 	turns := []Turn{{Log: row.Log}}
 	if raw.IsNone() {
@@ -317,7 +315,7 @@ func (r *Reader) Session(
 		return SessionPage{}, fmt.Errorf("read prompt: %w", err)
 	}
 	if !prompt.Kept && len(runs) > 0 && runs[0].Prompt != "" {
-		prompt = Prompt{Text: runs[0].Prompt, Kept: true}
+		prompt = keptPrompt(runs[0].Prompt)
 	}
 	rawLog, err := readRawLog(raw, row.LogPath)
 	if err != nil {
@@ -338,7 +336,6 @@ func (r *Reader) Session(
 		Steps:          steps,
 		Selected:       selected,
 		stepsPath:      ref.pathWithRun(),
-		Worked:         worked,
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		Actions:        actions,
@@ -392,7 +389,23 @@ func readPrompt(logPath string) (Prompt, error) {
 	if err != nil {
 		return Prompt{}, fmt.Errorf("read prompt for %s: %w", logPath, err)
 	}
-	return Prompt{Text: string(data), Kept: true}, nil
+	return keptPrompt(string(data)), nil
+}
+
+const leadWords = 10
+
+func keptPrompt(text string) Prompt {
+	var words []string
+	for line := range strings.Lines(text) {
+		if words = strings.Fields(line); len(words) > 0 {
+			break
+		}
+	}
+	lead := strings.Join(words[:min(len(words), leadWords)], " ")
+	if len(words) > leadWords {
+		lead += "…"
+	}
+	return Prompt{Text: text, Lead: lead, Kept: true}
 }
 
 func readRawLog(raw option.Option[RawFilter], logPath string) (RawLog, error) {

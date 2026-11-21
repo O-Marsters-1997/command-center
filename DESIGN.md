@@ -300,18 +300,23 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 - **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
 - **Session.** The transcript is centred at max 720px, with the composer floating at the foot.
-  The head is the state badge, the title and a mono `repo #n · branch` line. The prompt is a
-  right-aligned bubble under "Launched from the ticket · age", with a mono "Worked · 0.4% of
-  week · wall · turns" line beneath it, and Transcript and Raw log are right-aligned pill tabs.
-  Stored events (launched, pushed, PR opened, agent run finished) read as record lines, and the
-  checks that landed fold into one grid of glyph, name and elapsed, with an output link on each
-  failure. A 300px feature-stack panel sits on the right: the feature with its avatar, a
-  merged-progress meter with merged/total, and quiet Graph and Board text links; then "This
-  ticket" (blocked by, merging it unlocks); then "In flight", the live members as rows (glyph,
-  ref, title, right-aligned elapsed or wave) with the current ticket tinted, and closed "Ready
-  to launch", "Blocked" and "Merged" folds with counts. A small PR, Checks and Spend list (share
-  of week, never dollars) and a closed "Edit blockers" fold close the panel. Below 1180px the
-  panel becomes an overlay that opens on demand.
+  Voice leads: the agent's prose is the page's main text and everything else sits quieter. The
+  head is one line, wrapping only when narrow: the 22px title, then in `muted` the state badge,
+  mono `repo #n`, the mono branch (the worktree path on hover), the PR link and the time worked,
+  separated by small dots. The prompt is a closed bar: a white `surface` strip with a soft
+  border and 10px corners holding a doc icon, "Prompt", the prompt's first words clipped to one
+  line and the feature's launch age; it opens in place to the full text. Transcript and Raw log
+  are right-aligned pill tabs. A finished run's answer sits under a full-width `border-soft`
+  hairline headed by its state glyph and "Result", with no card, and fades in briefly unless the
+  user prefers reduced motion. Stored events (launched, pushed, PR opened, agent run finished)
+  read as record lines, and the checks that landed fold into one grid of glyph, name and
+  elapsed, with an output link on each failure. A 300px feature-stack panel sits on the right:
+  the feature with its avatar, a merged-progress meter with merged/total, and quiet Graph and
+  Board text links; then "This ticket" (blocked by, merging it unlocks); then "In flight", the
+  live members as rows (glyph, ref, title, right-aligned elapsed or wave) with the current
+  ticket tinted, and closed "Ready to launch", "Blocked" and "Merged" folds with counts. A small
+  PR, Checks and Spend list (share of week, never dollars) and a closed "Edit blockers" fold
+  close the panel. Below 1180px the panel becomes an overlay that opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.
@@ -459,8 +464,8 @@ ticket filters. No underline tabs.
 
 ### Transcript and composer
 
-- **Head:** a badge, a 22px title, and repo · feature in `muted`. The "Worked for 1m 44s ›" line
-  folds the run into one disclosure.
+- **Head:** the one-line session head above: a 22px title, then badge, repo, branch, PR and
+  "Worked for 1m 44s · 12 turns" in `muted`.
 - **Lines:** a grid of a 44px mono timestamp, an 18px icon and the body. Agent messages are
   body-read at 68ch. Tool groups are disclosures with a hairline-indented sublist. Commands sit
   in a bordered block with the exit status. Errors sit on a `s-failed-soft` block. Your messages
