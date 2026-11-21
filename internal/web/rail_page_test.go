@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -30,17 +29,10 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 	}
 	storetest.Tickets(t, st, tickets...)
 	dispositionAsPushed(t, st, "sandbox://CC-1", testNow)
-	runID, _, err := st.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: "sandbox://CC-3", Kind: "agent", PromptHash: "hash-3",
+	storetest.Run(t, st, storetest.RunOpts{
+		TicketURL: "sandbox://CC-3", Kind: "agent", PromptHash: "hash-3",
+		Pgid: 222, StartedAt: testNow, LogPath: "/state/runs/3.jsonl",
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton: %v", err)
-	}
-	if err := st.RecordSpawn(t.Context(), storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 222, StartedAt: testNow, LogPath: "/state/runs/3.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn: %v", err)
-	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
 		Runs:       map[plan.TicketURL]plan.RunObservation{"sandbox://CC-3": {Alive: true}},
@@ -156,9 +148,17 @@ func testRailQueryMissing(t *testing.T) {
 	}
 }
 
-func railHealth(t *testing.T, store *storepkg.Store, now time.Time) []htmltest.Node {
+func railHealth(t *testing.T, store *storepkg.Store, now time.Time) []string {
 	t.Helper()
-	return htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).Find(".rail-health")
+	return nodeTexts(htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).Find(".rail-health"))
+}
+
+func nodeTexts(nodes []htmltest.Node) []string {
+	var texts []string
+	for _, n := range nodes {
+		texts = append(texts, n.Text())
+	}
+	return texts
 }
 
 func TestRail(t *testing.T) {
@@ -208,32 +208,31 @@ func TestRail(t *testing.T) {
 		t.Parallel()
 		observedAt := testNow
 		for _, tt := range []struct {
-			name     string
-			age      time.Duration
-			never    bool
-			wantChip string
+			name string
+			age  time.Duration
+			want []string
 		}{
 			{name: "fresh", age: 2 * time.Second},
 			{name: "under twenty", age: 19 * time.Second},
-			{name: "at twenty", age: 20 * time.Second, wantChip: "last good observe: 20s ago"},
-			{name: "well past", age: 5 * time.Minute, wantChip: "last good observe: 5m0s ago"},
-			{name: "no observation", never: true, wantChip: "last good observe: never"},
+			{name: "at twenty", age: 20 * time.Second, want: []string{"last good observe: 20s ago"}},
+			{name: "well past", age: 5 * time.Minute, want: []string{"last good observe: 5m0s ago"}},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				at := &observedAt
-				if tt.never {
-					at = nil
-				}
-				chips := railHealth(t, shellStore(t, at, ""), observedAt.Add(tt.age))
-				switch {
-				case tt.wantChip == "" && len(chips) != 0:
-					t.Errorf("GET /rail chip = %q, want none", chips[0].Text())
-				case tt.wantChip != "" && (len(chips) != 1 || !strings.Contains(chips[0].Text(), tt.wantChip)):
-					t.Errorf("GET /rail chips = %d, want one reading %q", len(chips), tt.wantChip)
+				got := railHealth(t, shellStore(t, &observedAt, ""), observedAt.Add(tt.age))
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("GET /rail chips mismatch (-want +got):\n%s", diff)
 				}
 			})
 		}
+		t.Run("no observation", func(t *testing.T) {
+			t.Parallel()
+			got := railHealth(t, shellStore(t, nil, ""), observedAt)
+			want := []string{"last good observe: never"}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("GET /rail chips mismatch (-want +got):\n%s", diff)
+			}
+		})
 	})
 
 	t.Run("the age carries the absolute instant", func(t *testing.T) {
@@ -284,7 +283,7 @@ func TestRail(t *testing.T) {
 		for _, tt := range []struct {
 			name  string
 			store func(*testing.T) *storepkg.Store
-			want  int
+			want  []string
 		}{
 			{
 				name: "one running",
@@ -292,7 +291,7 @@ func TestRail(t *testing.T) {
 					t.Helper()
 					return detailStore(t, writeLog(t, 1), now, now)
 				},
-				want: 1,
+				want: []string{"1 running"},
 			},
 			{
 				name: "idle",
@@ -301,17 +300,14 @@ func TestRail(t *testing.T) {
 					return shellStore(t, &now, "")
 				},
 			},
-			{name: "a run whose row reads base gone", store: baseGoneLiveStore, want: 1},
+			{name: "a run whose row reads base gone", store: baseGoneLiveStore, want: []string{"1 running"}},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				page := htmltest.Parse(t, renderPath(t, newServer(tt.store(t), now), "/tickets"))
-				counts := page.Find("[data-scope-menu] summary .rail-count")
-				switch {
-				case tt.want == 0 && len(counts) != 0:
-					t.Errorf("GET /tickets scope = %q, want no running count", counts[0].Text())
-				case tt.want > 0 && (len(counts) != 1 || counts[0].Text() != fmt.Sprintf("%d running", tt.want)):
-					t.Errorf("GET /tickets scope counts = %d, want one reading %d running", len(counts), tt.want)
+				got := nodeTexts(page.Find("[data-scope-menu] summary .rail-count"))
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("GET /tickets scope counts mismatch (-want +got):\n%s", diff)
 				}
 			})
 		}
@@ -371,17 +367,10 @@ func baseGoneLiveStore(t *testing.T) *storepkg.Store {
 	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	dependent := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL}}
 	storetest.Tickets(t, store, blocker, dependent)
-	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+		Pgid: 4242, StartedAt: testNow, LogPath: "/logs/run.jsonl",
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton: %v", err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: testNow, LogPath: "/logs/run.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn: %v", err)
-	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
 		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(dependent.URL): {Alive: true}},

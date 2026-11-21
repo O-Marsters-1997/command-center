@@ -14,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -30,24 +31,11 @@ func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, _, err := st.InsertSessionRunSkeleton(t.Context(), store.RunSkeleton{
-		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
+	storetest.Run(t, st, storetest.RunOpts{
+		TicketURL: ticketURL, Kind: "agent", PromptHash: "hash-1",
+		Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
+		Outcome: option.Some(plan.OutcomePush), ExitCode: option.Some(0), EndedAt: at,
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton(%s): %v", ticketURL, err)
-	}
-	if err := st.RecordSpawn(t.Context(), store.Spawn{
-		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn(%d): %v", runID, err)
-	}
-	exitCode := 0
-	if err := st.RecordDisposition(t.Context(), store.Disposition{
-		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
-		Cost: option.None[float64](), EndedAt: at,
-	}); err != nil {
-		t.Fatalf("RecordDisposition(%d): %v", runID, err)
-	}
 }
 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

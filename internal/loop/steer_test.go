@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 type stubbornRunner struct{ *runnertest.Runner }
@@ -81,19 +82,14 @@ func newSteerFixture(t *testing.T, wrap func(*runnertest.Runner) runner.Runner) 
 
 func (f *steerFixture) send(t *testing.T, text string) {
 	t.Helper()
-	_, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	storetest.Verb(t, f.store, storepkg.VerbRequest{
 		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: testAt,
 	})
-	if err != nil {
-		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
-	}
 }
 
 func (f *steerFixture) tick(t *testing.T) {
 	t.Helper()
-	if err := f.loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce() error = %v", err)
-	}
+	runOnce(t, f.loop)
 }
 
 func (f *steerFixture) pendingFollowUps(t *testing.T) int {

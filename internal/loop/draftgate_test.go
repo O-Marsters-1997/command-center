@@ -74,7 +74,7 @@ func TestDraftGate(t *testing.T) {
 		*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
 		f.tick(t)
 
-		failed := f.events(t, "draft_ready_failed")
+		failed := storetest.Events(t, f.Store, "draft_ready_failed")
 		if len(failed) != 1 || failed[0].TicketURL != f.Ticket.URL ||
 			!strings.Contains(failed[0].Detail, fmt.Sprint(errForge)) {
 			t.Errorf("draft_ready_failed events = %+v, want one naming %q", failed, errForge)
@@ -86,7 +86,7 @@ func TestDraftGate(t *testing.T) {
 		if got := len(f.Forge.Calls("Ready")); got != 2 {
 			t.Errorf("Ready calls after the retry = %d, want 2", got)
 		}
-		if ready := f.events(t, "draft_ready"); len(ready) != 1 || ready[0].TicketURL != f.Ticket.URL {
+		if ready := storetest.Events(t, f.Store, "draft_ready"); len(ready) != 1 || ready[0].TicketURL != f.Ticket.URL {
 			t.Errorf("draft_ready events = %+v, want one for the retry", ready)
 		}
 	})

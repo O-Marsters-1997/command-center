@@ -2,9 +2,7 @@ package loop_test
 
 import (
 	"context"
-	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func mergeParentIntoMain(t *testing.T, repoPath string) {
@@ -68,16 +67,11 @@ func squashParentIntoMain(t *testing.T, root, repoPath string) {
 
 func isAncestor(t *testing.T, repoPath, commit, ref string) bool {
 	t.Helper()
-	cmd := exec.Command("git", "-C", repoPath, "merge-base", "--is-ancestor", commit, ref)
-	err := cmd.Run()
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return false
-	}
+	ancestor, err := git.Ancestor(t.Context(), repoPath, commit, ref)
 	if err != nil {
-		t.Fatalf("merge-base --is-ancestor %s %s: %v", commit, ref, err)
+		t.Fatalf("Ancestor(%s, %s): %v", commit, ref, err)
 	}
-	return true
+	return ancestor
 }
 
 func TestRetarget(t *testing.T) {
@@ -101,9 +95,7 @@ func TestRetarget(t *testing.T) {
 			cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 			lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{},
 				loop.WithForge(forge))
-			if err := lp.RunOnce(t.Context()); err != nil {
-				t.Fatalf("RunOnce: %v", err)
-			}
+			runOnce(t, lp)
 
 			want := []ghtest.Call{{Method: "Edit", Repo: repoPath, Branch: "child", Base: "main"}}
 			if diff := cmp.Diff(want, forge.Calls("Edit")); diff != "" {
@@ -123,10 +115,7 @@ func TestRetarget(t *testing.T) {
 				t.Errorf("child's recorded base sha = %q, want origin/main's tip %q", row.BaseSHAAtPush, mainSHA)
 			}
 
-			events, err := store.Events(t.Context())
-			if err != nil {
-				t.Fatalf("Events(): %v", err)
-			}
+			events := storetest.Events(t, store, "")
 			if !hasEvent(events, "retargeted", "child") {
 				t.Errorf("events = %+v, want a retargeted event naming the child's branch", events)
 			}
@@ -152,15 +141,9 @@ func TestRetarget(t *testing.T) {
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 
 		firstTick := at.Add(time.Minute)
-		if err := newLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge)).
-			RunOnce(t.Context()); err != nil {
-			t.Fatalf("first RunOnce: %v", err)
-		}
-		if err := newLoop(store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{},
-			loop.WithForge(forge)).
-			RunOnce(t.Context()); err != nil {
-			t.Fatalf("second RunOnce: %v", err)
-		}
+		runOnce(t, newLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge)))
+		runOnce(t, newLoop(store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{},
+			loop.WithForge(forge)))
 
 		pushes := planInput(t, store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.child.URL)].PushedAt; !got.Equal(firstTick) {
@@ -186,28 +169,17 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("retarget RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
 		gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("refresh RunOnce: %v", err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour)})
+		runOnce(t, lp)
 
 		if _, err := os.Stat(filepath.Join(f.childWorktree, "main-fix.txt")); err != nil {
 			t.Errorf("child worktree does not contain main's later commit after refresh: %v", err)
 		}
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refreshed", "merged origin/child then origin/main") {
 			t.Errorf("events = %+v, want a refreshed event naming origin/main, never the deleted parent", events)
 		}
@@ -228,14 +200,9 @@ func TestRetarget(t *testing.T) {
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{},
 			loop.WithForge(failingEdit{forge}))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "retarget_failed", "forge refused") {
 			t.Errorf("events = %+v, want a retarget_failed event naming gh's own refusal", events)
 		}
@@ -248,9 +215,7 @@ func TestRetarget(t *testing.T) {
 			t.Errorf("child's recorded base = %q, want parent unchanged: only a successful edit records one", got)
 		}
 
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("second RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 		if got := forge.Calls("Edit"); len(got) != 2 {
 			t.Errorf("forge Edit calls over two ticks = %+v, want two: a refused retarget is retried", got)
 		}
@@ -285,14 +250,9 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refresh_conflicted", "") {
 			t.Errorf("events = %+v, want a refresh_conflicted event: retargeting onto main must merge main, "+
 				"and this child's parent.txt conflicts with main's own", events)
@@ -331,14 +291,9 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("retarget RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "restacked", "restacked onto origin/main") {
 			t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/main", events)
 		}
@@ -359,9 +314,7 @@ func TestRetarget(t *testing.T) {
 			}
 		}
 
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("push RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 		local := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 		remote := gittest.Run(t, repoPath, "rev-parse", "origin/child")
 		if remote != local {
@@ -389,14 +342,9 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "restacked", "restacked onto origin/parent") {
 			t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/parent", events)
 		}
@@ -426,18 +374,13 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		if got := gittest.Run(t, repoPath, "rev-parse", "origin/child"); got != remoteBefore {
 			t.Errorf("origin/child = %q, want %q untouched: the app never rewrote this branch, so the "+
 				"commit that was there is the agent's to account for, not the app's to discard", got, remoteBefore)
 		}
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "push_failed", "") {
 			t.Errorf("events = %+v, want a push_failed event: a diverged branch the app did not restack "+
 				"is a human's problem", events)
@@ -476,14 +419,9 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("restack RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refresh_conflicted", "") {
 			t.Fatalf("events = %+v, want refresh_conflicted: the child's parent.txt conflicts with main's", events)
 		}
@@ -503,9 +441,7 @@ func TestRetarget(t *testing.T) {
 		gittest.Run(t, f.childWorktree, "add", "parent.txt")
 		gittest.Run(t, f.childWorktree, "-c", "core.editor=true", "rebase", "--continue")
 
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("push RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 		local := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 		remote := gittest.Run(t, repoPath, "rev-parse", "origin/child")
 		if remote != local {
@@ -553,14 +489,9 @@ func TestRetarget(t *testing.T) {
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("retarget RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "retargeted", "at main") {
 			t.Fatalf("events = %+v, want a retargeted event: the control this test rests on", events)
 		}
@@ -568,9 +499,7 @@ func TestRetarget(t *testing.T) {
 		gittest.Run(t, f.childWorktree, "rebase", "--abort")
 		obs.MidMerge[branchRef("repo", "child")] = false
 
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("second RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 		if isAncestor(t, f.childWorktree, f.parentTip0, "HEAD") {
 			t.Errorf("the child still carries the parent's own commit %s, so the retarget's stamp is "+
 				"still telling baseMoved this row sits on main when it has never been advanced there",

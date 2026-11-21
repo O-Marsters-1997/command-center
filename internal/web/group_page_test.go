@@ -36,24 +36,11 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
-	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: "sandbox://ROOT", Kind: "agent", PromptHash: "hash-1",
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: "sandbox://ROOT", Kind: "agent", PromptHash: "hash-1",
+		Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
+		Outcome: option.Some(plan.OutcomeFailed), ExitCode: option.Some(1), EndedAt: at,
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton(sandbox://ROOT): %v", err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn(%d): %v", runID, err)
-	}
-	exitCode := 1
-	if err := store.RecordDisposition(ctx, storepkg.Disposition{
-		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
-		Cost: option.None[float64](), EndedAt: at,
-	}); err != nil {
-		t.Fatalf("RecordDisposition(%d): %v", runID, err)
-	}
 	for _, c := range children {
 		launch := storepkg.LaunchRequest{Ticket: c, PromptHash: "hash-1", Group: "group-a", At: at}
 		if err := store.QueueLaunchIntent(ctx, launch); err != nil {
@@ -81,7 +68,7 @@ func observedTickets(t *testing.T, tickets ...storepkg.Ticket) *storepkg.Store {
 
 func boardFor(t *testing.T, store *storepkg.Store) string {
 	t.Helper()
-	return renderBoard(t, openServer(track(t, store, named("repo")...), fixedClock(testNow), ""))
+	return renderBoard(t, newServer(track(t, store, named("repo")...), testNow))
 }
 
 func testBoardGroups(t *testing.T) {
@@ -176,23 +163,11 @@ func testBoardGroups(t *testing.T) {
 		store := openStore(t)
 		ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 		storetest.Tickets(t, store, ticket)
-		runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
-			Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+		storetest.Run(t, store, storetest.RunOpts{
+			TicketURL: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+			Pgid: 111, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
+			Outcome: option.Some(plan.OutcomeFailed), ExitCode: option.Some(1), EndedAt: testNow,
 		})
-		if err != nil {
-			t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)
-		}
-		if err := store.RecordSpawn(ctx, storepkg.Spawn{
-			RunID: plan.RunID(runID), Pgid: 111, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
-		}); err != nil {
-			t.Fatalf("RecordSpawn(%d): %v", runID, err)
-		}
-		if err := store.RecordDisposition(ctx, storepkg.Disposition{
-			RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(1),
-			Cost: option.None[float64](), EndedAt: testNow,
-		}); err != nil {
-			t.Fatalf("RecordDisposition(%d): %v", runID, err)
-		}
 		obs := plan.Observation{
 			ObservedAt: testNow,
 			PRs:        map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 262, State: plan.Merged}},

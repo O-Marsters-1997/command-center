@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
@@ -158,9 +159,7 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		childHead := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 		parents := strings.Fields(gittest.Run(t, f.childWorktree, "log", "-1", "--format=%P", childHead))
@@ -176,10 +175,7 @@ func TestRefresh(t *testing.T) {
 			t.Errorf("remote child tip = %s, want %s: the merge commit must be pushed the same tick", remoteChildTip, childHead)
 		}
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refreshed", "") {
 			t.Errorf("events = %+v, want a refreshed event", events)
 		}
@@ -247,9 +243,7 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		if _, err := os.Stat(filepath.Join(f.parentWorktree, "main-fix.txt")); err != nil {
 			t.Errorf("parent worktree does not contain main's own advance after refresh: %v", err)
@@ -277,18 +271,13 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD"); got != childTip0 {
 			t.Errorf("child worktree HEAD = %s, want unchanged %s: a live run must never see a git write (inv. 4)",
 				got, childTip0)
 		}
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if hasEvent(events, "refreshed", "") || hasEvent(events, "refresh_refused", "") {
 			t.Errorf("events = %+v, want no refresh activity while a run is alive", events)
 		}
@@ -307,22 +296,13 @@ func TestRefresh(t *testing.T) {
 		obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Second),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Second)})
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refresh_refused", "a run is alive") {
 			t.Errorf("events = %+v, want a refresh_refused naming the live run as why the manual refresh did nothing", events)
 		}
@@ -341,22 +321,15 @@ func TestRefresh(t *testing.T) {
 		obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
 		observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, store, storepkg.VerbRequest{
 			Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at, HoldUntil: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
-		}
+		})
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if hasEvent(events, "refresh_refused", "a run is alive") {
 			t.Errorf("events = %+v, want the held refresh not yet acted on", events)
 		}
@@ -384,9 +357,7 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
 		if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD"); got != childTip0 {
 			t.Errorf("child worktree HEAD = %s, want unchanged %s: a refused fast-forward must not touch it", got, childTip0)
@@ -400,10 +371,7 @@ func TestRefresh(t *testing.T) {
 			t.Fatalf("refresh facts = %+v, want %s refused", facts, f.child.URL)
 		}
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refresh_refused", "") {
 			t.Errorf("events = %+v, want a refresh_refused event", events)
 		}
@@ -411,26 +379,12 @@ func TestRefresh(t *testing.T) {
 		if err := lp.RunOnce(t.Context()); err != nil {
 			t.Fatalf("second RunOnce: %v", err)
 		}
-		eventsAfter, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
-		refusalCount := 0
-		for _, e := range eventsAfter {
-			if e.Kind == "refresh_refused" {
-				refusalCount++
-			}
-		}
-		if refusalCount != 1 {
+		if refusalCount := len(storetest.Events(t, store, "refresh_refused")); refusalCount != 1 {
 			t.Errorf("refresh_refused events = %d after a second automatic tick, want still 1: no auto-retry", refusalCount)
 		}
 
 		gittest.Run(t, f.childWorktree, "push", "-q", "--force", "origin", "child")
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour)})
 		if err := lp.RunOnce(t.Context()); err != nil {
 			t.Fatalf("retry RunOnce: %v", err)
 		}
@@ -470,16 +424,9 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		runOnce(t, lp)
+		runOnce(t, lp)
+		events := storetest.Events(t, store, "")
 		if !hasEvent(events, "refresh_conflicted", "") {
 			t.Fatalf("events = %+v, want a refresh_conflicted event", events)
 		}
@@ -495,19 +442,10 @@ func TestRefresh(t *testing.T) {
 		cloneHead := gittest.Run(t, clone, "rev-parse", "HEAD")
 		obs.BranchTips[branchRef("repo", "child")] = plan.SHA(cloneHead)
 
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("abort RunOnce: %v", err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour)})
+		runOnce(t, lp)
 
-		eventsAfter, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		eventsAfter := storetest.Events(t, store, "")
 		if !hasEvent(eventsAfter, "refreshed", "") {
 			t.Errorf("events = %+v, want a refreshed event once the branch was resolved and pushed "+
 				"outside the app, with no refresh verb", eventsAfter)
@@ -537,26 +475,13 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
+		runOnce(t, lp)
 
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("abort RunOnce: %v", err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour)})
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events := storetest.Events(t, store, "")
 		if hasEvent(events, "refreshed", "") {
 			t.Fatalf("events = %+v, want no refreshed event yet: the base has not moved past the failed merge", events)
 		}
@@ -568,10 +493,7 @@ func TestRefresh(t *testing.T) {
 			t.Fatalf("retry RunOnce: %v", err)
 		}
 
-		eventsAfter, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		eventsAfter := storetest.Events(t, store, "")
 		if !hasEvent(eventsAfter, "refreshed", "") {
 			t.Errorf("events = %+v, want a refreshed event once the base moved past the failed merge, "+
 				"with no refresh verb", eventsAfter)
@@ -604,36 +526,14 @@ func TestRefresh(t *testing.T) {
 
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
+		runOnce(t, lp)
 
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("abort RunOnce: %v", err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour)})
+		runOnce(t, lp)
+		runOnce(t, lp)
 
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
-		conflicts := 0
-		for _, e := range events {
-			if e.Kind == "refresh_conflicted" {
-				conflicts++
-			}
-		}
-		if conflicts != 1 {
+		if conflicts := len(storetest.Events(t, store, "refresh_conflicted")); conflicts != 1 {
 			t.Errorf("refresh_conflicted events = %d, want still 1: nothing has moved, so autoRefresh "+
 				"must not retry the same merge", conflicts)
 		}
@@ -655,30 +555,16 @@ func TestRefresh(t *testing.T) {
 		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("automatic RunOnce: %v", err)
-		}
-		events, err := store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		runOnce(t, lp)
+		events := storetest.Events(t, store, "")
 		if hasEvent(events, "refresh_refused", "") {
 			t.Errorf("events = %+v, want no refresh_refused from an automatic tick", events)
 		}
 
-		if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-			Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
-		}
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("verb RunOnce: %v", err)
-		}
+		storetest.Verb(t, store, storepkg.VerbRequest{Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour)})
+		runOnce(t, lp)
 
-		events, err = store.Events(t.Context())
-		if err != nil {
-			t.Fatalf("Events(): %v", err)
-		}
+		events = storetest.Events(t, store, "")
 		if !hasEvent(events, "refresh_refused", f.parent.URL) {
 			t.Errorf("events = %+v, want a refresh_refused naming the blocker %s", events, f.parent.URL)
 		}
@@ -708,12 +594,13 @@ func TestRefresh(t *testing.T) {
 		if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD"); got != childTip0 {
 			t.Errorf("child HEAD while awaiting input = %s, want %s", got, childTip0)
 		}
-		if hasEventIn(t, store, "refreshed", "") || hasEventIn(t, store, "refresh_refused", "") {
+		events := storetest.Events(t, store, "")
+		if hasEvent(events, "refreshed", "") || hasEvent(events, "refresh_refused", "") {
 			t.Error("Events() has refresh activity while awaiting input, want none")
 		}
 		dispositionAs(t, store, f.child.URL, plan.OutcomePush, testAt.Add(2*time.Second))
 		runOnce(t, lp)
-		if !hasEventIn(t, store, "refreshed", "") {
+		if !hasEvent(storetest.Events(t, store, ""), "refreshed", "") {
 			t.Error("Events() has no refreshed once the ticket left awaiting input")
 		}
 	})
@@ -766,7 +653,7 @@ func TestRefresh(t *testing.T) {
 		if err := c.loop.RunOnce(t.Context()); err == nil {
 			t.Error("RunOnce() error = nil, want the failed advance reported")
 		}
-		if hasEventIn(t, c.store, "refresh_conflicted", "") {
+		if hasEvent(storetest.Events(t, c.store, ""), "refresh_conflicted", "") {
 			t.Error("Events() has refresh_conflicted, want none: the worktree is not mid-merge")
 		}
 	})
@@ -779,16 +666,14 @@ func TestRefresh(t *testing.T) {
 		c.tick(t)
 		c.tick(t)
 
-		if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, c.store, storepkg.VerbRequest{
 			Ticket: c.f.child.URL, Verb: plan.VerbRefresh, At: testAt.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(refresh): %v", err)
-		}
+		})
 		c.tick(t)
 		c.queueResolve(t)
 		c.tick(t)
 
-		if hasEventIn(t, c.store, storepkg.EventRefreshRefused, "") {
+		if hasEvent(storetest.Events(t, c.store, ""), storepkg.EventRefreshRefused, "") {
 			t.Error("Events() has refresh_refused, want none: it would hide the recorded conflict")
 		}
 		if got := len(fake.Spawns()); got != 1 {

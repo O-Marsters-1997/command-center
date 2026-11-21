@@ -34,17 +34,10 @@ func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
 	storetest.Tickets(t, store, ticket)
-	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	runID := storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+		Pgid: 4242, StartedAt: now, LogPath: logPath,
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)
-	}
-	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: logPath,
-	}); err != nil {
-		t.Fatalf("RecordSpawn(%d): %v", runID, err)
-	}
 	return store, runID
 }
 

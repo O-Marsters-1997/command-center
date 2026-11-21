@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 // Kind identifies a rendered stream-json event category.
@@ -89,7 +91,7 @@ type Result struct {
 
 type Run struct {
 	Phases []Phase
-	Result *Result
+	Result option.Option[Result]
 	Lines  int
 	Start  time.Time
 	End    time.Duration
@@ -117,8 +119,7 @@ func Parse(r io.Reader) (Run, error) {
 			return
 		}
 		if parsed.Type == "result" {
-			result := parsed.result()
-			run.Result = &result
+			run.Result = option.Some(parsed.result())
 			return
 		}
 		for _, event := range tail.feed(parsed) {
@@ -218,14 +219,14 @@ type logLine struct {
 		Content []contentBlock `json:"content"`
 		Usage   usage          `json:"usage"`
 	} `json:"message"`
-	ToolUseResult json.RawMessage `json:"tool_use_result"`
-	Subtype       string          `json:"subtype"`
-	ResultText    string          `json:"result"`
-	DurationMS    int64           `json:"duration_ms"`
-	NumTurns      int             `json:"num_turns"`
-	CostUSD       *float64        `json:"total_cost_usd"`
-	Usage         usage           `json:"usage"`
-	RateLimitInfo *rateLimitInfo  `json:"rate_limit_info"`
+	ToolUseResult json.RawMessage        `json:"tool_use_result"`
+	Subtype       string                 `json:"subtype"`
+	ResultText    string                 `json:"result"`
+	DurationMS    int64                  `json:"duration_ms"`
+	NumTurns      int                    `json:"num_turns"`
+	CostUSD       option.Option[float64] `json:"total_cost_usd"`
+	Usage         usage                  `json:"usage"`
+	RateLimitInfo *rateLimitInfo         `json:"rate_limit_info"`
 }
 
 type rateLimitInfo struct {
@@ -304,15 +305,11 @@ func eachLine(r io.Reader, fn func([]byte)) error {
 }
 
 func (l logLine) result() Result {
-	var cost float64
-	if l.CostUSD != nil {
-		cost = *l.CostUSD
-	}
 	return Result{
 		Outcome:  l.Subtype,
 		Duration: time.Duration(l.DurationMS) * time.Millisecond,
 		Turns:    l.NumTurns,
-		CostUSD:  cost,
+		CostUSD:  l.CostUSD.UnwrapOr(0),
 	}
 }
 

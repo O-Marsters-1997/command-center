@@ -7,12 +7,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func (f *pushFixture) awaitingPR(t *testing.T) {
 	t.Helper()
-	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+	f.seedAgentPush(t)
 	f.Obs.Settings = map[string]plan.RepoSettings{"repo": {Raise: plan.RaiseManual}}
 	f.tick(t)
 }
@@ -67,7 +67,7 @@ func TestRaise(t *testing.T) {
 		if got := len(f.Forge.Calls("Create")); got != 0 {
 			t.Errorf("Create calls after stale raise = %d, want 0", got)
 		}
-		if !hasEvent(f.events(t, storepkg.EventRaiseRefused), storepkg.EventRaiseRefused, "tip has moved") {
+		if !hasEvent(storetest.Events(t, f.Store, storepkg.EventRaiseRefused), storepkg.EventRaiseRefused, "tip has moved") {
 			t.Error("no raise_refused event naming the moved tip")
 		}
 		consumed, err := f.Store.IntentConsumed(t.Context(), id)

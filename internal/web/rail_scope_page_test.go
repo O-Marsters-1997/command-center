@@ -28,16 +28,10 @@ func testRailProjectScope(t *testing.T) {
 	}
 	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{}}
 	for i, u := range []string{alpha, solo} {
-		runID, _, err := st.InsertSessionRunSkeleton(
-			t.Context(), storepkg.RunSkeleton{Ticket: u, Kind: "agent", PromptHash: "hash"})
-		if err != nil {
-			t.Fatalf("InsertRunSkeleton(%q): %v", u, err)
-		}
-		if err := st.RecordSpawn(t.Context(), storepkg.Spawn{
-			RunID: plan.RunID(runID), Pgid: 100 + i, StartedAt: testNow, LogPath: "/state/runs/x.jsonl",
-		}); err != nil {
-			t.Fatalf("RecordSpawn(%q): %v", u, err)
-		}
+		storetest.Run(t, st, storetest.RunOpts{
+			TicketURL: u, Kind: "agent", PromptHash: "hash",
+			Pgid: 100 + i, StartedAt: testNow, LogPath: "/state/runs/x.jsonl",
+		})
 		obs.Runs[plan.TicketURL(u)] = plan.RunObservation{Alive: true}
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
