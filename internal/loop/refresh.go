@@ -66,7 +66,7 @@ func (l *Loop) refreshOne(
 		return refuse(refusal)
 	}
 	if obs.MidMerge[ticket.Ref()] {
-		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
+		return nil
 	}
 
 	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
