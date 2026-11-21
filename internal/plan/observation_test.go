@@ -74,3 +74,51 @@ func TestObservation(t *testing.T) {
 		}
 	})
 }
+
+func TestObservation_Merge(t *testing.T) {
+	t.Parallel()
+
+	ref := plan.BranchRef{Repo: "r", Branch: "b"}
+	dst := plan.NewObservation(time.Time{})
+	dst.BranchTips[ref] = "old"
+	src := plan.NewObservation(time.Time{})
+	src.BranchTips[ref] = "new"
+	src.Settings["r"] = plan.RepoSettings{}
+
+	dst.Merge(src)
+
+	if got := dst.BranchTips[ref]; got != "new" {
+		t.Errorf("BranchTips after Merge = %q, want src to win", got)
+	}
+	if _, ok := dst.Settings["r"]; !ok {
+		t.Error("Settings after Merge lack src's repo")
+	}
+}
+
+func TestObservation_CarryForward(t *testing.T) {
+	t.Parallel()
+
+	mine := plan.BranchRef{Repo: "r", Branch: "b"}
+	other := plan.BranchRef{Repo: "other", Branch: "b"}
+	prev := plan.NewObservation(time.Time{})
+	prev.BranchTips[mine], prev.BranchTips[other] = "prev-mine", "prev-other"
+	prev.MergifyHash["r"], prev.MergifyHash["other"] = "h1", "h2"
+	prev.Titles["t://1"] = "title"
+
+	dst := plan.NewObservation(time.Time{})
+	dst.MergifyHash["r"] = "fresh"
+	dst.CarryForward(prev, "r")
+
+	if _, ok := dst.BranchTips[other]; ok {
+		t.Error("CarryForward copied another repo's tip")
+	}
+	if got := dst.BranchTips[mine]; got != "prev-mine" {
+		t.Errorf("BranchTips[mine] = %q, want prev-mine", got)
+	}
+	if got := dst.MergifyHash["r"]; got != "fresh" {
+		t.Errorf("MergifyHash[r] = %q, want the existing reading kept", got)
+	}
+	if got := dst.Titles["t://1"]; got != "title" {
+		t.Errorf("Titles carried = %q, want title", got)
+	}
+}
