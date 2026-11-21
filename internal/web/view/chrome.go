@@ -33,6 +33,7 @@ type Chrome struct {
 	Launch         NavItem
 	Nav            []NavItem
 	Sidebar        Sidebar
+	Tray           Tray
 }
 
 type Sidebar struct {
