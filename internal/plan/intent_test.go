@@ -56,6 +56,25 @@ func TestStatusOf(t *testing.T) {
 		return option.Some(plan.RunSummary{ID: 7, Outcome: option.Some(o), EndedAt: option.Some(finished)})
 	}
 	noRun := option.None[plan.RunSummary]()
+	runningRun := option.Some(plan.RunSummary{ID: 7})
+
+	pending := func(p plan.IntentPhase) plan.IntentStatus {
+		return plan.IntentStatus{Phase: p, Glyph: plan.GlyphPending}
+	}
+	running := plan.IntentStatus{Phase: plan.PhaseRunning, Glyph: plan.GlyphRunning}
+	finishedDone := plan.IntentStatus{
+		Phase: plan.PhaseFinished, Outcome: plan.IntentDone, Glyph: plan.GlyphDone, Ended: option.Some(finished),
+	}
+	finishedFailed := plan.IntentStatus{
+		Phase: plan.PhaseFinished, Outcome: plan.IntentFailed, Glyph: plan.GlyphFailed, Ended: option.Some(finished),
+	}
+	failedWithDetail := finishedFailed
+	failedWithDetail.Detail = "merge conflict"
+	withdrawnAt := func(end time.Time) plan.IntentStatus {
+		return plan.IntentStatus{
+			Phase: plan.PhaseFinished, Outcome: plan.IntentWithdrawn, Glyph: plan.GlyphPending, Ended: option.Some(end),
+		}
+	}
 
 	tests := []struct {
 		name string
@@ -63,28 +82,30 @@ func TestStatusOf(t *testing.T) {
 		run  option.Option[plan.RunSummary]
 		want plan.IntentStatus
 	}{
-		{"queued", base, noRun, plan.IntentStatus{Record: base, Phase: plan.PhaseQueued, Glyph: plan.GlyphPending}},
-		{"held", held, noRun, plan.IntentStatus{Record: held, Phase: plan.PhaseHeld, Glyph: plan.GlyphPending}},
-		{"hold elapsed", elapsed, noRun, plan.IntentStatus{Record: elapsed, Phase: plan.PhaseQueued, Glyph: plan.GlyphPending}},
-		{"picked up git verb", picked, noRun, plan.IntentStatus{Record: picked, Phase: plan.PhasePickedUp, Glyph: plan.GlyphPending}},
-		{"running agent verb", agent, option.Some(plan.RunSummary{ID: 7}), plan.IntentStatus{Record: agent, Phase: plan.PhaseRunning, Glyph: plan.GlyphRunning}},
-		{"agent run not loaded", agent, noRun, plan.IntentStatus{Record: agent, Phase: plan.PhaseRunning, Glyph: plan.GlyphRunning}},
-		{"running ignores stored outcome", stale, option.Some(plan.RunSummary{ID: 7}), plan.IntentStatus{Record: stale, Phase: plan.PhaseRunning, Glyph: plan.GlyphRunning}},
-		{"withdrawn from queue", queuedWithdrawn, noRun, plan.IntentStatus{Record: queuedWithdrawn, Phase: plan.PhaseFinished, Outcome: plan.IntentWithdrawn, Glyph: plan.GlyphPending, Ended: option.Some(finished)}},
-		{"done git verb", gitDone, noRun, plan.IntentStatus{Record: gitDone, Phase: plan.PhaseFinished, Outcome: plan.IntentDone, Glyph: plan.GlyphDone, Ended: option.Some(finished)}},
-		{"failed with detail", gitFailed, noRun, plan.IntentStatus{Record: gitFailed, Phase: plan.PhaseFinished, Outcome: plan.IntentFailed, Detail: "merge conflict", Glyph: plan.GlyphFailed, Ended: option.Some(finished)}},
-		{"withdrawn", withdrawn, noRun, plan.IntentStatus{Record: withdrawn, Phase: plan.PhaseFinished, Outcome: plan.IntentWithdrawn, Glyph: plan.GlyphPending, Ended: option.Some(consumed)}},
-		{"agent run pushed", agent, ended(plan.OutcomePush), plan.IntentStatus{Record: agent, Phase: plan.PhaseFinished, Outcome: plan.IntentDone, Glyph: plan.GlyphDone, Ended: option.Some(finished)}},
-		{"agent run continued", agent, ended(plan.OutcomeContinued), plan.IntentStatus{Record: agent, Phase: plan.PhaseFinished, Outcome: plan.IntentDone, Glyph: plan.GlyphDone, Ended: option.Some(finished)}},
-		{"agent run passed", agent, ended(plan.OutcomePassed), plan.IntentStatus{Record: agent, Phase: plan.PhaseFinished, Outcome: plan.IntentDone, Glyph: plan.GlyphDone, Ended: option.Some(finished)}},
-		{"agent run failed", agent, ended(plan.OutcomeFailed), plan.IntentStatus{Record: agent, Phase: plan.PhaseFinished, Outcome: plan.IntentFailed, Glyph: plan.GlyphFailed, Ended: option.Some(finished)}},
-		{"agent run asked", agent, ended(plan.OutcomeAsked), plan.IntentStatus{Record: agent, Phase: plan.PhaseFinished, Outcome: plan.IntentFailed, Glyph: plan.GlyphFailed, Ended: option.Some(finished)}},
+		{"queued", base, noRun, pending(plan.PhaseQueued)},
+		{"held", held, noRun, pending(plan.PhaseHeld)},
+		{"hold elapsed", elapsed, noRun, pending(plan.PhaseQueued)},
+		{"picked up git verb", picked, noRun, pending(plan.PhasePickedUp)},
+		{"running agent verb", agent, runningRun, running},
+		{"agent run not loaded", agent, noRun, running},
+		{"running ignores stored outcome", stale, runningRun, running},
+		{"withdrawn from queue", queuedWithdrawn, noRun, withdrawnAt(finished)},
+		{"done git verb", gitDone, noRun, finishedDone},
+		{"failed with detail", gitFailed, noRun, failedWithDetail},
+		{"withdrawn", withdrawn, noRun, withdrawnAt(consumed)},
+		{"agent run pushed", agent, ended(plan.OutcomePush), finishedDone},
+		{"agent run continued", agent, ended(plan.OutcomeContinued), finishedDone},
+		{"agent run passed", agent, ended(plan.OutcomePassed), finishedDone},
+		{"agent run failed", agent, ended(plan.OutcomeFailed), finishedFailed},
+		{"agent run asked", agent, ended(plan.OutcomeAsked), finishedFailed},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := plan.StatusOf(tt.rec, tt.run, now)
-			if diff := cmp.Diff(tt.want, got, equateOptions); diff != "" {
+			want := tt.want
+			want.Record = tt.rec
+			if diff := cmp.Diff(want, got, equateOptions); diff != "" {
 				t.Errorf("StatusOf() mismatch (-want +got):\n%s", diff)
 			}
 			if !slices.Contains(allGlyphWords, got.Glyph) {
