@@ -13,11 +13,21 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
+
+func planInput(t *testing.T, store *storepkg.Store) plan.Input {
+	t.Helper()
+	in, err := store.PlanInput(t.Context())
+	if err != nil {
+		t.Fatalf("PlanInput: %v", err)
+	}
+	return in
+}
 
 func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -35,13 +45,10 @@ func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, 
 	}
 }
 
-func hasEvent(events []storepkg.Event, kind storepkg.EventKind, detailSubstring string) bool {
-	for _, e := range events {
-		if e.Kind == kind && strings.Contains(e.Detail, detailSubstring) {
-			return true
-		}
-	}
-	return false
+func (f *pushFixture) seedAgentPush(t *testing.T) {
+	t.Helper()
+	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 }
 
 func (f *pushFixture) pushedTip(t *testing.T) plan.SHA {
@@ -59,16 +66,15 @@ func TestPush(t *testing.T) {
 	t.Run("pushes and opens one PR, then stays idempotent", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.tick(t)
 
 		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 			t.Fatal("origin has no cc-1, want it pushed")
 		}
-		calls := f.Forge.Calls("Create")
-		if len(calls) != 1 || calls[0].Repo != f.Worktree || calls[0].Base != "main" || calls[0].Draft {
-			t.Errorf("Create calls = %+v, want one non-draft PR on main from the worktree", calls)
+		pr, ok := openPRs(t, f.Forge)["cc-1"]
+		if !ok || pr.BaseRef != "main" || pr.IsDraft {
+			t.Errorf("PR on cc-1 = %+v, %v, want a non-draft PR on main", pr, ok)
 		}
 		if f.pushedTip(t) == "" {
 			t.Error("LastPushedTips() has no tip, want the push recorded")
@@ -99,7 +105,7 @@ func TestPush(t *testing.T) {
 			t.Errorf("PushFacts() = %+v, want refused at .mergify.yml", fact)
 		}
 		f.tick(t)
-		if got := f.events(t, "push_refused"); len(got) != 1 || got[0].TicketURL != f.Ticket.URL {
+		if got := storetest.Events(t, f.Store, "push_refused"); len(got) != 1 || got[0].TicketURL != f.Ticket.URL {
 			t.Errorf("push_refused events after two ticks = %+v, want one for %s", got, f.Ticket.URL)
 		}
 	})
@@ -121,14 +127,10 @@ func TestPush(t *testing.T) {
 		f := newPushFixture(t)
 		gittest.Commit(t, f.Worktree, "package.json", "{\n\"a\": 1,\n\"b\": 2\n}\n")
 		gittest.Commit(t, f.Worktree, "package.json", "{\n\"a\": 1,\n\"c\": 3\n}\n")
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.tick(t)
 
-		pushes, err := f.Store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes: %v", err)
-		}
+		pushes := planInput(t, f.Store).Verdict.PushRows
 		want := []plan.PathMatch{{Path: "package.json", Rule: "**/package.json", Tier: plan.TierProtected, Added: 4}}
 		if diff := cmp.Diff(want, pushes[plan.TicketURL(f.Ticket.URL)].Protected); diff != "" {
 			t.Errorf("LatestPushes().Protected mismatch (-want +got):\n%s", diff)
@@ -157,8 +159,7 @@ func TestPush(t *testing.T) {
 	t.Run("opens an ordinary PR with no label", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.tick(t)
 
 		calls := f.Forge.Calls("Create")
@@ -191,14 +192,10 @@ func TestPush(t *testing.T) {
 	t.Run("records no protected paths for an ordinary push", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.tick(t)
 
-		pushes, err := f.Store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes: %v", err)
-		}
+		pushes := planInput(t, f.Store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.Ticket.URL)].Protected; len(got) != 0 {
 			t.Errorf("LatestPushes().Protected = %+v, want none", got)
 		}
@@ -207,16 +204,15 @@ func TestPush(t *testing.T) {
 	t.Run("adopts an existing open PR rather than duplicating it", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Open}
 		f.tick(t)
 
 		if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 			t.Error("origin has no cc-1, want it pushed")
 		}
-		if got := len(f.Forge.Calls("Create")); got != 0 {
-			t.Errorf("Create calls = %d, want 0", got)
+		if got := openPRs(t, f.Forge); len(got) != 0 {
+			t.Errorf("PRs = %+v, want none", got)
 		}
 		if f.pushedTip(t) == "" {
 			t.Error("LastPushedTips() has no tip, want the push recorded")
@@ -226,8 +222,7 @@ func TestPush(t *testing.T) {
 	t.Run("a failed PR create is not retried until retry-push", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingCreate{f.Forge}))
 		f.tick(t)
 
@@ -248,11 +243,9 @@ func TestPush(t *testing.T) {
 		}
 
 		f.reset(testAt, runner.ProcessRunner{})
-		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, f.Store, storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: "retry-push", At: testAt.Add(time.Second),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(retry-push): %v", err)
-		}
+		})
 		f.tick(t)
 
 		if got := len(f.Forge.Calls("Create")); got != 2 {
@@ -317,8 +310,7 @@ func TestPush(t *testing.T) {
 	t.Run("an unreadable settings file skips the repo and records the error", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
-		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+		f.seedAgentPush(t)
 		f.Obs.SettingsErrors = map[string]string{"repo": "line 2: unknown key \"stackin\""}
 		f.tick(t)
 

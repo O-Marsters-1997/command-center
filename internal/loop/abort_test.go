@@ -14,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
@@ -124,11 +125,9 @@ func TestAbort(t *testing.T) {
 			c.tick(t)
 			c.tick(t)
 			for _, verb := range tt.verbs {
-				if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+				storetest.Verb(t, c.store, storepkg.VerbRequest{
 					Ticket: c.f.child.URL, Verb: verb, At: testAt.Add(time.Hour),
-				}); err != nil {
-					t.Fatalf("QueueVerbIntent(%q): %v", verb, err)
-				}
+				})
 			}
 			c.tick(t)
 			c.tick(t)
@@ -146,16 +145,8 @@ func TestAbort(t *testing.T) {
 			if len(pending) != 0 {
 				t.Errorf("PendingVerbIntents(abort) = %+v, want none", pending)
 			}
-			events, err := c.store.Events(t.Context())
-			if err != nil {
-				t.Fatalf("Events(): %v", err)
-			}
-			conflicts := 0
-			for _, event := range events {
-				if event.Kind == "refresh_conflicted" {
-					conflicts++
-				}
-			}
+			events := storetest.Events(t, c.store, "")
+			conflicts := len(storetest.Events(t, c.store, "refresh_conflicted"))
 			if !hasEvent(events, "merge_aborted", "") || conflicts != tt.wantConflicts {
 				t.Errorf("merge_aborted = %v, refresh_conflicted events = %d, want true and %d",
 					hasEvent(events, "merge_aborted", ""), conflicts, tt.wantConflicts)
@@ -173,17 +164,15 @@ func TestAbort(t *testing.T) {
 		c.tick(t)
 		c.tick(t)
 		c.aliveRuns[c.f.child.URL] = true
-		if _, err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, c.store, storepkg.VerbRequest{
 			Ticket: c.f.child.URL, Verb: plan.VerbAbort, At: testAt.Add(time.Hour),
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent(abort): %v", err)
-		}
+		})
 		c.tick(t)
 
 		if !c.midMerge(t) {
 			t.Error("mid-merge = false, want the live run's worktree untouched")
 		}
-		if !hasEventIn(t, c.store, "merge_abort_failed", "a run is alive") {
+		if !hasEvent(storetest.Events(t, c.store, ""), "merge_abort_failed", "a run is alive") {
 			t.Error("Events() has no merge_abort_failed naming the live run")
 		}
 		rec := intentOf(t, c.store, plan.VerbAbort)

@@ -21,6 +21,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func noOpObserve(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
@@ -61,7 +62,7 @@ func newRunFixture(t *testing.T) *runFixture {
 
 func (f *runFixture) spawn(t *testing.T, pgid int, baseline, logPath string) int64 {
 	t.Helper()
-	runID, err := f.store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := f.store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: f.ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -81,9 +82,7 @@ func (f *runFixture) worktreeObs() plan.Observation {
 func (f *runFixture) tick(t *testing.T, obs plan.Observation, rn runner.Runner, opts ...loop.Option) {
 	t.Helper()
 	lp := newLoop(f.store, observing(obs), fixedClock(testAt.Add(30*time.Second)), f.cfg, f.ws, rn, opts...)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce() error = %v", err)
-	}
+	runOnce(t, lp)
 }
 
 func (f *runFixture) latest(t *testing.T) plan.RunSummary {
@@ -266,7 +265,7 @@ func TestLaunch(t *testing.T) {
 		if summary.Outcome != option.Some(plan.OutcomeCutFailed) || summary.Pgid.IsSome() {
 			t.Errorf("run = outcome %v, pgid %v, want cut_failed and no pgid", summary.Outcome, summary.Pgid)
 		}
-		if !ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventCutFailed, fmt.Sprint(errForge)) {
+		if !hasEvent(storetest.Events(t, f.Store, ""), storepkg.EventCutFailed, fmt.Sprint(errForge)) {
 			t.Errorf("Events() has no %s event naming %q", storepkg.EventCutFailed, errForge)
 		}
 	})
@@ -277,14 +276,12 @@ func TestLaunch(t *testing.T) {
 		lp := newLoop(f.Store, noOpObserve, fixedClock(testAt), f.Cfg, f.WS, f.Fake,
 			loop.WithForge(f.Forge), loop.WithWorktrees(postHookWorktrees{}))
 		f.AuthoriseAll(t)
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
 		if got := len(f.Fake.Spawns()); got != 1 {
 			t.Errorf("spawns = %d, want 1", got)
 		}
-		if ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventCutFailed, "") {
+		if hasEvent(storetest.Events(t, f.Store, ""), storepkg.EventCutFailed, "") {
 			t.Errorf("Events() has a %s event, want none", storepkg.EventCutFailed)
 		}
 	})
@@ -295,11 +292,9 @@ func TestLaunch(t *testing.T) {
 		lp := newLoop(f.Store, noOpObserve, fixedClock(testAt), f.Cfg, f.WS, failingSpawn{f.Fake},
 			loop.WithForge(f.Forge))
 		f.AuthoriseAll(t)
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce() error = %v", err)
-		}
+		runOnce(t, lp)
 
-		if !ticketEvent(t, f.Store, f.Tickets[0].URL, storepkg.EventSpawnFailed, fmt.Sprint(errSpawn)) {
+		if !hasEvent(storetest.Events(t, f.Store, ""), storepkg.EventSpawnFailed, fmt.Sprint(errSpawn)) {
 			t.Errorf("Events() has no %s event naming %q", storepkg.EventSpawnFailed, errSpawn)
 		}
 	})
@@ -343,229 +338,4 @@ func TestLaunch(t *testing.T) {
 			t.Errorf("canceled = %v, alive = %v, want nothing cancelled and 4242 alive", got, fake.Alive(4242))
 		}
 	})
-}
-
-func ticketEvent(t *testing.T, store *storepkg.Store, ticketURL string, kind storepkg.EventKind, detail string) bool {
-	t.Helper()
-	events, err := store.Events(t.Context())
-	if err != nil {
-		t.Fatalf("Events(): %v", err)
-	}
-	for _, e := range events {
-		if e.Kind == kind && e.TicketURL == ticketURL && strings.Contains(e.Detail, detail) {
-			return true
-		}
-	}
-	return false
-}
-
-const (
-	killedRunAssistantLine = `{"type":"assistant","request_id":"r1","message":{"model":"claude-sonnet-5",` +
-		`"usage":{"input_tokens":12,"output_tokens":8},"content":[]}}` + "\n"
-	killedRunResultLine = `{"type":"result","total_cost_usd":0.42}` + "\n"
-)
-
-func TestDispose(t *testing.T) {
-	t.Parallel()
-
-	t.Run("judges a dead run by commits after its own baseline", func(t *testing.T) {
-		t.Parallel()
-		f := newRunFixture(t)
-		f.spawn(t, 999, f.baseline, "/state/runs/1.jsonl")
-		fake := &runnertest.Runner{}
-		fake.Exit(999, 0)
-		f.tick(t, f.worktreeObs(), fake)
-		if got := f.latest(t); got.Outcome != option.Some(plan.OutcomeFailed) || got.ExitCode != option.Some(0) {
-			t.Fatalf("first run = outcome %v, exit %v, want failed with exit 0", got.Outcome, got.ExitCode)
-		}
-
-		gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
-		newBaseline := gittest.Run(t, f.repoPath, "rev-parse", "refs/heads/cc-1")
-		gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "more agent work")
-		f.spawn(t, 1000, newBaseline, "/state/runs/2.jsonl")
-		fake.Exit(1000, 0)
-		f.tick(t, f.worktreeObs(), fake)
-
-		if got := f.latest(t).Outcome; got != option.Some(plan.OutcomePush) {
-			t.Errorf("second run outcome = %v, want push", got)
-		}
-	})
-
-	t.Run("judges a dead run by the origin tip when the worktree is gone", func(t *testing.T) {
-		t.Parallel()
-		f := newRunFixture(t)
-		gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
-		gittest.Run(t, f.worktreePath, "push", "-q", "origin", "cc-1")
-		originTip := gittest.Run(t, f.repoPath, "rev-parse", "refs/remotes/origin/cc-1")
-		gittest.Run(t, f.repoPath, "worktree", "remove", "--force", f.worktreePath)
-		f.spawn(t, 999, f.baseline, "/state/runs/1.jsonl")
-		fake := &runnertest.Runner{}
-		fake.Exit(999, 0)
-
-		obs := plan.Observation{BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", "cc-1"): plan.SHA(originTip)}}
-		f.tick(t, obs, fake)
-
-		if got := f.latest(t).Outcome; got != option.Some(plan.OutcomePush) {
-			t.Errorf("outcome = %v, want push", got)
-		}
-	})
-
-	t.Run("keeps the run's final message after disposal", func(t *testing.T) {
-		t.Parallel()
-		f := newRunFixture(t)
-		f.spawn(t, 999, f.baseline, writeLog(t, killedRunAssistantLine+
-			`{"type":"result","result":"Opened the PR.","total_cost_usd":0.42}`+"\n"))
-		fake := &runnertest.Runner{}
-		fake.Exit(999, 0)
-		f.tick(t, f.worktreeObs(), fake)
-
-		activities, err := f.store.Activities(t.Context())
-		if err != nil {
-			t.Fatalf("Activities: %v", err)
-		}
-		if len(activities) != 1 || activities[0].LastMessage != "Opened the PR." {
-			t.Errorf("Activities() = %+v, want one ticket with last message %q", activities, "Opened the PR.")
-		}
-	})
-
-	t.Run("records the run's utilization readings", func(t *testing.T) {
-		t.Parallel()
-		f := newRunFixture(t)
-		line := `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
-			`"five_hour":{"utilization":0.05,"resetsAt":1787665200},` +
-			`"seven_day":{"utilization":0.19,"resetsAt":1788159600}}}}` + "\n"
-		f.spawn(t, 999, f.baseline, writeLog(t, line))
-		fake := &runnertest.Runner{}
-		fake.Exit(999, 0)
-		f.tick(t, f.worktreeObs(), fake)
-
-		gauges, err := f.store.LatestReadings(t.Context())
-		if err != nil {
-			t.Fatalf("LatestReadings(): %v", err)
-		}
-		got := map[agentlog.Window]float64{
-			agentlog.FiveHour: gauges[agentlog.FiveHour].Utilization,
-			agentlog.SevenDay: gauges[agentlog.SevenDay].Utilization,
-		}
-		want := map[agentlog.Window]float64{agentlog.FiveHour: 0.05, agentlog.SevenDay: 0.19}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("LatestReadings() utilization mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	tests := []struct {
-		name             string
-		log              string
-		wantCost         float64
-		wantUtilization5 float64
-	}{
-		{
-			name: "a killed run with an unsettled log records no cost",
-			log: killedRunAssistantLine + `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
-				`"five_hour":{"utilization":0.05,"resetsAt":1787665200}}}}` + "\n" + `{"type":"result","total_cost_usd":`,
-			wantUtilization5: 0.05,
-		},
-		{
-			name: "a killed run whose log settled records its cost",
-			log:  killedRunAssistantLine + killedRunResultLine, wantCost: 0.42,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			f := newRunFixture(t)
-			f.spawn(t, 999, f.baseline, writeLog(t, tt.log))
-			fake := &runnertest.Runner{}
-			fake.Exit(999, 137)
-			f.tick(t, f.worktreeObs(), fake)
-
-			if got := f.latest(t).Outcome; got != option.Some(plan.OutcomeFailed) {
-				t.Errorf("outcome = %v, want failed", got)
-			}
-			cost, err := f.store.CCCostUSD(t.Context(), testAt.Add(time.Hour))
-			if err != nil {
-				t.Fatalf("CCCostUSD: %v", err)
-			}
-			readings, err := f.store.LatestReadingsFull(t.Context())
-			if err != nil {
-				t.Fatalf("LatestReadingsFull: %v", err)
-			}
-			if cost[agentlog.FiveHour] != tt.wantCost {
-				t.Errorf("CCCostUSD()[five_hour] = %v, want %v", cost[agentlog.FiveHour], tt.wantCost)
-			}
-			if tt.wantUtilization5 != 0 && readings[agentlog.FiveHour].Utilization != tt.wantUtilization5 {
-				t.Errorf("LatestReadingsFull()[five_hour].Utilization = %v, want %v",
-					readings[agentlog.FiveHour].Utilization, tt.wantUtilization5)
-			}
-		})
-	}
-}
-
-func TestKill(t *testing.T) {
-	t.Parallel()
-	f := newRunFixture(t)
-	f.spawn(t, 4242, f.baseline, "/state/runs/1.jsonl")
-	if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-		Ticket: f.ticket.URL, Verb: "kill", At: testAt.Add(time.Second),
-	}); err != nil {
-		t.Fatalf("QueueVerbIntent(kill): %v", err)
-	}
-	fake := &runnertest.Runner{}
-	fake.Run(4242)
-
-	f.tick(t, f.worktreeObs(), fake)
-
-	if diff := cmp.Diff([]int{4242}, fake.Canceled()); diff != "" {
-		t.Errorf("canceled mismatch (-want +got):\n%s", diff)
-	}
-	pending, err := f.store.PendingVerbIntents(t.Context(), "kill")
-	if err != nil {
-		t.Fatalf("PendingVerbIntents(kill): %v", err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("PendingVerbIntents(kill) = %+v, want none", pending)
-	}
-	if got := f.latest(t); got.Outcome.IsNone() || got.ExitCode != option.Some(143) {
-		t.Errorf("killed run = outcome %v, exit %v, want disposed with exit 143 in the same tick", got.Outcome, got.ExitCode)
-	}
-}
-
-func TestKill_hold(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name         string
-		holdFor      time.Duration
-		wantCanceled []int
-		wantPending  int
-	}{
-		{name: "an intent still held is left alone", holdFor: time.Minute, wantPending: 1},
-		{name: "an intent whose hold has passed is consumed", holdFor: 10 * time.Second, wantCanceled: []int{4242}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			f := newRunFixture(t)
-			f.spawn(t, 4242, f.baseline, "/state/runs/1.jsonl")
-			if _, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
-				Ticket: f.ticket.URL, Verb: "kill", At: testAt, HoldUntil: testAt.Add(tt.holdFor),
-			}); err != nil {
-				t.Fatalf("QueueVerbIntent(kill): %v", err)
-			}
-			fake := &runnertest.Runner{}
-			fake.Run(4242)
-
-			f.tick(t, f.worktreeObs(), fake)
-
-			if diff := cmp.Diff(tt.wantCanceled, fake.Canceled()); diff != "" {
-				t.Errorf("canceled mismatch (-want +got):\n%s", diff)
-			}
-			pending, err := f.store.PendingVerbIntents(t.Context(), "kill")
-			if err != nil {
-				t.Fatalf("PendingVerbIntents(kill): %v", err)
-			}
-			if len(pending) != tt.wantPending {
-				t.Errorf("PendingVerbIntents(kill) = %+v, want %d", pending, tt.wantPending)
-			}
-		})
-	}
 }

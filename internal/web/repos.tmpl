@@ -41,7 +41,7 @@
 
 {{define "offerRow" -}}
 <li id="{{.ID}}" class="flex flex-wrap items-center gap-2"{{if eq .State "running"}} hx-get="/repos" hx-trigger="every 3s" hx-select="#{{.ID}}" hx-swap="outerHTML" hx-sync="this:drop"{{end}}>
-  <a href="/f/{{.Feature | pathEscape}}" {{template "nav" (printf "/f/%s" (.Feature | pathEscape))}}>{{.Feature}}</a>
+  <a href="{{featurePath .Feature}}" {{template "nav" (featurePath .Feature)}}>{{.Feature}}</a>
   {{if .OtherRepos}}<span class="text-muted text-xs">also labelled in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
   <span class="ml-auto flex items-center gap-2">
   {{if eq .State "running"}}
@@ -132,7 +132,7 @@
     hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
 </form>
 <div id="repo-results" class="track-menu">
-{{with .Search}}{{template "repoResults" .}}{{end}}
+{{if .Search.IsSome}}{{template "repoResults" .Search.Unwrap}}{{end}}
 </div>
 </div>
 <p class="text-muted text-xs mt-1 mb-3">Search runs as this machine's <code>gh</code> identity.</p>

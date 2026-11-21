@@ -24,29 +24,17 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 }
 
 func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbRetryPush, func(intent plan.Intent) (handled, error) {
-		e, ok := snap.Entry(intent.Ticket)
-		if !ok {
-			return failedWith(untrackedTicket), nil
-		}
+	return l.eachIntentEntry(ctx, snap, plan.VerbRetryPush, func(intent plan.Intent, e plan.Entry) (handled, error) {
 		p, ok := snap.Push(intent.Ticket, obs)
 		if !ok {
 			return failedWith("there is nothing to push"), nil
 		}
-		result, err := l.pushOne(ctx, e, p, obs)
-		if err != nil {
-			return handled{}, fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
-		}
-		return result, nil
+		return l.pushOne(ctx, e, p, obs)
 	})
 }
 
 func (l *Loop) applyRaiseIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbRaise, func(intent plan.Intent) (handled, error) {
-		e, ok := snap.Entry(intent.Ticket)
-		if !ok {
-			return failedWith(untrackedTicket), nil
-		}
+	return l.eachIntentEntry(ctx, snap, plan.VerbRaise, func(intent plan.Intent, e plan.Entry) (handled, error) {
 		url := string(intent.Ticket)
 		if e.State != plan.AwaitingPR {
 			return l.refuse(ctx, url, store.EventRaiseRefused, fmt.Sprintf("the ticket is %s, not awaiting PR", e.State))
@@ -55,20 +43,12 @@ func (l *Loop) applyRaiseIntents(ctx context.Context, snap plan.Snapshot, obs pl
 		if !ok || string(p.LocalTip) != intent.Payload {
 			return l.refuse(ctx, url, store.EventRaiseRefused, "the tip has moved since you reviewed it")
 		}
-		result, err := l.pushOne(ctx, e, p, obs)
-		if err != nil {
-			return handled{}, fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
-		}
-		return result, nil
+		return l.pushOne(ctx, e, p, obs)
 	})
 }
 
 func (l *Loop) applyAdoptHeadIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, snap, plan.VerbAdoptHead, func(intent plan.Intent) (handled, error) {
-		e, ok := snap.Entry(intent.Ticket)
-		if !ok {
-			return failedWith(untrackedTicket), nil
-		}
+	return l.eachIntentEntry(ctx, snap, plan.VerbAdoptHead, func(intent plan.Intent, e plan.Entry) (handled, error) {
 		pr := obs.PRs[e.Ticket.Ref()]
 		if pr.State != plan.Open || pr.HeadOid == "" {
 			return failedWith("the ticket has no open PR"), nil
@@ -128,15 +108,12 @@ func pushBranch(ctx context.Context, repoPath, branch string, tip plan.SHA, rest
 	return wrapGit("force-push restacked "+branch, git.PushRestacked(ctx, repoPath, branch, recordedTip))
 }
 
-func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.Observation) (handled, error) {
-	t := e.Ticket
-	url := string(t.URL)
-	base := e.Unlock.BaseBranch
-	repoPath := l.checkout(t.Repo)
-
-	stats, err := git.DiffStat(ctx, repoPath, "origin/"+base, t.Branch)
+func classifyChanges(
+	ctx context.Context, repoPath, base, branch string, settings plan.RepoSettings,
+) ([]plan.PathMatch, map[string]git.FileStat, error) {
+	stats, err := git.DiffStat(ctx, repoPath, "origin/"+base, branch)
 	if err != nil {
-		return handled{}, fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
+		return nil, nil, fmt.Errorf("diff %s against origin/%s: %w", branch, base, err)
 	}
 	changed := make([]string, len(stats))
 	counts := make(map[string]git.FileStat, len(stats))
@@ -144,9 +121,20 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 		changed[i] = s.Path
 		counts[s.Path] = s
 	}
-	settings := obs.Settings[t.Repo]
 	policy := plan.Policy{Deny: settings.Deny, Protect: settings.Protect}
-	matches := plan.Classify(changed, policy)
+	return plan.Classify(changed, policy), counts, nil
+}
+
+func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.Observation) (handled, error) {
+	t := e.Ticket
+	url := string(t.URL)
+	base := e.Unlock.BaseBranch
+	repoPath := l.checkout(t.Repo)
+
+	matches, counts, err := classifyChanges(ctx, repoPath, base, t.Branch, obs.Settings[t.Repo])
+	if err != nil {
+		return handled{}, err
+	}
 	if denied := plan.Denied(matches); len(denied) > 0 {
 		detail, err := json.Marshal(denied)
 		if err != nil {

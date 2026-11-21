@@ -105,11 +105,19 @@ func (v Params) PagePath() string {
 		return withQuery(RepoPath(v.Repo), rest.Query())
 	case v.Feature != "":
 		rest.Feature = ""
-		return withQuery("/f/"+url.PathEscape(v.Feature), rest.Query())
+		return withQuery(FeaturePath(v.Feature), rest.Query())
 	default:
 		return withQuery(ticketsPath, v.Query())
 	}
 }
+
+func TicketsPath(rawQuery string) string { return withQuery(ticketsPath, rawQuery) }
+
+func FeaturePath(feature string) string { return "/f/" + url.PathEscape(feature) }
+
+func FeatureGraphPath(feature string) string { return FeaturePath(feature) + "/graph" }
+
+func FeatureLaunchPath(feature string) string { return FeaturePath(feature) + "/launch" }
 
 func withQuery(path, query string) string {
 	if query == "" {

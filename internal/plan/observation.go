@@ -1,6 +1,11 @@
 package plan
 
-import "time"
+import (
+	"maps"
+	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
+)
 
 type CheckState struct {
 	Name        string    `json:"name"`
@@ -10,6 +15,22 @@ type CheckState struct {
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at"`
 	Attempt     int       `json:"attempt"`
+}
+
+func (c CheckState) Passed() bool { return ToVerdictCheckState(c) == verdict.Success }
+
+func (c CheckState) Failed() bool { return ToVerdictCheckState(c) == verdict.Failure }
+
+func (c CheckState) Glyph() GlyphWord {
+	switch ToVerdictCheckState(c) {
+	case verdict.Success, verdict.Skipped:
+		return GlyphDone
+	case verdict.Failure:
+		return GlyphFailed
+	case verdict.Pending:
+		return GlyphRunning
+	}
+	return GlyphRunning
 }
 
 type PR struct {
@@ -62,6 +83,47 @@ func NewObservation(at time.Time) Observation {
 		HeadDescends: map[BranchRef]bool{},
 		Settings:     map[string]RepoSettings{}, SettingsErrors: map[string]string{},
 		SettingsSources: map[string]string{}, RepoErrors: map[string]string{}, Questions: map[RunID]string{},
+	}
+}
+
+func (o *Observation) Merge(src Observation) {
+	maps.Copy(o.PRs, src.PRs)
+	maps.Copy(o.Worktrees, src.Worktrees)
+	maps.Copy(o.MergifyHash, src.MergifyHash)
+	maps.Copy(o.BranchTips, src.BranchTips)
+	maps.Copy(o.LocalTips, src.LocalTips)
+	maps.Copy(o.MidMerge, src.MidMerge)
+	maps.Copy(o.Titles, src.Titles)
+	maps.Copy(o.ConflictsWithBase, src.ConflictsWithBase)
+	maps.Copy(o.ConflictsWithPeer, src.ConflictsWithPeer)
+	maps.Copy(o.HeadDescends, src.HeadDescends)
+	maps.Copy(o.Settings, src.Settings)
+	maps.Copy(o.SettingsErrors, src.SettingsErrors)
+	maps.Copy(o.SettingsSources, src.SettingsSources)
+}
+
+func (o *Observation) CarryForward(prev Observation, repo string) {
+	keep := func(key BranchRef) bool { return key.Repo == repo }
+	copyKeyed(o.PRs, prev.PRs, keep)
+	copyKeyed(o.Worktrees, prev.Worktrees, keep)
+	copyKeyed(o.BranchTips, prev.BranchTips, keep)
+	copyKeyed(o.LocalTips, prev.LocalTips, keep)
+	copyKeyed(o.MidMerge, prev.MidMerge, keep)
+	copyKeyed(o.ConflictsWithBase, prev.ConflictsWithBase, keep)
+	copyKeyed(o.ConflictsWithPeer, prev.ConflictsWithPeer, keep)
+	copyKeyed(o.HeadDescends, prev.HeadDescends, keep)
+	copyKeyed(o.Titles, prev.Titles, func(TicketURL) bool { return true })
+	named := func(key string) bool { return key == repo }
+	copyKeyed(o.MergifyHash, prev.MergifyHash, named)
+	copyKeyed(o.Settings, prev.Settings, named)
+	copyKeyed(o.SettingsErrors, prev.SettingsErrors, named)
+}
+
+func copyKeyed[K comparable, V any](dst, src map[K]V, keep func(K) bool) {
+	for key, value := range src {
+		if _, taken := dst[key]; !taken && keep(key) {
+			dst[key] = value
+		}
 	}
 }
 

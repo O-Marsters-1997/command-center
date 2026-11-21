@@ -35,6 +35,10 @@ func (o Option[T]) Unwrap() T {
 	return o.value
 }
 
+func (o Option[T]) Get() (T, bool) {
+	return o.value, o.ok
+}
+
 func (o Option[T]) UnwrapOr(fallback T) T {
 	if !o.ok {
 		return fallback

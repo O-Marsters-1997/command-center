@@ -17,7 +17,7 @@ func RenderStatesBoard(states []plan.State) (string, error) {
 	for _, state := range states {
 		rows = append(rows, view.Row{
 			URL:   "sandbox://" + state.String(),
-			State: state.String(),
+			State: state,
 			Glyph: state.Glyph(),
 		})
 	}

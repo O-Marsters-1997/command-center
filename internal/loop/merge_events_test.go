@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestRecordMergedEvents(t *testing.T) {
@@ -45,12 +46,8 @@ func TestRecordMergedEvents(t *testing.T) {
 				if err := lp.RunOnce(ctx); err != nil {
 					t.Fatalf("RunOnce tick %d: %v", tick, err)
 				}
-				events, err := store.Events(ctx)
-				if err != nil {
-					t.Fatalf("Events: %v", err)
-				}
 				var got []mergedEvent
-				for _, event := range mergedEvents(events) {
+				for _, event := range storetest.Events(t, store, "pr_merged") {
 					got = append(got, mergedEvent{URL: event.TicketURL, At: event.At})
 				}
 				if diff := cmp.Diff(tt.want, got); diff != "" {
@@ -62,14 +59,4 @@ func TestRecordMergedEvents(t *testing.T) {
 			}
 		})
 	}
-}
-
-func mergedEvents(events []storepkg.Event) []storepkg.Event {
-	var merges []storepkg.Event
-	for _, e := range events {
-		if e.Kind == "pr_merged" {
-			merges = append(merges, e)
-		}
-	}
-	return merges
 }

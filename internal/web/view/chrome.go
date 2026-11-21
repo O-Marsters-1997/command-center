@@ -166,13 +166,13 @@ func deriveGauge(
 	now time.Time,
 ) Gauge {
 	reading, ok := gauges[window]
-	view := Gauge{Label: label, Pct: spend.Pct(reading.Utilization), ResetsAt: reading.ResetsAt, NoReading: !ok}
+	gauge := Gauge{Label: label, Pct: spend.Pct(reading.Utilization), ResetsAt: reading.ResetsAt, NoReading: !ok}
 	if age := now.Sub(reading.At); ok && age > staleReadingAge {
-		view.Stale, view.ReadAgo = true, "read "+shortAge(age)+" ago"
+		gauge.Stale, gauge.ReadAgo = true, "read "+shortAge(age)+" ago"
 	}
 	w := split[window]
-	view.CCPct, view.Calibrating = spend.Share(view.Pct, w.Fit, w.CCUSD)
-	return view
+	gauge.CCPct, gauge.Calibrating = spend.Share(gauge.Pct, w.Fit, w.CCUSD)
+	return gauge
 }
 
 type SpendPaused struct {

@@ -12,16 +12,12 @@ import (
 func (l *Loop) applyResolveIntents(
 	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
 ) error {
-	return l.eachIntent(ctx, snap, plan.VerbResolve, func(intent plan.Intent) (handled, error) {
-		ticket, ok := l.ticket(byURL, string(intent.Ticket))
+	return l.eachIntentEntry(ctx, snap, plan.VerbResolve, func(_ plan.Intent, e plan.Entry) (handled, error) {
+		ticket, ok := byURL[e.Ticket.URL]
 		if !ok {
 			return failedWith(untrackedTicket), nil
 		}
-		result, err := l.resolveOne(ctx, snap, t, ticket, byURL)
-		if err != nil {
-			return handled{}, fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
-		}
-		return result, nil
+		return l.resolveOne(ctx, snap, t, ticket, byURL)
 	})
 }
 
@@ -73,9 +69,9 @@ func (l *Loop) resolveOne(
 		}
 	}
 
-	baseline, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
+	baseline, err := l.baseline(ctx, ticket)
 	if err != nil {
-		return handled{}, fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
+		return handled{}, err
 	}
 	if err := l.event(ctx, ticket.URL, store.EventResolveStarted, pair); err != nil {
 		return handled{}, err

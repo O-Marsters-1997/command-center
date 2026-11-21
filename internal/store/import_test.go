@@ -167,7 +167,7 @@ func TestStore_ImportTickets(t *testing.T) {
 		if err := store.ImportTickets(ctx, "project:x", both, at); err != nil {
 			t.Fatalf("ImportTickets: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(
+		runID, _, err := store.InsertSessionRunSkeleton(
 			ctx, storepkg.RunSkeleton{Ticket: withdrawn.URL, Kind: "agent", PromptHash: "hash-1"})
 		if err != nil {
 			t.Fatalf("InsertRunSkeleton: %v", err)

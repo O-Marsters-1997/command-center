@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 )
@@ -25,13 +25,17 @@ import (
 var errGH = errors.New("gh exited 1")
 
 func fakeGH(respond func(args []string) ([]byte, error)) gh.CLI {
-	run := func(_ context.Context, _ time.Duration, _, name string, args ...string) ([]byte, error) {
+	return fakeGHIn(func(_ string, args []string) ([]byte, error) { return respond(args) })
+}
+
+func fakeGHIn(respond func(dir string, args []string) ([]byte, error)) gh.CLI {
+	run := func(_ context.Context, _ time.Duration, dir, name string, args ...string) ([]byte, error) {
 		if name != "gh" {
 			return nil, fmt.Errorf("ran %q, want gh", name)
 		}
-		return respond(args)
+		return respond(dir, args)
 	}
-	return gh.CLI{Exec: command.ExecutorFunc(run)}
+	return gh.CLI{Exec: run}
 }
 
 func readFixture(t *testing.T, name string) []byte {
@@ -112,9 +116,43 @@ func TestCLI(t *testing.T) {
 	ghtest.RunContract(t, func(t *testing.T, seed ghtest.Seed) gh.Forge {
 		t.Helper()
 		attempts := map[string]int{}
-		return fakeGH(func(args []string) ([]byte, error) {
+		prs := slices.Clone(seed.PRs)
+		titles := maps.Clone(seed.Titles)
+		return fakeGHIn(func(dir string, args []string) ([]byte, error) {
 			var out []byte
 			switch i := slices.Index(args, "--head"); {
+			case args[0] == "pr" && args[1] == "create":
+				pr := gh.PR{
+					Number: len(prs) + 1, HeadRef: seed.Checkouts[dir], State: gh.Open,
+					IsDraft: slices.Contains(args, "--draft"),
+				}
+				for j, arg := range args {
+					switch arg {
+					case "--base":
+						pr.BaseRef = args[j+1]
+					case "--label":
+						pr.Labels = append(pr.Labels, args[j+1])
+					}
+				}
+				prs = append(prs, pr)
+				return nil, nil
+			case args[0] == "pr" && args[1] == "ready":
+				for j := range prs {
+					if prs[j].HeadRef == args[2] {
+						prs[j].IsDraft = false
+					}
+				}
+				return nil, nil
+			case args[0] == "pr" && args[1] == "edit":
+				for j := range prs {
+					if prs[j].HeadRef == args[2] {
+						prs[j].BaseRef = args[slices.Index(args, "--base")+1]
+					}
+				}
+				return nil, nil
+			case args[0] == "issue" && args[1] == "close":
+				delete(titles, args[2])
+				return nil, nil
 			case args[0] == "api":
 				return []byte(strconv.Itoa(max(attempts[path.Base(args[1])], 1)) + "\n"), nil
 			case args[0] == "run" && args[1] == "rerun":
@@ -122,7 +160,7 @@ func TestCLI(t *testing.T) {
 				return nil, nil
 			case args[0] == "issue" && args[1] == "list":
 				issues := []map[string]string{}
-				for url, title := range seed.Titles {
+				for url, title := range titles {
 					issues = append(issues, map[string]string{"url": url, "title": title})
 				}
 				raw, err := json.Marshal(issues)
@@ -131,10 +169,10 @@ func TestCLI(t *testing.T) {
 				}
 				out = raw
 			case args[0] == "pr" && args[1] == "list" && i >= 0:
-				match := slices.DeleteFunc(slices.Clone(seed.PRs), func(pr gh.PR) bool { return pr.HeadRef != args[i+1] })
+				match := slices.DeleteFunc(slices.Clone(prs), func(pr gh.PR) bool { return pr.HeadRef != args[i+1] })
 				out = recordedOutput(t, match)
 			case args[0] == "pr" && args[1] == "list":
-				open := slices.DeleteFunc(slices.Clone(seed.PRs), func(pr gh.PR) bool { return pr.State != gh.Open })
+				open := slices.DeleteFunc(slices.Clone(prs), func(pr gh.PR) bool { return pr.State != gh.Open })
 				out = recordedOutput(t, open)
 			case args[0] == "run" && args[1] == "view":
 				for url, log := range seed.Logs {

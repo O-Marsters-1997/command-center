@@ -6,7 +6,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
 
-const SettingsFile = ".command-centre.toml"
+const (
+	SettingsFile  = ".command-centre.toml"
+	TrackerGitHub = "github"
+)
 
 type RaiseMode string
 
@@ -29,7 +32,6 @@ type RepoSettings struct {
 
 type Rules struct {
 	Stacking     map[string]bool
-	Deny         map[string][]string
 	Checks       map[string]verdict.Predicate
 	MergifySHA   map[string]string
 	CompatCheck  map[string]string
@@ -48,11 +50,14 @@ type Daemon struct {
 	Workflows    map[string]Workflow
 }
 
+func (d Daemon) Derive(in Input) Snapshot {
+	return RulesFor(d, in.Obs).Derive(in)
+}
+
 func RulesFor(daemon Daemon, obs Observation) Rules {
 	n := len(obs.Settings) + len(obs.SettingsErrors)
 	rules := Rules{
 		Stacking:     make(map[string]bool, n),
-		Deny:         make(map[string][]string, n),
 		Checks:       make(map[string]verdict.Predicate, n),
 		MergifySHA:   make(map[string]string, n),
 		CompatCheck:  make(map[string]string, n),
@@ -65,7 +70,6 @@ func RulesFor(daemon Daemon, obs Observation) Rules {
 	}
 	add := func(name string, s RepoSettings) {
 		rules.Stacking[name] = s.Stacking
-		rules.Deny[name] = s.Deny
 		rules.Checks[name] = s.Checks
 		rules.MergifySHA[name] = s.MergifySHA
 		rules.CompatCheck[name] = s.CompatCheck

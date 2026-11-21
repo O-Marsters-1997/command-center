@@ -1,6 +1,7 @@
 package ghtest
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ type Seed struct {
 	PRs    []gh.PR
 	Titles map[string]string
 	Logs   map[string]string
+
+	Checkouts map[string]string
 }
 
 func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) {
@@ -121,21 +124,79 @@ func RunContract(t *testing.T, newForge func(t *testing.T, seed Seed) gh.Forge) 
 		}
 	})
 
-	t.Run("writes succeed", func(t *testing.T) {
+	listed := func(t *testing.T, forge gh.Forge, branch string) gh.PR {
+		t.Helper()
+		got, err := forge.List(t.Context(), "/repo", []string{branch})
+		if err != nil {
+			t.Fatalf("List() error = %v", err)
+		}
+		pr, ok := got.ByBranch[branch]
+		if !ok {
+			t.Fatalf("List(tracked %s) has no PR for it, want one", branch)
+		}
+		return pr
+	}
+
+	t.Run("Create opens a PR from the worktree's branch", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{Checkouts: map[string]string{"/wt": "cc-4-fourth"}})
+
+		if err := forge.Create(t.Context(), "/wt", "main", "body", true, []string{"cc-protected"}); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		pr := listed(t, forge, "cc-4-fourth")
+		if pr.BaseRef != "main" || !pr.IsDraft || pr.State != gh.Open || !slices.Contains(pr.Labels, "cc-protected") {
+			t.Errorf("List() after Create = %+v, want an open draft on main labelled cc-protected", pr)
+		}
+	})
+
+	t.Run("Ready clears the draft flag", func(t *testing.T) {
 		t.Parallel()
 		forge := newForge(t, Seed{PRs: []gh.PR{open}})
-		ctx := t.Context()
 
-		for name, err := range map[string]error{
-			"Create":     forge.Create(ctx, "/wt", "main", "body", true, []string{"cc-protected"}),
-			"Ready":      forge.Ready(ctx, "/repo", "cc-1-first"),
-			"Edit":       forge.Edit(ctx, "/repo", "cc-1-first", "main"),
-			"Comment":    forge.Comment(ctx, "/repo", "cc-1-first", "hello"),
-			"CloseIssue": forge.CloseIssue(ctx, "/repo", "https://github.com/o/r/issues/1"),
-		} {
-			if err != nil {
-				t.Errorf("%s() error = %v, want nil", name, err)
-			}
+		if err := forge.Ready(t.Context(), "/repo", "cc-1-first"); err != nil {
+			t.Fatalf("Ready() error = %v", err)
+		}
+		if pr := listed(t, forge, "cc-1-first"); pr.IsDraft {
+			t.Errorf("List() after Ready = %+v, want a PR that is not a draft", pr)
+		}
+	})
+
+	t.Run("Edit changes the base", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{PRs: []gh.PR{open}})
+
+		if err := forge.Edit(t.Context(), "/repo", "cc-1-first", "release"); err != nil {
+			t.Fatalf("Edit() error = %v", err)
+		}
+		if pr := listed(t, forge, "cc-1-first"); pr.BaseRef != "release" {
+			t.Errorf("List() after Edit base = %q, want release", pr.BaseRef)
+		}
+	})
+
+	t.Run("CloseIssue removes the issue from IssueTitles", func(t *testing.T) {
+		t.Parallel()
+		const url = "https://github.com/o/r/issues/1"
+		forge := newForge(t, Seed{Titles: map[string]string{url: "First", url + "2": "Second"}})
+
+		if err := forge.CloseIssue(t.Context(), "/repo", url); err != nil {
+			t.Fatalf("CloseIssue() error = %v", err)
+		}
+		got, err := forge.IssueTitles(t.Context(), "/repo")
+		if err != nil {
+			t.Fatalf("IssueTitles() error = %v", err)
+		}
+		if diff := cmp.Diff(map[string]string{url + "2": "Second"}, got); diff != "" {
+			t.Errorf("IssueTitles() after CloseIssue mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("Comment succeeds", func(t *testing.T) {
+		t.Parallel()
+		forge := newForge(t, Seed{PRs: []gh.PR{open}})
+
+		if err := forge.Comment(t.Context(), "/repo", "cc-1-first", "hello"); err != nil {
+			t.Errorf("Comment() error = %v, want nil", err)
 		}
 	})
 }

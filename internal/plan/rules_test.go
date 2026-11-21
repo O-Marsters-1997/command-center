@@ -29,7 +29,6 @@ func TestRulesFor(t *testing.T) {
 
 	want := plan.Rules{
 		Stacking:    map[string]bool{"a": true, "b": false, "c": false},
-		Deny:        map[string][]string{"a": {".github/**"}, "b": nil, "c": nil},
 		Checks:      map[string]verdict.Predicate{"a": {Success: "CI"}, "b": {}, "c": {}},
 		MergifySHA:  map[string]string{"a": "sha256:1", "b": "", "c": ""},
 		CompatCheck: map[string]string{"a": "compat", "b": "", "c": ""},

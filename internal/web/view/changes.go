@@ -77,22 +77,13 @@ type changeSet struct {
 	diffs []git.FileDiff
 }
 
-func (r *Reader) loadChanges(ctx context.Context, now time.Time, ref SessionRef, dataDir string) (changeSet, error) {
-	board, err := r.Board(ctx, now, Params{})
+func (r *Reader) loadChanges(ctx context.Context, now time.Time, ref SessionRef) (changeSet, error) {
+	board, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
-		return changeSet{}, fmt.Errorf("load board: %w", err)
+		return changeSet{}, err
 	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return changeSet{}, ErrSessionNotFound
-	}
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return changeSet{}, fmt.Errorf("load plan input: %w", err)
-	}
-	in.Now = now
-	snap := plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in)
-	entry, ok := snap.Entry(plan.TicketURL(row.URL))
+	in := board.in
+	entry, ok := board.snap.Entry(plan.TicketURL(row.URL))
 	if !ok {
 		return changeSet{}, ErrSessionNotFound
 	}
@@ -101,15 +92,15 @@ func (r *Reader) loadChanges(ctx context.Context, now time.Time, ref SessionRef,
 		return changeSet{}, ErrNoLocalTip
 	}
 	base := entry.Unlock.BaseBranch
-	diffs, err := git.Diff(ctx, config.CheckoutPath(dataDir, row.Repo), "origin/"+base, string(tip))
+	diffs, err := git.Diff(ctx, config.CheckoutPath(r.dataDir, row.Repo), "origin/"+base, string(tip))
 	if err != nil {
 		return changeSet{}, fmt.Errorf("diff %s against origin/%s: %w", entry.Ticket.Branch, base, err)
 	}
 	return changeSet{board: board, row: row, in: in, entry: entry, tip: tip, base: base, diffs: diffs}, nil
 }
 
-func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef, dataDir string) (ChangesPage, error) {
-	cs, err := r.loadChanges(ctx, now, ref, dataDir)
+func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef) (ChangesPage, error) {
+	cs, err := r.loadChanges(ctx, now, ref)
 	if err != nil {
 		return ChangesPage{}, err
 	}
@@ -134,8 +125,8 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef, dat
 	for _, c := range pending {
 		changes.Comments[c.Path] = append(changes.Comments[c.Path], c)
 	}
-	if row.PRNumber > 0 {
-		changes.PR = option.Some("https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber))
+	if row.PRURL != "" {
+		changes.PR = option.Some(row.PRURL)
 	}
 	for _, d := range diffs {
 		file := ChangedFile{FileDiff: d, Protected: option.None[plan.PathMatch]()}
@@ -207,16 +198,22 @@ type CommentAnchor struct {
 	Hunk   string
 }
 
+type DiffLine struct {
+	Path string
+	Side plan.Side
+	Line int
+}
+
 func (r *Reader) CommentAnchor(
-	ctx context.Context, now time.Time, ref SessionRef, dataDir, path string, side plan.Side, line int,
+	ctx context.Context, now time.Time, ref SessionRef, target DiffLine,
 ) (CommentAnchor, error) {
-	cs, err := r.loadChanges(ctx, now, ref, dataDir)
+	cs, err := r.loadChanges(ctx, now, ref)
 	if err != nil {
 		return CommentAnchor{}, err
 	}
 	anchor := CommentAnchor{Ticket: plan.TicketURL(cs.row.URL), Tip: cs.tip}
 	for _, f := range cs.diffs {
-		if f.Path != path {
+		if f.Path != target.Path {
 			continue
 		}
 		for _, h := range f.Hunks {
@@ -224,7 +221,7 @@ func (r *Reader) CommentAnchor(
 			b.WriteString(h.Header)
 			for _, l := range h.Lines {
 				b.WriteString("\n" + linePrefix(l.Kind) + l.Text)
-				if s, n := lineSide(l); s == side && n == line {
+				if s, n := lineSide(l); s == target.Side && n == target.Line {
 					anchor.Hunk = b.String()
 					return anchor, nil
 				}
@@ -247,15 +244,21 @@ func linePrefix(k git.LineKind) string {
 }
 
 func (r *Reader) SessionTicket(ctx context.Context, now time.Time, ref SessionRef) (plan.TicketURL, error) {
-	board, err := r.Board(ctx, now, Params{})
+	_, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
-		return "", fmt.Errorf("load board: %w", err)
-	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return "", ErrSessionNotFound
+		return "", err
 	}
 	return plan.TicketURL(row.URL), nil
+}
+
+func (r *Reader) SessionSnapshot(
+	ctx context.Context, now time.Time, ref SessionRef,
+) (plan.TicketURL, plan.Snapshot, error) {
+	board, row, err := r.sessionRow(ctx, now, ref)
+	if err != nil {
+		return "", plan.Snapshot{}, err
+	}
+	return plan.TicketURL(row.URL), board.snap, nil
 }
 
 type RaiseResult struct {
@@ -264,19 +267,11 @@ type RaiseResult struct {
 }
 
 func (r *Reader) RaiseResult(ctx context.Context, now time.Time, ref SessionRef) (RaiseResult, error) {
-	board, err := r.Board(ctx, now, Params{})
-	if err != nil {
-		return RaiseResult{}, fmt.Errorf("load board: %w", err)
-	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return RaiseResult{}, ErrSessionNotFound
-	}
-	snap, err := r.Snapshot(ctx, now)
+	board, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
 		return RaiseResult{}, err
 	}
-	entry, ok := snap.Entry(plan.TicketURL(row.URL))
+	entry, ok := board.snap.Entry(plan.TicketURL(row.URL))
 	if !ok {
 		return RaiseResult{}, ErrSessionNotFound
 	}
@@ -286,11 +281,11 @@ func (r *Reader) RaiseResult(ctx context.Context, now time.Time, ref SessionRef)
 	if entry.State == plan.PushFailed || entry.State == plan.PushRefused {
 		return RaiseResult{Problem: entry.Reason}, nil
 	}
-	repo := "https://github.com/" + row.Repo
-	if row.PRNumber > 0 {
-		return RaiseResult{PRURL: repo + "/pull/" + strconv.Itoa(row.PRNumber)}, nil
+	if row.PRURL != "" {
+		return RaiseResult{PRURL: row.PRURL}, nil
 	}
-	return RaiseResult{PRURL: repo + "/pulls?q=head%3A" + url.QueryEscape(entry.Ticket.Branch)}, nil
+	search := "https://github.com/" + row.Repo + "/pulls?q=head%3A" + url.QueryEscape(entry.Ticket.Branch)
+	return RaiseResult{PRURL: search}, nil
 }
 
 func groupByFolder(files []ChangedFile) []ChangeFolder {

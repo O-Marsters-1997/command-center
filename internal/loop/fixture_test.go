@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
@@ -20,6 +21,15 @@ import (
 )
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func openPRs(t *testing.T, forge *ghtest.Forge) map[string]gh.PR {
+	t.Helper()
+	snap, err := forge.List(t.Context(), "/repo", nil)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	return snap.ByBranch
+}
 
 func newLoop(
 	st *storepkg.Store, observe loop.ObserveFunc, clock loop.Clock, cfg config.Config, ws config.Workspace,
@@ -49,7 +59,7 @@ func newLoopWithDeps(deps loop.Deps, opts ...loop.Option) *loop.Loop {
 		deps.Logger = discardLog
 	}
 	deps.Observe = completeObserve
-	return loop.New(deps, opts...)
+	return loop.New(deps, append([]loop.Option{loop.WithForge(&ghtest.Forge{})}, opts...)...)
 }
 
 type loopFixture struct {
@@ -138,9 +148,7 @@ func (f *loopFixture) AuthoriseAll(t *testing.T) {
 
 func (f *loopFixture) Tick(t *testing.T) {
 	t.Helper()
-	if err := f.Loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
+	runOnce(t, f.Loop)
 }
 
 func (f *loopFixture) Latest(t *testing.T) map[string]plan.RunSummary {
@@ -180,9 +188,11 @@ func newPushFixture(t *testing.T, opts ...loop.Option) *pushFixture {
 	ticket := sandboxTicket("1")
 	storetest.Tickets(t, st, ticket)
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+	forge := &ghtest.Forge{}
+	forge.Seed(ghtest.Seed{Checkouts: map[string]string{worktree: "cc-1"}})
 	f := &pushFixture{
 		Repo: repo, Origin: filepath.Join(root, "remote.git"), Worktree: worktree,
-		Store: st, Ticket: ticket, Forge: &ghtest.Forge{}, root: root, cfg: cfg, ws: ws,
+		Store: st, Ticket: ticket, Forge: forge, root: root, cfg: cfg, ws: ws,
 		Obs: &plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktree},
 			PRs: map[plan.BranchRef]plan.PR{}},
 	}
@@ -198,24 +208,7 @@ func (f *pushFixture) reset(at time.Time, rn runner.Runner, opts ...loop.Option)
 
 func (f *pushFixture) tick(t *testing.T) {
 	t.Helper()
-	if err := f.Loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-}
-
-func (f *pushFixture) events(t *testing.T, kind storepkg.EventKind) []storepkg.Event {
-	t.Helper()
-	all, err := f.Store.Events(t.Context())
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	var selected []storepkg.Event
-	for _, event := range all {
-		if event.Kind == kind {
-			selected = append(selected, event)
-		}
-	}
-	return selected
+	runOnce(t, f.Loop)
 }
 
 func (f *pushFixture) head(t *testing.T, dir, ref string) string {

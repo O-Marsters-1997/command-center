@@ -20,7 +20,7 @@ func TestReader_RailCountAgreesWithAllTab(t *testing.T) {
 		store.Ticket{URL: "https://github.com/acme/web/issues/1", Repo: "acme/web", Branch: "cc-1", Feature: "alpha"},
 		store.Ticket{URL: "https://github.com/acme/web/issues/2", Repo: "acme/web", Branch: "cc-2", Feature: "beta"},
 	)
-	reader := view.NewReader(st, 0, 0)
+	reader := view.NewReader(st, "", view.ReaderSettings{})
 	params := view.Params{Feature: "alpha"}
 
 	board, err := reader.Board(ctx, testNow, params)

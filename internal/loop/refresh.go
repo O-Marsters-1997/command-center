@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -13,6 +12,7 @@ import (
 
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	ctx = withSnapshot(ctx, snap)
+	ticketIntents, orphanIntents := partitionRefreshIntents(snap)
 	for _, r := range snap.Refreshes() {
 		e, _ := snap.Entry(r.Ticket)
 		result, err := l.refreshOne(ctx, snap, obs, e.Ticket, r.Row, r.Requested)
@@ -20,27 +20,28 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs 
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		if r.Requested {
-			if err := l.consumeAll(ctx, ticketIntents(snap, r.Ticket), result); err != nil {
+			if err := l.consumeAll(ctx, ticketIntents[r.Ticket], result); err != nil {
 				return err
 			}
 		}
 	}
-	return l.consumeAll(ctx, orphanIntents(snap), failedWith(untrackedTicket))
+	return l.consumeAll(ctx, orphanIntents, failedWith(untrackedTicket))
 }
 
 func (l *Loop) consumeAll(ctx context.Context, intents []plan.Intent, result handled) error {
 	return l.consumeEach(ctx, intents, func(plan.Intent) (handled, error) { return result, nil })
 }
 
-func ticketIntents(snap plan.Snapshot, url plan.TicketURL) []plan.Intent {
-	return slices.DeleteFunc(snap.Intents(plan.VerbRefresh), func(i plan.Intent) bool { return i.Ticket != url })
-}
-
-func orphanIntents(snap plan.Snapshot) []plan.Intent {
-	return slices.DeleteFunc(snap.Intents(plan.VerbRefresh), func(i plan.Intent) bool {
-		_, ok := snap.Entry(i.Ticket)
-		return ok
-	})
+func partitionRefreshIntents(snap plan.Snapshot) (byTicket map[plan.TicketURL][]plan.Intent, orphans []plan.Intent) {
+	byTicket = map[plan.TicketURL][]plan.Intent{}
+	for _, i := range snap.Intents(plan.VerbRefresh) {
+		if _, ok := snap.Entry(i.Ticket); ok {
+			byTicket[i.Ticket] = append(byTicket[i.Ticket], i)
+		} else {
+			orphans = append(orphans, i)
+		}
+	}
+	return byTicket, orphans
 }
 
 func conflictDetail(branchTip, baseTip plan.SHA, mergeErr error) string {
@@ -61,7 +62,7 @@ func (l *Loop) refreshOne(
 
 	entry, _ := snap.Entry(ticket.URL)
 	if entry.HoldsWorktree() {
-		return refuse(heldWorktreeRefusal)
+		return refuse(plan.HeldWorktreeRefusal)
 	}
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {

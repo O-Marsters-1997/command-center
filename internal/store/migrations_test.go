@@ -118,12 +118,12 @@ func TestMigrations(t *testing.T) {
 		if len(events) != 1 || events[0].Detail != "" {
 			t.Errorf("Events() = %+v, want the NULL detail backfilled to empty", events)
 		}
-		ticks, err := store.CheckingTicks(ctx)
+		facts, err := store.VerdictFacts(ctx)
 		if err != nil {
-			t.Fatalf("CheckingTicks: %v", err)
+			t.Fatalf("VerdictFacts: %v", err)
 		}
-		if got := ticks["https://x/1"]; got != 2 {
-			t.Errorf("CheckingTicks()[x/1] = %d, want 2", got)
+		if got, want := facts.CheckingFor["https://x/1"], 2*storepkg.TickPeriod; got != want {
+			t.Errorf("VerdictFacts().CheckingFor[x/1] = %v, want %v", got, want)
 		}
 	})
 
@@ -301,13 +301,13 @@ func TestMigrations(t *testing.T) {
 			insert     func(context.Context, *storepkg.Store, *sql.DB) error
 		}{
 			{"run kind", "runs_kind_check", func(ctx context.Context, s *storepkg.Store, _ *sql.DB) error {
-				_, err := s.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+				_, _, err := s.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 					Ticket: "sandbox://CC-1", Kind: plan.RunKind("bogus"), BaselineSHA: "base", PromptHash: "hash",
 				})
 				return err
 			}},
 			{"run outcome", "runs_outcome_check", func(ctx context.Context, s *storepkg.Store, db *sql.DB) error {
-				runID, err := s.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+				runID, _, err := s.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 					Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "base", PromptHash: "hash",
 				})
 				if err != nil {

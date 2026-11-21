@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -20,58 +21,43 @@ type Workspace struct {
 	SystemPromptPath string
 }
 
-const defaultDatabaseURL = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
+const (
+	defaultDatabaseURL       = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
+	defaultClaudeProjectsDir = "~/.claude/projects"
+	reposDirName             = "repos"
+)
 
 func resolveDatabaseURL(configured string, env Env) string {
-	if configured != "" {
-		return configured
-	}
-	if env.DatabaseURL != "" {
-		return env.DatabaseURL
-	}
-	return defaultDatabaseURL
+	return cmp.Or(configured, env.DatabaseURL, defaultDatabaseURL)
 }
 
 // ResolveDataDir answers where the app keeps everything: the config's own data_dir, else
 // CC_DATA_DIR, else os.UserConfigDir()/command-centre. A leading ~ expands.
 func ResolveDataDir(configured string, env Env) (string, error) {
-	dir := configured
-	if dir == "" {
-		dir = env.DataDir
-	}
+	dir := cmp.Or(configured, env.DataDir)
 	if dir == "" {
 		if env.UserConfigDir == "" {
 			return "", errors.New("resolve data dir: no data_dir, CC_DATA_DIR or user config dir")
 		}
 		dir = filepath.Join(env.UserConfigDir, "command-centre")
 	}
-	dir, err := expandHome(dir, env.Home)
-	if err != nil {
-		return "", fmt.Errorf("expand data dir: %w", err)
-	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return "", fmt.Errorf("absolute data dir %s: %w", dir, err)
-	}
-	return abs, nil
+	return absHome("data dir", dir, env.Home)
 }
-
-const defaultClaudeProjectsDir = "~/.claude/projects"
 
 // ResolveClaudeProjectsDir answers where usage.Weigh reads transcripts from: the config's own
 // claude_projects_dir, else defaultClaudeProjectsDir. A leading ~ expands.
 func ResolveClaudeProjectsDir(configured string, env Env) (string, error) {
-	dir := configured
-	if dir == "" {
-		dir = defaultClaudeProjectsDir
-	}
-	dir, err := expandHome(dir, env.Home)
+	return absHome("claude projects dir", cmp.Or(configured, defaultClaudeProjectsDir), env.Home)
+}
+
+func absHome(what, dir, home string) (string, error) {
+	dir, err := expandHome(dir, home)
 	if err != nil {
-		return "", fmt.Errorf("expand claude projects dir: %w", err)
+		return "", fmt.Errorf("expand %s: %w", what, err)
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", fmt.Errorf("absolute claude projects dir %s: %w", dir, err)
+		return "", fmt.Errorf("absolute %s %s: %w", what, dir, err)
 	}
 	return abs, nil
 }
@@ -92,7 +78,7 @@ func ResolveWorkspace(dataDir string) (Workspace, error) {
 	ws := Workspace{
 		DataDir:          dataDir,
 		StateDir:         state,
-		ReposDir:         filepath.Join(dataDir, "repos"),
+		ReposDir:         filepath.Join(dataDir, reposDirName),
 		LockPath:         filepath.Join(state, "command-centre.lock"),
 		RunsDir:          filepath.Join(state, "runs"),
 		SettingsPath:     filepath.Join(state, "settings", "agent.json"),

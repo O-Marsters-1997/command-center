@@ -4,7 +4,7 @@
 {{- if .Project.Name}}<span class="launch-proj">{{template "mark" .Project}}{{.Project.Name}}</span>{{end}}
 <h2 id="launch-dialog-title" class="launch-dialog-title">Launch {{if .Feature}}{{.Feature}}{{else}}tickets{{end}}</h2>
 {{- if .Feature}}<a class="btn btn-ghost btn-sm" href="/launch" {{template "nav" "/launch"}}>Change feature</a>{{end}}
-<a class="btn btn-ghost btn-sm btn-icon" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}" aria-label="Close">{{template "icon" "x"}}</a>
+<a class="btn btn-ghost btn-sm btn-icon" href="{{if .Feature}}{{featurePath .Feature}}{{else}}/{{end}}" aria-label="Close">{{template "icon" "x"}}</a>
 </header>
 {{if .Pending -}}
 <div class="launch-body"><p>importing {{.Feature}}&hellip;</p></div>
@@ -17,7 +17,7 @@
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
 {{- if or .Pending .Refused .Empty}}
-<div class="launch-foot"><a class="btn btn-ghost" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a></div>
+<div class="launch-foot"><a class="btn btn-ghost" href="{{if .Feature}}{{featurePath .Feature}}{{else}}/{{end}}">Cancel</a></div>
 {{- end}}
 </dialog>
 {{- end}}

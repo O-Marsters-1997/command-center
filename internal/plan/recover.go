@@ -53,15 +53,16 @@ func (s Snapshot) autoCandidate(e Entry) (AutoFollowUp, bool) {
 		fact, ok := s.verifyFacts[e.Ticket.URL]
 		return AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseVerifyFailed, Tip: fact.Tip, LogPath: fact.LogPath}, ok
 	}
-	if e.State != CIFailed || e.Run.IsNone() || e.Run.Unwrap().Verdict.IsNone() || e.LastPush.IsNone() {
+	push, ok := e.LastPush.Get()
+	if e.State != CIFailed || !ok {
 		return AutoFollowUp{}, false
 	}
-	red := e.Run.Unwrap().Verdict.Unwrap().RedLeaves
 	checks := s.obs.PRs[e.Ticket.Ref()].Checks
-	if len(red) == 0 || slices.ContainsFunc(red, func(name string) bool { return checks[name].Attempt <= 1 }) {
+	red := e.RedChecks(checks)
+	if len(red) == 0 || slices.ContainsFunc(red, func(c RedCheck) bool { return checks[c.Name].Attempt <= 1 }) {
 		return AutoFollowUp{}, false
 	}
-	return AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseCIFailed, Tip: e.LastPush.Unwrap().PushedTip}, true
+	return AutoFollowUp{Ticket: e.Ticket.URL, Cause: CauseCIFailed, Tip: push.PushedTip}, true
 }
 
 func parkExhausted(state State, reason Reason, history AutoHistory) (State, Reason) {

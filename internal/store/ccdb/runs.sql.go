@@ -12,40 +12,6 @@ import (
 	"time"
 )
 
-const activeLaunchHashes = `-- name: ActiveLaunchHashes :many
-SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm
-JOIN launches l ON l.id = lm.launch_id
-WHERE l.state = 'active'
-`
-
-type ActiveLaunchHashesRow struct {
-	TicketID   string
-	PromptHash string
-}
-
-func (q *Queries) ActiveLaunchHashes(ctx context.Context) ([]ActiveLaunchHashesRow, error) {
-	rows, err := q.db.QueryContext(ctx, activeLaunchHashes)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ActiveLaunchHashesRow
-	for rows.Next() {
-		var i ActiveLaunchHashesRow
-		if err := rows.Scan(&i.TicketID, &i.PromptHash); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const autoHistories = `-- name: AutoHistories :many
 SELECT r.ticket_id::text AS ticket_id, COUNT(*)::int AS rounds,
   (ARRAY_AGG(COALESCE(r.baseline_sha, '') ORDER BY r.id DESC))[1]::text AS last_tip
@@ -349,18 +315,6 @@ func (q *Queries) LatestRunLog(ctx context.Context, ticketID sql.NullString) (La
 	return i, err
 }
 
-const latestSessionID = `-- name: LatestSessionID :one
-SELECT session_id::text AS session_id FROM runs
-WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1
-`
-
-func (q *Queries) LatestSessionID(ctx context.Context, ticketID sql.NullString) (string, error) {
-	row := q.db.QueryRowContext(ctx, latestSessionID, ticketID)
-	var session_id string
-	err := row.Scan(&session_id)
-	return session_id, err
-}
-
 const latestSessionRuns = `-- name: LatestSessionRuns :many
 SELECT runs.id,
   COALESCE(runs.log_path, '')::text AS log_path,
@@ -585,25 +539,35 @@ func (q *Queries) ListPassRuns(ctx context.Context) ([]ListPassRunsRow, error) {
 	return items, nil
 }
 
-const pendingIntentsByTicket = `-- name: PendingIntentsByTicket :many
-SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id
+const pendingIntents = `-- name: PendingIntents :many
+SELECT id, ticket_id, verb, COALESCE(payload, 'null'::jsonb) AS payload, hold_until FROM intents
+WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id
 `
 
-type PendingIntentsByTicketRow struct {
-	TicketID string
-	Verb     string
+type PendingIntentsRow struct {
+	ID        int64
+	TicketID  string
+	Verb      string
+	Payload   json.RawMessage
+	HoldUntil sql.NullTime
 }
 
-func (q *Queries) PendingIntentsByTicket(ctx context.Context) ([]PendingIntentsByTicketRow, error) {
-	rows, err := q.db.QueryContext(ctx, pendingIntentsByTicket)
+func (q *Queries) PendingIntents(ctx context.Context) ([]PendingIntentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, pendingIntents)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []PendingIntentsByTicketRow
+	var items []PendingIntentsRow
 	for rows.Next() {
-		var i PendingIntentsByTicketRow
-		if err := rows.Scan(&i.TicketID, &i.Verb); err != nil {
+		var i PendingIntentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Verb,
+			&i.Payload,
+			&i.HoldUntil,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

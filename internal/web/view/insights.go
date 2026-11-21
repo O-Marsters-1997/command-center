@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/url"
@@ -18,22 +19,20 @@ const insightsDefaultRangeDays = 30
 const insightsDateFormat = "2006-01-02"
 
 type InsightsResponse struct {
-	Since        string           `json:"since"`
-	Until        string           `json:"until"`
-	Timezone     string           `json:"timezone"`
-	Points       []InsightsPoint  `json:"points"`
-	WastePctWeek float64          `json:"waste_pct_week"`
-	Workflows    []WorkflowSeries `json:"workflows"`
+	Loc          *time.Location
+	Points       []InsightsPoint
+	WastePctWeek float64
+	Workflows    []WorkflowSeries
 }
 
 type InsightsPoint struct {
-	Ticket          string  `json:"ticket"`
-	Title           string  `json:"title"`
-	Feature         string  `json:"feature"`
-	MergedAt        string  `json:"merged_at"`
-	PctWeek         float64 `json:"pct_week"`
-	AgentPctWeek    float64 `json:"agent_pct_week"`
-	FollowUpPctWeek float64 `json:"follow_up_pct_week"`
+	Ticket          string
+	Title           string
+	Feature         string
+	MergedAt        time.Time
+	PctWeek         float64
+	AgentPctWeek    float64
+	FollowUpPctWeek float64
 }
 
 // Postgres dates have no timezone; encode the wall-clock date at UTC midnight.
@@ -88,28 +87,13 @@ type MergedRow struct {
 	Agent, FollowUp, Total float64
 }
 
-func mergedDay(mergedAt, timezone string) string {
-	at, err := time.Parse(time.RFC3339, mergedAt)
-	if err != nil {
-		return ""
-	}
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		loc = time.UTC
-	}
-	return at.In(loc).Format(insightsDateFormat)
-}
-
-func buildMergedRows(points []InsightsPoint, timezone string) []MergedRow {
+func buildMergedRows(points []InsightsPoint, loc *time.Location) []MergedRow {
 	rows := make([]MergedRow, 0, len(points))
 	for i := len(points) - 1; i >= 0; i-- {
 		p := points[i]
-		name := p.Title
-		if name == "" {
-			name = p.Ticket
-		}
 		rows = append(rows, MergedRow{
-			Name: name, Feature: p.Feature, Day: mergedDay(p.MergedAt, timezone),
+			Name: cmp.Or(p.Title, p.Ticket), Feature: p.Feature,
+			Day:   p.MergedAt.In(cmp.Or(loc, time.UTC)).Format(insightsDateFormat),
 			Agent: p.AgentPctWeek, FollowUp: p.FollowUpPctWeek, Total: p.PctWeek,
 		})
 	}
@@ -196,7 +180,7 @@ func NewInsightsPage(chrome Chrome, resp InsightsResponse, now time.Time) Insigh
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
 		Limits: buildLimits(chrome.Gauges, now), Split: buildSpendSplit(resp.Points),
-		Merged: buildMergedRows(resp.Points, resp.Timezone), Workflows: resp.Workflows,
+		Merged: buildMergedRows(resp.Points, resp.Loc), Workflows: resp.Workflows,
 	}
 }
 
@@ -238,14 +222,14 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	factor := fits[agentlog.SevenDay].Factor
 
 	resp := InsightsResponse{
-		Since: since.Format(insightsDateFormat), Until: until.Format(insightsDateFormat), Timezone: tz,
+		Loc:    loc,
 		Points: make([]InsightsPoint, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
 		Workflows: buildWorkflowSeries(workflowSpend, withdrawn, factor),
 	}
 	for i, p := range merged {
 		agentPct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.FollowUpUSD, factor)
 		resp.Points[i] = InsightsPoint{
-			Ticket: p.Ticket, Title: p.Title, Feature: p.Feature, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
+			Ticket: p.Ticket, Title: p.Title, Feature: p.Feature, MergedAt: p.MergedAt,
 			PctWeek:         totalPct,
 			AgentPctWeek:    agentPct,
 			FollowUpPctWeek: followUpPct,

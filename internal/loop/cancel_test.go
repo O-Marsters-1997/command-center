@@ -1,12 +1,12 @@
 package loop_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestCancel(t *testing.T) {
@@ -36,11 +36,9 @@ func TestCancel(t *testing.T) {
 	if sibling == running {
 		sibling = f.Tickets[1].URL
 	}
-	if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	storetest.Verb(t, f.Store, storepkg.VerbRequest{
 		Ticket: sibling, Verb: "cancel", At: testAt.Add(time.Second),
-	}); err != nil {
-		t.Fatalf("QueueVerbIntent(cancel): %v", err)
-	}
+	})
 
 	f.Tick(t)
 
@@ -53,31 +51,14 @@ func TestCancel(t *testing.T) {
 	if f.Latest(t)[running].Outcome.IsSome() {
 		t.Error("running member has an outcome, want it untouched")
 	}
-	memberships, err := f.Store.LaunchMemberships(t.Context())
-	if err != nil {
-		t.Fatalf("LaunchMemberships(): %v", err)
-	}
+	memberships := planInput(t, f.Store).Memberships
 	for _, ticket := range f.Tickets {
 		got := memberships[plan.TicketURL(ticket.URL)]
 		if disarmed := ticket.URL == sibling; disarmed == (got.LaunchID != 0) {
 			t.Errorf("LaunchMemberships()[%s] = %+v, want only %s disarmed", ticket.URL, got, sibling)
 		}
 	}
-	if !hasEventIn(t, f.Store, "launch_cancelled", "disarmed") {
+	if !hasEvent(storetest.Events(t, f.Store, ""), "launch_cancelled", "disarmed") {
 		t.Error("Events() has no launch_cancelled recording the disarm")
 	}
-}
-
-func hasEventIn(t *testing.T, store *storepkg.Store, kind storepkg.EventKind, detail string) bool {
-	t.Helper()
-	events, err := store.Events(t.Context())
-	if err != nil {
-		t.Fatalf("Events(): %v", err)
-	}
-	for _, e := range events {
-		if e.Kind == kind && strings.Contains(e.Detail, detail) {
-			return true
-		}
-	}
-	return false
 }

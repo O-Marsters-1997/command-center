@@ -55,8 +55,8 @@ func validatingLoop(t *testing.T, st *storepkg.Store, validate loop.ValidateFunc
 	}
 	return newLoopWithDeps(loop.Deps{
 		Store: st, Observe: noOpObserve, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
-		Runner: runner.ProcessRunner{}, Validate: validate, RemoteOf: remoteOf,
-	}, opts...)
+		Runner: runner.ProcessRunner{},
+	}, append([]loop.Option{loop.WithValidator(validate), loop.WithRemoteOf(remoteOf)}, opts...)...)
 }
 
 func readyValidator(validations *[]string) loop.ValidateFunc {
@@ -72,13 +72,6 @@ func queueTrack(t *testing.T, st *storepkg.Store, repo string) {
 	t.Helper()
 	if _, err := st.QueueTrackIntent(t.Context(), repo, "", testAt); err != nil {
 		t.Fatalf("QueueTrackIntent(%q): %v", repo, err)
-	}
-}
-
-func runOnce(t *testing.T, lp *loop.Loop) {
-	t.Helper()
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce() error = %v", err)
 	}
 }
 

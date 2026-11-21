@@ -13,6 +13,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -66,7 +67,7 @@ func (m LaunchModal) EffortList() string {
 type LaunchPicker struct {
 	Chrome
 	Features []LaunchFeature
-	Launch   *LaunchModal
+	Launch   option.Option[LaunchModal]
 }
 
 type LaunchFeature struct {
@@ -78,14 +79,12 @@ type LaunchFeature struct {
 }
 
 func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker, error) {
-	chrome, err := r.Chrome(ctx, now, Params{})
+	f, err := r.loadFrame(ctx, now, Params{})
 	if err != nil {
-		return LaunchPicker{}, fmt.Errorf("load chrome: %w", err)
+		return LaunchPicker{}, fmt.Errorf("load frame: %w", err)
 	}
-	in, err := r.loadCandidateInputs(ctx, now)
-	if err != nil {
-		return LaunchPicker{}, fmt.Errorf("load candidate inputs: %w", err)
-	}
+	chrome := f.chrome
+	in := candidateInputs{tickets: f.tickets, snap: f.snap, marks: f.projects}
 	byFeature := map[string][]string{}
 	for _, t := range in.tickets {
 		if t.Feature != "" {
@@ -100,7 +99,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 		if err != nil {
 			return LaunchPicker{}, fmt.Errorf("preview launch of feature %s: %w", feature, err)
 		}
-		row := LaunchFeature{Name: feature, Project: in.featureMark(feature), Path: featureLaunchPath(feature)}
+		row := LaunchFeature{Name: feature, Project: in.featureMark(feature), Path: FeatureLaunchPath(feature)}
 		for _, c := range candidates {
 			switch c.Label {
 			case plan.Now.String():
@@ -119,13 +118,9 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 
 func (m LaunchModal) Path() string {
 	if m.Feature != "" {
-		return featureLaunchPath(m.Feature)
+		return FeatureLaunchPath(m.Feature)
 	}
 	return "/launch?" + m.TicketQuery
-}
-
-func featureLaunchPath(feature string) string {
-	return "/f/" + url.PathEscape(feature) + "/launch"
 }
 
 type candidateInputs struct {
@@ -166,11 +161,11 @@ func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([
 	}
 	requested, err := candidateSelection(q, in.tickets)
 	if err != nil {
-		return nil, InvalidError{err}
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
 	}
 	candidates, err := previewCandidates(requested, in)
 	if err != nil {
-		return nil, InvalidError{err}
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
 	}
 	return candidates, nil
 }
@@ -216,8 +211,8 @@ func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) 
 }
 
 func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string) (LaunchModal, error) {
-	view := newLaunchModal()
-	view.Feature, view.FeatureQuery = feature, url.QueryEscape(feature)
+	modal := newLaunchModal()
+	modal.Feature, modal.FeatureQuery = feature, url.QueryEscape(feature)
 
 	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbImport)
 	if err != nil {
@@ -225,8 +220,8 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 	}
 	for _, intent := range intents {
 		if intent.TicketID == feature {
-			view.Pending = true
-			return view, nil
+			modal.Pending = true
+			return modal, nil
 		}
 	}
 
@@ -234,7 +229,7 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 	if err != nil {
 		return LaunchModal{}, fmt.Errorf("load candidate inputs: %w", err)
 	}
-	view.Project = in.featureMark(feature)
+	modal.Project = in.featureMark(feature)
 	requested, err := candidateSelection(url.Values{"feature": {feature}}, in.tickets)
 	if err != nil {
 		return LaunchModal{}, fmt.Errorf("load candidate selection: %w", err)
@@ -250,12 +245,12 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 			return LaunchModal{}, fmt.Errorf("load last import error: %w", err)
 		}
 		if failed && lastErr.Feature == feature {
-			view.Refused = lastErr.Message
+			modal.Refused = lastErr.Message
 		} else {
-			view.Empty = true
+			modal.Empty = true
 		}
 	}
-	return view, nil
+	return modal, nil
 }
 
 func (r *Reader) TicketModal(ctx context.Context, now time.Time, requested []string) (LaunchModal, error) {

@@ -7,10 +7,6 @@ VALUES (
   sqlc.narg(message), sqlc.narg(model), sqlc.narg(effort), sqlc.narg(cause)
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id;
 
--- name: LatestSessionID :one
-SELECT session_id::text AS session_id FROM runs
-WHERE ticket_id = sqlc.arg(ticket_id) AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1;
-
 -- name: RecordSpawn :execrows
 UPDATE runs SET pgid = sqlc.arg(pgid), proc_started_at = sqlc.arg(proc_started_at), log_path = sqlc.arg(log_path)
 WHERE id = sqlc.arg(id);
@@ -113,18 +109,14 @@ SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = sqlc.
 SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload, hold_until FROM intents
 WHERE verb = sqlc.arg(verb) AND consumed_at IS NULL ORDER BY id;
 
--- name: PendingIntentsByTicket :many
-SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id;
+-- name: PendingIntents :many
+SELECT id, ticket_id, verb, COALESCE(payload, 'null'::jsonb) AS payload, hold_until FROM intents
+WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id;
 
 -- name: ConsumeVerbIntent :execrows
 UPDATE intents SET consumed_at = sqlc.arg(consumed_at), outcome = sqlc.narg(outcome), detail = sqlc.narg(detail),
   finished_at = sqlc.narg(finished_at), run_id = sqlc.narg(run_id), ticket_state = sqlc.narg(ticket_state)
 WHERE id = sqlc.arg(id) AND consumed_at IS NULL;
-
--- name: ActiveLaunchHashes :many
-SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm
-JOIN launches l ON l.id = lm.launch_id
-WHERE l.state = 'active';
 
 -- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = sqlc.arg(ticket_id) ORDER BY id;

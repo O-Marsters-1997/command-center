@@ -15,6 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/notify"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -31,47 +32,27 @@ type App struct {
 	server *web.Server
 }
 
-type options struct {
-	clock    loop.Clock
-	observe  loop.ObserveFunc
-	validate loop.ValidateFunc
-	remoteOf loop.RemoteFunc
-	forge    gh.Forge
-	runner   runner.Runner
+type Seams struct {
+	Clock    loop.Clock
+	Observe  loop.ObserveFunc
+	Validate loop.ValidateFunc
+	RemoteOf loop.RemoteFunc
+	Forge    gh.Forge
+	Runner   runner.Runner
 }
 
-func WithForge(forge gh.Forge) Option {
-	return func(o *options) { o.forge = forge }
-}
-
-func WithRunner(r runner.Runner) Option {
-	return func(o *options) { o.runner = r }
-}
-
-type Option func(*options)
-
-func WithClock(clock loop.Clock) Option {
-	return func(o *options) { o.clock = clock }
-}
-
-func WithObserver(observe loop.ObserveFunc) Option {
-	return func(o *options) { o.observe = observe }
-}
-
-func WithValidator(validate loop.ValidateFunc) Option {
-	return func(o *options) { o.validate = validate }
-}
-
-func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
-	return func(o *options) { o.remoteOf = remoteOf }
-}
-
-func New(
-	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, opts ...Option,
-) (app *App, err error) {
-	settings := options{clock: loop.RealClock{}, forge: gh.CLI{}, runner: runner.ProcessRunner{}}
-	for _, opt := range opts {
-		opt(&settings)
+func New(logger *slog.Logger, configPath string, env config.Env, seams Seams) (app *App, err error) {
+	if seams.Clock == nil {
+		seams.Clock = loop.RealClock{}
+	}
+	if seams.Forge == nil {
+		seams.Forge = gh.CLI{}
+	}
+	if seams.Runner == nil {
+		seams.Runner = runner.ProcessRunner{}
+	}
+	if seams.RemoteOf == nil {
+		seams.RemoteOf = gh.CLI{}.RepoRemote
 	}
 
 	cfg, err := config.Load(configPath, env)
@@ -106,17 +87,23 @@ func New(
 		return nil, fmt.Errorf("write agent files: %w", err)
 	}
 
-	observe := settings.observe
-	if observe == nil {
-		observe = loop.NewObserver(st, settings.forge, cfg)
+	if seams.Observe == nil {
+		seams.Observe = loop.NewObserver(st, seams.Forge, cfg)
 	}
 
+	loopOpts := []loop.Option{
+		loop.WithForge(seams.Forge), loop.WithNotifier(notify.Log{Logger: logger}),
+		loop.WithRemoteOf(seams.RemoteOf), loop.WithTracker(tracker.Resolve(gh.CLI{})),
+	}
+	if seams.Validate != nil {
+		loopOpts = append(loopOpts, loop.WithValidator(seams.Validate))
+	}
 	lp := loop.New(loop.Deps{
-		Logger: logger, Store: st, Clock: settings.clock, Runner: settings.runner, Observe: observe,
-		Config: cfg, Workspace: ws, Validate: settings.validate, RemoteOf: settings.remoteOf,
-	}, loop.WithForge(settings.forge), loop.WithNotifier(notify.Log{Logger: logger}))
+		Logger: logger, Store: st, Clock: seams.Clock, Runner: seams.Runner, Observe: seams.Observe,
+		Config: cfg, Workspace: ws,
+	}, loopOpts...)
 	server := web.NewServer(web.Deps{
-		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
+		Logger: logger, Store: st, Clock: seams.Clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
 		SpendLimit5h: cfg.SpendLimit5h, BoardPollSeconds: cfg.BoardPollSeconds,
 		AgentCommand: cfg.AgentCommand,
 	})

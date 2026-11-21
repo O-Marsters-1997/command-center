@@ -93,7 +93,7 @@ func dsnFor(tb testing.TB, cloned bool) string {
 func Store(tb testing.TB) *store.Store {
 	tb.Helper()
 	dsn := DSN(tb)
-	st, err := store.OpenStore(dsn, store.MaxOpenConns(maxConns))
+	st, err := store.OpenStore(dsn, store.MaxOpenConns(maxConns), store.SkipMigrate())
 	if err != nil {
 		tb.Fatalf("open test store: %v", err)
 	}

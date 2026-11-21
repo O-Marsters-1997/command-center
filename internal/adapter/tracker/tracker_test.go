@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/command"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 )
@@ -21,7 +20,7 @@ func TestResolve(t *testing.T) {
 			got = args
 			return []byte("[]"), nil
 		}
-		src, err := tracker.Resolve(gh.CLI{Exec: command.ExecutorFunc(run)})(tracker.GitHub, remote)
+		src, err := tracker.Resolve(gh.CLI{Exec: run})(tracker.GitHub, remote)
 		if err != nil {
 			t.Fatalf("Resolve(GitHub, %q) error = %v", remote, err)
 		}

@@ -60,15 +60,12 @@ func (l *Loop) recordTransitions(ctx context.Context, snap plan.Snapshot) error 
 
 func (l *Loop) applyDraftGate(ctx context.Context, snap plan.Snapshot) error {
 	return eachEntry(snap, func(e plan.Entry) bool { return e.ReadyToUndraft }, func(e plan.Entry) error {
-		return l.readyOne(ctx, e.Ticket)
+		t := e.Ticket
+		if err := l.forge.Ready(ctx, l.checkout(t.Repo), t.Branch); err != nil {
+			return l.event(ctx, string(t.URL), store.EventDraftReadyFailed, err.Error())
+		}
+		return l.event(ctx, string(t.URL), store.EventDraftReady, "")
 	})
-}
-
-func (l *Loop) readyOne(ctx context.Context, t plan.Ticket) error {
-	if err := l.forge.Ready(ctx, l.checkout(t.Repo), t.Branch); err != nil {
-		return l.event(ctx, string(t.URL), store.EventDraftReadyFailed, err.Error())
-	}
-	return l.event(ctx, string(t.URL), store.EventDraftReady, "")
 }
 
 // Mergify's queue takes main-based pull requests only, and both repos delete a merged branch.

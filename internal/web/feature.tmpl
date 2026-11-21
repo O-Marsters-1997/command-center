@@ -4,8 +4,8 @@
 {{template "featureLaunch" .}}
 {{template "shellContent" .}}
 <nav class="pill-tabs" aria-label="feature views">
-  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph" data-key="v" {{template "nav" (printf "/f/%s/graph" (.FeatureScope | pathEscape))}}>Graph</a>
-  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}" {{template "nav" (printf "/f/%s" (.FeatureScope | pathEscape))}} aria-current="page">Board</a>
+  <a class="pill-tab" href="{{featureGraphPath .FeatureScope}}" data-key="v" {{template "nav" (featureGraphPath .FeatureScope)}}>Graph</a>
+  <a class="pill-tab" href="{{featurePath .FeatureScope}}" {{template "nav" (featurePath .FeatureScope)}} aria-current="page">Board</a>
 </nav>
 {{template "featureHead" .}}
 {{template "board" .}}

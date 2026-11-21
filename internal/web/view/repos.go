@@ -40,7 +40,7 @@ type FeatureOffer struct {
 	OtherRepos []string
 }
 
-func (o FeatureOffer) LaunchPath() string { return featureLaunchPath(o.Feature) }
+func (o FeatureOffer) LaunchPath() string { return FeatureLaunchPath(o.Feature) }
 
 func (o FeatureOffer) ID() string {
 	return "offer-" + strings.Map(func(r rune) rune {
@@ -87,7 +87,7 @@ type ReposPage struct {
 	ProjectsPane
 	LastImportError option.Option[ImportError]
 	Query           string
-	Search          *RepoSearch
+	Search          option.Option[RepoSearch]
 }
 
 type RepoGroup struct {
@@ -184,24 +184,20 @@ func repoStatus(state BannerState, steps []CheckStep) string {
 func openByRepo(rows []Row) map[string]int {
 	open := make(map[string]int)
 	for _, row := range rows {
-		if row.Glyph != plan.GlyphDone {
+		if plan.OpenGlyph(row.Glyph) {
 			open[row.Repo]++
 		}
 	}
 	return open
 }
 
-func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return store.Repo{}, false, fmt.Errorf("load repos: %w", err)
-	}
+func knownRepo(repos []store.Repo, scope string) (store.Repo, bool) {
 	for _, repo := range repos {
 		if scope != "" && strings.EqualFold(repo.Name, scope) {
-			return repo, true, nil
+			return repo, true
 		}
 	}
-	return store.Repo{}, false, nil
+	return store.Repo{}, false
 }
 
 func (r *Reader) Repos(ctx context.Context, now time.Time, offers map[string][]ImportOffer) (ReposPage, error) {
@@ -284,7 +280,7 @@ func featureOffers(
 	offers := make([]FeatureOffer, 0, len(all[repo.Name]))
 	for _, in := range all[repo.Name] {
 		offer := FeatureOffer{
-			Feature: in.Feature, Tickets: in.Tickets, Repo: repo.Name, Path: featureLaunchPath(in.Feature),
+			Feature: in.Feature, Tickets: in.Tickets, Repo: repo.Name, Path: FeatureLaunchPath(in.Feature),
 			State: ImportAvailable,
 		}
 		if in.Imported {
@@ -349,22 +345,21 @@ func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
 }
 
 func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string) (RepoPage, error) {
-	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
+	board, err := r.Board(ctx, now, ParseParams(url.Values{"repo": {scope}}))
 	if err != nil {
-		return RepoPage{}, fmt.Errorf("load chrome: %w", err)
+		return RepoPage{}, fmt.Errorf("load board: %w", err)
 	}
+	chrome := board.Chrome
 	chrome.setCurrent(keyRepos)
 	chrome.titled(scope)
 	chrome.Crumbs = repoCrumbs(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
-	if page.Banner, err = r.Banner(ctx, scope); err != nil {
-		return RepoPage{}, fmt.Errorf("load banner: %w", err)
-	}
-
-	repo, known, err := r.KnownRepo(ctx, scope)
+	pending, err := r.store.TrackPending(ctx, scope)
 	if err != nil {
-		return page, fmt.Errorf("load known repo: %w", err)
+		return RepoPage{}, fmt.Errorf("track pending: %w", err)
 	}
+	repo, known := knownRepo(board.repos, scope)
+	page.Banner = bannerOf(scope, pending, repo, known)
 	if !known {
 		return page, nil
 	}
@@ -379,10 +374,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string) (Rep
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("import error: %w", err)
 	}
-	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}}))
-	if err != nil {
-		return RepoPage{}, fmt.Errorf("load board: %w", err)
-	}
+	page.Tickets = board
 	page.OpenTickets = openByRepo(rowsIn(page.Tickets.Groups))[repo.Name]
 	return page, nil
 }

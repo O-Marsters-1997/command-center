@@ -11,7 +11,7 @@ import (
 
 // RefreshFacts gates automatic retries after refusal or verification failure, but not manual refreshes.
 func (s *Store) RefreshFacts(ctx context.Context) (map[plan.TicketURL]plan.RefreshFact, error) {
-	outcomes, err := s.LatestRefreshOutcomes(ctx)
+	outcomes, err := s.latestRefreshOutcomes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read latest refresh outcomes: %w", err)
 	}
@@ -45,8 +45,7 @@ type RefreshOutcome struct {
 	Advanced bool
 }
 
-// LatestRefreshOutcomes excludes events before the ticket's last recorded push.
-func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
+func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
 	kinds, err := encodeJSON("refresh outcome kinds", []EventKind{
 		EventRefreshRefused, EventRefreshConflicted, EventRefreshed, EventRestacked,
 	})

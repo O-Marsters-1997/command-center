@@ -51,6 +51,23 @@ type Board struct {
 	TicketCount      int
 	WaveCount        int
 	Launch           option.Option[LaunchModal]
+
+	in    plan.Input
+	snap  plan.Snapshot
+	repos []store.Repo
+	split map[agentlog.Window]windowSplit
+}
+
+func (r *Reader) sessionRow(ctx context.Context, now time.Time, ref SessionRef) (Board, Row, error) {
+	board, err := r.Board(ctx, now, Params{})
+	if err != nil {
+		return Board{}, Row{}, fmt.Errorf("load board: %w", err)
+	}
+	row, ok := board.rowFor(ref)
+	if !ok {
+		return Board{}, Row{}, ErrSessionNotFound
+	}
+	return board, row, nil
 }
 
 func (b Board) LaunchCount() int {
@@ -58,13 +75,7 @@ func (b Board) LaunchCount() int {
 }
 
 func (b Board) OpenCount() int {
-	open := 0
-	for _, r := range rowsIn(b.Groups) {
-		if sectionKey(r.Glyph) != SectionDone {
-			open++
-		}
-	}
-	return open
+	return openCount(rowsIn(b.Groups))
 }
 
 func (b Board) FeatureCount() int {
@@ -98,23 +109,27 @@ func (b Board) rowFor(ref SessionRef) (Row, bool) {
 	return rows[i], true
 }
 
-type InvalidError struct{ Err error }
-
-func (e InvalidError) Error() string { return e.Err.Error() }
-func (e InvalidError) Unwrap() error { return e.Err }
+var ErrInvalidInput = errors.New("view: invalid input")
 
 type Reader struct {
 	store            *store.Store
+	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
 	spend            *SpendCache
 }
 
-func NewReader(st *store.Store, boardPollSeconds, spendLimit5h int) *Reader {
+type ReaderSettings struct {
+	BoardPollSeconds int
+	SpendLimit5h     int
+}
+
+func NewReader(st *store.Store, dataDir string, settings ReaderSettings) *Reader {
 	return &Reader{
 		store:            st,
-		boardPollSeconds: boardPollSeconds,
-		spendLimit5h:     spendLimit5h,
+		dataDir:          dataDir,
+		boardPollSeconds: settings.BoardPollSeconds,
+		spendLimit5h:     settings.SpendLimit5h,
 		spend:            NewSpendCache(),
 	}
 }
@@ -125,7 +140,7 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = now
-	return plan.RulesFor(plan.Daemon{Workflows: config.Workflows()}, in.Obs).Derive(in), nil
+	return plan.Daemon{Workflows: config.Workflows()}.Derive(in), nil
 }
 
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
@@ -182,6 +197,10 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Tabs:             filterTabs(sections, params),
 		BoardPath:        params.BoardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
+		in:               f.in,
+		snap:             f.snap,
+		repos:            f.repos,
+		split:            f.split,
 	}, nil
 }
 

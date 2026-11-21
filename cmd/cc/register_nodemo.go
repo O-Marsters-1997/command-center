@@ -2,4 +2,4 @@
 
 package main
 
-func demoSubcmd([]string) command { return nil }
+func demoCommands() map[string]command { return nil }

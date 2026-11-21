@@ -99,10 +99,10 @@
       <div class="run-log-live" hx-ext="sse" sse-connect="{{.}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
       {{- end}}
     </div>
-    {{- with .Log.Final}}
+    {{- if .Log.Final.IsSome}}
     <section class="run-final" aria-label="Result">
       <h2 class="run-final-label"><span class="glyph glyph-{{$.Row.Glyph}}" data-glyph="{{$.Row.Glyph}}" aria-hidden="true"></span>Result</h2>
-      {{template "logline" .}}
+      {{template "logline" .Log.Final.Unwrap}}
     </section>
     {{- end}}
     {{- with .Ask}}

@@ -1,7 +1,6 @@
 package spend
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -16,11 +15,9 @@ type Interval struct {
 	WeightUSD                        float64
 }
 
-type Weigher func(start, end time.Time) (float64, error)
-
 func Intervals(
-	readings []agentlog.Reading, previous map[agentlog.Window]agentlog.Reading, weigh Weigher,
-) ([]Interval, map[agentlog.Window]agentlog.Reading, error) {
+	readings []agentlog.Reading, previous map[agentlog.Window]agentlog.Reading, requests []agentlog.RequestUsage,
+) []Interval {
 	sorted := slices.Clone(readings)
 	slices.SortFunc(sorted, func(a, b agentlog.Reading) int { return a.At.Compare(b.At) })
 
@@ -34,17 +31,13 @@ func Intervals(
 			continue
 		}
 		if ok && reading.Utilization >= prev.Utilization {
-			weight, err := weigh(prev.At, reading.At)
-			if err != nil {
-				return nil, nil, fmt.Errorf("weigh %s interval: %w", reading.Window, err)
-			}
 			intervals = append(intervals, Interval{
 				Window: reading.Window, Start: prev.At, End: reading.At,
 				UtilizationStart: prev.Utilization, UtilizationEnd: reading.Utilization,
-				WeightUSD: weight,
+				WeightUSD: SumWeight(requests, prev.At, reading.At),
 			})
 		}
 		latest[reading.Window] = reading
 	}
-	return intervals, latest, nil
+	return intervals
 }

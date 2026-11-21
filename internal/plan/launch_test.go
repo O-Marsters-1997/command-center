@@ -17,7 +17,7 @@ func runStep(command bool) plan.Next {
 func TestLaunchPlan(t *testing.T) {
 	t.Parallel()
 
-	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	unlocked := noBlockers
 	blocked := plan.Unlock{Reason: "blocked"}
 
 	tests := []struct {

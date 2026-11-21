@@ -18,11 +18,7 @@ type githubSource struct {
 }
 
 func (s *githubSource) run(ctx context.Context, args ...string) ([]byte, error) {
-	out, err := s.cli.Run(ctx, "", args...)
-	if err != nil {
-		return nil, fmt.Errorf("query github tracker: %w", err)
-	}
-	return out, nil
+	return s.cli.Read(ctx, "", args...)
 }
 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
@@ -103,12 +99,9 @@ type rawIssue struct {
 }
 
 func decodeIssues(raw []byte) ([]rawIssue, error) {
-	decoded, err := gh.Decode[[]rawIssue](raw)
+	decoded, err := gh.DecodePage[rawIssue](raw)
 	if err != nil {
 		return nil, fmt.Errorf("issue list: %w", err)
-	}
-	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues: %w", &gh.FullPageError{Limit: listLimit})
 	}
 	return decoded, nil
 }

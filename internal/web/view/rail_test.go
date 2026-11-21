@@ -14,7 +14,10 @@ import (
 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
-var equateRows = cmpopts.EquateComparable(option.Option[plan.IntentStatus]{})
+var equateRows = cmp.Options{
+	cmpopts.EquateComparable(option.Option[plan.IntentStatus]{}),
+	cmp.AllowUnexported(option.Option[view.LogLine]{}),
+}
 
 func railRow(n, feature string, glyph plan.GlyphWord) view.Row {
 	return view.Row{
@@ -212,7 +215,7 @@ func TestBuildRail(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				row := railRow("3", "billing", plan.GlyphAttention)
-				row.State = plan.AwaitingInput.String()
+				row.State = plan.AwaitingInput
 				row.Detail = "Which database?"
 				row.Verbs = tt.verbs
 
@@ -232,7 +235,7 @@ func TestBuildRail(t *testing.T) {
 		failed := railRow("1", "billing", plan.GlyphFailed)
 		failed.Updated, failed.Last = updated, "Tests are red."
 		asked := railRow("2", "billing", plan.GlyphAttention)
-		asked.State, asked.Detail = plan.AwaitingInput.String(), "Which database?"
+		asked.State, asked.Detail = plan.AwaitingInput, "Which database?"
 		asked.Verbs = []plan.Verb{plan.VerbFollowUp}
 		asked.Updated, asked.Last = updated, "Which database?"
 
@@ -275,7 +278,6 @@ func TestBuildRail(t *testing.T) {
 				row.Verbs = []plan.Verb{plan.VerbRemoveWorktree}
 				row.PendingVerbs = tt.pending
 				row.Refusal = tt.refusal
-				row.Warning = "ready-to-merge on a non-main base (main): would squash into the parent branch"
 
 				item := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
 

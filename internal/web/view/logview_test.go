@@ -424,7 +424,7 @@ func TestBuildLogDetail(t *testing.T) {
 	t.Run("lifts the final answer out of the fold", func(t *testing.T) {
 		t.Parallel()
 		detail := logDetail(view.LogSource{Path: writeRunLog(t, sessionLog), TicketURL: "x"}, view.LogAll)
-		if detail.Final == nil || detail.Final.Kind != "say" {
+		if detail.Final.IsNone() || detail.Final.Unwrap().Kind != "say" {
 			t.Errorf("BuildLogDetail(session).Final = %+v, want the closing prose", detail.Final)
 		}
 		for _, item := range detail.Phases[1].Items {
@@ -436,7 +436,7 @@ func TestBuildLogDetail(t *testing.T) {
 		live := sessionLog[:strings.LastIndex(strings.TrimSuffix(sessionLog, "\n"), "\n")+1]
 		source := view.LogSource{Path: writeRunLog(t, live), Streaming: true, TicketURL: "x"}
 		alive := logDetail(source, view.LogAll)
-		if alive.Final != nil {
+		if alive.Final.IsSome() {
 			t.Errorf("BuildLogDetail(live session).Final = %+v, want none", alive.Final)
 		}
 	})

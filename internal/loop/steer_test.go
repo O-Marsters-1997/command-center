@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 type stubbornRunner struct{ *runnertest.Runner }
@@ -81,19 +82,14 @@ func newSteerFixture(t *testing.T, wrap func(*runnertest.Runner) runner.Runner) 
 
 func (f *steerFixture) send(t *testing.T, text string) {
 	t.Helper()
-	_, err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	storetest.Verb(t, f.store, storepkg.VerbRequest{
 		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: testAt,
 	})
-	if err != nil {
-		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
-	}
 }
 
 func (f *steerFixture) tick(t *testing.T) {
 	t.Helper()
-	if err := f.loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce() error = %v", err)
-	}
+	runOnce(t, f.loop)
 }
 
 func (f *steerFixture) pendingFollowUps(t *testing.T) int {
@@ -126,16 +122,16 @@ func TestSteer(t *testing.T) {
 		if got := f.pendingFollowUps(t); got != 0 {
 			t.Errorf("pending follow-ups = %d, want 0", got)
 		}
-		ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
+		runs, err := f.store.SessionRunsForTicket(t.Context(), f.ticket.URL)
 		if err != nil {
-			t.Fatalf("RunIDsForTicket: %v", err)
+			t.Fatalf("SessionRunsForTicket: %v", err)
 		}
-		if len(ids) != 2 {
-			t.Fatalf("RunIDsForTicket() = %v, want the interrupted run and its resume", ids)
+		if len(runs) != 2 {
+			t.Fatalf("SessionRunsForTicket() = %+v, want the interrupted run and its resume", runs)
 		}
-		first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
+		first, err := f.store.RunDetails(t.Context(), plan.RunID(runs[0].ID))
 		if err != nil {
-			t.Fatalf("RunDetails(%d): %v", ids[0], err)
+			t.Fatalf("RunDetails(%d): %v", runs[0].ID, err)
 		}
 		if first.Outcome != option.Some(plan.OutcomeContinued) {
 			t.Errorf("interrupted run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)

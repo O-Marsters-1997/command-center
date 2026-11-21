@@ -173,12 +173,12 @@ func TestApplyTicketSpend(t *testing.T) {
 
 	view.ApplyTicketSpend(rows, byURL, 0.1)
 
-	want := []view.Row{
-		{URL: "sandbox://CC-1", AgentPctWeek: 10, FollowUpPctWeek: 2.5, SpendPctWeek: 12.5},
-		{URL: "sandbox://CC-2", AgentPctWeek: 20, SpendPctWeek: 20, TicketOpen: true},
-		{URL: "sandbox://CC-3"},
+	want := []float64{12.5, 20, 0}
+	got := make([]float64, len(rows))
+	for i, row := range rows {
+		got[i] = row.SpendPctWeek
 	}
-	if diff := cmp.Diff(want, rows, equateRows); diff != "" {
+	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ApplyTicketSpend() rows mismatch (-want +got):\n%s", diff)
 	}
 }

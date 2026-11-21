@@ -7,7 +7,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/verdict"
 )
@@ -34,7 +33,7 @@ const (
 type RepoSettings = plan.RepoSettings
 
 func DefaultRepoSettings() RepoSettings {
-	return RepoSettings{Tracker: string(tracker.GitHub)}
+	return RepoSettings{Tracker: plan.TrackerGitHub}
 }
 
 // SettingsRef is the ref callers read SettingsFile from, never a branch or worktree.
@@ -65,7 +64,7 @@ func ParseRepoSettings(body string) (RepoSettings, error) {
 		return RepoSettings{}, fmt.Errorf("decode repo settings: %w", err)
 	}
 	if settings.Tracker == "" {
-		settings.Tracker = string(tracker.GitHub)
+		settings.Tracker = plan.TrackerGitHub
 	}
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
 		key := undecoded[0]

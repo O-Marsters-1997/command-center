@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -143,9 +142,9 @@ func (s SessionPage) Empty() bool {
 	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
 }
 
-func (s SessionPage) Running() bool { return s.Row.State == plan.Running.String() }
+func (s SessionPage) Running() bool { return s.Row.State == plan.Running }
 
-func (s SessionPage) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
+func (s SessionPage) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput }
 
 type Turn struct {
 	You string
@@ -201,7 +200,7 @@ func sessionCrumbs(row Row) []Crumb {
 		crumbs = append(crumbs, projectCrumb(row.Mark()))
 	}
 	if row.Feature != "" {
-		crumbs = append(crumbs, Crumb{Label: row.Feature, Path: "/f/" + url.PathEscape(row.Feature)})
+		crumbs = append(crumbs, Crumb{Label: row.Feature, Path: FeaturePath(row.Feature)})
 	}
 	return append(crumbs, Crumb{Label: cmp.Or(row.Title, row.Ticket())})
 }
@@ -221,13 +220,9 @@ type RawLog struct {
 func (r *Reader) Session(
 	ctx context.Context, now time.Time, ref SessionRef, raw option.Option[RawFilter],
 ) (SessionPage, error) {
-	board, err := r.Board(ctx, now, Params{})
+	board, row, err := r.sessionRow(ctx, now, ref)
 	if err != nil {
-		return SessionPage{}, fmt.Errorf("load board: %w", err)
-	}
-	row, ok := board.rowFor(ref)
-	if !ok {
-		return SessionPage{}, ErrSessionNotFound
+		return SessionPage{}, err
 	}
 	ticketURL := row.URL
 
@@ -241,11 +236,7 @@ func (r *Reader) Session(
 			pendingMessages = append(pendingMessages, store.DecodeFollowUpPayload(intent.Payload).Message)
 		}
 	}
-	snap, err := r.Snapshot(ctx, now)
-	if err != nil {
-		return SessionPage{}, fmt.Errorf("load snapshot: %w", err)
-	}
-	entry, _ := snap.Entry(plan.TicketURL(ticketURL))
+	entry, _ := board.snap.Entry(plan.TicketURL(ticketURL))
 	model := cmp.Or(entry.Ticket.Choice.Model, config.AgentModel)
 	models := config.AgentModels()
 	if !slices.Contains(models, model) {
@@ -257,10 +248,6 @@ func (r *Reader) Session(
 	chrome.Home = false
 	chrome.titled(row.Ticket())
 	chrome.Crumbs = sessionCrumbs(row)
-	prURL := ""
-	if row.PRNumber > 0 {
-		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)
-	}
 	actions := slices.Clone(row.Buttons)
 	for i := range actions {
 		actions[i].Label = string(actions[i].Verb)
@@ -295,12 +282,8 @@ func (r *Reader) Session(
 	if raw.IsNone() {
 		turns = buildTurns(row, runs)
 	}
-	fits, err := r.store.FitFactors(ctx, now)
-	if err != nil {
-		return SessionPage{}, fmt.Errorf("load fit factors: %w", err)
-	}
 	steps, selected := buildSteps(runs, stepInputs{
-		live: worked, alive: row.Alive, factor: fits[agentlog.SevenDay].Factor, pick: ref.Run,
+		live: worked, alive: row.Alive, factor: board.split[agentlog.SevenDay].Fit.Factor, pick: ref.Run,
 	})
 	picked := slices.IndexFunc(runs, func(run store.SessionRun) bool { return plan.RunID(run.ID) == ref.Run })
 	if picked >= 0 && raw.IsNone() {
@@ -340,7 +323,7 @@ func (r *Reader) Session(
 		ActionsPath:    self + "/actions",
 		Actions:        actions,
 		Callout:        row.Glyph == plan.GlyphFailed || row.Glyph == plan.GlyphAttention,
-		PRURL:          prURL,
+		PRURL:          row.PRURL,
 		Chrome:         chrome,
 		Row:            row,
 		Stack:          buildStack(board, row),

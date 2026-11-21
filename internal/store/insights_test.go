@@ -13,35 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
-func insightsTicket(t *testing.T, store *storepkg.Store, url, repo, feature string) {
-	t.Helper()
-	storetest.Tickets(t, store, storepkg.Ticket{URL: url, Repo: repo, Branch: "branch-" + url, Feature: feature})
-}
-
-func disposeInsightsRun(
-	t *testing.T, store *storepkg.Store, ticketURL string, kind plan.RunKind, endedAt time.Time, costUSD float64,
-) {
-	t.Helper()
-	ctx := t.Context()
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticketURL, Kind: kind, BaselineSHA: "deadbeef", PromptHash: "hash-" + ticketURL,
-	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton: %v", err)
-	}
-	if err := store.RecordDisposition(ctx, storepkg.Disposition{
-		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.None[int](),
-		Cost: option.Some(costUSD), EndedAt: endedAt,
-	}); err != nil {
-		t.Fatalf("RecordDisposition: %v", err)
-	}
-}
-
-func mergeInsightsTicket(t *testing.T, store *storepkg.Store, ticketURL string, mergedAt time.Time) {
-	t.Helper()
-	appendEvents(t, store, storepkg.Event{At: mergedAt, TicketURL: ticketURL, Kind: storepkg.EventPRMerged})
-}
-
 func withdraw(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time, merged bool) {
 	t.Helper()
 	if _, err := store.WithdrawTicket(t.Context(), ticketURL, at, merged); err != nil {
@@ -80,10 +51,10 @@ func TestStore_MergedTicketSpend(t *testing.T) {
 	t.Run("sums every run kind", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", mergedAt.Add(-2*time.Hour), 1.00)
-		disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(-2*time.Hour), 0.10)
-		mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", mergedAt.Add(-2*time.Hour), 1.00)
+		storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(-2*time.Hour), 0.10)
+		storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
 
 		points := mergedSpend(t, store)
 		if len(points) != 1 {
@@ -97,10 +68,10 @@ func TestStore_MergedTicketSpend(t *testing.T) {
 	t.Run("excludes runs disposed after the merge", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", mergedAt.Add(-time.Hour), 1.00)
-		disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 5.00)
-		mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", mergedAt.Add(-time.Hour), 1.00)
+		storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 5.00)
+		storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
 
 		if points := mergedSpend(t, store); len(points) != 1 || points[0].TotalUSD() != 1.00 {
 			t.Errorf("MergedTicketSpend() = %+v, want the one pre-merge run only", points)
@@ -110,8 +81,8 @@ func TestStore_MergedTicketSpend(t *testing.T) {
 	t.Run("excludes unmerged tickets", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", mergedAt, 3.00)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", mergedAt, 3.00)
 		withdraw(t, store, "sandbox://CC-1", mergedAt, false)
 
 		if points := mergedSpend(t, store); len(points) != 0 {
@@ -127,10 +98,10 @@ func TestStore_BoardTicketSpend(t *testing.T) {
 	t.Run("a merged ticket counts only pre-merge runs", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", at.Add(-time.Hour), 1.00)
-		disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", at.Add(time.Hour), 5.00)
-		mergeInsightsTicket(t, store, "sandbox://CC-1", at)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", at.Add(-time.Hour), 1.00)
+		storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", at.Add(time.Hour), 5.00)
+		storetest.Merged(t, store, "sandbox://CC-1", at)
 
 		got, ok := boardSpend(t, store, "")["sandbox://CC-1"]
 		if !ok || !got.Merged || got.TotalUSD() != 1.00 {
@@ -141,9 +112,9 @@ func TestStore_BoardTicketSpend(t *testing.T) {
 	t.Run("an open ticket sums its spend so far", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", at, 1.00)
-		disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", at, 0.50)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", at, 1.00)
+		storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", at, 0.50)
 
 		got, ok := boardSpend(t, store, "")["sandbox://CC-1"]
 		if !ok || got.Merged || got.AgentUSD != 1.00 || got.FollowUpUSD != 0.50 {
@@ -154,10 +125,10 @@ func TestStore_BoardTicketSpend(t *testing.T) {
 	t.Run("scopes by repo", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
-		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-		insightsTicket(t, store, "sandbox://CC-2", "cc-other", "feat-b")
-		disposeInsightsRun(t, store, "sandbox://CC-1", "agent", at, 1.00)
-		disposeInsightsRun(t, store, "sandbox://CC-2", "agent", at, 9.00)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		storetest.FeatureTicket(t, store, "sandbox://CC-2", "cc-other", "feat-b")
+		storetest.Disposed(t, store, "sandbox://CC-1", "agent", at, 1.00)
+		storetest.Disposed(t, store, "sandbox://CC-2", "agent", at, 9.00)
 
 		byURL := boardSpend(t, store, "cc-sandbox")
 		_, hasCC1 := byURL["sandbox://CC-1"]
@@ -173,13 +144,13 @@ func TestStore_WithdrawnTicketWaste(t *testing.T) {
 	store := openStore(t)
 	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 
-	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", day, 2.00)
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.Disposed(t, store, "sandbox://CC-1", "agent", day, 2.00)
 	withdraw(t, store, "sandbox://CC-1", day, false)
 
-	insightsTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
-	disposeInsightsRun(t, store, "sandbox://CC-2", "agent", day.Add(-time.Hour), 9.00)
-	mergeInsightsTicket(t, store, "sandbox://CC-2", day)
+	storetest.FeatureTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
+	storetest.Disposed(t, store, "sandbox://CC-2", "agent", day.Add(-time.Hour), 9.00)
+	storetest.Merged(t, store, "sandbox://CC-2", day)
 	withdraw(t, store, "sandbox://CC-2", day, true)
 
 	waste, err := store.WithdrawnTicketWaste(t.Context(), june10)
@@ -199,12 +170,12 @@ func TestStore_MergedTicketWorkflowSpend_Rework(t *testing.T) {
 	store := openStore(t)
 	mergedAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 	openedAt := mergedAt.Add(-4 * time.Hour)
-	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 
-	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", openedAt.Add(-time.Hour), 1)
-	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", openedAt.Add(time.Hour), 1)
-	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", openedAt.Add(2*time.Hour), 1)
-	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 1)
+	storetest.Disposed(t, store, "sandbox://CC-1", "agent", openedAt.Add(-time.Hour), 1)
+	storetest.Disposed(t, store, "sandbox://CC-1", "agent", openedAt.Add(time.Hour), 1)
+	storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", openedAt.Add(2*time.Hour), 1)
+	storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 1)
 	verdict := func(at time.Time, detail string) storepkg.Event {
 		return storepkg.Event{At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventVerdictTransition, Detail: detail}
 	}
@@ -214,7 +185,7 @@ func TestStore_MergedTicketWorkflowSpend_Rework(t *testing.T) {
 		verdict(openedAt.Add(time.Hour), "ci_failed: Tests"),
 		verdict(openedAt.Add(90*time.Minute), "review_me: green"),
 	)
-	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+	storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
 
 	got, err := store.MergedTicketWorkflowSpend(t.Context(), june10)
 	if err != nil {
@@ -231,14 +202,14 @@ func TestStore_WithdrawnWorkflowTickets(t *testing.T) {
 	store := openStore(t)
 	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 
-	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", day, 2.00)
-	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", day, 2.00)
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.Disposed(t, store, "sandbox://CC-1", "agent", day, 2.00)
+	storetest.Disposed(t, store, "sandbox://CC-1", "follow_up", day, 2.00)
 	withdraw(t, store, "sandbox://CC-1", day, false)
 
-	insightsTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
-	disposeInsightsRun(t, store, "sandbox://CC-2", "agent", day.Add(-time.Hour), 9.00)
-	mergeInsightsTicket(t, store, "sandbox://CC-2", day)
+	storetest.FeatureTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
+	storetest.Disposed(t, store, "sandbox://CC-2", "agent", day.Add(-time.Hour), 9.00)
+	storetest.Merged(t, store, "sandbox://CC-2", day)
 	withdraw(t, store, "sandbox://CC-2", day, true)
 
 	got, err := store.WithdrawnWorkflowTickets(t.Context(), june10)
@@ -256,12 +227,12 @@ func TestStore_MergedTicketWorkflowSpend(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	mergedAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 
 	type metrics = option.Option[agentlog.RunMetrics]
 	dispose := func(step plan.StepName, hash string, cost float64, m metrics, at time.Time) {
 		t.Helper()
-		runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 			Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "h",
 			Step: step, Workflow: "wf", WorkflowHash: hash,
 		})
@@ -283,7 +254,7 @@ func TestStore_MergedTicketWorkflowSpend(t *testing.T) {
 	dispose("implement", "aaa", 2, measured(time.Minute, 3), mergedAt.Add(-2*time.Hour))
 	dispose("review", "bbb", 4, option.None[agentlog.RunMetrics](), mergedAt.Add(-time.Hour))
 	dispose("implement", "aaa", 8, measured(time.Minute, 1), mergedAt.Add(time.Hour))
-	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+	storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
 
 	got, err := store.MergedTicketWorkflowSpend(ctx, june10)
 	if err != nil {

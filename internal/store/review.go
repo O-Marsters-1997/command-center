@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -47,21 +46,14 @@ func (s *Store) RequestChanges(
 	if err != nil {
 		return fmt.Errorf("request changes on %s: %w", ticket, err)
 	}
-	raw, err := json.Marshal(encoded)
-	if err != nil {
-		return fmt.Errorf("encode follow-up intent payload for %s: %w", ticket, err)
-	}
 	err = s.inTx(ctx, func(q *ccdb.Queries) error {
 		if err := q.DeleteReviewComments(ctx, string(ticket)); err != nil {
 			return fmt.Errorf("delete review comments: %w", err)
 		}
-		if _, err := q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
-			At: at.UTC(), TicketID: string(ticket), Verb: string(plan.VerbFollowUp), Payload: raw,
-			QueuedBy: string(plan.QueuedByOwner),
-		}); err != nil {
-			return fmt.Errorf("queue follow-up intent: %w", err)
-		}
-		return nil
+		_, err := queueVerbIntent(ctx, q, VerbRequest{
+			Ticket: string(ticket), Verb: plan.VerbFollowUp, Payload: encoded, At: at,
+		})
+		return err
 	})
 	if err != nil {
 		return fmt.Errorf("request changes on %s: %w", ticket, err)

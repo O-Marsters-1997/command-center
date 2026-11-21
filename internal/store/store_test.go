@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/url"
@@ -34,9 +35,9 @@ func openStore(t *testing.T) *storepkg.Store {
 	return cctest.Store(t)
 }
 
-func openStoreAt(t *testing.T, dsn string, opts ...storepkg.Option) *storepkg.Store {
+func openStoreAt(t *testing.T, dsn string, opts ...storepkg.OpenOption) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(dsn, append([]storepkg.Option{storepkg.MaxOpenConns(4)}, opts...)...)
+	store, err := storepkg.OpenStore(dsn, append([]storepkg.OpenOption{storepkg.MaxOpenConns(4)}, opts...)...)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestOpenStore(t *testing.T) {
 		if _, err := raw.ExecContext(t.Context(), "DROP TABLE goose_db_version"); err != nil {
 			t.Fatalf("DROP TABLE goose_db_version: %v", err)
 		}
-		store := openStoreAt(t, dsn)
+		store := openStoreAt(t, dsn, storepkg.SkipMigrate())
 		if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
 			{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 		}); err != nil {
@@ -284,7 +285,7 @@ func TestStore_WithdrawTicket(t *testing.T) {
 		if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
 			t.Fatalf("ApplyLaunchIntents: %v", err)
 		}
-		runID, err := store.InsertRunSkeleton(
+		runID, _, err := store.InsertSessionRunSkeleton(
 			ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
 		if err != nil {
 			t.Fatalf("InsertRunSkeleton: %v", err)
@@ -321,12 +322,12 @@ func TestStore_WithdrawTicket(t *testing.T) {
 		if got := tips[plan.TicketURL(ticket.URL)]; got != "deadbeef" {
 			t.Errorf("LastPushedTips()[CC-1] after WithdrawTicket = %q, want deadbeef", got)
 		}
-		memberships, err := store.LaunchMemberships(ctx)
+		in, err := store.PlanInput(ctx)
 		if err != nil {
-			t.Fatalf("LaunchMemberships: %v", err)
+			t.Fatalf("PlanInput: %v", err)
 		}
-		if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
-			t.Errorf("LaunchMemberships() after WithdrawTicket = %+v, want CC-1's membership kept", memberships)
+		if _, ok := in.Memberships[plan.TicketURL(ticket.URL)]; !ok {
+			t.Errorf("PlanInput().Memberships after WithdrawTicket = %+v, want CC-1's membership kept", in.Memberships)
 		}
 	})
 
@@ -512,4 +513,18 @@ func TestStore_TicketEventsAfter(t *testing.T) {
 			t.Errorf("paged TicketEventsAfter kinds mismatch (-want +got):\n%s", diff)
 		}
 	})
+}
+
+func TestStore_IncrementCheckingTicks_wrapsOnce(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	err := store.IncrementCheckingTicks(ctx, []plan.TicketURL{"sandbox://CC-1"})
+	if err == nil {
+		t.Fatal("IncrementCheckingTicks(cancelled ctx) error = nil, want one")
+	}
+	if got := strings.Count(fmt.Sprint(err), "checking_ticks"); got != 1 {
+		t.Errorf("IncrementCheckingTicks(cancelled ctx) error = %q, names checking_ticks %d times, want 1", err, got)
+	}
 }
