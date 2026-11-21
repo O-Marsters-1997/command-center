@@ -56,7 +56,7 @@ func recordUsage(
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("with store: %w", err)
+		return fmt.Errorf("record usage readings: %w", err)
 	}
 	return nil
 }

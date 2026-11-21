@@ -4,11 +4,15 @@ package main
 
 import (
 	"github.com/O-Marsters-1997/command-center/e2e/register"
+	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
-func init() {
-	seams = register.Seams()
+func e2eCommands() map[string]command {
+	cmds := map[string]command{}
 	for name, cmd := range register.Commands() {
-		subcommands[name] = cmd
+		cmds[name] = cmd
 	}
+	return cmds
 }
+
+func appSeams() app.Seams { return register.Seams() }

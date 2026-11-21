@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,13 +17,15 @@ import (
 
 type command func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string) error
 
-var (
-	subcommands = map[string]command{
+func subcommands() map[string]command {
+	cmds := map[string]command{
 		"open":         openSubcmd,
 		"record-usage": recordUsageSubcmd,
 	}
-	seams app.Seams
-)
+	maps.Copy(cmds, e2eCommands())
+	maps.Copy(cmds, demoCommands())
+	return cmds
+}
 
 func main() {
 	configPath := flag.String("config", "cc/config.toml", "path to config file")
@@ -39,7 +42,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cmd, ok := subcommands[flag.Arg(0)]
+	cmd, ok := subcommands()[flag.Arg(0)]
 	if !ok {
 		cmd = run
 	}
@@ -52,7 +55,7 @@ func main() {
 func run(ctx context.Context, logger *slog.Logger, configPath string, env config.Env, _ []string) (err error) {
 	logger.Info("loading config", "path", configPath)
 
-	instance, err := app.New(logger, configPath, env, seams)
+	instance, err := app.New(logger, configPath, env, appSeams())
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}

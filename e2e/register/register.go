@@ -76,7 +76,7 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("with store: %w", err)
+		return fmt.Errorf("queue import: %w", err)
 	}
 	return nil
 }
@@ -97,19 +97,25 @@ func request(
 	}
 	method, path := rest[0], rest[1]
 
+	spec := requestSpec{method: method, path: path, form: *form, htmx: *htmx, origin: *origin}
 	err := app.WithStore(configPath, env, func(cfg config.Config, st *store.Store) error {
-		return send(ctx, logger, cfg, st, method, path, *form, *htmx, *origin)
+		return send(ctx, logger, cfg, st, spec)
 	})
 	if err != nil {
-		return fmt.Errorf("with store: %w", err)
+		return fmt.Errorf("send request: %w", err)
 	}
 	return nil
 }
 
+type requestSpec struct {
+	method, path, form, origin string
+	htmx                       bool
+}
+
 func send(
-	ctx context.Context, logger *slog.Logger, cfg config.Config, st *store.Store,
-	method, path, form string, htmx bool, origin string,
+	ctx context.Context, logger *slog.Logger, cfg config.Config, st *store.Store, spec requestSpec,
 ) (err error) {
+	method, path, form, htmx, origin := spec.method, spec.path, spec.form, spec.htmx, spec.origin
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)

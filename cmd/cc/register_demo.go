@@ -16,9 +16,11 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/demo"
 )
 
-func init() {
-	subcommands["demo"] = func(ctx context.Context, logger *slog.Logger, _ string, _ config.Env, args []string) error {
-		return runDemo(ctx, logger, args)
+func demoCommands() map[string]command {
+	return map[string]command{
+		"demo": func(ctx context.Context, logger *slog.Logger, _ string, _ config.Env, args []string) error {
+			return runDemo(ctx, logger, args)
+		},
 	}
 }
 
