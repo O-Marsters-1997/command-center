@@ -174,6 +174,35 @@ func scopeRailRows(rows []Row, params RailParams) []Row {
 	return rowsIn(groups)
 }
 
+var intentWords = map[plan.Verb]struct{ action, running string }{
+	plan.VerbKill:           {"Kill", "Killing…"},
+	plan.VerbReRun:          {"Re-run", "Re-running…"},
+	plan.VerbRetryPush:      {"Retry push", "Retrying push…"},
+	plan.VerbRemoveWorktree: {"Remove worktree", "Removing worktree…"},
+	plan.VerbCancel:         {"Disarm", "Disarming…"},
+	plan.VerbRefresh:        {"Refresh", "Refreshing…"},
+	plan.VerbAbort:          {"Abort", "Aborting…"},
+	plan.VerbResolve:        {"Resolve conflict", "Resolving…"},
+	plan.VerbFollowUp:       {"Follow-up", "Following up…"},
+	plan.VerbRaise:          {"Raise", "Raising…"},
+	plan.VerbAdoptHead:      {"Adopt head", "Adopting head…"},
+}
+
+func intentLabel(st plan.IntentStatus) string {
+	words, ok := intentWords[st.Record.Verb]
+	if !ok {
+		words.action = string(st.Record.Verb)
+		words.running = words.action + "…"
+	}
+	switch {
+	case st.Outcome == plan.IntentFailed:
+		return words.action + " failed"
+	case st.Phase == plan.PhaseRunning:
+		return words.running
+	}
+	return words.action + " queued"
+}
+
 func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 	rows = scopeRailRows(rows, params)
 	scope := Params{Project: params.Project}
@@ -197,6 +226,13 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			}
 		}
 		it.Pending = it.Verb != "" && slices.Contains(r.PendingVerbs, it.Verb)
+		if r.Intent.IsSome() {
+			st := r.Intent.Unwrap()
+			it.Glyph, it.Label = st.Glyph, intentLabel(st)
+			if st.Outcome == plan.IntentFailed {
+				it.Detail = st.Detail
+			}
+		}
 		if r.Alive && r.Glyph == plan.GlyphRunning {
 			it.Started = now.Add(-time.Duration(r.ElapsedSeconds) * time.Second).UTC().Format(time.RFC3339)
 		}

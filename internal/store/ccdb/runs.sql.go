@@ -218,7 +218,7 @@ SELECT id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
   COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
   COALESCE(ticket_state, '')::text AS ticket_state
 FROM intents
-WHERE at >= $1 OR finished_at IS NULL
+WHERE verb <> 'edit_ticket' AND (at >= $1 OR finished_at IS NULL)
 ORDER BY id DESC
 `
 
@@ -246,6 +246,66 @@ func (q *Queries) IntentHistory(ctx context.Context, since time.Time) ([]IntentH
 	var items []IntentHistoryRow
 	for rows.Next() {
 		var i IntentHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Verb,
+			&i.QueuedBy,
+			&i.At,
+			&i.HoldUntil,
+			&i.ConsumedAt,
+			&i.FinishedAt,
+			&i.Outcome,
+			&i.Detail,
+			&i.RunID,
+			&i.TicketState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const latestRowIntents = `-- name: LatestRowIntents :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
+  COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
+  COALESCE(ticket_state, '')::text AS ticket_state
+FROM intents
+WHERE verb = ANY(string_to_array($1::text, ','))
+ORDER BY ticket_id, id DESC
+`
+
+type LatestRowIntentsRow struct {
+	ID          int64
+	TicketID    string
+	Verb        string
+	QueuedBy    string
+	At          time.Time
+	HoldUntil   sql.NullTime
+	ConsumedAt  sql.NullTime
+	FinishedAt  sql.NullTime
+	Outcome     string
+	Detail      string
+	RunID       sql.NullInt64
+	TicketState string
+}
+
+func (q *Queries) LatestRowIntents(ctx context.Context, verbs string) ([]LatestRowIntentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, latestRowIntents, verbs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LatestRowIntentsRow
+	for rows.Next() {
+		var i LatestRowIntentsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TicketID,

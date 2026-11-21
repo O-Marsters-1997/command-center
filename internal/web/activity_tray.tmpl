@@ -1,0 +1,57 @@
+{{define "trayButtonInner"}}<span class="glyph" data-glyph="{{if .InProgress}}{{.Glyph}}{{else}}done{{end}}"></span><span>Activity</span>{{with .InProgress}}<span class="sidebar-count">{{len .}}</span>{{end}}{{end}}
+
+{{define "trayButton"}}<button type="button" id="activity-button" class="btn btn-ghost btn-sm" popovertarget="activity-tray" aria-label="Activity{{with .InProgress}}, {{len .}} in progress{{end}}">{{template "trayButtonInner" .}}</button>{{end}}
+
+{{define "trayBody" -}}
+{{- if .InProgress}}
+<section aria-label="In progress">
+  <h2 class="rail-heading">In progress</h2>
+  <ul class="m-0 flex list-none flex-col gap-1 p-0">
+    {{- range .InProgress}}
+    <li class="flex items-center gap-2">
+      <span class="glyph" data-glyph="{{.Glyph}}"></span>
+      <span class="min-w-0 flex-1">
+        {{- if .Path}}<a href="{{.Path}}" {{template "nav" .Path}}>{{.Action}} <span class="font-mono">{{.Ref}}</span></a>{{else}}{{.Action}} <span class="font-mono">{{.Ref}}</span>{{end}}
+        {{- if .Auto}} <span class="flag">auto</span>{{end}}
+        <span class="text-muted">{{.Phase}} · {{template "age" .Since}}</span>
+      </span>
+      {{- if .UndoUntil.IsSome}}
+      <form method="post" action="/verb/undo" hx-post="/verb/undo" hx-target="#activity-tray-body" hx-swap="innerHTML" hx-sync="#activity-tray-body:replace" hx-disabled-elt="find button">
+        <input type="hidden" name="ticket" value="{{.Ticket}}">
+        <input type="hidden" name="verb" value="{{.Verb}}">
+        <input type="hidden" name="intent" value="{{.ID}}">
+        <input type="hidden" name="from" value="tray">
+        <button type="submit" id="tray-undo-{{.ID}}" class="btn btn-ghost btn-sm">Undo</button>
+      </form>
+      {{- end}}
+    </li>
+    {{- end}}
+  </ul>
+</section>
+{{- else}}
+<p class="text-muted m-0">Nothing in progress</p>
+{{- end}}
+<section aria-label="Recent">
+  <h2 class="rail-heading">Recent</h2>
+  <ul class="m-0 flex list-none flex-col gap-1 p-0">
+    {{- range .Recent}}
+    <li><time datetime="{{.At.UTC.Format "2006-01-02T15:04:05Z07:00"}}" class="text-muted">{{.At.Format "15:04"}}</time> {{.Action}} <span class="font-mono">{{.Ref}}</span> <span class="text-muted">{{.Phase}}</span></li>
+    {{- end}}
+  </ul>
+</section>
+<a href="/activity" {{template "nav" "/activity"}}>All activity &rsaquo;</a>
+{{- end}}
+
+{{define "trayFragment" -}}
+{{template "trayBody" .}}
+<button type="button" id="activity-button" class="btn btn-ghost btn-sm" popovertarget="activity-tray" hx-swap-oob="true" aria-label="Activity{{with .InProgress}}, {{len .}} in progress{{end}}">{{template "trayButtonInner" .}}</button>
+{{- end}}
+
+{{define "tray" -}}
+{{template "trayButton" .}}
+<div id="activity-tray" popover class="fixed inset-auto right-4 top-12 m-0 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border border-border bg-surface p-3 text-fg">
+  <div id="activity-tray-body" class="flex flex-col gap-3" hx-get="/activity/tray" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="innerHTML">
+    {{- template "trayBody" .}}
+  </div>
+</div>
+{{- end}}

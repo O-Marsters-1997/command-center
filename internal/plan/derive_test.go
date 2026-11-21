@@ -50,6 +50,59 @@ func TestRules_Derive(t *testing.T) {
 	t.Run("a chain does not serialise past the holding peer", deriveChainHeldByOnePeer)
 	t.Run("draft reason", deriveDraftReason)
 	t.Run("workflow pass", deriveWorkflowPass)
+	t.Run("intent", deriveIntent)
+}
+
+func deriveIntent(t *testing.T) {
+	t.Parallel()
+
+	tk := ticket("1", "cc-1-first")
+	derived := func(rec plan.IntentRecord) plan.Entry {
+		rec.Ticket = tk.URL
+		in := plan.Input{
+			Tickets: []plan.Ticket{tk},
+			Latest:  map[plan.TicketURL]plan.IntentRecord{tk.URL: rec},
+		}
+		return entry(t, derive(plan.Rules{}, in), tk.URL)
+	}
+	state := derived(plan.IntentRecord{}).State
+	at := time.Date(2026, 8, 20, 11, 0, 0, 0, time.UTC)
+	queued := plan.IntentRecord{ID: 1, Verb: plan.VerbResolve, At: at}
+	failed := plan.IntentRecord{
+		ID: 1, Verb: plan.VerbRefresh, At: at, ConsumedAt: option.Some(at), FinishedAt: option.Some(at),
+		Outcome: plan.IntentFailed, Detail: "dirty", TicketState: state,
+	}
+	moved := failed
+	moved.TicketState = plan.Failed
+	done := failed
+	done.Outcome = plan.IntentDone
+	withdrawn := failed
+	withdrawn.Outcome = plan.IntentWithdrawn
+
+	tests := []struct {
+		name  string
+		rec   plan.IntentRecord
+		want  bool
+		glyph plan.GlyphWord
+	}{
+		{name: "a queued verb shows pending", rec: queued, want: true, glyph: plan.GlyphPending},
+		{name: "a failed verb shows while the state has not moved", rec: failed, want: true, glyph: plan.GlyphFailed},
+		{name: "a failed verb clears once the ticket's state moves", rec: moved},
+		{name: "a done verb clears", rec: done},
+		{name: "a withdrawn verb clears", rec: withdrawn},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := derived(tt.rec).Intent
+			if got.IsSome() != tt.want {
+				t.Fatalf("Entry.Intent present = %t, want %t", got.IsSome(), tt.want)
+			}
+			if tt.want && got.Unwrap().Glyph != tt.glyph {
+				t.Errorf("Entry.Intent glyph = %q, want %q", got.Unwrap().Glyph, tt.glyph)
+			}
+		})
+	}
 }
 
 func deriveWorkflowPass(t *testing.T) {

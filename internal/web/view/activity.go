@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -392,6 +393,103 @@ func (r *Reader) intentRun(
 		return option.None[plan.RunSummary](), fmt.Errorf("load run of intent %d: %w", rec.ID, err)
 	}
 	return option.Some(plan.RunSummary{ID: id, Outcome: d.Outcome, EndedAt: rec.FinishedAt}), nil
+}
+
+const (
+	trayRecent  = 8
+	trayHistory = 24 * time.Hour
+)
+
+type Tray struct {
+	Glyph      plan.GlyphWord
+	InProgress []TrayItem
+	Recent     []TrayLine
+}
+
+type TrayItem struct {
+	ID        int64
+	Ticket    string
+	Verb      plan.Verb
+	Action    string
+	Ref       string
+	Phase     string
+	Glyph     plan.GlyphWord
+	Since     Age
+	UndoUntil option.Option[time.Time]
+	Auto      bool
+	Path      string
+}
+
+type TrayLine struct {
+	At     time.Time
+	Action string
+	Ref    string
+	Phase  string
+}
+
+func buildTray(records []plan.IntentRecord, runs map[plan.TicketURL]plan.RunSummary, now time.Time) Tray {
+	var tray Tray
+	var lines []TrayLine
+	for _, rec := range records {
+		run := option.None[plan.RunSummary]()
+		if s, ok := runs[rec.Ticket]; ok && rec.Run.IsSome() && s.ID == rec.Run.Unwrap() {
+			run = option.Some(s)
+		}
+		st := plan.StatusOf(rec, run, now)
+		ticket := string(rec.Ticket)
+		ref := trayRef(ticket)
+		for _, step := range plan.Trail(st) {
+			lines = append(lines, TrayLine{At: step.At, Action: string(rec.Verb), Ref: ref, Phase: stepPhase(step)})
+		}
+		if st.Phase != plan.PhaseQueued && st.Phase != plan.PhaseHeld && st.Phase != plan.PhaseRunning {
+			continue
+		}
+		item := TrayItem{
+			ID: rec.ID, Ticket: ticket, Verb: rec.Verb, Action: string(rec.Verb), Ref: ref,
+			Phase: phaseLabel(st.Phase), Glyph: st.Glyph, Auto: rec.QueuedBy == plan.QueuedByLoop,
+			Since: Age{Age: shortAge(now.Sub(rec.At)), Stamp: rec.At.UTC().Format(time.RFC3339)},
+			Path:  SessionPath(ticket),
+		}
+		if st.Phase == plan.PhaseHeld {
+			item.UndoUntil = option.Some(rec.HoldUntil)
+		}
+		tray.InProgress = append(tray.InProgress, item)
+		if tray.Glyph != plan.GlyphRunning {
+			tray.Glyph = st.Glyph
+		}
+	}
+	slices.SortStableFunc(lines, func(a, b TrayLine) int { return b.At.Compare(a.At) })
+	tray.Recent = lines[:min(len(lines), trayRecent)]
+	return tray
+}
+
+func trayRef(ticketURL string) string {
+	ref, err := ParseSessionRef(plan.TicketURL(ticketURL))
+	if err != nil {
+		return path.Base(ticketURL)
+	}
+	return ref.Name + "#" + ref.N
+}
+
+func phaseLabel(p plan.IntentPhase) string { return strings.ReplaceAll(string(p), "_", " ") }
+
+func stepPhase(s plan.IntentStep) string {
+	if s.Outcome != plan.IntentInProgress {
+		return string(s.Outcome)
+	}
+	return phaseLabel(s.Phase)
+}
+
+func (r *Reader) Tray(ctx context.Context, now time.Time) (Tray, error) {
+	history, err := r.store.IntentHistory(ctx, now.Add(-trayHistory))
+	if err != nil {
+		return Tray{}, fmt.Errorf("load intent history: %w", err)
+	}
+	runs, err := r.store.LatestRunsByTicket(ctx)
+	if err != nil {
+		return Tray{}, fmt.Errorf("load latest runs: %w", err)
+	}
+	return buildTray(history, runs, now), nil
 }
 
 func applyActivities(rows []Row, activities []store.Activity, now time.Time) {

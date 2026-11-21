@@ -68,6 +68,6 @@ func TestActivityPage(t *testing.T) {
 		if got := main.Text(); !strings.Contains(got, "No failed actions match 'zzzz'") {
 			t.Errorf("GET /activity empty text = %q, want the specific empty sentence", got)
 		}
-		main.One(t, `a[href="/activity"]`)
+		main.One(t, `#activity-results a[href="/activity"]`)
 	})
 }

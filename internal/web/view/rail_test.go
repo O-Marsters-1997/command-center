@@ -8,10 +8,13 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+var equateRows = cmpopts.EquateComparable(option.Option[plan.IntentStatus]{})
 
 func railRow(n, feature string, glyph plan.GlyphWord) view.Row {
 	return view.Row{
@@ -70,6 +73,44 @@ var acmeScope = view.RailParams{Project: "acme", ProjectRepos: []string{"acme/we
 
 func TestBuildRail(t *testing.T) {
 	t.Parallel()
+
+	t.Run("a row's intent replaces its glyph and word", func(t *testing.T) {
+		t.Parallel()
+		at := testNow
+		intent := func(rec plan.IntentRecord) option.Option[plan.IntentStatus] {
+			return option.Some(plan.StatusOf(rec, option.None[plan.RunSummary](), testNow))
+		}
+		queued := plan.IntentRecord{ID: 1, Verb: plan.VerbResolve, At: at}
+		running := queued
+		running.ConsumedAt, running.Run = option.Some(at), option.Some(plan.RunID(3))
+		failed := queued
+		failed.ConsumedAt, failed.FinishedAt = option.Some(at), option.Some(at)
+		failed.Outcome, failed.Detail = plan.IntentFailed, "no conflict is recorded"
+
+		tests := []struct {
+			name       string
+			rec        plan.IntentRecord
+			wantGlyph  plan.GlyphWord
+			wantLabel  string
+			wantDetail string
+		}{
+			{"queued", queued, plan.GlyphPending, "Resolve conflict queued", ""},
+			{"running", running, plan.GlyphRunning, "Resolving…", ""},
+			{"failed", failed, plan.GlyphFailed, "Resolve conflict failed", "no conflict is recorded"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				row := railRow("1", "billing", plan.GlyphAttention)
+				row.Intent = intent(tt.rec)
+				got := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).NeedsYou[0]
+				if got.Glyph != tt.wantGlyph || got.Label != tt.wantLabel || got.Detail != tt.wantDetail {
+					t.Errorf("BuildRail() item = glyph %q label %q detail %q, want %q %q %q",
+						got.Glyph, got.Label, got.Detail, tt.wantGlyph, tt.wantLabel, tt.wantDetail)
+				}
+			})
+		}
+	})
 
 	t.Run("groups by attention", func(t *testing.T) {
 		t.Parallel()

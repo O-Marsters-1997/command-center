@@ -95,8 +95,16 @@ SELECT id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
   COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
   COALESCE(ticket_state, '')::text AS ticket_state
 FROM intents
-WHERE at >= sqlc.arg(since) OR finished_at IS NULL
+WHERE verb <> 'edit_ticket' AND (at >= sqlc.arg(since) OR finished_at IS NULL)
 ORDER BY id DESC;
+
+-- name: LatestRowIntents :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id, verb, queued_by, at, hold_until, consumed_at, finished_at,
+  COALESCE(outcome, '')::text AS outcome, COALESCE(detail, '')::text AS detail, run_id,
+  COALESCE(ticket_state, '')::text AS ticket_state
+FROM intents
+WHERE verb = ANY(string_to_array(sqlc.arg(verbs)::text, ','))
+ORDER BY ticket_id, id DESC;
 
 -- name: IntentConsumed :one
 SELECT (consumed_at IS NOT NULL)::bool AS consumed FROM intents WHERE id = sqlc.arg(id);
