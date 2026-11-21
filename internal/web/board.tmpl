@@ -14,7 +14,7 @@
 {{- end}}
 
 {{define "featureLaunch" -}}
-<a class="btn" href="/f/{{.FeatureScope | pathEscape}}/launch" data-key="c" {{template "nav" (printf "/f/%s/launch" (.FeatureScope | pathEscape))}}>Launch{{if .LaunchCount}} · {{.LaunchCount}}{{end}}</a>
+<a class="btn" href="{{featureLaunchPath .FeatureScope}}" data-key="c" {{template "nav" (featureLaunchPath .FeatureScope)}}>Launch{{if .LaunchCount}} · {{.LaunchCount}}{{end}}</a>
 {{- end}}
 
 {{define "board" -}}

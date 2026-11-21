@@ -40,7 +40,7 @@ type FeatureOffer struct {
 	OtherRepos []string
 }
 
-func (o FeatureOffer) LaunchPath() string { return featureLaunchPath(o.Feature) }
+func (o FeatureOffer) LaunchPath() string { return FeatureLaunchPath(o.Feature) }
 
 func (o FeatureOffer) ID() string {
 	return "offer-" + strings.Map(func(r rune) rune {
@@ -280,7 +280,7 @@ func featureOffers(
 	offers := make([]FeatureOffer, 0, len(all[repo.Name]))
 	for _, in := range all[repo.Name] {
 		offer := FeatureOffer{
-			Feature: in.Feature, Tickets: in.Tickets, Repo: repo.Name, Path: featureLaunchPath(in.Feature),
+			Feature: in.Feature, Tickets: in.Tickets, Repo: repo.Name, Path: FeatureLaunchPath(in.Feature),
 			State: ImportAvailable,
 		}
 		if in.Imported {

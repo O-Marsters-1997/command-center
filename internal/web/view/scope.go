@@ -2,7 +2,6 @@ package view
 
 import (
 	"cmp"
-	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -30,7 +29,7 @@ func ScopeList(projects []store.Project, repos []store.Repo) []ScopeEntry {
 	for _, p := range projects {
 		entries = append(entries, ScopeEntry{
 			Label: p.Name, Kind: ScopeProject, Value: p.Name, Hue: p.Hue,
-			Initial: initial(p.Name), Path: "/tickets?project=" + url.QueryEscape(p.Name),
+			Initial: initial(p.Name), Path: withQuery(ticketsPath, Params{Project: p.Name}.Query()),
 		})
 	}
 	slices.SortFunc(entries, func(a, b ScopeEntry) int {
@@ -42,7 +41,7 @@ func ScopeList(projects []store.Project, repos []store.Repo) []ScopeEntry {
 			continue
 		}
 		loose = append(loose, ScopeEntry{
-			Label: r.Name, Kind: ScopeRepo, Value: r.Name, Path: "/tickets?repo=" + url.QueryEscape(r.Name),
+			Label: r.Name, Kind: ScopeRepo, Value: r.Name, Path: withQuery(ticketsPath, Params{Repo: r.Name}.Query()),
 		})
 	}
 	slices.SortFunc(loose, func(a, b ScopeEntry) int { return strings.Compare(a.Label, b.Label) })

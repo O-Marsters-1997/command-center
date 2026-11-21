@@ -2,6 +2,8 @@ package hx
 
 import "net/http"
 
+const StatusStopPolling = 286
+
 const (
 	HeaderRequest        = "HX-Request"
 	HeaderCurrentURL     = "HX-Current-URL"

@@ -101,9 +101,9 @@ func (r Row) ProtectedLinks() []ProtectedLink {
 	links := make([]ProtectedLink, len(r.Protected))
 	for i, m := range r.Protected {
 		links[i] = ProtectedLink{PathMatch: m}
-		if r.PRNumber > 0 {
+		if r.PRURL != "" {
 			sum := sha256.Sum256([]byte(m.Path))
-			links[i].Href = fmt.Sprintf("https://github.com/%s/pull/%d/files#diff-%x", r.Repo, r.PRNumber, sum)
+			links[i].Href = fmt.Sprintf("%s/files#diff-%x", r.PRURL, sum)
 		}
 	}
 	return links
