@@ -69,8 +69,11 @@ func (PS) Lookup(pid int) (Process, bool, error) {
 	out, err := command.OutputWithin(
 		context.Background(), psTimeout, "", "ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid),
 	)
-	if err != nil {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
 		return Process{}, false, nil
+	}
+	if err != nil {
+		return Process{}, false, fmt.Errorf("run ps for pid %d: %w", pid, err)
 	}
 	fields := strings.Fields(string(out))
 	if len(fields) != 2 {

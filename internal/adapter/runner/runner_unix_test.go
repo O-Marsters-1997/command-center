@@ -512,6 +512,30 @@ func TestProcessRunner(t *testing.T) {
 	runnertest.RunContract(t, func(*testing.T) runner.Runner { return runner.ProcessRunner{} })
 }
 
+func TestPS_Lookup(t *testing.T) {
+	t.Run("a pid that no longer exists is not found", func(t *testing.T) {
+		cmd := exec.Command("true")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("Run(true): %v", err)
+		}
+		pid := cmd.Process.Pid
+
+		_, found, err := (runner.PS{}).Lookup(pid)
+		if err != nil || found {
+			t.Errorf("Lookup(%d) = found %v, err %v, want not found and no error", pid, found, err)
+		}
+	})
+
+	t.Run("a ps that cannot run is an error", func(t *testing.T) {
+		t.Setenv("PATH", "")
+
+		_, found, err := (runner.PS{}).Lookup(os.Getpid())
+		if err == nil || found {
+			t.Errorf("Lookup(self) without ps = found %v, err %v, want an error", found, err)
+		}
+	})
+}
+
 func TestProcessRunner_Reap(t *testing.T) {
 	t.Parallel()
 

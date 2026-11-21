@@ -169,15 +169,16 @@ func (l *Loop) writeHandoff(run store.PendingRun, step plan.Step, lastMessage op
 func (l *Loop) tailOf(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
+		l.logger.Warn("open command log", "path", path, "err", err)
 		return ""
 	}
 	buf := make([]byte, maxCommandHandoffBytes)
 	n := 0
-	if info, err := f.Stat(); err == nil {
-		n, err = f.ReadAt(buf, max(0, info.Size()-maxCommandHandoffBytes))
-		if err != nil && !errors.Is(err, io.EOF) {
-			n = 0
-		}
+	if info, err := f.Stat(); err != nil {
+		l.logger.Warn("stat command log", "path", path, "err", err)
+	} else if n, err = f.ReadAt(buf, max(0, info.Size()-maxCommandHandoffBytes)); err != nil && !errors.Is(err, io.EOF) {
+		l.logger.Warn("read command log", "path", path, "err", err)
+		n = 0
 	}
 	if err := f.Close(); err != nil {
 		l.logger.Warn("close command log", "path", path, "err", err)
