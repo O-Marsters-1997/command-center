@@ -44,6 +44,7 @@ type Observation struct {
 	MidMerge          map[BranchRef]bool               `json:"mid_merge"`
 	ConflictsWithBase map[BranchRef]bool               `json:"conflicts_with_base"`
 	ConflictsWithPeer map[BranchRef]map[BranchRef]bool `json:"conflicts_with_peer"`
+	HeadDescends      map[BranchRef]bool               `json:"head_descends"`
 	Settings          map[string]RepoSettings          `json:"settings"`
 	SettingsErrors    map[string]string                `json:"settings_errors"`
 	SettingsSources   map[string]string                `json:"settings_sources"`
@@ -58,7 +59,8 @@ func NewObservation(at time.Time) Observation {
 		MergifyHash: map[string]string{}, BranchTips: map[BranchRef]SHA{}, LocalTips: map[BranchRef]SHA{},
 		Titles: map[TicketURL]string{}, MidMerge: map[BranchRef]bool{},
 		ConflictsWithBase: map[BranchRef]bool{}, ConflictsWithPeer: map[BranchRef]map[BranchRef]bool{},
-		Settings: map[string]RepoSettings{}, SettingsErrors: map[string]string{},
+		HeadDescends: map[BranchRef]bool{},
+		Settings:     map[string]RepoSettings{}, SettingsErrors: map[string]string{},
 		SettingsSources: map[string]string{}, RepoErrors: map[string]string{}, Questions: map[RunID]string{},
 	}
 }

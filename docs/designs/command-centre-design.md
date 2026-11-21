@@ -606,8 +606,10 @@ Numbered so each can become a test.
     An empty PR list is data only from a zero-exit call. `checking`'s bounded wait advances
     only over ticks whose observe phase succeeded.
 11. A CI verdict is computed only over the repo's configured predicate, from a normalised
-    snapshot (latest completed run per check name) whose `headRefOid` matches the pushed
-    tip, and — for a stacked base only — whose recorded base SHA matches
+    snapshot (latest completed run per check name) whose `headRefOid` is the pushed tip or
+    descends from it (a hand-pushed fix; a new descendant head restarts the bounded wait, and
+    `adopt-head` records the live head as the pushed tip), and — for a stacked base only,
+    never one based on `main` — whose recorded base SHA matches
     `origin/<base_branch>`'s tip. An empty or absent rollup is never green; an absent
     `absent_ok` check is `pending` until the bounded wait elapses; a green verdict is
     suppressed while the repo's `.mergify.yml` hash no longer matches the one the predicate

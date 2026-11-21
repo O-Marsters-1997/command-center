@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -126,6 +127,44 @@ func TestNewObserver(t *testing.T) {
 		}
 		if len(obs.RepoErrors) != 1 || obs.RepoErrors["acme/broken"] == "" {
 			t.Errorf("RepoErrors = %+v, want exactly acme/broken", obs.RepoErrors)
+		}
+	})
+
+	t.Run("marks an open PR head that descends from the last pushed tip", func(t *testing.T) {
+		t.Parallel()
+		root, repoPath := repoWithOrigin(t)
+		cfg, _ := testConfigAndWorkspace(t, root, 1, []string{"true"})
+		st := openStore(t)
+		trackRepo(t, st, "repo", filepath.Join(root, "remote.git"))
+		storetest.Tickets(t, st, storepkg.Ticket{URL: "sandbox://A", Repo: "repo", Branch: "a"})
+		forge := &ghtest.Forge{}
+		f := &observerFixture{repoPath: repoPath, store: st, observe: loop.NewObserver(st, forge, cfg)}
+		a := branchRef("repo", "a")
+
+		f.pushBranch(t, "a", "a.txt", "agent\n")
+		pushedTip := gittest.Run(t, repoPath, "rev-parse", "origin/a")
+		storetest.Pushed(t, st, storetest.PushedOpts{
+			URL: "sandbox://A", Tip: pushedTip, Base: "main", BaseTip: "m", At: testAt,
+		})
+		observeHead := func() bool {
+			head := gittest.Run(t, repoPath, "rev-parse", "origin/a")
+			forge.Snapshot.ByBranch = map[string]gh.PR{"a": {Number: 1, State: gh.Open, HeadOid: head}}
+			return f.observation(t).HeadDescends[a]
+		}
+
+		if observeHead() {
+			t.Error("HeadDescends with the head at the pushed tip = true, want false")
+		}
+		gittest.Run(t, repoPath, "switch", "-q", "a")
+		gittest.Commit(t, repoPath, "fix.txt", "hand-pushed\n")
+		gittest.Run(t, repoPath, "push", "-q", "origin", "a")
+		gittest.Run(t, repoPath, "switch", "-q", "main")
+		if !observeHead() {
+			t.Error("HeadDescends after a hand-pushed commit = false, want true")
+		}
+		f.pushBranch(t, "a", "other.txt", "rewritten\n")
+		if observeHead() {
+			t.Error("HeadDescends after a force-push = true, want false")
 		}
 	})
 

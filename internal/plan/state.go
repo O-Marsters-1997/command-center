@@ -36,7 +36,7 @@ var stateInfo = map[State]stateSpec{
 	},
 	NeedsYou: {
 		name: "needs_you", label: "Needs you", glyph: GlyphAttention,
-		verbs: []Verb{VerbReRun, VerbFollowUp, VerbKill},
+		verbs: []Verb{VerbReRun, VerbFollowUp, VerbKill, VerbAdoptHead},
 	},
 	PushFailed: {
 		name: "push_failed", label: "Push failed", glyph: GlyphFailed,
@@ -56,7 +56,8 @@ var stateInfo = map[State]stateSpec{
 		verbs: []Verb{VerbRefresh, VerbReRun, VerbFollowUp}, unattended: true,
 	},
 	CIFailed: {
-		name: "ci_failed", label: "Checks failing", glyph: GlyphFailed, verbs: []Verb{VerbReRun, VerbFollowUp},
+		name: "ci_failed", label: "Checks failing", glyph: GlyphFailed,
+		verbs: []Verb{VerbReRun, VerbFollowUp, VerbAdoptHead},
 	},
 	RefreshConflicted: {
 		name: "refresh_conflicted", label: "Refresh conflicted", glyph: GlyphFailed,

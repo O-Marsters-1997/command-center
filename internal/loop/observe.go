@@ -34,11 +34,18 @@ func NewObserver(st *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc
 		if err != nil {
 			return plan.Observation{}, fmt.Errorf("last observation: %w", err)
 		}
+		pushedTips, err := st.LastPushedTips(ctx)
+		if err != nil {
+			return plan.Observation{}, fmt.Errorf("last pushed tips: %w", err)
+		}
 
 		obs := plan.NewObservation(time.Time{})
 		for _, repo := range repos {
 			path := config.CheckoutPath(cfg.DataDir, repo.Name)
-			read := repoRead{name: repo.Name, path: path, branches: branchesFor(tickets, repo.Name)}
+			read := repoRead{
+				name: repo.Name, path: path, branches: branchesFor(tickets, repo.Name),
+				pushed: pushedTipsFor(tickets, repo.Name, pushedTips),
+			}
 			part, err := observeRepo(ctx, forge, read, prevObs)
 			if err != nil {
 				obs.RepoErrors[repo.Name] = err.Error()
@@ -61,6 +68,7 @@ func mergeObservation(dst *plan.Observation, src plan.Observation) {
 	maps.Copy(dst.Titles, src.Titles)
 	maps.Copy(dst.ConflictsWithBase, src.ConflictsWithBase)
 	maps.Copy(dst.ConflictsWithPeer, src.ConflictsWithPeer)
+	maps.Copy(dst.HeadDescends, src.HeadDescends)
 	maps.Copy(dst.Settings, src.Settings)
 	maps.Copy(dst.SettingsErrors, src.SettingsErrors)
 	maps.Copy(dst.SettingsSources, src.SettingsSources)
@@ -75,6 +83,7 @@ func carryForward(dst *plan.Observation, prev plan.Observation, repo string) {
 	copyKeyed(dst.MidMerge, prev.MidMerge, keep)
 	copyKeyed(dst.ConflictsWithBase, prev.ConflictsWithBase, keep)
 	copyKeyed(dst.ConflictsWithPeer, prev.ConflictsWithPeer, keep)
+	copyKeyed(dst.HeadDescends, prev.HeadDescends, keep)
 	copyKeyed(dst.Titles, prev.Titles, func(plan.TicketURL) bool { return true })
 	named := func(key string) bool { return key == repo }
 	copyKeyed(dst.MergifyHash, prev.MergifyHash, named)
@@ -93,6 +102,17 @@ func copyKeyed[K comparable, V any](dst, src map[K]V, keep func(K) bool) {
 type repoRead struct {
 	name, path string
 	branches   []string
+	pushed     map[string]plan.SHA
+}
+
+func pushedTipsFor(tickets []store.Ticket, repo string, tips map[plan.TicketURL]plan.SHA) map[string]plan.SHA {
+	out := map[string]plan.SHA{}
+	for _, t := range tickets {
+		if tip, ok := tips[plan.TicketURL(t.URL)]; ok && t.Repo == repo {
+			out[t.Branch] = tip
+		}
+	}
+	return out
 }
 
 func observeRepo(
@@ -122,7 +142,17 @@ func observeRepo(
 				return plan.Observation{}, fmt.Errorf("read check attempts for %s: %w", branch, err)
 			}
 		}
-		obs.PRs[plan.BranchRef{Repo: name, Branch: branch}] = planPR(pr)
+		ref := plan.BranchRef{Repo: name, Branch: branch}
+		obs.PRs[ref] = planPR(pr)
+		pushed := read.pushed[branch]
+		if pr.State != gh.Open || pushed == "" || pr.HeadOid == "" || plan.SHA(pr.HeadOid) == pushed {
+			continue
+		}
+		descends, err := git.Ancestor(ctx, path, string(pushed), pr.HeadOid)
+		if err != nil {
+			return plan.Observation{}, fmt.Errorf("check %s descends from %s: %w", branch, pushed, err)
+		}
+		obs.HeadDescends[ref] = descends
 	}
 	titles, err := forge.IssueTitles(ctx, path)
 	if err != nil {
