@@ -36,9 +36,15 @@ const (
 )
 
 var (
-	allLogFilters  = []LogFilter{LogAll, LogSkills, LogTools, LogFails}
-	allSectionKeys = []SectionKey{SectionNeedsYou, SectionInProgress, SectionReady, SectionBlocked, SectionDone}
+	allLogFilters   = []LogFilter{LogAll, LogSkills, LogTools, LogFails}
+	allSectionKeys  = []SectionKey{SectionNeedsYou, SectionInProgress, SectionReady, SectionBlocked, SectionDone}
+	allBannerStates = []BannerState{BannerUntracked, BannerCloning, BannerReady, BannerRefused}
 )
+
+func ParseBannerState(s string) (BannerState, bool) {
+	state := BannerState(s)
+	return state, slices.Contains(allBannerStates, state)
+}
 
 func ParseLogFilter(s string) LogFilter {
 	if f := LogFilter(s); slices.Contains(allLogFilters, f) {

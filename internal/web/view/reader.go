@@ -109,23 +109,27 @@ func (b Board) rowFor(ref SessionRef) (Row, bool) {
 	return rows[i], true
 }
 
-type InvalidError struct{ Err error }
-
-func (e InvalidError) Error() string { return e.Err.Error() }
-func (e InvalidError) Unwrap() error { return e.Err }
+var ErrInvalidInput = errors.New("view: invalid input")
 
 type Reader struct {
 	store            *store.Store
+	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
 	spend            *SpendCache
 }
 
-func NewReader(st *store.Store, boardPollSeconds, spendLimit5h int) *Reader {
+type ReaderSettings struct {
+	BoardPollSeconds int
+	SpendLimit5h     int
+}
+
+func NewReader(st *store.Store, dataDir string, settings ReaderSettings) *Reader {
 	return &Reader{
 		store:            st,
-		boardPollSeconds: boardPollSeconds,
-		spendLimit5h:     spendLimit5h,
+		dataDir:          dataDir,
+		boardPollSeconds: settings.BoardPollSeconds,
+		spendLimit5h:     settings.SpendLimit5h,
 		spend:            NewSpendCache(),
 	}
 }

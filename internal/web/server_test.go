@@ -214,6 +214,34 @@ func TestServer(t *testing.T) {
 		}
 	})
 
+	t.Run("a store failure in a verb is a 500 with a generic body", func(t *testing.T) {
+		t.Parallel()
+		st := openStore(t)
+		server := newServer(st, testNow)
+		if err := st.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+
+		rec := do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"alpha"}, "hue": {"1"}}})
+		if rec.Code != http.StatusInternalServerError || strings.TrimSpace(rec.Body) != "internal error" {
+			t.Errorf("POST /projects on a closed store = %d %q, want 500 \"internal error\"", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("bad input is a 400 with the mapped message", func(t *testing.T) {
+		t.Parallel()
+		server := newServer(openStore(t), testNow)
+		for path, want := range map[string]string{
+			"/launch/candidates.json?ticket=sandbox://GHOST": "unknown ticket",
+			"/launch/candidates.json":                        "invalid request",
+		} {
+			rec := do(t, server, http.MethodGet, path, req{})
+			if rec.Code != http.StatusBadRequest || strings.TrimSpace(rec.Body) != want {
+				t.Errorf("GET %s = %d %q, want 400 %q", path, rec.Code, rec.Body, want)
+			}
+		}
+	})
+
 	for _, route := range mutationRoutes {
 		t.Run(route.name+" checks the origin", func(t *testing.T) {
 			t.Parallel()

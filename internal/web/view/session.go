@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -201,7 +200,7 @@ func sessionCrumbs(row Row) []Crumb {
 		crumbs = append(crumbs, projectCrumb(row.Mark()))
 	}
 	if row.Feature != "" {
-		crumbs = append(crumbs, Crumb{Label: row.Feature, Path: "/f/" + url.PathEscape(row.Feature)})
+		crumbs = append(crumbs, Crumb{Label: row.Feature, Path: FeaturePath(row.Feature)})
 	}
 	return append(crumbs, Crumb{Label: cmp.Or(row.Title, row.Ticket())})
 }
@@ -249,10 +248,6 @@ func (r *Reader) Session(
 	chrome.Home = false
 	chrome.titled(row.Ticket())
 	chrome.Crumbs = sessionCrumbs(row)
-	prURL := ""
-	if row.PRNumber > 0 {
-		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)
-	}
 	actions := slices.Clone(row.Buttons)
 	for i := range actions {
 		actions[i].Label = string(actions[i].Verb)
@@ -328,7 +323,7 @@ func (r *Reader) Session(
 		ActionsPath:    self + "/actions",
 		Actions:        actions,
 		Callout:        row.Glyph == plan.GlyphFailed || row.Glyph == plan.GlyphAttention,
-		PRURL:          prURL,
+		PRURL:          row.PRURL,
 		Chrome:         chrome,
 		Row:            row,
 		Stack:          buildStack(board, row),

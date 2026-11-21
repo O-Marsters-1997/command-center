@@ -164,8 +164,10 @@ func protectedPushStore(t *testing.T, matches []plan.PathMatch) *storepkg.Store 
 	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		PRs:        map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): {Number: 7, State: plan.Open}},
-		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {}},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): {
+			Number: 7, URL: "https://github.com/acme/web/pull/7", State: plan.Open,
+		}},
+		Runs: map[plan.TicketURL]plan.RunObservation{sessionTicket: {}},
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatalf("SaveObservation: %v", err)
@@ -653,7 +655,9 @@ func TestSessionPage(t *testing.T) {
 			ObservedAt: testNow,
 			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
 			PRs: map[plan.BranchRef]plan.PR{
-				branchRef("acme/web", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow},
+				branchRef("acme/web", "cc-1"): {
+					Number: 7, URL: "https://github.com/acme/web/pull/7", HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow,
+				},
 			},
 		}
 		if err := st.SaveObservation(t.Context(), obs); err != nil {
@@ -789,7 +793,9 @@ func testVerbFromSession(t *testing.T) {
 			ObservedAt: testNow,
 			Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
 			PRs: map[plan.BranchRef]plan.PR{
-				branchRef("acme/web", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow},
+				branchRef("acme/web", "cc-1"): {
+					Number: 7, URL: "https://github.com/acme/web/pull/7", HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow,
+				},
 			},
 		}
 		if err := st.SaveObservation(t.Context(), obs); err != nil {
