@@ -30,7 +30,7 @@ func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, err := st.InsertRunSkeleton(t.Context(), store.RunSkeleton{
+	runID, _, err := st.InsertSessionRunSkeleton(t.Context(), store.RunSkeleton{
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {

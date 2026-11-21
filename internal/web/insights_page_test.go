@@ -55,7 +55,7 @@ func TestInsightsPage(t *testing.T) {
 		store := openStore(t)
 		insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 		now := testNow.Add(31*24*time.Hour + 3*time.Hour)
-		runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 			Ticket: "sandbox://CC-1", Kind: "agent", PromptHash: "h",
 			Step: "implement", Workflow: "default", WorkflowHash: "abcdef0123456789",
 		})

@@ -15,9 +15,18 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
+func planInput(t *testing.T, store *storepkg.Store) plan.Input {
+	t.Helper()
+	in, err := store.PlanInput(t.Context())
+	if err != nil {
+		t.Fatalf("PlanInput: %v", err)
+	}
+	return in
+}
+
 func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -125,10 +134,7 @@ func TestPush(t *testing.T) {
 		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 		f.tick(t)
 
-		pushes, err := f.Store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes: %v", err)
-		}
+		pushes := planInput(t, f.Store).Verdict.PushRows
 		want := []plan.PathMatch{{Path: "package.json", Rule: "**/package.json", Tier: plan.TierProtected, Added: 4}}
 		if diff := cmp.Diff(want, pushes[plan.TicketURL(f.Ticket.URL)].Protected); diff != "" {
 			t.Errorf("LatestPushes().Protected mismatch (-want +got):\n%s", diff)
@@ -195,10 +201,7 @@ func TestPush(t *testing.T) {
 		dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 		f.tick(t)
 
-		pushes, err := f.Store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes: %v", err)
-		}
+		pushes := planInput(t, f.Store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.Ticket.URL)].Protected; len(got) != 0 {
 			t.Errorf("LatestPushes().Protected = %+v, want none", got)
 		}

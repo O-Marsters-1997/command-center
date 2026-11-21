@@ -67,7 +67,7 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 			t.Fatalf("WriteFile(1.prompt): %v", err)
 		}
 	}
-	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := st.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: sessionTicket, Kind: opts.Kind, PromptHash: "hash", Step: "implement",
 		Session: storepkg.RunSession{StartNew: true},
 	})
@@ -118,7 +118,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
 	storetest.Tickets(t, store, ticket)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
 	if err != nil {

@@ -55,7 +55,7 @@ func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[plan.TicketURL]
 
 // LastPushedTips returns the latest recorded pushed tip per ticket.
 func (s *Store) LastPushedTips(ctx context.Context) (map[plan.TicketURL]plan.SHA, error) {
-	pushes, err := s.LatestPushes(ctx)
+	pushes, err := s.latestPushes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +67,7 @@ func (s *Store) LastPushedTips(ctx context.Context) (map[plan.TicketURL]plan.SHA
 	return tips, nil
 }
 
-// LatestPushes returns the latest recorded push per ticket URL.
-func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushRow, error) {
+func (s *Store) latestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushRow, error) {
 	rows, err := s.q.ListLatestPushes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest pushes: %w", err)

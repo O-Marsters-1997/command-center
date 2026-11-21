@@ -36,7 +36,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: "sandbox://ROOT", Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func testBoardGroups(t *testing.T) {
 		store := openStore(t)
 		ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 		storetest.Tickets(t, store, ticket)
-		runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 			Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 		})
 		if err != nil {

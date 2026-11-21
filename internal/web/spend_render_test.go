@@ -25,7 +25,7 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 	ctx := t.Context()
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {

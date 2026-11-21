@@ -53,10 +53,7 @@ func TestCancel(t *testing.T) {
 	if f.Latest(t)[running].Outcome.IsSome() {
 		t.Error("running member has an outcome, want it untouched")
 	}
-	memberships, err := f.Store.LaunchMemberships(t.Context())
-	if err != nil {
-		t.Fatalf("LaunchMemberships(): %v", err)
-	}
+	memberships := planInput(t, f.Store).Memberships
 	for _, ticket := range f.Tickets {
 		got := memberships[plan.TicketURL(ticket.URL)]
 		if disarmed := ticket.URL == sibling; disarmed == (got.LaunchID != 0) {

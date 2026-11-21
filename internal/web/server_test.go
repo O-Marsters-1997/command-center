@@ -23,7 +23,7 @@ import (
 
 func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
@@ -148,7 +148,7 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 	ctx := t.Context()
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {

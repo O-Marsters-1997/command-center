@@ -110,10 +110,7 @@ func TestRetarget(t *testing.T) {
 				t.Errorf("Edit calls mismatch (-want +got):\n%s", diff)
 			}
 
-			pushes, err := store.LatestPushes(t.Context())
-			if err != nil {
-				t.Fatalf("LatestPushes(): %v", err)
-			}
+			pushes := planInput(t, store).Verdict.PushRows
 			row := pushes[plan.TicketURL(f.child.URL)]
 			if row.BaseBranch != "main" {
 				t.Errorf("child's recorded base = %q, want main", row.BaseBranch)
@@ -165,10 +162,7 @@ func TestRetarget(t *testing.T) {
 			t.Fatalf("second RunOnce: %v", err)
 		}
 
-		pushes, err := store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes(): %v", err)
-		}
+		pushes := planInput(t, store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.child.URL)].PushedAt; !got.Equal(firstTick) {
 			t.Errorf("child's latest push row is stamped %s, want the first tick's %s: an unchanged base "+
 				"must not append a second row", got, firstTick)
@@ -249,10 +243,7 @@ func TestRetarget(t *testing.T) {
 			t.Errorf("events = %+v, want no retargeted event: gh refused", events)
 		}
 
-		pushes, err := store.LatestPushes(t.Context())
-		if err != nil {
-			t.Fatalf("LatestPushes(): %v", err)
-		}
+		pushes := planInput(t, store).Verdict.PushRows
 		if got := pushes[plan.TicketURL(f.child.URL)].BaseBranch; got != "parent" {
 			t.Errorf("child's recorded base = %q, want parent unchanged: only a successful edit records one", got)
 		}

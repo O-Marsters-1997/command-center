@@ -27,7 +27,7 @@ func disposeInsightsRun(
 ) {
 	t.Helper()
 	ctx := t.Context()
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: kind, PromptHash: "hash-" + ticketURL,
 	})
 	if err != nil {

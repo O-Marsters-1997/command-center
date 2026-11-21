@@ -30,7 +30,7 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 	}
 	storetest.Tickets(t, st, tickets...)
 	dispositionAsPushed(t, st, "sandbox://CC-1", testNow)
-	runID, err := st.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := st.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: "sandbox://CC-3", Kind: "agent", PromptHash: "hash-3",
 	})
 	if err != nil {
@@ -371,7 +371,7 @@ func baseGoneLiveStore(t *testing.T) *storepkg.Store {
 	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	dependent := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL}}
 	storetest.Tickets(t, store, blocker, dependent)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
 	if err != nil {

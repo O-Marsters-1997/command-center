@@ -134,10 +134,7 @@ func TestResolve(t *testing.T) {
 		}
 		fake.Exit(2, 1)
 		c.tick(t)
-		verifies, err := c.store.LatestVerifyRuns(t.Context())
-		if err != nil {
-			t.Fatalf("LatestVerifyRuns: %v", err)
-		}
+		verifies := planInput(t, c.store).Verifies
 		if got := verifies[plan.TicketURL(c.f.child.URL)].Outcome; got != option.Some(plan.OutcomeFailed) {
 			t.Errorf("verify outcome = %v, want failed", got)
 		}

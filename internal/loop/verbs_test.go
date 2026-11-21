@@ -50,7 +50,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	}
 
 	at := testAt
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {

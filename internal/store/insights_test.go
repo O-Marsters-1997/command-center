@@ -23,7 +23,7 @@ func disposeInsightsRun(
 ) {
 	t.Helper()
 	ctx := t.Context()
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: kind, BaselineSHA: "deadbeef", PromptHash: "hash-" + ticketURL,
 	})
 	if err != nil {
@@ -261,7 +261,7 @@ func TestStore_MergedTicketWorkflowSpend(t *testing.T) {
 	type metrics = option.Option[agentlog.RunMetrics]
 	dispose := func(step plan.StepName, hash string, cost float64, m metrics, at time.Time) {
 		t.Helper()
-		runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 			Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "h",
 			Step: step, Workflow: "wf", WorkflowHash: hash,
 		})

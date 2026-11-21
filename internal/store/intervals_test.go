@@ -105,7 +105,7 @@ func TestStore_CCCostUSD(t *testing.T) {
 		{now.Add(-6 * time.Hour), 3.00},
 		{now.Add(-8 * 24 * time.Hour), 4.00},
 	} {
-		runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		runID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 			Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: fmt.Sprintf("hash-%v", run.endedAt),
 		})
 		if err != nil {

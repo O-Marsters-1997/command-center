@@ -1,6 +1,3 @@
--- name: QueueLaunchIntent :exec
-INSERT INTO intents (at, ticket_id, verb, payload) VALUES (sqlc.arg(at), sqlc.arg(ticket_id), 'launch', sqlc.arg(payload));
-
 -- name: ClaimLaunchIntents :many
 UPDATE intents SET consumed_at = sqlc.arg(at)
 WHERE verb = 'launch' AND consumed_at IS NULL
