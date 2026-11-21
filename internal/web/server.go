@@ -230,7 +230,7 @@ func classify(err error) (int, string) {
 func requireOffer(snap plan.Snapshot, ticket plan.TicketURL, verb plan.Verb) error {
 	entry, ok := snap.Entry(ticket)
 	if !ok {
-		return errorf(http.StatusBadRequest, "unknown ticket %q", ticket)
+		return fmt.Errorf("%w %q", plan.ErrUnknownTicket, ticket)
 	}
 	if !snap.Offers(ticket, verb) {
 		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s", ticket, entry.State, verb, entry.Reason)
