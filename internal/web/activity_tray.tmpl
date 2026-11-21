@@ -16,7 +16,7 @@
         <span class="text-muted">{{.Phase}} · {{template "age" .Since}}</span>
       </span>
       {{- if .UndoUntil.IsSome}}
-      <form method="post" action="/verb/undo" hx-post="/verb/undo" hx-target="#activity-tray-body" hx-swap="innerHTML" hx-disabled-elt="find button">
+      <form method="post" action="/verb/undo" hx-post="/verb/undo" hx-target="#activity-tray-body" hx-swap="innerHTML" hx-sync="#activity-tray-body:replace" hx-disabled-elt="find button">
         <input type="hidden" name="ticket" value="{{.Ticket}}">
         <input type="hidden" name="verb" value="{{.Verb}}">
         <input type="hidden" name="intent" value="{{.ID}}">

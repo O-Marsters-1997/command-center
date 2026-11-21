@@ -99,11 +99,15 @@ func stepPhase(s plan.IntentStep) string {
 }
 
 func (r *Reader) Tray(ctx context.Context, now time.Time) (Tray, error) {
-	f, err := r.loadFrame(ctx, now, Params{})
+	history, err := r.store.IntentHistory(ctx, now.Add(-trayHistory))
 	if err != nil {
-		return Tray{}, fmt.Errorf("load frame: %w", err)
+		return Tray{}, fmt.Errorf("load intent history: %w", err)
 	}
-	return f.chrome.Tray, nil
+	runs, err := r.store.LatestRunsByTicket(ctx)
+	if err != nil {
+		return Tray{}, fmt.Errorf("load latest runs: %w", err)
+	}
+	return buildTray(history, runs, now), nil
 }
 
 func applyActivities(rows []Row, activities []store.Activity, now time.Time) {

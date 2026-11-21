@@ -3,6 +3,7 @@ package web_test
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func TestActivityTray(t *testing.T) {
 		server := newServer(st, testNow.Add(time.Second))
 
 		got := do(t, server, http.MethodPost, "/verb/undo", req{Header: htmx, Form: url.Values{
-			"ticket": {"sandbox://CC-1"}, "verb": {"refresh"}, "intent": {"1"}, "from": {"tray"},
+			"ticket": {"sandbox://CC-1"}, "verb": {"refresh"}, "intent": {strconv.FormatInt(id, 10)}, "from": {"tray"},
 		}})
 
 		if got.Code != http.StatusOK {
