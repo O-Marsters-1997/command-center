@@ -178,7 +178,7 @@ func TestApplyTicketSpend(t *testing.T) {
 		{URL: "sandbox://CC-2", AgentPctWeek: 20, SpendPctWeek: 20, TicketOpen: true},
 		{URL: "sandbox://CC-3"},
 	}
-	if diff := cmp.Diff(want, rows); diff != "" {
+	if diff := cmp.Diff(want, rows, equateRows); diff != "" {
 		t.Errorf("ApplyTicketSpend() rows mismatch (-want +got):\n%s", diff)
 	}
 }

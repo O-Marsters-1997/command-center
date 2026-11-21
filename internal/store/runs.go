@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -436,22 +437,57 @@ func (s *Store) IntentHistory(ctx context.Context, since time.Time) ([]plan.Inte
 		if !verb.IsRowVerb() {
 			continue
 		}
-		rec := plan.IntentRecord{
-			ID: row.ID, Ticket: plan.TicketURL(row.TicketID), Verb: verb, QueuedBy: plan.QueuedBy(row.QueuedBy),
-			At: row.At, HoldUntil: row.HoldUntil.Time, ConsumedAt: optionalTime(row.ConsumedAt),
-			FinishedAt: optionalTime(row.FinishedAt), Outcome: plan.IntentOutcome(row.Outcome), Detail: row.Detail,
-		}
-		if row.RunID.Valid {
-			rec.Run = option.Some(plan.RunID(row.RunID.Int64))
-		}
-		if row.TicketState != "" {
-			if rec.TicketState, err = plan.ParseState(row.TicketState); err != nil {
-				return nil, fmt.Errorf("decode state of intent %d: %w", row.ID, err)
-			}
+		rec, err := intentRecord(row, verb)
+		if err != nil {
+			return nil, err
 		}
 		records = append(records, rec)
 	}
 	return records, nil
+}
+
+func (s *Store) LatestRowIntents(ctx context.Context) (map[plan.TicketURL]plan.IntentRecord, error) {
+	var verbs []string
+	for _, verb := range plan.AllVerbs() {
+		if verb.IsRowVerb() {
+			verbs = append(verbs, string(verb))
+		}
+	}
+	rows, err := s.q.LatestRowIntents(ctx, strings.Join(verbs, ","))
+	if err != nil {
+		return nil, fmt.Errorf("select latest row intents: %w", err)
+	}
+	latest := make(map[plan.TicketURL]plan.IntentRecord, len(rows))
+	for _, row := range rows {
+		verb, err := plan.ParseVerb(row.Verb)
+		if err != nil {
+			return nil, fmt.Errorf("decode verb of intent %d: %w", row.ID, err)
+		}
+		rec, err := intentRecord(ccdb.IntentHistoryRow(row), verb)
+		if err != nil {
+			return nil, err
+		}
+		latest[rec.Ticket] = rec
+	}
+	return latest, nil
+}
+
+func intentRecord(row ccdb.IntentHistoryRow, verb plan.Verb) (plan.IntentRecord, error) {
+	rec := plan.IntentRecord{
+		ID: row.ID, Ticket: plan.TicketURL(row.TicketID), Verb: verb, QueuedBy: plan.QueuedBy(row.QueuedBy),
+		At: row.At, HoldUntil: row.HoldUntil.Time, ConsumedAt: optionalTime(row.ConsumedAt),
+		FinishedAt: optionalTime(row.FinishedAt), Outcome: plan.IntentOutcome(row.Outcome), Detail: row.Detail,
+	}
+	if row.RunID.Valid {
+		rec.Run = option.Some(plan.RunID(row.RunID.Int64))
+	}
+	if row.TicketState != "" {
+		var err error
+		if rec.TicketState, err = plan.ParseState(row.TicketState); err != nil {
+			return plan.IntentRecord{}, fmt.Errorf("decode state of intent %d: %w", row.ID, err)
+		}
+	}
+	return rec, nil
 }
 
 func optionalTime(t sql.NullTime) option.Option[time.Time] {

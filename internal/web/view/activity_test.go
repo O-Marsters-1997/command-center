@@ -41,7 +41,7 @@ func TestApplyActivities(t *testing.T) {
 				URL: "sandbox://CC-1", Last: tt.wantLast,
 				Updated: view.Age{Age: tt.wantAge, Stamp: at.Format(time.RFC3339)},
 			}
-			if diff := cmp.Diff(want, rows[0]); diff != "" {
+			if diff := cmp.Diff(want, rows[0], equateRows); diff != "" {
 				t.Errorf("ApplyActivities() row mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -53,7 +53,7 @@ func TestApplyActivities(t *testing.T) {
 
 		view.ApplyActivities(rows, []store.Activity{{TicketURL: "sandbox://CC-1", At: testNow}}, testNow)
 
-		if diff := cmp.Diff([]view.Row{{URL: "sandbox://CC-2"}}, rows); diff != "" {
+		if diff := cmp.Diff([]view.Row{{URL: "sandbox://CC-2"}}, rows, equateRows); diff != "" {
 			t.Errorf("ApplyActivities() rows mismatch (-want +got):\n%s", diff)
 		}
 	})

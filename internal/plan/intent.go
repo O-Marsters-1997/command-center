@@ -95,6 +95,18 @@ func StatusOf(rec IntentRecord, run option.Option[RunSummary], now time.Time) In
 	return st
 }
 
+func railIntent(rec IntentRecord, latestRun RunSummary, state State, now time.Time) option.Option[IntentStatus] {
+	run := option.None[RunSummary]()
+	if rec.Run.IsSome() && rec.Run.Unwrap() == latestRun.ID {
+		run = option.Some(latestRun)
+	}
+	st := StatusOf(rec, run, now)
+	if st.Outcome == IntentInProgress || (st.Outcome == IntentFailed && state == rec.TicketState) {
+		return option.Some(st)
+	}
+	return option.None[IntentStatus]()
+}
+
 func intentGlyph(st IntentStatus) GlyphWord {
 	switch {
 	case st.Outcome == IntentDone:
