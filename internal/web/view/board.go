@@ -19,13 +19,12 @@ import (
 const defaultBaseBranch = "main"
 
 type Row struct {
-	URL        string `json:"url"`
-	Ref        string `json:"ref"`
-	Repo       string `json:"-"`
-	Feature    string `json:"-"`
-	Project    string `json:"-"`
-	ProjectHue int    `json:"-"`
-	// GitHub's issue list caps reads at 100 rows, leaving titles beyond the limit empty.
+	URL             string           `json:"url"`
+	Ref             string           `json:"ref"`
+	Repo            string           `json:"-"`
+	Feature         string           `json:"-"`
+	Project         string           `json:"-"`
+	ProjectHue      int              `json:"-"`
 	Title           string           `json:"title"`
 	State           string           `json:"state"`
 	Reason          string           `json:"reason"`
@@ -53,6 +52,7 @@ type Row struct {
 	Worktree        string           `json:"-"`
 	PRNumber        int              `json:"pr_number"`
 	PRState         string           `json:"-"`
+	PRURL           string           `json:"-"`
 	Pgid            string           `json:"-"`
 	Elapsed         string           `json:"elapsed"`
 	ElapsedSeconds  int              `json:"-"`
@@ -199,7 +199,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Feature:        t.Feature,
 			Project:        projects[t.Repo].Name,
 			ProjectHue:     projects[t.Repo].Hue,
-			Title:          in.Obs.Titles[url],
+			Title:          cmp.Or(in.Obs.Titles[url], pr.Title),
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
 			Label:          e.State.Label(),
@@ -215,6 +215,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Worktree:       in.Obs.Worktrees[t.Ref()],
 			PRNumber:       pr.Number,
 			PRState:        pr.State.String(),
+			PRURL:          pr.URL,
 			Pgid:           pgid,
 			Elapsed:        elapsed,
 			ElapsedSeconds: elapsedSeconds,

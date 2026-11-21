@@ -6,7 +6,7 @@ import {
   maxLiveLines,
   modifierLabel,
   parseViewed,
-  railOpenCookie,
+  railClosedCookie,
   scopeOf,
   shouldHop,
   viewedLabel,
@@ -53,12 +53,12 @@ test("elapsed is the rail timer", () => {
   expect(elapsed(3_720_000)).toBe("1h2m");
 });
 
-test("railOpenCookie adds and removes a key", () => {
-  const base = "a=b; rail-open=x%7Cy";
-  expect(railOpenCookie(base, "z", true)).toStartWith("rail-open=x%7Cy%7Cz; path=/");
-  expect(railOpenCookie(base, "x", false)).toStartWith("rail-open=y; path=/");
-  expect(railOpenCookie(base, "y", true)).toStartWith("rail-open=x%7Cy;");
-  expect(railOpenCookie("", "k", true)).toStartWith("rail-open=k;");
+test("railClosedCookie adds a closed key and drops a reopened one", () => {
+  const base = "a=b; rail-closed=x%7Cy";
+  expect(railClosedCookie(base, "z", false)).toStartWith("rail-closed=x%7Cy%7Cz; path=/");
+  expect(railClosedCookie(base, "x", true)).toStartWith("rail-closed=y; path=/");
+  expect(railClosedCookie(base, "y", false)).toStartWith("rail-closed=x%7Cy;");
+  expect(railClosedCookie("", "k", false)).toStartWith("rail-closed=k;");
 });
 
 test("scopeOf prefers project over repo", () => {

@@ -195,6 +195,7 @@ func TestCLI_List(t *testing.T) {
 			want: gh.Snapshot{ByBranch: map[string]gh.PR{"cc-0-earlier": {
 				Number: 40, HeadRef: "cc-0-earlier", HeadOid: "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
 				BaseRef: "main", State: gh.Merged, MergedAt: at("2026-08-20T10:15:00Z"),
+				Title: "Earlier ticket", URL: "https://github.com/acme/web/pull/40",
 			}}},
 		},
 		{
@@ -240,6 +241,7 @@ func TestCLI_List(t *testing.T) {
 		want := gh.Snapshot{ByBranch: map[string]gh.PR{"cc-0-earlier": {
 			Number: 40, HeadRef: "cc-0-earlier", HeadOid: "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
 			BaseRef: "main", State: gh.Merged, MergedAt: at("2026-08-20T10:15:00Z"),
+			Title: "Earlier ticket", URL: "https://github.com/acme/web/pull/40",
 		}}}
 		if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
 			t.Errorf("List() mismatch (-want +got):\n%s", diff)

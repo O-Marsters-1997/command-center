@@ -5,6 +5,8 @@
     "headRefOid": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
     "baseRefName": "main",
     "state": "MERGED",
-    "mergedAt": "2026-08-20T10:15:00Z"
+    "mergedAt": "2026-08-20T10:15:00Z",
+    "title": "Earlier ticket",
+    "url": "https://github.com/acme/web/pull/40"
   }
 ]
