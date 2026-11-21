@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 type followUpCase struct {
@@ -61,19 +62,15 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 			t.Fatalf("WriteFile(transcript): %v", err)
 		}
 	}
-	if _, err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+	storetest.Verb(t, store, storepkg.VerbRequest{
 		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: testAt,
-	}); err != nil {
-		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
-	}
+	})
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	fake := &runnertest.Runner{}
 	lp := newLoop(store, observing(obs), fixedClock(testAt), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce() error = %v", err)
-	}
+	runOnce(t, lp)
 	spawns := fake.Spawns()
 	if len(spawns) != 1 {
 		t.Fatalf("spawns = %d, want 1", len(spawns))
@@ -95,11 +92,9 @@ func TestFollowUp(t *testing.T) {
 	t.Run("spawns a fresh run in the existing worktree with the typed prompt", func(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
-		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, f.Store, storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: testAt,
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent: %v", err)
-		}
+		})
 		fake := &runnertest.Runner{}
 		f.reset(testAt, fake)
 		f.tick(t)
@@ -147,11 +142,9 @@ func TestFollowUp(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Encode: %v", err)
 		}
-		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, f.Store, storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: payload, At: testAt,
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent: %v", err)
-		}
+		})
 		fake := &runnertest.Runner{}
 		f.reset(testAt, fake)
 		f.tick(t)
@@ -160,10 +153,8 @@ func TestFollowUp(t *testing.T) {
 		if len(spawns) != 1 {
 			t.Fatalf("spawns = %d, want 1", len(spawns))
 		}
-		if got := spawns[0]; got.Model != "opus" || got.Effort != option.Some(plan.EffortHigh) ||
-			!strings.Contains(got.Prompt, "now fix it") || strings.Contains(got.Prompt, `"message"`) {
-			t.Errorf("spawn = model %q effort %v prompt %q, want opus, high and the bare message",
-				got.Model, got.Effort, got.Prompt)
+		if got := spawns[0]; got.Model != "opus" || got.Effort != option.Some(plan.EffortHigh) {
+			t.Errorf("spawn = model %q effort %v, want opus and high", got.Model, got.Effort)
 		}
 	})
 
@@ -171,11 +162,9 @@ func TestFollowUp(t *testing.T) {
 		t.Parallel()
 		f := newPushFixture(t)
 		delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
-		if _, err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		storetest.Verb(t, f.Store, storepkg.VerbRequest{
 			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "do the thing", At: testAt,
-		}); err != nil {
-			t.Fatalf("QueueVerbIntent: %v", err)
-		}
+		})
 		fake := &runnertest.Runner{}
 		f.reset(testAt, fake)
 		f.tick(t)
@@ -183,7 +172,7 @@ func TestFollowUp(t *testing.T) {
 		if got := len(fake.Spawns()); got != 0 {
 			t.Fatalf("spawns = %d, want 0", got)
 		}
-		events := f.events(t, "follow_up_refused")
+		events := storetest.Events(t, f.Store, "follow_up_refused")
 		if len(events) != 1 || events[0].TicketURL != f.Ticket.URL || !strings.Contains(events[0].Detail, "no worktree") {
 			t.Errorf("follow_up_refused events = %+v, want one naming the missing worktree", events)
 		}

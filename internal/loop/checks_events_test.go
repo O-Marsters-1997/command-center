@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestChecksLanded(t *testing.T) {
@@ -48,18 +49,10 @@ func TestChecksLanded(t *testing.T) {
 		landed := func(obs plan.Observation) []string {
 			t.Helper()
 			observed = obs
-			if err := lp.RunOnce(ctx); err != nil {
-				t.Fatalf("RunOnce: %v", err)
-			}
-			events, err := store.Events(ctx)
-			if err != nil {
-				t.Fatalf("Events: %v", err)
-			}
+			runOnce(t, lp)
 			var details []string
-			for _, e := range events {
-				if e.Kind == "checks_landed" {
-					details = append(details, e.Detail)
-				}
+			for _, e := range storetest.Events(t, store, "checks_landed") {
+				details = append(details, e.Detail)
 			}
 			return details
 		}
@@ -98,18 +91,10 @@ func TestChecksLanded(t *testing.T) {
 		lp := newLoop(store,
 			func(context.Context) (plan.Observation, error) { return observed, nil },
 			fixedClock(testAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-		if err := lp.RunOnce(ctx); err != nil {
-			t.Fatalf("RunOnce: %v", err)
-		}
+		runOnce(t, lp)
 
-		events, err := store.Events(ctx)
-		if err != nil {
-			t.Fatalf("Events: %v", err)
-		}
-		for _, e := range events {
-			if e.Kind == "checks_landed" {
-				t.Errorf("checks_landed after a restart with an unchanged observation = %+v, want none", e)
-			}
+		for _, e := range storetest.Events(t, store, "checks_landed") {
+			t.Errorf("checks_landed after a restart with an unchanged observation = %+v, want none", e)
 		}
 	})
 }
