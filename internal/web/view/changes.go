@@ -165,9 +165,13 @@ func lineSide(l git.DiffLine) (plan.Side, int) {
 }
 
 func (p ChangesPage) At(path string, l git.DiffLine) []plan.ReviewComment {
+	return commentsAt(p.Comments[path], l)
+}
+
+func commentsAt(comments []plan.ReviewComment, l git.DiffLine) []plan.ReviewComment {
 	side, line := lineSide(l)
 	var out []plan.ReviewComment
-	for _, c := range p.Comments[path] {
+	for _, c := range comments {
 		if c.Side == side && c.Line == line {
 			out = append(out, c)
 		}
@@ -230,7 +234,20 @@ func (r *Reader) CommentAnchor(
 			}
 		}
 	}
-	return CommentAnchor{}, ErrNoSuchLine
+	inDiff := slices.ContainsFunc(cs.diffs, func(f git.FileDiff) bool { return f.Path == target.Path })
+	if !inDiff || target.Side != plan.SideNew {
+		return CommentAnchor{}, ErrNoSuchLine
+	}
+	text, err := git.FileLines(
+		ctx, config.CheckoutPath(r.dataDir, cs.row.Repo), string(cs.tip), target.Path, target.Line, target.Line)
+	if err != nil {
+		return CommentAnchor{}, fmt.Errorf("read %s line %d: %w", target.Path, target.Line, err)
+	}
+	if len(text) == 0 {
+		return CommentAnchor{}, ErrNoSuchLine
+	}
+	anchor.Hunk = fmt.Sprintf("@@ +%d @@\n %s", target.Line, text[0])
+	return anchor, nil
 }
 
 func linePrefix(k git.LineKind) string {
@@ -371,16 +388,33 @@ func (f ChangedFile) KindLabel() string {
 	return strings.ToUpper(k[:1]) + k[1:]
 }
 
-func hunkGaps(hunks []git.Hunk) []int {
-	gaps := make([]int, len(hunks))
+type gapSpan struct {
+	firstNew    int
+	count       int
+	oldMinusNew int
+}
+
+func gapSpans(hunks []git.Hunk) []gapSpan {
+	spans := make([]gapSpan, len(hunks))
 	next := 1
 	for i, h := range hunks {
-		first := h.NewStart
+		first, oldFirst := h.NewStart, h.OldStart
 		if h.NewLines == 0 {
 			first++
 		}
-		gaps[i] = max(0, first-next)
+		if h.OldLines == 0 {
+			oldFirst++
+		}
+		spans[i] = gapSpan{firstNew: next, count: max(0, first-next), oldMinusNew: oldFirst - first}
 		next = first + h.NewLines
+	}
+	return spans
+}
+
+func hunkGaps(hunks []git.Hunk) []int {
+	gaps := make([]int, len(hunks))
+	for i, s := range gapSpans(hunks) {
+		gaps[i] = s.count
 	}
 	return gaps
 }
