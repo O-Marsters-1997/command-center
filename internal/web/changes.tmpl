@@ -289,4 +289,4 @@
   <button type="button" hx-post="{{.SessionPath}}/changes/comments/restore" hx-vals="{{.Vals}}" hx-target="#toast" hx-swap="innerHTML">Undo</button>
 </div>{{end}}
 
-{{define "reviewRestored"}}<template hx-swap-oob="afterend:#{{.LineID}}">{{template "reviewThread" .}}</template>{{template "reqChipSwap" .Pending}}{{end}}
+{{define "reviewRestored"}}<tbody hx-swap-oob="afterend:#{{.LineID}}">{{template "reviewThread" .}}</tbody>{{template "reqChipSwap" .Pending}}{{end}}
