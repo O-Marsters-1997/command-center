@@ -409,6 +409,16 @@ function init(): void {
       goToComment(goto.dataset.goto ?? "");
       return;
     }
+    if (e.target.closest("[data-collapse-dirs]")) {
+      for (const d of document.querySelectorAll<HTMLDetailsElement>("details[data-dir]")) d.open = false;
+      return;
+    }
+    const collapse = e.target.closest("[data-collapse-file]");
+    if (collapse) {
+      const file = fileOf(collapse);
+      if (file) file.open = !file.open;
+      return;
+    }
     const cancel = e.target.closest("[data-cancel]");
     if (cancel) {
       if (!cancel.hasAttribute("hx-get")) cancel.closest("tr")?.remove();
@@ -458,6 +468,14 @@ function init(): void {
       frame = requestAnimationFrame(() => markActive(true));
     },
     { passive: true },
+  );
+  document.addEventListener(
+    "toggle",
+    (e) => {
+      if (!(e.target instanceof HTMLDetailsElement) || !e.target.matches("details.diff-file")) return;
+      e.target.querySelector("[data-collapse-file]")?.setAttribute("aria-expanded", String(e.target.open));
+    },
+    true,
   );
   document.addEventListener("htmx:afterSettle", enhance);
   document.addEventListener("htmx:historyRestore", enhance);

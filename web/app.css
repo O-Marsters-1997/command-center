@@ -3685,8 +3685,13 @@ summary.prompt-bar:focus-visible {
   }
 
   .tree-dir[open] > summary > .tree-chev,
-  .diff-file[open] > summary > .diff-chev {
+  .diff-file[open] > summary .diff-chev {
     transform: rotate(90deg);
+  }
+
+  .changes-tree-foot {
+    padding: var(--space-2) var(--space-3);
+    border-top: 1px solid var(--color-border);
   }
 
   .tree-kind {
@@ -3968,6 +3973,9 @@ summary.prompt-bar:focus-visible {
     color: var(--color-s-running);
     display: grid;
   }
+
+  .diff-line:hover .diff-add-comment,
+  .diff-line.is-focus .diff-add-comment,
 
   .diff-line:hover .diff-add-comment,
   .diff-line.is-focus .diff-add-comment,
@@ -4497,7 +4505,18 @@ summary.prompt-bar:focus-visible {
     background: var(--color-s-failed-soft);
   }
 
-  .diff-line.diff-ws {
+  .diff-added .diff-no {
+    background: var(--color-s-done-soft);
+    color: var(--color-s-done);
+  }
+
+  .diff-deleted .diff-no {
+    background: var(--color-s-failed-soft);
+    color: var(--color-s-failed);
+  }
+
+  .diff-line.diff-ws,
+  .diff-line.diff-ws .diff-no {
     background: transparent;
   }
 
