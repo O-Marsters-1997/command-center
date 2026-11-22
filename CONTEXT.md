@@ -195,6 +195,12 @@ inside a scroll container that never swaps, keeps its expanded features in a coo
 selected session from the current URL (ADR 15). Below 760px it is the home screen.
 _Avoid_: Collapsed nav, mini sidebar, icon bar, session list
 
+**Inspector**:
+The Detail page's right-hand column, collapsible, with a Details tab (the stack panel) and an
+Activity tab (the tray's body). Open state and tab live in a cookie (ADR 26). Other pages show
+Activity as a dropdown instead.
+_Avoid_: Right sidebar (the Sidebar is the left column), stack panel (that is the Details tab), drawer
+
 **Breadcrumb**:
 The top bar's path to the current page: project, feature and title on a session, project and
 feature on a feature, `Repos` and the repo on a repo, one crumb elsewhere. Sits beside the sidebar outside every `hx-swap` target.
