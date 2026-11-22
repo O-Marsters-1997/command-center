@@ -102,9 +102,10 @@ type Consumption struct {
 }
 
 type FollowUpPayload struct {
-	Message string      `json:"message"`
-	Model   string      `json:"model"`
-	Effort  plan.Effort `json:"effort,omitempty"`
+	Message  string               `json:"message"`
+	Model    string               `json:"model"`
+	Effort   plan.Effort          `json:"effort,omitempty"`
+	Comments []plan.ReviewComment `json:"comments,omitempty"`
 }
 
 func (p FollowUpPayload) Encode() (string, error) {

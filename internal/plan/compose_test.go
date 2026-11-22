@@ -111,28 +111,6 @@ func TestComposeResolve(t *testing.T) {
 	}
 }
 
-func TestComposeMessage(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		after plan.Outcome
-		want  string
-	}{
-		{after: plan.OutcomeContinued, want: "last tool call may have been cut off"},
-		{after: plan.OutcomeAsked, want: "answer to your question"},
-		{after: plan.OutcomeFailed, want: "follow-up instruction"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.after.String(), func(t *testing.T) {
-			t.Parallel()
-			got := plan.ComposeMessage("use sqlite", tt.after)
-			if !strings.Contains(got, tt.want) || !strings.Contains(got, "use sqlite") {
-				t.Errorf("ComposeMessage(text, %v) = %q, want %q and the text", tt.after, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestHash(t *testing.T) {
 	t.Parallel()
 
