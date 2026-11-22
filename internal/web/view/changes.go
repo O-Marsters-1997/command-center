@@ -65,6 +65,7 @@ type ChangesPage struct {
 	ViewedKey   string
 	Tree        TreeDir
 	Reason      plan.Reason
+	Request     RequestChanges
 }
 
 type changeSet struct {
@@ -154,6 +155,7 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef) (Ch
 		ViewedKey:   "cc:viewed:" + row.URL + ":" + string(tip),
 		Tree:        buildTree(changes.Files),
 		Reason:      entry.Reason,
+		Request:     NewRequestChanges(self, tip, changes.CanFollowUp, entry.Reason, "", pending),
 	}, nil
 }
 
