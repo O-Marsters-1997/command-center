@@ -2,6 +2,8 @@ package web_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -171,6 +173,55 @@ func TestFactoryPage(t *testing.T) {
 		}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("fold-all links mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a card's verb queues the same intent as the session verb", func(t *testing.T) {
+		t.Parallel()
+		st := seededRunning(t)
+		server := newServer(st, testNow)
+
+		root := htmltest.Parse(t, renderPath(t, server, "/factory"))
+		form := factoryColumn(t, root, "working").One(t, `form[action="/verb"]`)
+		fields := url.Values{}
+		for _, in := range form.Find("input") {
+			name, _ := in.Attr("name")
+			value, _ := in.Attr("value")
+			fields.Set(name, value)
+		}
+		fields.Set("verb", "kill")
+		got := do(t, server, http.MethodPost, "/verb", req{Form: fields})
+		if got.Code != http.StatusSeeOther || got.Location != "/factory" {
+			t.Fatalf("POST /verb from the floor = %d %q, want 303 /factory", got.Code, got.Location)
+		}
+		if diff := cmp.Diff([]string{"sandbox://CC-1 "}, pendingVerbs(t, st, "kill")); diff != "" {
+			t.Errorf("pending kill intents mismatch (-want +got):\n%s", diff)
+		}
+		queued := factoryColumn(t, htmltest.Parse(t, renderPath(t, server, "/factory")), "working")
+		if text := queued.Text(); !strings.Contains(text, "queued") {
+			t.Errorf("working column after kill = %q, want queued", text)
+		}
+	})
+
+	t.Run("ready cards launch and blocked cards arm", func(t *testing.T) {
+		t.Parallel()
+		root := htmltest.Parse(t, renderPath(t, newServer(seededStore(t, testNow), testNow), "/factory"))
+
+		if got := factoryColumn(t, root, "ready").One(t, `form[action="/launch"] button`).Text(); got != "Launch" {
+			t.Errorf("ready card button = %q, want Launch", got)
+		}
+		if got := factoryColumn(t, root, "blocked").One(t, `form[action="/launch"] button`).Text(); got != "Arm" {
+			t.Errorf("blocked card button = %q, want Arm", got)
+		}
+	})
+
+	t.Run("a launch from the floor returns to the floor", func(t *testing.T) {
+		t.Parallel()
+		got := do(t, newServer(seededStore(t, testNow), testNow), http.MethodPost, "/launch", req{
+			Form: url.Values{"ticket": {"sandbox://CC-1"}, "return": {"/factory?feature=project%3Aalpha"}},
+		})
+		if got.Code != http.StatusSeeOther || got.Location != "/factory?feature=project%3Aalpha" {
+			t.Errorf("POST /launch = %d %q, want 303 back to the floor", got.Code, got.Location)
 		}
 	})
 

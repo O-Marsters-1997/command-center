@@ -14,13 +14,12 @@
 {{- else if .Detail}}<p class="factory-card-line">{{.Detail}}</p>{{end}}
 {{- end}}
 
-{{define "factoryCard" -}}
-<article class="factory-card" style="view-transition-name: {{.TransitionName}}"{{if .Flagged}} data-flagged="{{.Glyph}}"{{end}}{{if eq .Glyph "blocked"}} data-blocked{{end}}>
+{{define "factoryCardBody" -}}
   <a class="grid gap-1 text-inherit no-underline" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>
     <span class="flex items-center gap-1.5">
       <span class="glyph{{if .Alive}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" title="{{.Label}}"></span>
       <span class="font-mono text-xs text-meta">{{.Ticket}}</span>
-      <span class="ml-auto font-mono text-xs text-meta">{{if .Elapsed}}{{.Elapsed}}{{else}}{{template "age" .Updated}}{{end}}</span>
+      {{- if .InStage.IsSome}}<span class="ml-auto font-mono text-xs text-meta" title="Time in this stage">{{template "age" .InStage.Unwrap}}</span>{{end}}
     </span>
     <b class="factory-card-title">{{if .Title}}{{.Title}}{{else}}Untitled{{end}}</b>
   </a>
@@ -35,7 +34,6 @@
     {{- if .PRURL}}<a class="ml-auto text-xs text-muted" href="{{.PRURL}}" target="_blank" rel="noopener">PR #{{.PRNumber}}</a>{{end}}
   </span>
   {{- end}}
-</article>
 {{- end}}
 
 {{template "shellStart" .}}
@@ -104,11 +102,36 @@
   {{- if .Open}}
   <div class="factory-floor">
     {{- range .Columns}}
-    <section class="factory-col" data-stage="{{.Stage}}" aria-label="{{.Title}}, {{.Total}}">
-      <h3 class="flex h-[30px] items-center gap-2 px-1 text-sm font-medium text-fg-2">
+    <section class="factory-col" data-stage="{{.Stage}}"{{if .Pressure}} data-pressure{{end}} aria-label="{{.Title}}, {{.Total}}">
+      <h3 class="factory-col-head flex h-[30px] items-center gap-2 px-1 text-sm font-medium text-fg-2">
         <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{.Title}} <span class="section-count">{{.Total}}</span>
+        {{- if .Oldest.IsSome}}<span class="ml-auto font-mono text-xs font-normal text-meta" title="Longest time in Review me">oldest {{template "age" .Oldest.Unwrap}}</span>{{end}}
       </h3>
-      {{- range .Cards}}{{template "factoryCard" .}}{{else}}<p class="factory-empty">{{.Empty}}</p>{{end}}
+      {{- range .Cards}}
+      <article class="factory-card" style="view-transition-name: {{.TransitionName}}"{{if .Flagged}} data-flagged="{{.Glyph}}"{{end}}{{if eq .Glyph "blocked"}} data-blocked{{end}}{{if not (or .Flagged .Launchable)}} data-calm{{end}}>
+        {{- template "factoryCardBody" .}}
+        {{- if or .Buttons .Launchable}}
+        <div class="factory-card-verbs">
+          {{- $row := .}}
+          {{- range .Buttons}}
+          <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-swap="none"{{with .Confirm}} hx-confirm="{{.}}"{{end}}>
+            <input type="hidden" name="ticket" value="{{$row.URL}}">
+            <input type="hidden" name="return" value="{{$.FloorPath}}">
+            <button class="btn btn-sm" type="submit" name="verb" value="{{.Verb}}"{{if .Pending}} disabled{{end}}>{{.Label}}</button>
+            {{- if .Pending}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+          </form>
+          {{- end}}
+          {{- if .Selectable}}
+          <form method="post" action="/launch" hx-post="/launch" hx-disabled-elt="find button" hx-swap="none">
+            <input type="hidden" name="ticket" value="{{.URL}}">
+            <input type="hidden" name="return" value="{{$.FloorPath}}">
+            <button class="btn btn-sm btn-primary" type="submit">{{if .WillArm}}Arm{{else}}Launch{{end}}</button>
+          </form>
+          {{- else if .Launchable}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+        </div>
+        {{- end}}
+      </article>
+      {{- else}}<p class="factory-empty">{{.Empty}}</p>{{end}}
       {{- if .More}}<a class="btn btn-sm btn-ghost w-full" href="{{.More}}" {{template "nav" .More}}>Show {{.Hidden}} more</a>{{end}}
       {{- if .Fewer}}<a class="btn btn-sm btn-ghost w-full" href="{{.Fewer}}" {{template "nav" .Fewer}}>Show fewer</a>{{end}}
       {{- if .SeeAll}}<a class="btn btn-sm btn-ghost w-full" href="{{.SeeAll}}" {{template "nav" .SeeAll}}>See all {{.Total}} merged</a>{{end}}

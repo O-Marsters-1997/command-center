@@ -2859,6 +2859,43 @@ summary.prompt-bar:focus-visible {
     background: var(--color-s-failed-soft);
   }
 
+  .factory-card-verbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .factory-card-verbs form {
+    display: contents;
+  }
+
+  .factory-card-verbs .btn {
+    min-height: 36px;
+  }
+
+  @media (hover: hover) and (pointer: fine) and (min-width: 761px) {
+    .factory-card-verbs .btn {
+      min-height: 0;
+    }
+
+    .factory-card[data-calm] .factory-card-verbs .btn {
+      opacity: 0;
+      transition: opacity var(--motion-fast) var(--ease-out);
+    }
+
+    .factory-card[data-calm]:hover .factory-card-verbs .btn,
+    .factory-card[data-calm]:focus-within .factory-card-verbs .btn {
+      opacity: 1;
+    }
+  }
+
+  .factory-col[data-pressure] .factory-col-head {
+    border-radius: var(--radius-md);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
+
   .factory-card-title {
     display: -webkit-box;
     overflow: hidden;

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
@@ -31,6 +32,7 @@ type Row struct {
 	Label          string                           `json:"label"`
 	Detail         string                           `json:"detail"`
 	Updated        Age                              `json:"-"`
+	InStage        option.Option[Age]               `json:"-"`
 	Last           string                           `json:"-"`
 	Question       string                           `json:"-"`
 	Glyph          plan.GlyphWord                   `json:"glyph"`
@@ -168,6 +170,10 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			elapsed = e.Elapsed.Unwrap().String()
 			elapsedSeconds = int(e.Elapsed.Unwrap().Seconds())
 		}
+		inStage := option.None[Age]()
+		if since, ok := e.StageSince.Get(); ok {
+			inStage = option.Some(Age{Age: shortAge(in.Now.Sub(since)), Stamp: since.UTC().Format(time.RFC3339)})
+		}
 		refusal := removalWarning(e.State, in.Removals[url])
 		rows = append(rows, Row{
 			URL:            t.URL,
@@ -183,6 +189,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Label:          e.State.Label(),
 			Detail:         detailOf(string(e.Reason)),
 			Question:       question,
+			InStage:        inStage,
 			Glyph:          e.State.Glyph(),
 			Alive:          in.Obs.Runs[url].Alive,
 			Verbs:          plan.Verbs(e.State),

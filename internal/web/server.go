@@ -559,7 +559,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 			return fmt.Errorf("queue launch intent: %w", err)
 		}
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, returnPath(r.FormValue("return"), "/", "/"), http.StatusSeeOther)
 	return nil
 }
 

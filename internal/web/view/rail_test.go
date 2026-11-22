@@ -16,6 +16,7 @@ var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 var equateRows = cmp.Options{
 	cmpopts.EquateComparable(option.Option[plan.IntentStatus]{}),
+	cmpopts.EquateComparable(option.Option[view.Age]{}),
 	cmp.AllowUnexported(option.Option[view.LogLine]{}),
 }
 
