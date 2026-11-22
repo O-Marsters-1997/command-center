@@ -55,7 +55,7 @@ export function nextUnviewed(viewed: readonly boolean[], cur: number): number {
   return -1;
 }
 
-export function stripSpace(s: string): string {
+function stripSpace(s: string): string {
   return s.replace(/\s+/g, "");
 }
 
@@ -165,16 +165,18 @@ function files(): HTMLDetailsElement[] {
   return [...document.querySelectorAll<HTMLDetailsElement>("details.diff-file")];
 }
 
-function currentFile(): HTMLDetailsElement | null {
-  const fromFocus = fileOf(focused());
-  if (fromFocus) return fromFocus;
+function fileInView(): HTMLDetailsElement | null {
   const all = files();
   const above = all.filter((f) => f.getBoundingClientRect().top < 160);
   return above[above.length - 1] ?? all[0] ?? null;
 }
 
-function markActive(): void {
-  const path = currentFile()?.dataset.file;
+function currentFile(): HTMLDetailsElement | null {
+  return fileOf(focused()) ?? fileInView();
+}
+
+function markActive(byScroll = false): void {
+  const path = (byScroll ? fileInView() : currentFile())?.dataset.file;
   for (const row of document.querySelectorAll<HTMLElement>(".tree-file")) {
     const on = row.dataset.file === path;
     row.classList.toggle("is-active", on);
@@ -259,15 +261,18 @@ function enhance(): void {
   const root = document.querySelector<HTMLElement>("[data-changes]");
   if (!root) return;
   highlight(root);
-  const ws = root.querySelector<HTMLInputElement>("#changes-ws");
-  const wrap = root.querySelector<HTMLInputElement>("#changes-wrap");
-  if (ws) {
-    ws.checked = stored(wsKey);
-    applyWhitespace(root, ws.checked);
-  }
-  if (wrap) {
-    wrap.checked = stored(wrapKey);
-    root.classList.toggle("is-wrap", wrap.checked);
+  if (root.dataset.ready === undefined) {
+    root.dataset.ready = "";
+    const ws = root.querySelector<HTMLInputElement>("#changes-ws");
+    const wrap = root.querySelector<HTMLInputElement>("#changes-wrap");
+    if (ws) {
+      ws.checked = stored(wsKey);
+      applyWhitespace(root, ws.checked);
+    }
+    if (wrap) {
+      wrap.checked = stored(wrapKey);
+      root.classList.toggle("is-wrap", wrap.checked);
+    }
   }
   markActive();
 }
@@ -282,6 +287,7 @@ function init(): void {
     (e) => {
       if (!document.querySelector("[data-changes]") || document.querySelector("dialog[open]")) return;
       if (isField(document.activeElement)) return;
+      if (e.key === "Escape") setFocus(null);
       const action = actionFor(e);
       if (!action) return;
       e.preventDefault();
@@ -316,11 +322,12 @@ function init(): void {
     "scroll",
     () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(markActive);
+      frame = requestAnimationFrame(() => markActive(true));
     },
     { passive: true },
   );
   document.addEventListener("htmx:afterSettle", enhance);
+  document.addEventListener("htmx:historyRestore", enhance);
   enhance();
 }
 
