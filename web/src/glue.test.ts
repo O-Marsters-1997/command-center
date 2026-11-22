@@ -6,39 +6,10 @@ import {
   maxLiveLines,
   modifierLabel,
   nextTab,
-  parseViewed,
   railClosedCookie,
   scopeOf,
   shouldHop,
-  viewedCount,
-  viewedLabel,
-  viewedPercent,
-  withViewed,
 } from "./glue";
-
-test("viewedCount and viewedPercent", () => {
-  expect(viewedCount(2, 5)).toBe("2/5");
-  expect(viewedPercent(1, 4)).toBe("25%");
-  expect(viewedPercent(0, 0)).toBe("0%");
-});
-
-test("parseViewed keeps only a stored list of paths", () => {
-  expect(parseViewed('["a","b"]')).toEqual(["a", "b"]);
-  expect(parseViewed('["a",1]')).toEqual(["a"]);
-  expect(parseViewed(null)).toEqual([]);
-  expect(parseViewed("{")).toEqual([]);
-  expect(parseViewed('{"a":1}')).toEqual([]);
-});
-
-test("withViewed marks and unmarks a file once", () => {
-  expect(withViewed(["a"], "b", true)).toEqual(["a", "b"]);
-  expect(withViewed(["a", "b"], "a", true)).toEqual(["b", "a"]);
-  expect(withViewed(["a", "b"], "a", false)).toEqual(["b"]);
-});
-
-test("viewedLabel reads as progress", () => {
-  expect(viewedLabel(4, 4)).toBe("4 of 4 viewed");
-});
 
 test("a failed response names its status", () => {
   expect(failureText("responseError", 500)).toContain("500");

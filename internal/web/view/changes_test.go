@@ -72,6 +72,21 @@ func TestChangedFile_Bar(t *testing.T) {
 	}
 }
 
+func TestChangedFile_DiffHash(t *testing.T) {
+	t.Parallel()
+	file := func(text string) view.ChangedFile {
+		return view.ChangedFile{FileDiff: git.FileDiff{Path: "a.go", Hunks: []git.Hunk{
+			{Header: "@@ -1 +1 @@", Lines: []git.DiffLine{{Kind: git.LineAdded, NewLine: 1, Text: text}}},
+		}}}
+	}
+	if a, b := file("x").DiffHash(), file("x").DiffHash(); a != b {
+		t.Errorf("DiffHash() of the same diff = %q then %q, want equal", a, b)
+	}
+	if a, b := file("x").DiffHash(), file("y").DiffHash(); a == b {
+		t.Errorf("DiffHash() = %q for different hunks, want them to differ", a)
+	}
+}
+
 func TestBuildTree(t *testing.T) {
 	t.Parallel()
 	paths := []string{

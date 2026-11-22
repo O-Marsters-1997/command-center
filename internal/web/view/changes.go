@@ -3,6 +3,8 @@ package view
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -62,7 +64,6 @@ type ChangesPage struct {
 	Chrome
 	Changes
 	SessionPath string
-	ViewedKey   string
 	Tree        TreeDir
 	Reason      plan.Reason
 	Request     RequestChanges
@@ -152,7 +153,6 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef) (Ch
 		Chrome:      chrome,
 		Changes:     changes,
 		SessionPath: self,
-		ViewedKey:   "cc:viewed:" + row.URL + ":" + string(tip),
 		Tree:        buildTree(changes.Files),
 		Reason:      entry.Reason,
 		Request:     NewRequestChanges(self, tip, changes.CanFollowUp, entry.Reason, "", pending),
@@ -381,6 +381,19 @@ func (f ChangedFile) Dir() string {
 }
 
 func (f ChangedFile) Base() string { return path.Base(f.Path) }
+
+func (f ChangedFile) DiffHash() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\x00%s\x00%s\x00%t\x00", f.OldPath, f.Path, f.Kind, f.Binary)
+	for _, hunk := range f.Hunks {
+		b.WriteString(hunk.Header + "\x00")
+		for _, l := range hunk.Lines {
+			b.WriteString(linePrefix(l.Kind) + l.Text + "\x00")
+		}
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:8])
+}
 
 func (f ChangedFile) KindLabel() string {
 	k := string(f.Kind)

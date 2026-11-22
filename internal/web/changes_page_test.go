@@ -83,9 +83,17 @@ func TestChangesPage(t *testing.T) {
 		if len(flagged) != 1 || flagged[0].Text() != "protected" {
 			t.Errorf("GET /s/acme/web/1/changes protected flags = %d, want one reading %q", len(flagged), "protected")
 		}
-		wantKey := "cc:viewed:" + sessionTicket + ":" + sha
-		if got, _ := page.One(t, "[data-changes]").Attr("data-viewed-key"); got != wantKey {
-			t.Errorf("GET /s/acme/web/1/changes data-viewed-key = %q, want %q", got, wantKey)
+		root := page.One(t, "[data-changes]")
+		if got, _ := root.Attr("data-ticket"); got != sessionTicket {
+			t.Errorf("GET /s/acme/web/1/changes data-ticket = %q, want %q", got, sessionTicket)
+		}
+		if got, _ := root.Attr("data-tip"); got != sha {
+			t.Errorf("GET /s/acme/web/1/changes data-tip = %q, want %q", got, sha)
+		}
+		for _, f := range page.Find("details.diff-file") {
+			if got, _ := f.Attr("data-diff-hash"); got == "" {
+				t.Errorf("GET /s/acme/web/1/changes file %q has no data-diff-hash", f.Text())
+			}
 		}
 	})
 
