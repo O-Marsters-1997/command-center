@@ -216,7 +216,8 @@ func TestChangesPage(t *testing.T) {
 			"line": {strconv.Itoa(one.Line)}, "hunk": {one.Hunk}, "body": {"first\nsecond"},
 		}
 		restored := do(t, server, http.MethodPost, base+"/restore", req{Form: restore})
-		if restored.Code != http.StatusOK || !strings.Contains(restored.Body, `hx-swap-oob="afterend:#l-`) {
+		if restored.Code != http.StatusOK || !strings.Contains(restored.Body, `<tbody hx-swap-oob="afterend:#l-`) ||
+			!strings.Contains(restored.Body, `<tr class="review-thread"`) {
 			t.Fatalf("POST restore = %d %q, want 200 placing the card after its line", restored.Code, restored.Body)
 		}
 

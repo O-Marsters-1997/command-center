@@ -185,7 +185,6 @@ type ReviewThread struct {
 	SessionPath string
 	Comment     plan.ReviewComment
 	Pending     int
-	Restored    bool
 }
 
 type ReviewForm struct {

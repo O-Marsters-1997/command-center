@@ -249,7 +249,7 @@
 
 {{define "raiseResult"}}{{if .Problem}}<p class="flag flag-warning">{{.Problem}}</p>{{else}}<a href="{{.PRURL}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
 
-{{define "reviewThread"}}<tr class="review-thread" id="c-{{.Comment.ID}}" data-comment data-path="{{.Comment.Path}}" data-line="{{.Comment.Line}}"{{if .Restored}} hx-swap-oob="afterend:#{{.LineID}}"{{end}}><td colspan="4">
+{{define "reviewThread"}}<tr class="review-thread" id="c-{{.Comment.ID}}" data-comment data-path="{{.Comment.Path}}" data-line="{{.Comment.Line}}"><td colspan="4">
   <div class="review-comment">
     <div class="review-head">
       <span class="flag">Pending</span><span class="sp"></span>
@@ -289,4 +289,4 @@
   <button type="button" hx-post="{{.SessionPath}}/changes/comments/restore" hx-vals="{{.Vals}}" hx-target="#toast" hx-swap="innerHTML">Undo</button>
 </div>{{end}}
 
-{{define "reviewRestored"}}{{template "reviewThread" .}}{{template "reqChipSwap" .Pending}}{{end}}
+{{define "reviewRestored"}}<tbody hx-swap-oob="afterend:#{{.LineID}}">{{template "reviewThread" .}}</tbody>{{template "reqChipSwap" .Pending}}{{end}}
