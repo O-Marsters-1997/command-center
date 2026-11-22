@@ -101,6 +101,10 @@ func railIntent(rec IntentRecord, latestRun RunSummary, state State, now time.Ti
 		run = option.Some(latestRun)
 	}
 	st := StatusOf(rec, run, now)
+	if st.Outcome == IntentDone && rec.Verb == VerbResolve && run.IsSome() && state == PushPending {
+		st.Glyph = GlyphPending
+		return option.Some(st)
+	}
 	if st.Outcome == IntentInProgress || (st.Outcome == IntentFailed && state == rec.TicketState) {
 		return option.Some(st)
 	}
