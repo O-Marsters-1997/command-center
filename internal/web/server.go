@@ -111,6 +111,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
+	mux.Handle("GET /s/{owner}/{name}/{n}/changes/expand", s.handle(s.handleExpand))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes/comment", s.handle(s.handleCommentForm))
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments", s.handle(s.handleAddComment))
 	mux.Handle("POST /s/{owner}/{name}/{n}/changes/comments/{id}/delete", s.handle(s.handleDeleteComment))
