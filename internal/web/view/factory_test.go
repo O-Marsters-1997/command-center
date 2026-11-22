@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -117,4 +118,75 @@ func TestCard_TransitionName(t *testing.T) {
 			t.Errorf("TransitionName() = %q, want a CSS ident", name)
 		}
 	}
+}
+
+func inStage(stamp string) option.Option[view.Age] {
+	return option.Some(view.Age{Age: "1h", Stamp: stamp})
+}
+
+func floorColumn(t *testing.T, columns []view.Column, stage plan.Stage) view.Column {
+	t.Helper()
+	for _, c := range columns {
+		if c.Stage == stage {
+			return c
+		}
+	}
+	t.Fatalf("no %s column", stage)
+	return view.Column{}
+}
+
+func floorColumns(rows []view.Row) []view.Column {
+	lanes, _ := view.BuildFloor(rows, view.FactoryParams{})
+	return lanes[0].Columns
+}
+
+func TestBuildFloor(t *testing.T) {
+	t.Parallel()
+
+	t.Run("flagged cards sort first and review cards are never flagged", func(t *testing.T) {
+		t.Parallel()
+		rows := []view.Row{
+			{URL: "sandbox://A-1", Stage: plan.StageWorking, Glyph: plan.GlyphRunning},
+			{URL: "sandbox://A-2", Stage: plan.StageWorking, Glyph: plan.GlyphFailed},
+			{URL: "sandbox://R-1", Stage: plan.StageReview, Glyph: plan.GlyphAttention},
+		}
+		columns := floorColumns(rows)
+
+		var order []string
+		for _, c := range floorColumn(t, columns, plan.StageWorking).Cards {
+			order = append(order, c.URL)
+		}
+		if diff := cmp.Diff([]string{"sandbox://A-2", "sandbox://A-1"}, order); diff != "" {
+			t.Errorf("Agent working order mismatch (-want +got):\n%s", diff)
+		}
+		if review := floorColumn(t, columns, plan.StageReview); review.Cards[0].Flagged {
+			t.Errorf("review card flagged = true, want false")
+		}
+	})
+
+	t.Run("review reports its oldest card and pressure at three", func(t *testing.T) {
+		t.Parallel()
+		review := func(url, stamp string) view.Row {
+			return view.Row{URL: url, Stage: plan.StageReview, Glyph: plan.GlyphAttention, InStage: inStage(stamp)}
+		}
+		two := []view.Row{
+			review("sandbox://R-1", "2026-01-02T00:00:00Z"), review("sandbox://R-2", "2026-01-01T00:00:00Z"),
+		}
+		columns := floorColumns(two)
+		got := floorColumn(t, columns, plan.StageReview)
+		if got.Pressure {
+			t.Errorf("two review cards: Pressure = true, want false")
+		}
+		if want := inStage("2026-01-01T00:00:00Z"); got.Oldest != want {
+			t.Errorf("Oldest = %v, want %v", got.Oldest, want)
+		}
+
+		columns = floorColumns(append(two, review("sandbox://R-3", "2026-01-03T00:00:00Z")))
+		if got := floorColumn(t, columns, plan.StageReview); !got.Pressure {
+			t.Errorf("three review cards: Pressure = false, want true")
+		}
+		if got := floorColumn(t, columns, plan.StageWorking); got.Pressure || got.Oldest.IsSome() {
+			t.Errorf("working column carries review pressure: %+v", got)
+		}
+	})
 }

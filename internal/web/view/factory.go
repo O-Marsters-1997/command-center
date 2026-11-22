@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 const (
 	factoryPath       = "/factory"
 	factoryMergedCap  = 10
 	factoryBlockedCap = 4
+	reviewPressure    = 3
 )
 
 type LaneBy string
@@ -87,24 +89,38 @@ type FactoryCounts struct {
 }
 
 type Column struct {
-	Stage  plan.Stage
-	Glyph  plan.GlyphWord
-	Title  string
-	Empty  string
-	Cards  []Card
-	Total  int
-	Hidden int
-	More   string
-	Fewer  string
-	SeeAll string
+	Stage    plan.Stage
+	Glyph    plan.GlyphWord
+	Title    string
+	Empty    string
+	Cards    []Card
+	Total    int
+	Hidden   int
+	More     string
+	Fewer    string
+	SeeAll   string
+	Oldest   option.Option[Age]
+	Pressure bool
 }
 
 type Card struct {
 	Row
+	Flagged bool
 }
 
-func (c Card) Flagged() bool {
-	return c.Stage != plan.StageReview && (c.Glyph == plan.GlyphFailed || c.Glyph == plan.GlyphAttention)
+func newCard(r Row) Card {
+	flagged := r.Stage != plan.StageReview && (r.Glyph == plan.GlyphFailed || r.Glyph == plan.GlyphAttention)
+	return Card{Row: r, Flagged: flagged}
+}
+
+func oldestInStage(cards []Card) option.Option[Age] {
+	oldest := option.None[Age]()
+	for _, c := range cards {
+		if age, ok := c.InStage.Get(); ok && (oldest.IsNone() || age.Stamp < oldest.Unwrap().Stamp) {
+			oldest = c.InStage
+		}
+	}
+	return oldest
 }
 
 func (c Card) TransitionName() string {
@@ -236,14 +252,14 @@ func buildFloor(rows []Row, fp FactoryParams) ([]Lane, FactoryCounts) {
 			}
 			b = newBuild(key, name, mark)
 		}
-		c := Card{r}
+		c := newCard(r)
 		b.byStage[r.Stage] = append(b.byStage[r.Stage], c)
 		b.Count++
 		if r.Alive {
 			b.Working++
 			counts.Working++
 		}
-		if c.Flagged() {
+		if c.Flagged {
 			b.NeedsYou++
 			counts.NeedsYou++
 		}
@@ -305,14 +321,18 @@ func floorColumns(byStage map[plan.Stage][]Card, fp FactoryParams) []Column {
 			}
 		case plan.StageNone, plan.StageReady, plan.StageWorking, plan.StagePR, plan.StageReview:
 			slices.SortStableFunc(cards, func(a, b Card) int {
-				if a.Flagged() != b.Flagged() {
-					if a.Flagged() {
+				if a.Flagged != b.Flagged {
+					if a.Flagged {
 						return -1
 					}
 					return 1
 				}
 				return cmp.Compare(a.Updated.Stamp, b.Updated.Stamp)
 			})
+		}
+		if def.Stage == plan.StageReview {
+			col.Oldest = oldestInStage(cards)
+			col.Pressure = len(cards) >= reviewPressure
 		}
 		col.Cards = cards
 		columns[i] = col
