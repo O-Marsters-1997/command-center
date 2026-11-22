@@ -39,6 +39,17 @@ func (s *Store) DeleteReviewComment(ctx context.Context, ticket plan.TicketURL, 
 	return nil
 }
 
+func (s *Store) EditReviewComment(ctx context.Context, ticket plan.TicketURL, id int64, body string) error {
+	n, err := s.q.EditReviewComment(ctx, ccdb.EditReviewCommentParams{TicketID: string(ticket), ID: id, Body: body})
+	if err != nil {
+		return fmt.Errorf("edit review comment %d on %s: %w", id, ticket, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("review comment %d on %s: %w", id, ticket, ErrNotFound)
+	}
+	return nil
+}
+
 func (s *Store) RequestChanges(
 	ctx context.Context, ticket plan.TicketURL, payload FollowUpPayload, at time.Time,
 ) error {

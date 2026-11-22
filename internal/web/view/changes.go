@@ -185,6 +185,7 @@ type ReviewThread struct {
 	SessionPath string
 	Comment     plan.ReviewComment
 	Pending     int
+	Restored    bool
 }
 
 type ReviewForm struct {
@@ -193,6 +194,10 @@ type ReviewForm struct {
 	Side        plan.Side
 	Line        int
 }
+
+func (t ReviewThread) LineID() string { return lineID(t.Comment.Path, t.Comment.Side, t.Comment.Line) }
+
+func (t ReviewThread) Vals() (string, error) { return restoreVals(t.Comment) }
 
 func (p ChangesPage) Thread(c plan.ReviewComment) ReviewThread {
 	return ReviewThread{SessionPath: p.SessionPath, Comment: c}

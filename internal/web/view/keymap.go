@@ -40,6 +40,8 @@ var Keymap = []KeyGroup{
 		{"V", "Mark the file viewed"},
 		{"Shift V", "Mark viewed and go to the next unviewed file"},
 		{"O", "Collapse or expand the file"},
+		{"C", "Comment on the focused line"},
+		{"Shift L", "Pending comments"},
 		{"/", "Filter files"},
 	}},
 	{"In a feature", []KeyRow{

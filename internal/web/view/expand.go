@@ -36,6 +36,12 @@ type LineRow struct {
 	Comments    []plan.ReviewComment
 }
 
+func lineID(path string, side plan.Side, line int) string {
+	return fmt.Sprintf("l-%x-%s-%d", path, side, line)
+}
+
+func (r LineRow) ID() string { return lineID(r.Path, r.Side(), r.Number()) }
+
 func (r LineRow) Thread(c plan.ReviewComment) ReviewThread {
 	return ReviewThread{SessionPath: r.SessionPath, Comment: c}
 }

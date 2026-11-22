@@ -59,6 +59,8 @@ describe("actionFor", () => {
   test("maps diffKeys and ignores modified presses", () => {
     expect(actionFor(key("V"))).toBe("viewed-and-next");
     expect(actionFor(key("j", { metaKey: true }))).toBeUndefined();
+    expect(actionFor(key("c"))).toBe("comment");
+    expect(actionFor(key("L"))).toBe("comments");
     expect(actionFor(key("x"))).toBeUndefined();
   });
 });

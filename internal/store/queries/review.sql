@@ -15,3 +15,6 @@ FROM review_comments
 WHERE ticket_id = sqlc.arg(ticket_id)
 ORDER BY id
 LIMIT 1000;
+
+-- name: EditReviewComment :execrows
+UPDATE review_comments SET body = sqlc.arg(body) WHERE ticket_id = sqlc.arg(ticket_id) AND id = sqlc.arg(id);
