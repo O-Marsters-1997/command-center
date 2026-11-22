@@ -58,7 +58,7 @@
 
 {{define "tray" -}}
 {{template "trayButton" .}}
-<div id="activity-tray" popover class="fixed inset-auto right-4 top-12 m-0 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border border-border bg-surface p-3 text-fg">
+<div id="activity-tray" popover class="fixed inset-auto right-4 top-12 m-0 open:flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border border-border bg-surface p-3 text-fg">
   {{- template "trayPolling" .}}
 </div>
 {{- end}}
