@@ -64,6 +64,10 @@
 
 {{define "shellContent" -}}
   {{template "tray" .Tray}}
+{{template "shellContentBare" .}}
+{{- end}}
+
+{{define "shellContentBare" -}}
   </div>
 </header>
 <div class="content">

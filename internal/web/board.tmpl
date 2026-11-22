@@ -13,6 +13,18 @@
 </header>
 {{- end}}
 
+{{define "featureDetails" -}}
+<h2 class="stack-title">{{.FeatureScope}}</h2>
+<dl class="stack-props">
+  {{- with .ProjectScope}}<dt>Project</dt><dd>{{.}}</dd>{{end}}
+  <dt>Tickets</dt><dd>{{.TicketCount}}</dd>
+  <dt>Waves</dt><dd>{{.WaveCount}}</dd>
+  {{- range .Sections}}
+  <dt>{{.Title}}</dt><dd>{{len .Rows}}</dd>
+  {{- end}}
+</dl>
+{{- end}}
+
 {{define "featureLaunch" -}}
 <a class="btn" href="{{featureLaunchPath .FeatureScope}}" data-key="c" {{template "nav" (featureLaunchPath .FeatureScope)}}>Launch{{if .LaunchCount}} · {{.LaunchCount}}{{end}}</a>
 {{- end}}

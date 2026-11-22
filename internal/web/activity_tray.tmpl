@@ -42,16 +42,47 @@
 <a href="/activity" {{template "nav" "/activity"}}>All activity &rsaquo;</a>
 {{- end}}
 
+{{define "activityTab"}}<label id="activity-tab" for="rb-activity" aria-label="Activity{{with .InProgress}}, {{len .}} in progress{{end}}">{{template "trayButtonInner" .}}</label>{{end}}
+
 {{define "trayFragment" -}}
 {{template "trayBody" .}}
 <button type="button" id="activity-button" class="btn btn-ghost btn-sm" popovertarget="activity-tray" hx-swap-oob="true" aria-label="Activity{{with .InProgress}}, {{len .}} in progress{{end}}">{{template "trayButtonInner" .}}</button>
+<label id="activity-tab" for="rb-activity" hx-swap-oob="true" aria-label="Activity{{with .InProgress}}, {{len .}} in progress{{end}}">{{template "trayButtonInner" .}}</label>
+{{- end}}
+
+{{define "trayPolling" -}}
+<div id="activity-tray-body" class="flex flex-col gap-3" hx-get="/activity/tray" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="innerHTML">
+  {{- template "trayBody" .}}
+</div>
 {{- end}}
 
 {{define "tray" -}}
 {{template "trayButton" .}}
 <div id="activity-tray" popover class="fixed inset-auto right-4 top-12 m-0 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border border-border bg-surface p-3 text-fg">
-  <div id="activity-tray-body" class="flex flex-col gap-3" hx-get="/activity/tray" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="innerHTML">
-    {{- template "trayBody" .}}
-  </div>
+  {{- template "trayPolling" .}}
 </div>
+{{- end}}
+
+{{define "rightbarStart" -}}
+<button type="button" class="btn stack-toggle" popovertarget="rightbar">Panel</button>
+<aside id="rightbar" class="rightbar stack-panel" popover aria-label="Details and activity">
+  <input type="checkbox" id="rb-collapse" class="sr-only" aria-label="Sidebar collapsed">
+  <div class="rb-bar">
+    <div class="rb-tabs" role="radiogroup" aria-label="Sidebar view">
+      <input type="radio" name="rb-view" id="rb-details" class="sr-only" checked>
+      <label for="rb-details">Details</label>
+      <input type="radio" name="rb-view" id="rb-activity" class="sr-only">
+      {{template "activityTab" .Tray}}
+    </div>
+    <label for="rb-collapse" class="rb-collapse" title="Collapse or expand the sidebar">{{template "icon" "chev"}}</label>
+  </div>
+  <div class="rb-panel rb-details">
+{{- end}}
+
+{{define "rightbarEnd" -}}
+  </div>
+  <div class="rb-panel rb-activity">
+    {{- template "trayPolling" .Tray}}
+  </div>
+</aside>
 {{- end}}
