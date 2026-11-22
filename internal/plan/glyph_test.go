@@ -15,7 +15,7 @@ func TestState_Glyph(t *testing.T) {
 		plan.RefreshConflicted:  plan.GlyphFailed,
 		plan.VerificationFailed: plan.GlyphFailed, plan.Withdrawn: plan.GlyphFailed,
 		plan.ReviewMe: plan.GlyphAttention, plan.NeedsYou: plan.GlyphAttention,
-		plan.AwaitingInput: plan.GlyphAttention, plan.PushRefused: plan.GlyphAttention,
+		plan.AwaitingInput: plan.GlyphAsked, plan.PushRefused: plan.GlyphAttention,
 		plan.Parked:     plan.GlyphAttention,
 		plan.AwaitingPR: plan.GlyphAttention,
 		plan.Running:    plan.GlyphRunning,
@@ -43,7 +43,7 @@ func TestOpenGlyph(t *testing.T) {
 	t.Parallel()
 
 	tests := map[plan.GlyphWord]bool{
-		plan.GlyphFailed: true, plan.GlyphAttention: true, plan.GlyphRunning: true,
+		plan.GlyphFailed: true, plan.GlyphAttention: true, plan.GlyphAsked: true, plan.GlyphRunning: true,
 		plan.GlyphPending: true, plan.GlyphChecking: true, plan.GlyphReady: true, plan.GlyphBlocked: true,
 		plan.GlyphDone: false, plan.GlyphUnknown: false,
 	}
@@ -67,6 +67,7 @@ func TestRailGroup(t *testing.T) {
 	}{
 		{glyph: plan.GlyphFailed, group: "needs-you"},
 		{glyph: plan.GlyphAttention, group: "needs-you"},
+		{glyph: plan.GlyphAsked, group: "needs-you"},
 		{glyph: plan.GlyphRunning, group: "in-flight"},
 		{glyph: plan.GlyphPending, group: "in-flight"},
 		{glyph: plan.GlyphChecking, group: "in-flight"},

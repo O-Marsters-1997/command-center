@@ -72,7 +72,7 @@ var stateInfo = map[State]stateSpec{
 		verbs: []Verb{VerbReRun, VerbFollowUp},
 	},
 	AwaitingInput: {
-		name: "awaiting_input", label: "Asked you a question", glyph: GlyphAttention,
+		name: "awaiting_input", label: "Asked you a question", glyph: GlyphAsked,
 		verbs: []Verb{VerbFollowUp, VerbReRun},
 	},
 	PushRefused: {

@@ -4,15 +4,15 @@
 
 ## Context
 
-Signal draws eight status glyphs and reserves indigo for "your move". The owner's first product
+Signal draws nine status glyphs and reserves indigo for "your move". The owner's first product
 principle is that what needs them outranks what is merely running, so the surface is ordered by
 attention, not by dependency.
 
 ## Decision
 
-- `plan.Glyph(State)` returns one of eight words: `blocked`, `ready`, `running`, `pending`,
-  `checking`, `attention`, `done`, `failed`. The mapping is one table in `plan`, with `attention`
-  covering `ReviewMe`, `NeedsYou` and `AwaitingInput`, and `failed` covering every state a human
+- `plan.Glyph(State)` returns one of nine words: `blocked`, `ready`, `running`, `pending`,
+  `checking`, `attention`, `asked`, `done`, `failed`. The mapping is one table in `plan`, with
+  `attention` covering `ReviewMe` and `NeedsYou`, `asked` covering `AwaitingInput`, and `failed` covering every state a human
   must repair.
 - `plan` returns words, glyphs and verbs, and `internal/web/view` owns how they are presented. One
   table keyed by `plan.Verb` holds each verb's label, key binding and confirm text; the row's
@@ -20,7 +20,7 @@ attention, not by dependency.
   has no verb table.
 - The template composes `glyph glyph-{word}` and `[data-glyph]`. Go returns a word, never a utility
   string. Segbars and meters colour by glyph too.
-- The rail groups by glyph: `failed` and `attention` are Needs you, `done` is Settled, everything else
+- The rail groups by glyph: `failed`, `attention` and `asked` are Needs you, `done` is Settled, everything else
   is In flight.
 - The board renders sections in a fixed order, Needs you, In progress, Ready, Blocked, Done, keyed by
   glyph. Scoping admits a blocker chain whole ([ADR 6](0006-scope-is-a-view-concern.md)) before rows

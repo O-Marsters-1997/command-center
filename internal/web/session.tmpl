@@ -101,7 +101,7 @@
     </div>
     {{- if .Log.Final.IsSome}}
     <section class="run-final" aria-label="Result">
-      <h2 class="run-final-label"><span class="glyph glyph-{{$.Row.Glyph}}" data-glyph="{{$.Row.Glyph}}" aria-hidden="true"></span>Result</h2>
+      <h2 class="run-final-label"><span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>Result</h2>
       {{template "logline" .Log.Final.Unwrap}}
     </section>
     {{- end}}

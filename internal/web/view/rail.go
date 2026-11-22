@@ -282,7 +282,7 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 				f.Blocked++
 			case plan.GlyphDone:
 				f.Merged++
-			case plan.GlyphUnknown, plan.GlyphFailed, plan.GlyphAttention, plan.GlyphRunning,
+			case plan.GlyphUnknown, plan.GlyphFailed, plan.GlyphAttention, plan.GlyphAsked, plan.GlyphRunning,
 				plan.GlyphPending, plan.GlyphChecking:
 			}
 			if group, folded := plan.RailGroup(r.Glyph); group != plan.GroupInFlight || folded {

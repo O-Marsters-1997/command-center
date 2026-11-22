@@ -1,5 +1,5 @@
 export type Glyph =
-  | "failed" | "attention" | "running" | "pending" | "checking" | "ready" | "blocked" | "done";
+  | "failed" | "attention" | "asked" | "running" | "pending" | "checking" | "ready" | "blocked" | "done";
 
 export type State =
   | "blocked" | "ready" | "queued" | "running" | "failed" | "push_pending" | "awaiting_pr"

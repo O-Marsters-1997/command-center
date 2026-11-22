@@ -297,9 +297,31 @@
   }
 
   [data-glyph="attention"],
-  .glyph-attention {
+  .glyph-attention,
+  [data-glyph="asked"],
+  .glyph-asked {
     --glyph: var(--color-s-attention);
     --fill: 75%;
+  }
+
+  .glyph.glyph-asked::before,
+  .glyph[data-glyph="asked"]::before {
+    padding: 0;
+    background: var(--glyph);
+  }
+
+  .glyph.glyph-asked::after,
+  .glyph[data-glyph="asked"]::after {
+    content: "?";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 14px;
+    height: 14px;
+    display: grid;
+    place-items: center;
+    font: 700 10px/1 var(--font-sans);
+    color: var(--color-surface);
   }
 
   [data-glyph="running"],
@@ -446,7 +468,8 @@
     width: 5px;
   }
 
-  .badge[data-glyph="attention"] {
+  .badge[data-glyph="attention"],
+  .badge[data-glyph="asked"] {
     background: var(--color-accent-soft);
     color: color-mix(in oklab, var(--color-accent), var(--color-ink) 10%);
   }
@@ -1552,7 +1575,8 @@
     color: color-mix(in oklab, var(--color-s-failed), var(--color-ink) 12%);
   }
 
-  .rail-card[data-glyph="attention"] .rail-reason b {
+  .rail-card[data-glyph="attention"] .rail-reason b,
+  .rail-card[data-glyph="asked"] .rail-reason b {
     color: var(--color-accent);
   }
 
@@ -2406,7 +2430,8 @@ summary.prompt-bar:focus-visible {
   background: color-mix(in oklab, var(--color-s-failed-soft), var(--color-surface) 40%);
 }
 
-.session-actions .verbs.callout[data-glyph="attention"] {
+.session-actions .verbs.callout[data-glyph="attention"],
+.session-actions .verbs.callout[data-glyph="asked"] {
   border-color: var(--color-accent-line);
   background: color-mix(in oklab, var(--color-accent-soft), var(--color-surface) 40%);
 }
