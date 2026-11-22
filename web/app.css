@@ -3900,7 +3900,6 @@ summary.prompt-bar:focus-visible {
 
   .diff-gap td {
     padding: 0 var(--space-3);
-    line-height: 28px;
     border-block: 1px solid var(--color-border-soft);
     background: var(--color-surface-2);
     color: var(--color-muted);
@@ -3910,6 +3909,7 @@ summary.prompt-bar:focus-visible {
 
   .diff-gap-btn {
     margin-inline-start: var(--space-2);
+    min-height: 28px;
     padding: 0 var(--space-2);
     border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-sm);
@@ -4028,14 +4028,11 @@ summary.prompt-bar:focus-visible {
       min-height: var(--hit-min);
     }
 
-    .diff-gutter {
-      width: 2.5rem;
-      min-width: 2.5rem;
-    }
-
     .diff-add-comment {
-      width: 2.25rem;
-      height: 2.25rem;
+      top: -2px;
+      left: 0;
+      width: 1.75rem;
+      height: 1.75rem;
     }
   }
 
@@ -4461,20 +4458,7 @@ summary.prompt-bar:focus-visible {
     background: var(--color-s-failed-soft);
   }
 
-  .diff-gutter {
-    background: var(--color-surface);
-  }
-
-  .diff-added .diff-gutter {
-    background: var(--color-s-done-soft);
-  }
-
-  .diff-deleted .diff-gutter {
-    background: var(--color-s-failed-soft);
-  }
-
-  .diff-line.diff-ws,
-  .diff-line.diff-ws .diff-gutter {
+  .diff-line.diff-ws {
     background: transparent;
   }
 
