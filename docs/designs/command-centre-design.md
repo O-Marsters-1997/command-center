@@ -201,7 +201,7 @@ unlock(task, prs) → { unlocked, base_branch, reason }
   over stacking edges only:
     none               →  unlocked, base = main
     exactly 1, PR OPEN →  unlocked, base = the blocker's branch   (stacking on)
-                          unlocked, base = main                    (stacking off)
+                          not unlocked until it merges             (stacking off)
     exactly 1, MERGED  →  unlocked, base = main
     2+                 →  unlocked iff EVERY blocker is MERGED, base = main
 ```
@@ -221,8 +221,9 @@ launch preview's job to surface, not unlock's to forbid.)
 `main`.
 
 **`stacking` is a per-repo flag** (`.command-centre.toml`, [ADR 2](../adr/0002-repos-are-tracked-not-configured.md)).
-Off, unlock's *timing* is identical — a dependent still launches the moment its blocker's PR
-opens — but every base is `main`.
+Off, a dependent waits until every same-repo blocker has merged and then cuts from `main`, the
+only base that holds the blocker's code
+([ADR 27](../adr/0027-an-unstacked-dependent-waits-for-its-blocker-to-merge.md)).
 
 **Fan-out is not a chain.** Four tickets sharing one blocker each get base = that blocker's
 branch. There is no chain between them, so nothing serialises them and there is no chain
@@ -622,7 +623,8 @@ Numbered so each can become a test.
 15. Every worktree is cut with an explicit `--base origin/<base_branch>` resolved from a
     snapshot fetched (with `--prune`) on the same tick.
 16. A task with one stacking blocker whose PR is OPEN launches with base = the blocker's
-    branch when `stacking` is on, and base = `main` otherwise; a MERGED blocker always
+    branch when `stacking` is on and does not launch until it merges when `stacking` is
+    off; a MERGED blocker always
     yields base = `main` (the branch is deleted on merge); a task with two or more stacking
     blockers launches only when every one is MERGED, base = `main`. Gating (cross-repo)
     edges never affect unlock or the base.
