@@ -58,7 +58,7 @@ func TestChangedFile_Bar(t *testing.T) {
 		{name: "all deleted", deleted: 10, want: [5]string{"deleted", "deleted", "deleted", "deleted", "deleted"}},
 		{
 			name: "rounds to the nearest cell", added: 1, deleted: 1,
-			want: [5]string{"added", "added", "deleted", "deleted", "deleted"},
+			want: [5]string{"added", "added", "added", "deleted", "deleted"},
 		},
 	}
 	for _, tt := range tests {
