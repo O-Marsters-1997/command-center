@@ -2,7 +2,9 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "featureLaunch" .}}
-{{template "shellContent" .}}
+{{template "shellContentBare" .}}
+<div class="has-rightbar">
+<div class="rb-main">
 <nav class="pill-tabs" aria-label="feature views">
   <a class="pill-tab" href="{{featureGraphPath .FeatureScope}}" data-key="v" {{template "nav" (featureGraphPath .FeatureScope)}}>Graph</a>
   <a class="pill-tab" href="{{featurePath .FeatureScope}}" {{template "nav" (featurePath .FeatureScope)}} aria-current="page">Board</a>
@@ -10,4 +12,9 @@
 {{template "featureHead" .}}
 {{template "board" .}}
 <div id="launch-modal">{{if .Launch.IsSome}}{{template "launchDialog" .Launch.Unwrap}}{{end}}</div>
+</div>
+{{template "rightbarStart" .}}
+{{template "featureDetails" .}}
+{{template "rightbarEnd" .}}
+</div>
 {{template "shellEnd" .}}
