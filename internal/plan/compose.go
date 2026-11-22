@@ -111,7 +111,40 @@ func ComposeAsking(questionPath string) string {
 		questionPath, MissingDependencyMarker)
 }
 
-func ComposeMessage(text string, after Outcome) string {
+const RunIDPlaceholder = "<run id>"
+
+type FollowUpPrompt struct {
+	Message    string
+	Comments   int
+	Attachment string
+	Resume     option.Option[Outcome]
+	AskPath    string
+}
+
+func (p FollowUpPrompt) Compose() string {
+	text := p.Message
+	if p.Comments > 0 {
+		text = "Changes requested on this branch."
+		if note := strings.TrimSpace(p.Message); note != "" {
+			text += "\n\n" + note
+		}
+		text += fmt.Sprintf("\n\nAddress every review comment in `%s` (attached to this run). "+
+			"Each entry has the file, the side and line, the diff hunk it was left on, and the comment. "+
+			"For each one, make the change, or say in your final message why you did not. "+
+			"Leave code the comments do not concern alone, and commit your work to this branch when you are done.",
+			p.Attachment)
+	}
+	prompt := ComposeFollowUp(text)
+	if after, resumed := p.Resume.Get(); resumed {
+		prompt = resumeFraming(text, after)
+	}
+	if p.AskPath != "" {
+		prompt += ComposeAsking(p.AskPath)
+	}
+	return prompt
+}
+
+func resumeFraming(text string, after Outcome) string {
 	switch after {
 	case OutcomeAsked:
 		return fmt.Sprintf("The owner's answer to your question:\n\n%s", text)

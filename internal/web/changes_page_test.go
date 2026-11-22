@@ -156,11 +156,17 @@ func TestChangesPage(t *testing.T) {
 		if err != nil || len(intents) != 1 {
 			t.Fatalf("PendingVerbIntents(follow-up) = %v, %v, want one", intents, err)
 		}
-		message := storepkg.DecodeFollowUpPayload(intents[0].Payload).Message
-		for _, want := range []string{"mind the API", "src/a.go", "line 1", "@@", "+package a", "rename this"} {
-			if !strings.Contains(message, want) {
-				t.Errorf("follow-up message = %q, want it to contain %q", message, want)
-			}
+		payload := storepkg.DecodeFollowUpPayload(intents[0].Payload)
+		if payload.Message != "mind the API" {
+			t.Errorf("follow-up message = %q, want the note alone", payload.Message)
+		}
+		if len(payload.Comments) != 1 {
+			t.Fatalf("follow-up comments = %v, want one", payload.Comments)
+		}
+		got := payload.Comments[0]
+		if got.Path != "src/a.go" || got.Line != 1 || got.Side != plan.SideNew || got.Body != "rename this" ||
+			!strings.Contains(got.Hunk, "+package a") {
+			t.Errorf("follow-up comment = %+v, want src/a.go new line 1 %q on its hunk", got, "rename this")
 		}
 	})
 

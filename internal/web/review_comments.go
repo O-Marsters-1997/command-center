@@ -94,7 +94,7 @@ func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) er
 	if note == "" && len(comments) == 0 {
 		return errorf(http.StatusBadRequest, "add a comment or a note before requesting changes")
 	}
-	payload := store.FollowUpPayload{Message: plan.ComposeReview(note, comments)}
+	payload := store.FollowUpPayload{Message: note, Comments: comments}
 	if err := s.store.RequestChanges(ctx, ticket, payload, now); err != nil {
 		return fmt.Errorf("request changes: %w", err)
 	}
