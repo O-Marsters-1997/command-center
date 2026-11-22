@@ -2879,13 +2879,13 @@ summary.prompt-bar:focus-visible {
       min-height: 0;
     }
 
-    .factory-card[data-calm] .factory-card-verbs {
+    .factory-card[data-calm] .factory-card-verbs .btn {
       opacity: 0;
       transition: opacity var(--motion-fast) var(--ease-out);
     }
 
-    .factory-card[data-calm]:hover .factory-card-verbs,
-    .factory-card[data-calm]:focus-within .factory-card-verbs {
+    .factory-card[data-calm]:hover .factory-card-verbs .btn,
+    .factory-card[data-calm]:focus-within .factory-card-verbs .btn {
       opacity: 1;
     }
   }

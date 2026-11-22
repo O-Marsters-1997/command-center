@@ -215,6 +215,16 @@ func TestFactoryPage(t *testing.T) {
 		}
 	})
 
+	t.Run("a launch from the floor returns to the floor", func(t *testing.T) {
+		t.Parallel()
+		got := do(t, newServer(seededStore(t, testNow), testNow), http.MethodPost, "/launch", req{
+			Form: url.Values{"ticket": {"sandbox://CC-1"}, "return": {"/factory?feature=project%3Aalpha"}},
+		})
+		if got.Code != http.StatusSeeOther || got.Location != "/factory?feature=project%3Aalpha" {
+			t.Errorf("POST /launch = %d %q, want 303 back to the floor", got.Code, got.Location)
+		}
+	})
+
 	t.Run("the rail links to the floor", func(t *testing.T) {
 		t.Parallel()
 		root := htmltest.Parse(t, renderPath(t, newServer(seededStore(t, testNow), testNow), "/factory"))
