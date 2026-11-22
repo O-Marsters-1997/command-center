@@ -54,9 +54,17 @@
 </header>
 
 <nav class="mb-4" aria-label="Factory scope">
-  <div class="pill-tabs factory-tabs" aria-label="Project">
-    {{template "factoryTab" .Scope.AllProjects}}
-    {{- range .Scope.Projects}}{{template "factoryTab" .}}{{end}}
+  <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <div class="pill-tabs factory-tabs" aria-label="Project">
+      {{template "factoryTab" .Scope.AllProjects}}
+      {{- range .Scope.Projects}}{{template "factoryTab" .}}{{end}}
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-medium text-muted">Group by</span>
+      <div class="pill-tabs factory-tabs" aria-label="Group by">
+        {{- range .LaneTabs}}{{template "factoryTab" .}}{{end}}
+      </div>
+    </div>
   </div>
   {{- if or (gt (len .Scope.Features) 1) (gt (len .Scope.Repos) 1)}}
   <div class="mt-3 flex flex-wrap items-center gap-1.5">
@@ -73,18 +81,42 @@
   {{- end}}
 </nav>
 
-<div class="factory-floor">
-  {{- range .Columns}}
-  <section class="factory-col" data-stage="{{.Stage}}" aria-label="{{.Title}}, {{.Total}}">
-    <h3 class="flex h-[30px] items-center gap-2 px-1 text-sm font-medium text-fg-2">
-      <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{.Title}} <span class="section-count">{{.Total}}</span>
-    </h3>
-    {{- range .Cards}}{{template "factoryCard" .}}{{else}}<p class="factory-empty">{{.Empty}}</p>{{end}}
-    {{- if .More}}<a class="btn btn-sm btn-ghost w-full" href="{{.More}}" {{template "nav" .More}}>Show {{.Hidden}} more</a>{{end}}
-    {{- if .Fewer}}<a class="btn btn-sm btn-ghost w-full" href="{{.Fewer}}" {{template "nav" .Fewer}}>Show fewer</a>{{end}}
-    {{- if .SeeAll}}<a class="btn btn-sm btn-ghost w-full" href="{{.SeeAll}}" {{template "nav" .SeeAll}}>See all {{.Total}} merged</a>{{end}}
-  </section>
+{{- if .ExpandAll}}
+<p class="mb-2 flex items-center justify-end gap-1">
+  <a class="btn btn-sm btn-ghost" href="{{.ExpandAll}}" {{template "nav" .ExpandAll}}>Expand all</a>
+  <a class="btn btn-sm btn-ghost" href="{{.CollapseAll}}" {{template "nav" .CollapseAll}}>Collapse all</a>
+</p>
+{{- end}}
+{{- range .Lanes}}
+<div class="factory-lane">
+  {{- if .Key}}
+  <a class="factory-lane-head" href="{{.Toggle}}" {{template "nav" .Toggle}} aria-expanded="{{.Open}}">
+    {{template "icon" "chev"}}{{template "mark" .Mark}}
+    <b class="truncate font-medium text-fg">{{.Name}}</b>
+    <span class="section-count">{{.Count}}</span>
+    {{- if .Working}}<span class="glyph glyph-pulse text-xs" data-glyph="running">{{.Working}} working</span>{{end}}
+    {{- if .NeedsYou}}<span class="glyph text-xs" data-glyph="failed">{{.NeedsYou}} {{if eq .NeedsYou 1}}needs{{else}}need{{end}} you</span>{{end}}
+    <span class="segbar ml-auto" aria-hidden="true">
+      {{- range .Segments}}<span class="segbar-segment" data-glyph="{{.Glyph}}" title="{{.Title}}, {{.Count}}" style="flex-grow: {{.Count}}"></span>{{end -}}
+    </span>
+  </a>
+  {{- end}}
+  {{- if .Open}}
+  <div class="factory-floor">
+    {{- range .Columns}}
+    <section class="factory-col" data-stage="{{.Stage}}" aria-label="{{.Title}}, {{.Total}}">
+      <h3 class="flex h-[30px] items-center gap-2 px-1 text-sm font-medium text-fg-2">
+        <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{.Title}} <span class="section-count">{{.Total}}</span>
+      </h3>
+      {{- range .Cards}}{{template "factoryCard" .}}{{else}}<p class="factory-empty">{{.Empty}}</p>{{end}}
+      {{- if .More}}<a class="btn btn-sm btn-ghost w-full" href="{{.More}}" {{template "nav" .More}}>Show {{.Hidden}} more</a>{{end}}
+      {{- if .Fewer}}<a class="btn btn-sm btn-ghost w-full" href="{{.Fewer}}" {{template "nav" .Fewer}}>Show fewer</a>{{end}}
+      {{- if .SeeAll}}<a class="btn btn-sm btn-ghost w-full" href="{{.SeeAll}}" {{template "nav" .SeeAll}}>See all {{.Total}} merged</a>{{end}}
+    </section>
+    {{- end}}
+  </div>
   {{- end}}
 </div>
+{{- end}}
 </div>
 {{template "shellEnd" .}}
