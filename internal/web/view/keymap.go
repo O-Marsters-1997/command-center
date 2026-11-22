@@ -32,6 +32,16 @@ var Keymap = []KeyGroup{
 		{"O", "Open the PR"},
 		{"Enter", "Focus the composer"},
 	}},
+	{"On the changes page", []KeyRow{
+		{"J / K", "Next / previous line"},
+		{"N / P", "Next / previous change"},
+		{"] / [", "Next / previous file"},
+		{"} / {", "Last / first file"},
+		{"V", "Mark the file viewed"},
+		{"Shift V", "Mark viewed and go to the next unviewed file"},
+		{"O", "Collapse or expand the file"},
+		{"/", "Filter files"},
+	}},
 	{"In a feature", []KeyRow{
 		{"V", "Switch graph and board"},
 	}},

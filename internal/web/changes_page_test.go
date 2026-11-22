@@ -109,6 +109,22 @@ func TestChangesPage(t *testing.T) {
 		page.One(t, "details.diff-file#f-1")
 	})
 
+	t.Run("rows, toolbar and tree carry the hooks the changes script needs", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		page.One(t, `script[type="module"][src="/assets/dist/changes.js"]`)
+		page.One(t, `details.diff-file#f-1[data-kind="added"]`)
+		if got := len(page.Find("tr.diff-line[data-kind=added][data-side=new][data-line]")); got != 2 {
+			t.Errorf("GET changes annotated rows = %d, want 2", got)
+		}
+		page.One(t, "#changes-ws")
+		page.One(t, "#changes-wrap")
+		page.One(t, "#changes-filter")
+	})
+
 	t.Run("the session page links to it from a Changes tab", func(t *testing.T) {
 		t.Parallel()
 		st, _ := changesFixture(t, func(string) string { return "" })
