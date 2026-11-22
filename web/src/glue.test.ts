@@ -5,31 +5,11 @@ import {
   failureText,
   maxLiveLines,
   modifierLabel,
-  parseViewed,
+  nextTab,
   railClosedCookie,
   scopeOf,
   shouldHop,
-  viewedLabel,
-  withViewed,
 } from "./glue";
-
-test("parseViewed keeps only a stored list of paths", () => {
-  expect(parseViewed('["a","b"]')).toEqual(["a", "b"]);
-  expect(parseViewed('["a",1]')).toEqual(["a"]);
-  expect(parseViewed(null)).toEqual([]);
-  expect(parseViewed("{")).toEqual([]);
-  expect(parseViewed('{"a":1}')).toEqual([]);
-});
-
-test("withViewed marks and unmarks a file once", () => {
-  expect(withViewed(["a"], "b", true)).toEqual(["a", "b"]);
-  expect(withViewed(["a", "b"], "a", true)).toEqual(["b", "a"]);
-  expect(withViewed(["a", "b"], "a", false)).toEqual(["b"]);
-});
-
-test("viewedLabel reads as progress", () => {
-  expect(viewedLabel(4, 4)).toBe("4 of 4 viewed");
-});
 
 test("a failed response names its status", () => {
   expect(failureText("responseError", 500)).toContain("500");
@@ -82,4 +62,13 @@ test("shouldHop needs a target and a wide viewport", () => {
 
 test("the live tail keeps a thousand lines", () => {
   expect(maxLiveLines).toBe(1000);
+});
+
+test("nextTab wraps with the arrow keys and ignores other keys", () => {
+  expect(nextTab(0, 2, "ArrowRight")).toBe(1);
+  expect(nextTab(1, 2, "ArrowRight")).toBe(0);
+  expect(nextTab(0, 2, "ArrowLeft")).toBe(1);
+  expect(nextTab(1, 2, "Home")).toBe(0);
+  expect(nextTab(0, 2, "End")).toBe(1);
+  expect(nextTab(0, 2, "a")).toBeNull();
 });

@@ -82,7 +82,11 @@ func (l *Loop) followUpOne(
 	}
 	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
-		kind: plan.RunKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText, cause: cause,
+		kind: plan.RunKindFollowUp, message: promptText, cause: cause, review: picked.Comments,
+	}
+	followUp := plan.FollowUpPrompt{
+		Message: promptText, Comments: len(picked.Comments),
+		Attachment: l.reviewAttachmentPath(plan.RunIDPlaceholder),
 	}
 
 	launched, _ := snap.Entry(url)
@@ -103,9 +107,10 @@ func (l *Loop) followUpOne(
 		if launched.Run.IsSome() {
 			outcome = launched.Run.Unwrap().Outcome.UnwrapOr(plan.OutcomeFailed)
 		}
-		spec.prompt = plan.ComposeMessage(promptText, outcome)
+		followUp.Resume = option.Some(outcome)
 		spec.resumeSessionID = sessionID
 	}
+	spec.prompt = followUp.Compose()
 	if launched.State.FailingChecks() {
 		logs, err := l.failedLogs(ctx, ticket, launched, t.obs)
 		if err != nil {

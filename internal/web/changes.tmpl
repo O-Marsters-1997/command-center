@@ -2,108 +2,291 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<article class="changes" data-changes data-viewed-key="{{.ViewedKey}}" data-total="{{len .Files}}">
+<article class="changes" data-changes data-ticket="{{.Ticket}}" data-tip="{{.Tip}}" data-total="{{len .Files}}">
   <header class="changes-toolbar">
+    {{- if .Files}}
+    <button class="btn btn-ghost btn-sm btn-icon changes-navbtn" type="button" data-toggle-tree aria-controls="changes-tree" aria-expanded="false" aria-label="Show files"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h12"/></svg></button>
+    {{- end}}
     <a class="pill-tab" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>&lsaquo; Session</a>
-    <span class="font-mono text-sm">{{len .Files}} {{if eq (len .Files) 1}}file{{else}}files{{end}}
+    <span class="changes-sm-hide font-mono text-sm">{{len .Files}} {{if eq (len .Files) 1}}file{{else}}files{{end}}
       <span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
-    <span class="text-muted text-sm">against <code>origin/{{.Base}}</code></span>
+    <span class="changes-sm-hide text-muted text-sm">against <code>origin/{{.Base}}</code></span>
     {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
-    <span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span>
-    {{template "reviewButton" .Pending}}
-    <div id="review-popover" class="review-popover" popover>
-      <form class="review-comment" method="post" action="{{.SessionPath}}/changes/request" hx-post="{{.SessionPath}}/changes/request" hx-disabled-elt="find button">
-        <textarea name="note" rows="3" aria-label="Note" placeholder="Note for the agent (optional)"></textarea>
-        <div class="flex items-center gap-2">
-          <button class="btn" type="submit" {{if not .CanFollowUp}}disabled title="{{.Reason}}"{{end}}>Request changes</button>
-          {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Open PR</a>{{end}}{{end}}
-        </div>
-        {{- if not .CanFollowUp}}<p class="text-muted text-sm">{{.Reason}}</p>{{end}}
-      </form>
-      {{- if .CanRaise}}
+    <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-ws"> Ignore whitespace</label>
+    <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-wrap"> Wrap lines</label>
+    <span class="changes-progress"><span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span><span class="changes-meter" aria-hidden="true"><i data-viewed-meter></i></span></span>
+    <button id="comments-btn" class="btn btn-ghost btn-sm" type="button" data-show-modal="comments-drawer" title="Pending comments (Shift L)">Comments <span class="chip-count" data-comments-total>0</span></button>
+    {{- if .CanRaise}}
+    <button id="raise-pr" class="btn btn-lg" type="button" popovertarget="raise-popover">Raise PR</button>
+    <div id="raise-popover" class="review-popover" popover role="dialog" aria-labelledby="raise-title">
       <form class="review-comment" method="post" action="{{.SessionPath}}/changes/raise" hx-post="{{.SessionPath}}/changes/raise" hx-target="find .raise-result" hx-disabled-elt="find button">
+        <h3 id="raise-title" class="launch-section-title">Raise PR</h3>
         <input type="hidden" name="sha" value="{{.Tip}}">
         {{- if .Pending}}<p class="flag flag-warning">Raising discards your {{.Pending}} pending {{if eq .Pending 1}}comment{{else}}comments{{end}}.</p>{{end}}
-        <button class="btn" type="submit">Raise PR</button>
-        <span class="text-muted text-sm font-mono">{{.Tip}}</span>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-primary" type="submit">Raise PR at this tip</button>
+          <span class="text-muted text-sm font-mono">{{.Tip}}</span>
+        </div>
         <div class="raise-result" aria-live="polite"></div>
       </form>
-      {{- end}}
     </div>
+    {{- end}}
+    {{- if .CanFollowUp}}
+    <button id="request-changes" class="btn btn-primary btn-lg" type="button" data-show-modal="request-dialog" hx-get="{{.SessionPath}}/changes/request" hx-include="#request-note" hx-target="#request-body" hx-swap="innerHTML">Request changes{{template "reqChip" .Pending}}</button>
+    {{- else}}
+    <button id="request-changes" class="btn btn-primary btn-lg" type="button" aria-disabled="true" popovertarget="request-reason">Request changes{{template "reqChip" .Pending}}</button>
+    <div id="request-reason" class="review-popover" popover role="status">{{.Reason}}</div>
+    {{- end}}
   </header>
+  <dialog id="request-dialog" class="launch-dialog request-dialog" aria-labelledby="request-title" aria-describedby="req-sub">
+    <div id="request-body" class="request-body">{{template "requestBody" .Request}}</div>
+  </dialog>
+  <dialog id="comments-drawer" class="comments-drawer" aria-labelledby="comments-drawer-title">
+    <form method="dialog" class="key-sheet-head">
+      <h2 id="comments-drawer-title">Pending comments</h2>
+      <button type="submit" class="btn btn-ghost btn-sm">Close</button>
+    </form>
+    <ol class="comments-list" id="comments-list"></ol>
+    <p class="text-muted text-sm" id="comments-empty" hidden>No pending comments. Press <kbd>c</kbd> on a line to add one.</p>
+  </dialog>
   {{- if not .Files}}
   <p class="text-muted">Nothing differs from <code>origin/{{.Base}}</code>.</p>
   {{- else}}
   <div class="changes-body">
-    <nav class="changes-tree" aria-label="changed files">
-      {{- range .Folders}}
-      <details open>
-        <summary class="font-mono text-xs">{{.Dir}}</summary>
-        <ul>
-          {{- range .Files}}
-          <li><a class="font-mono text-xs" href="#{{$.FileID .}}">{{.Path}}</a>{{if .Protected.IsSome}} <span class="flag flag-warning">protected</span>{{end}}</li>
-          {{- end}}
-        </ul>
-      </details>
-      {{- end}}
-    </nav>
+    <aside class="changes-tree" id="changes-tree" aria-label="Changed files">
+      <div class="changes-tree-head">Files changed <span class="changes-stat"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span></div>
+      <label class="changes-filter"><input id="changes-filter" type="search" placeholder="Filter files…" aria-label="Filter files" autocomplete="off"><kbd aria-hidden="true">/</kbd></label>
+      <nav class="changes-tree-list" aria-label="Changed files tree">
+        {{- with .TreeRoot}}{{template "treeLevel" .}}{{end}}
+      </nav>
+    </aside>
+    <div class="changes-scrim" data-toggle-tree></div>
     <div class="changes-files">
       {{- range .Files}}{{$file := .}}
-      <details class="diff-file" id="{{$.FileID .}}" data-file="{{.Path}}" open>
+      <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" data-diff-hash="{{.DiffHash}}" data-kind="{{.Kind}}" open>
         <summary class="diff-head">
-          <span class="font-mono text-sm">{{if .OldPath}}{{.OldPath}} → {{end}}{{.Path}}</span>
+          <svg class="icon diff-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="diff-path font-mono text-sm" title="{{.Path}}">{{if .OldPath}}{{.OldPath}} → {{end}}<span class="diff-path-dir">{{.Dir}}</span><b>{{.Base}}</b></span>
+          <button class="btn btn-ghost btn-sm btn-icon" type="button" data-copy-path="{{.Path}}" aria-label="Copy file path" title="Copy path"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 15V6a2 2 0 0 1 2-2h9"/></svg></button>
           {{- if .Protected.IsSome}} <span class="flag flag-warning" title="rule {{.Protected.Unwrap.Rule}}">protected</span>{{end}}
-          <span class="font-mono text-xs"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
-          <label class="text-xs"><input type="checkbox" data-viewed> Viewed</label>
+          <span class="diff-head-end">
+            <span class="font-mono text-xs"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
+            <span class="diff-bars" aria-hidden="true">{{range .Bar}}<i{{with .}} class="diff-bar-{{.}}"{{end}}></i>{{end}}</span>
+            <label class="diff-viewed"><input type="checkbox" data-viewed><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Viewed</label>
+          </span>
         </summary>
         {{- if .Binary}}
-        <p class="text-muted text-sm">Binary file not shown.</p>
+        <p class="diff-note">Binary file not shown.</p>
         {{- else if not .Hunks}}
-        <p class="text-muted text-sm">No content changes.</p>
-        {{- end}}
-        {{- range .Hunks}}
-        <table class="diff-hunk font-mono text-xs">
-          <caption class="text-muted">{{.Header}}</caption>
+        <p class="diff-note">No content changes.</p>
+        {{- else}}
+        <div class="diff-scroll">
+        <table class="diff-hunk font-mono">
           <tbody>
-            {{- range .Lines}}
-            {{- $side := "new"}}{{$n := .NewLine}}{{if eq .Kind "deleted"}}{{$side = "old"}}{{$n = .OldLine}}{{end}}
-            <tr class="diff-line diff-{{.Kind}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre>{{.Text}}</pre></td></tr>
-            {{- range $.At $file.Path .}}{{template "reviewThread" $.Thread .}}{{end}}
+            {{- range $i, $hunk := .Hunks}}
+            {{- if index $file.Gaps $i}}{{template "diffGap" ($.Gap $file $i)}}{{end}}
+            {{- range .Lines}}{{template "diffLine" ($.Row $file.Path .)}}{{end}}
             {{- end}}
           </tbody>
         </table>
+        </div>
         {{- end}}
       </details>
       {{- end}}
     </div>
   </div>
   {{- end}}
+<script type="module" src="/assets/dist/changes.js"></script>
 </article>
 {{template "shellEnd" .}}
+
+{{define "treeLevel"}}
+{{- range .Subdirs}}
+<details class="tree-dir" data-dir open>
+  <summary class="tree-row"><svg class="icon tree-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span class="tree-name">{{.Name}}</span><span class="changes-stat" data-dir-count data-total="{{.Total}}">0/{{.Total}}</span></summary>
+  {{- template "treeLevel" .}}
+</details>
+{{- end}}
+{{- range .Members}}
+<div class="tree-row tree-file" data-file="{{.Path}}"><input type="checkbox" data-viewed aria-label="Viewed {{.Path}}"><span class="tree-kind tree-kind-{{.Kind}}" title="{{.KindLabel}}" role="img" aria-label="{{.KindLabel}}"></span><a class="tree-name" href="#{{.ID}}" title="{{.Path}}">{{.Base}}</a>{{if .Protected.IsSome}}<span class="flag flag-warning">protected</span>{{end}}<span class="chip-count tree-comments" data-file-comments hidden>0</span></div>
+{{- end}}
+{{- end}}
+
+{{define "reqChipBody"}}{{if .}}<span class="chip-count" aria-hidden="true">{{.}}</span><span class="sr-only">({{.}} pending {{if eq . 1}}comment{{else}}comments{{end}})</span>{{end}}{{end}}
+{{define "reqChip"}}<span id="req-chip">{{template "reqChipBody" .}}</span>{{end}}
+{{define "reqChipSwap"}}<span id="req-chip" hx-swap-oob="true">{{template "reqChipBody" .}}</span>{{end}}
+
+{{define "requestBody"}}
+{{- $part := .Part}}
+<form class="launch-form" method="post" action="{{.SessionPath}}/changes/request" hx-post="{{.SessionPath}}/changes/request" hx-target="#request-body" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]" data-submit-on-mod-enter>
+  <header class="launch-head">
+    <div class="request-titles">
+      <h2 id="request-title" class="launch-dialog-title">Request changes</h2>
+      {{template "reqSub" $part}}
+    </div>
+    <div class="pill-tabs request-tabs" role="tablist" aria-label="Request view" data-tabs>
+      <button type="button" class="pill-tab" role="tab" id="request-tab-prompt" aria-controls="request-prompt" aria-selected="true" data-tab="request-prompt">Prompt</button>
+      <button type="button" class="pill-tab" role="tab" id="request-tab-comments" aria-controls="request-comments" aria-selected="false" tabindex="-1" data-tab="request-comments">Comments {{template "reqCount" $part}}</button>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm btn-icon" data-close-modal aria-label="Close">{{template "icon" "x"}}</button>
+  </header>
+  <div class="launch-body" id="request-prompt" role="tabpanel" aria-labelledby="request-tab-prompt">
+    <section class="launch-section">
+      <h3 class="launch-section-title"><label for="request-note">Request changes text</label><span class="text-muted" id="req-hint">{{.NoteHint}}</span></h3>
+      <textarea id="request-note" name="note" class="request-ta" rows="3" autofocus placeholder="Anything the comments don't cover?" hx-get="{{.SessionPath}}/changes/request/preview" hx-trigger="input changed delay:300ms" hx-target="#request-preview" hx-swap="innerHTML" hx-sync="this:replace">{{.Note}}</textarea>
+    </section>
+    <section class="launch-section">
+      <h3 class="launch-section-title" id="request-pre-h">Prompt sent to the agent<span class="text-muted">your text is highlighted</span></h3>
+      <pre class="request-pre" id="request-preview" tabindex="0" aria-labelledby="request-pre-h">{{template "requestPreviewText" .Preview}}</pre>
+    </section>
+    {{template "reqAttached" $part}}
+  </div>
+  <div class="launch-body" id="request-comments" role="tabpanel" aria-labelledby="request-tab-comments" hidden>
+    <ul class="request-list" id="req-list">
+      {{- range .Items}}{{template "requestItem" .}}{{else}}
+      <li class="request-empty text-muted text-sm">No comments yet. Add one with the + beside a diff line.</li>
+      {{- end}}
+    </ul>
+    {{template "reqJSON" $part}}
+  </div>
+  <div class="launch-foot">
+    <div class="composer">
+      <div class="composer-bar">
+        {{- $model := .Model}}
+        <label class="picker"><span class="sr-only">Model</span><select name="model">
+          {{- range .Models}}<option value="{{.}}"{{if eq . $model}} selected{{end}}>{{.}}</option>{{end -}}
+        </select></label><span class="sep"></span>
+        <label class="picker"><span class="sr-only">Effort</span><select name="effort">
+          <option value="">Default effort</option>
+          {{- range .Efforts}}<option value="{{.}}">{{.}}</option>{{end -}}
+        </select></label><span class="sep"></span>
+        <span class="picker">{{template "icon" "lock"}}Worktree</span>
+      </div>
+    </div>
+    <div class="launch-actions">
+      <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
+      {{template "reqSend" $part}}
+    </div>
+  </div>
+</form>
+{{end}}
+
+{{define "reqSub"}}<p id="req-sub" class="request-sub"{{if .Swap}} hx-swap-oob="true"{{end}}>{{.Subtitle}}</p>{{end}}
+
+{{define "reqCount"}}<span id="req-count" class="chip-count" aria-hidden="true"{{if .Swap}} hx-swap-oob="true"{{end}}>{{len .Comments}}</span>{{end}}
+
+{{define "reqAttached"}}<section id="req-attached" class="launch-section"{{if not .Comments}} hidden{{end}}{{if .Swap}} hx-swap-oob="true"{{end}}>
+  <h3 class="launch-section-title">Attached<span class="text-muted">stored beside the run, not pasted into the prompt</span></h3>
+  <div class="request-file"><span class="font-mono text-xs">review-comments.json</span><span class="text-muted text-sm">{{.Attached}}</span></div>
+</section>{{end}}
+
+{{define "reqJSON"}}<details id="req-json" class="request-json"{{if .Swap}} hx-swap-oob="true"{{end}}><summary>review-comments.json</summary><pre tabindex="0" aria-label="review-comments.json contents">{{.JSON}}</pre></details>{{end}}
+
+{{define "reqSend"}}<div id="req-send" class="request-send"{{if .Swap}} hx-swap-oob="true"{{end}}>
+  <p class="request-why" id="req-why" role="status">{{.Why}}</p>
+  {{- if .CanSend}}
+  <button type="submit" class="btn btn-primary" aria-describedby="req-why">Send to agent <kbd>⌘↵</kbd></button>
+  {{- else}}
+  <button type="button" class="btn btn-primary" aria-disabled="true" data-send aria-describedby="req-why">Send to agent <kbd>⌘↵</kbd></button>
+  {{- end}}
+</div>{{end}}
+
+{{define "requestPreviewText"}}<span class="g">{{.Before}}</span>{{if .Note}}<span class="u">{{.Note}}</span><span class="g">{{.After}}</span>{{end}}{{end}}
+
+{{define "requestPreview"}}{{template "requestPreviewText" .Preview}}{{template "requestOOB" .}}{{end}}
+
+{{define "requestOOB"}}{{template "reqSub" .}}{{template "reqCount" .}}{{template "reqAttached" .}}{{template "reqJSON" .}}{{template "reqSend" .}}{{template "reqChipSwap" (len .Comments)}}{{end}}
+
+{{define "requestItem"}}<li class="request-item">
+  <div class="request-top">
+    <a class="request-loc" href="#c-{{.Comment.ID}}" data-close-modal aria-label="Show {{.Side}} of {{.Comment.Path}} in the diff">{{.Where}}</a>
+    <span class="flag flag-warning">{{.Side}}</span>
+    <span class="sp"></span>
+    <button type="button" class="btn btn-ghost btn-sm" hx-post="{{.SessionPath}}/changes/request/comments/{{.Comment.ID}}/remove" hx-target="closest li" hx-swap="outerHTML" aria-label="Remove comment on {{.Where}}">Remove</button>
+  </div>
+  <pre class="request-hunk" tabindex="0" aria-label="Diff context">{{range .Tail}}<span{{with .Kind}} class="request-hunk-{{.}}"{{end}}>{{.Text}}</span>{{end}}</pre>
+  <p>{{.Comment.Body}}</p>
+</li>{{end}}
+
+{{define "requestRemoved"}}<li class="request-undo" role="status">Comment on <span class="font-mono">{{.Where}}</span> removed
+  <button type="button" class="btn btn-ghost btn-sm" hx-post="{{.SessionPath}}/changes/request/comments/restore" hx-vals="{{.Vals}}" hx-target="closest li" hx-swap="outerHTML">Undo</button>
+</li><tr id="c-{{.Comment.ID}}" hx-swap-oob="delete"></tr>{{template "requestOOB" .Part}}{{end}}
+
+{{define "requestRestored"}}{{template "requestItem" .RequestItem}}{{template "requestOOB" .Part}}{{end}}
+
+{{define "requestSent"}}<div class="request-done">
+  <svg class="request-tick" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21"/><path d="m15 25 7 7 12-15"/></svg>
+  <h3 id="request-sent-h" tabindex="-1" autofocus>Sent to the agent</h3>
+  <p class="text-muted text-sm">{{.Meta}}</p>
+  <ol class="request-sent-list">
+    {{- range $i, $c := .Shown}}<li style="--i: {{$i}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>{{$c.Path}}:{{$c.Line}}</span></li>{{end}}
+    {{- if .More}}<li style="--i: 8">and {{.More}} more</li>{{end}}
+  </ol>
+  <div class="launch-actions">
+    <button type="button" class="btn btn-ghost" data-close-modal>Close</button>
+    <a class="btn btn-primary" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>Watch the agent</a>
+  </div>
+</div>{{range .Comments}}<tr id="c-{{.ID}}" hx-swap-oob="delete"></tr>{{end}}{{template "reqChipSwap" 0}}{{end}}
+
+{{define "diffLine"}}
+<tr class="diff-line diff-{{.Kind}}{{if .Comments}} has-comment{{end}}" id="{{.ID}}" data-kind="{{.Kind}}" data-side="{{.Side}}" data-line="{{.Number}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{.Number}}" title="Comment  c" hx-get="{{.CommentURL}}" hx-target="closest tr" hx-swap="afterend"><svg class="icon icon-add" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/><path d="M12 9v6M9 12h6"/></svg><svg class="icon icon-has" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/></svg></button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
+{{- $row := .}}{{range .Comments}}{{template "reviewThread" $row.Thread .}}{{end}}
+{{- end}}
+
+{{define "diffGap"}}
+<tr class="diff-gap"><td colspan="4"><span class="diff-gap-count">{{.Remaining}} hidden {{if eq .Remaining 1}}line{{else}}lines{{end}}</span>{{with .Section}} · <span class="diff-gap-section">{{.}}</span>{{end}}
+  {{- if .CanExpandAll}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "all"}}" hx-target="closest tr" hx-swap="outerHTML">Expand all</button>
+  {{- else}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "above"}}" hx-target="closest tr" hx-swap="outerHTML">Expand down</button> <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "below"}}" hx-target="closest tr" hx-swap="outerHTML">Expand up</button>{{end}}</td></tr>
+{{- end}}
+
+{{define "expansion"}}
+{{- if and .Gap.Remaining (eq .Edge "below")}}{{template "diffGap" .Gap}}{{end}}
+{{- range .Rows}}{{template "diffLine" .}}{{end}}
+{{- if and .Gap.Remaining (ne .Edge "below")}}{{template "diffGap" .Gap}}{{end}}
+{{- end}}
 
 {{define "reviewButton"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover">Review changes{{if .}} ({{.}}){{end}}</button>{{end}}
 
 {{define "raiseResult"}}{{if .Problem}}<p class="flag flag-warning">{{.Problem}}</p>{{else}}<a href="{{.PRURL}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
 
-{{define "reviewThread"}}<tr class="review-thread"><td colspan="4">
+{{define "reviewThread"}}<tr class="review-thread" id="c-{{.Comment.ID}}" data-comment data-path="{{.Comment.Path}}" data-line="{{.Comment.Line}}"><td colspan="4">
   <div class="review-comment">
-    <span class="flag flag-warning">Pending</span>
-    <p>{{.Comment.Body}}</p>
-    <button type="button" class="btn" hx-post="{{.SessionPath}}/changes/comments/{{.Comment.ID}}/delete" hx-target="closest tr" hx-swap="outerHTML">Delete</button>
+    <div class="review-head">
+      <span class="flag">Pending</span><span class="sp"></span>
+      <button type="button" class="btn btn-ghost btn-sm" hx-get="{{.SessionPath}}/changes/comments/{{.Comment.ID}}/edit" hx-target="closest tr" hx-swap="outerHTML" aria-label="Edit comment on line {{.Comment.Line}}">Edit</button>
+      <button type="button" class="btn btn-ghost btn-sm" hx-post="{{.SessionPath}}/changes/comments/{{.Comment.ID}}/delete" hx-target="closest tr" hx-swap="outerHTML" aria-label="Delete comment on line {{.Comment.Line}}">Delete</button>
+    </div>
+    <p class="review-body" data-body>{{.Comment.Body}}</p>
   </div>
 </td></tr>{{end}}
 
 {{define "reviewForm"}}<tr class="review-thread"><td colspan="4">
-  <form class="review-comment" hx-post="{{.SessionPath}}/changes/comments" hx-target="closest tr" hx-swap="outerHTML">
+  <form class="review-comment" hx-post="{{.SessionPath}}/changes/comments" hx-target="closest tr" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-submit-on-mod-enter>
     <input type="hidden" name="path" value="{{.Path}}">
     <input type="hidden" name="side" value="{{.Side}}">
     <input type="hidden" name="line" value="{{.Line}}">
     <textarea name="body" required rows="3" aria-label="Comment" autofocus></textarea>
-    <button class="btn" type="submit">Comment</button>
-    <button class="btn" type="button" hx-on:click="this.closest('tr').remove()">Cancel</button>
+    <div class="review-actions">
+      <button class="btn" type="button" data-cancel>Cancel <kbd>Esc</kbd></button>
+      <button class="btn btn-primary" type="submit">Comment <kbd>⌘↵</kbd></button>
+    </div>
   </form>
 </td></tr>{{end}}
 
-{{define "reviewPosted"}}{{template "reviewThread" .}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover" hx-swap-oob="true">Review changes ({{.Pending}})</button>{{end}}
+{{define "reviewEdit"}}<tr class="review-thread" id="c-{{.Comment.ID}}" data-comment data-path="{{.Comment.Path}}" data-line="{{.Comment.Line}}"><td colspan="4">
+  <form class="review-comment" hx-post="{{.SessionPath}}/changes/comments/{{.Comment.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-submit-on-mod-enter>
+    <textarea name="body" required rows="3" aria-label="Edit comment" autofocus>{{.Comment.Body}}</textarea>
+    <div class="review-actions">
+      <button class="btn" type="button" data-cancel hx-get="{{.SessionPath}}/changes/comments/{{.Comment.ID}}" hx-target="closest tr" hx-swap="outerHTML">Cancel <kbd>Esc</kbd></button>
+      <button class="btn btn-primary" type="submit">Save <kbd>⌘↵</kbd></button>
+    </div>
+  </form>
+</td></tr>{{end}}
 
-{{define "reviewDeleted"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover" hx-swap-oob="true">Review changes{{if .Pending}} ({{.Pending}}){{end}}</button>{{end}}
+{{define "reviewPosted"}}{{template "reviewThread" .}}{{template "reqChipSwap" .Pending}}{{end}}
+
+{{define "reviewDeleted"}}{{template "reqChipSwap" .Pending}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">Comment on <span class="font-mono">{{.Comment.Path}}:{{.Comment.Line}}</span> deleted
+  <button type="button" hx-post="{{.SessionPath}}/changes/comments/restore" hx-vals="{{.Vals}}" hx-target="#toast" hx-swap="innerHTML">Undo</button>
+</div>{{end}}
+
+{{define "reviewRestored"}}<tbody hx-swap-oob="afterend:#{{.LineID}}">{{template "reviewThread" .}}</tbody>{{template "reqChipSwap" .Pending}}{{end}}

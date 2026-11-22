@@ -1,43 +1,77 @@
 package plan_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
-func TestComposeReview(t *testing.T) {
+func TestFollowUpPrompt_Compose(t *testing.T) {
 	t.Parallel()
+
+	const paragraphFor = "Address every review comment in `%s` (attached to this run). " +
+		"Each entry has the file, the side and line, the diff hunk it was left on, and the comment. " +
+		"For each one, make the change, or say in your final message why you did not. " +
+		"Leave code the comments do not concern alone, and commit your work to this branch when you are done."
+	const attachment = "/runs/7.review-comments.json"
+	paragraph := fmt.Sprintf(paragraphFor, attachment)
+	fresh := plan.ComposeFollowUp
+
 	tests := []struct {
-		name     string
-		note     string
-		comments []plan.ReviewComment
-		want     string
+		name string
+		in   plan.FollowUpPrompt
+		want string
 	}{
-		{name: "no comments with a note", note: " ship it ", want: "Changes requested on this branch.\n\nship it"},
+		{name: "note only", in: plan.FollowUpPrompt{Message: "tidy up"}, want: fresh("tidy up")},
 		{
-			name: "several files",
-			comments: []plan.ReviewComment{
-				{Path: "a.go", Line: 3, Side: plan.SideNew, Hunk: "@@ -1 +1 @@\n+x", Body: "why"},
-				{Path: "b.go", Line: 9, Side: plan.SideNew, Hunk: "@@ -9 +9 @@\n+y", Body: "rename"},
-			},
-			want: "Changes requested on this branch." +
-				"\n\na.go, new line 3:\n```diff\n@@ -1 +1 @@\n+x\n```\nwhy" +
-				"\n\nb.go, new line 9:\n```diff\n@@ -9 +9 @@\n+y\n```\nrename",
+			name: "comments only",
+			in:   plan.FollowUpPrompt{Comments: 2, Attachment: attachment},
+			want: fresh("Changes requested on this branch.\n\n" + paragraph),
 		},
 		{
-			name:     "deleted-side line",
-			comments: []plan.ReviewComment{{Path: "a.go", Line: 2, Side: plan.SideOld, Hunk: "@@ -2 +1 @@\n-z", Body: "keep"}},
-			want:     "Changes requested on this branch.\n\na.go, old line 2:\n```diff\n@@ -2 +1 @@\n-z\n```\nkeep",
+			name: "note and comments",
+			in:   plan.FollowUpPrompt{Message: " ship it ", Comments: 1, Attachment: attachment},
+			want: fresh("Changes requested on this branch.\n\nship it\n\n" + paragraph),
+		},
+		{
+			name: "resumed after a question",
+			in:   plan.FollowUpPrompt{Message: "use sqlite", Resume: option.Some(plan.OutcomeAsked)},
+			want: "The owner's answer to your question:\n\nuse sqlite",
+		},
+		{
+			name: "resumed after an interrupt",
+			in:   plan.FollowUpPrompt{Message: "stop", Resume: option.Some(plan.OutcomeContinued)},
+			want: "The owner interrupted you with a message. Your last tool call may have been cut off, " +
+				"so check its effect before going on:\n\nstop",
+		},
+		{
+			name: "resumed with comments",
+			in:   plan.FollowUpPrompt{Comments: 1, Attachment: attachment, Resume: option.Some(plan.OutcomeFailed)},
+			want: "The owner's follow-up instruction:\n\nChanges requested on this branch.\n\n" + paragraph,
+		},
+		{
+			name: "with AskPath",
+			in:   plan.FollowUpPrompt{Message: "tidy up", AskPath: "/runs/7.question"},
+			want: fresh("tidy up") + plan.ComposeAsking("/runs/7.question"),
+		},
+		{
+			name: "run id placeholder in the attachment path",
+			in: plan.FollowUpPrompt{
+				Comments: 1, Attachment: "/runs/" + plan.RunIDPlaceholder + "." + plan.ReviewAttachmentName,
+			},
+			want: fresh("Changes requested on this branch.\n\n" +
+				fmt.Sprintf(paragraphFor, "/runs/<run id>.review-comments.json")),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if diff := cmp.Diff(tt.want, plan.ComposeReview(tt.note, tt.comments)); diff != "" {
-				t.Errorf("ComposeReview mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(tt.want, tt.in.Compose()); diff != "" {
+				t.Errorf("Compose() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

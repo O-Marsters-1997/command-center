@@ -83,10 +83,54 @@ func TestChangesPage(t *testing.T) {
 		if len(flagged) != 1 || flagged[0].Text() != "protected" {
 			t.Errorf("GET /s/acme/web/1/changes protected flags = %d, want one reading %q", len(flagged), "protected")
 		}
-		wantKey := "cc:viewed:" + sessionTicket + ":" + sha
-		if got, _ := page.One(t, "[data-changes]").Attr("data-viewed-key"); got != wantKey {
-			t.Errorf("GET /s/acme/web/1/changes data-viewed-key = %q, want %q", got, wantKey)
+		root := page.One(t, "[data-changes]")
+		if got, _ := root.Attr("data-ticket"); got != sessionTicket {
+			t.Errorf("GET /s/acme/web/1/changes data-ticket = %q, want %q", got, sessionTicket)
 		}
+		if got, _ := root.Attr("data-tip"); got != sha {
+			t.Errorf("GET /s/acme/web/1/changes data-tip = %q, want %q", got, sha)
+		}
+		for _, f := range page.Find("details.diff-file") {
+			if got, _ := f.Attr("data-diff-hash"); got == "" {
+				t.Errorf("GET /s/acme/web/1/changes file %q has no data-diff-hash", f.Text())
+			}
+		}
+	})
+
+	t.Run("the tree lists each folder with its count, kind dot and a link to the file card", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		counts := page.Find(".tree-dir [data-dir-count]")
+		if len(counts) != 2 || counts[0].Text() != "0/1" {
+			t.Fatalf("GET changes folder counts = %d, want 2 folders reading 0/1", len(counts))
+		}
+		if got := len(page.Find(".tree-file .tree-kind-added")); got != 2 {
+			t.Errorf("GET changes added dots = %d, want 2", got)
+		}
+		link := page.One(t, `.tree-file a[href="#f-1"]`)
+		if link.Text() != "a.go" {
+			t.Errorf("GET changes tree link f-1 = %q, want a.go", link.Text())
+		}
+		page.One(t, "details.diff-file#f-1")
+	})
+
+	t.Run("rows, toolbar and tree carry the hooks the changes script needs", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		page.One(t, `script[type="module"][src="/assets/dist/changes.js"]`)
+		page.One(t, `details.diff-file#f-1[data-kind="added"]`)
+		if got := len(page.Find("tr.diff-line[data-kind=added][data-side=new][data-line]")); got != 2 {
+			t.Errorf("GET changes annotated rows = %d, want 2", got)
+		}
+		page.One(t, "#changes-ws")
+		page.One(t, "#changes-wrap")
+		page.One(t, "#changes-filter")
 	})
 
 	t.Run("the session page links to it from a Changes tab", func(t *testing.T) {
@@ -106,7 +150,7 @@ func TestChangesPage(t *testing.T) {
 
 		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
 		posted := do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
-		if posted.Code != http.StatusOK || !strings.Contains(posted.Body, "Review changes (1)") {
+		if posted.Code != http.StatusOK || !strings.Contains(posted.Body, "(1 pending comment)") {
 			t.Fatalf("POST comment = %d %q, want 200 with a count of 1", posted.Code, posted.Body)
 		}
 
@@ -116,8 +160,8 @@ func TestChangesPage(t *testing.T) {
 			!strings.Contains(threads[0].Text(), "Pending") {
 			t.Fatalf("GET changes threads = %d, want one Pending thread reading %q", len(threads), "rename this")
 		}
-		if got := page.One(t, "#review-changes").Text(); got != "Review changes (1)" {
-			t.Errorf("GET changes review button = %q, want %q", got, "Review changes (1)")
+		if got := page.One(t, "#request-changes").Text(); !strings.Contains(got, "(1 pending comment)") {
+			t.Errorf("GET changes request button = %q, want the pending count in its name", got)
 		}
 
 		comments, err := st.ReviewComments(t.Context(), sessionTicket)
@@ -127,13 +171,63 @@ func TestChangesPage(t *testing.T) {
 		}
 		deletePath := "/s/acme/web/1/changes/comments/" + strconv.FormatInt(comments[0].ID, 10) + "/delete"
 		deleted := do(t, server, http.MethodPost, deletePath, req{})
-		if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body, ">Review changes<") {
+		if deleted.Code != http.StatusOK || strings.Contains(deleted.Body, "pending comment") {
 			t.Fatalf("POST delete = %d %q, want 200 with no count", deleted.Code, deleted.Body)
 		}
 		page = htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
 		if got := len(page.Find(".review-thread")); got != 0 {
 			t.Errorf("GET changes threads after delete = %d, want 0", got)
 		}
+	})
+
+	t.Run("a comment is edited in place and a deleted one is restored by its undo", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		base := "/s/acme/web/1/changes/comments"
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		do(t, server, http.MethodPost, base, req{Form: form})
+		comments, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(comments) != 1 {
+			t.Fatalf("ReviewComments = %v, %v, want one", comments, err)
+		}
+		one := comments[0]
+		id := strconv.FormatInt(one.ID, 10)
+
+		editForm := do(t, server, http.MethodGet, base+"/"+id+"/edit", req{})
+		if editForm.Code != http.StatusOK || !strings.Contains(editForm.Body, "rename this") {
+			t.Fatalf("GET edit = %d %q, want 200 with the body in a textarea", editForm.Code, editForm.Body)
+		}
+		edited := do(t, server, http.MethodPost, base+"/"+id, req{Form: url.Values{"body": {"first\nsecond"}}})
+		if edited.Code != http.StatusOK || !strings.Contains(edited.Body, "first\nsecond") {
+			t.Fatalf("POST edit = %d %q, want 200 with the line break kept", edited.Code, edited.Body)
+		}
+		blank := do(t, server, http.MethodPost, base+"/"+id, req{Form: url.Values{"body": {"  "}}})
+		if blank.Code != http.StatusBadRequest {
+			t.Errorf("POST edit with a blank body = %d, want %d", blank.Code, http.StatusBadRequest)
+		}
+
+		deleted := do(t, server, http.MethodPost, base+"/"+id+"/delete", req{})
+		if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body, "Undo") {
+			t.Fatalf("POST delete = %d %q, want 200 with an Undo toast", deleted.Code, deleted.Body)
+		}
+		restore := url.Values{
+			"tip": {string(one.Tip)}, "path": {one.Path}, "side": {string(one.Side)},
+			"line": {strconv.Itoa(one.Line)}, "hunk": {one.Hunk}, "body": {"first\nsecond"},
+		}
+		restored := do(t, server, http.MethodPost, base+"/restore", req{Form: restore})
+		if restored.Code != http.StatusOK || !strings.Contains(restored.Body, `<tbody hx-swap-oob="afterend:#l-`) ||
+			!strings.Contains(restored.Body, `<tr class="review-thread"`) {
+			t.Fatalf("POST restore = %d %q, want 200 placing the card after its line", restored.Code, restored.Body)
+		}
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		threads := page.Find(".review-thread")
+		if len(threads) != 1 || !strings.Contains(threads[0].Text(), "first") {
+			t.Errorf("GET changes threads after undo = %d, want one reading %q", len(threads), "first")
+		}
+		page.One(t, "tr.diff-line.has-comment")
+		page.One(t, "#comments-drawer")
 	})
 
 	t.Run("request changes queues one follow-up quoting the comments and clears them", func(t *testing.T) {
@@ -156,11 +250,17 @@ func TestChangesPage(t *testing.T) {
 		if err != nil || len(intents) != 1 {
 			t.Fatalf("PendingVerbIntents(follow-up) = %v, %v, want one", intents, err)
 		}
-		message := storepkg.DecodeFollowUpPayload(intents[0].Payload).Message
-		for _, want := range []string{"mind the API", "src/a.go", "line 1", "@@", "+package a", "rename this"} {
-			if !strings.Contains(message, want) {
-				t.Errorf("follow-up message = %q, want it to contain %q", message, want)
-			}
+		payload := storepkg.DecodeFollowUpPayload(intents[0].Payload)
+		if payload.Message != "mind the API" {
+			t.Errorf("follow-up message = %q, want the note alone", payload.Message)
+		}
+		if len(payload.Comments) != 1 {
+			t.Fatalf("follow-up comments = %v, want one", payload.Comments)
+		}
+		got := payload.Comments[0]
+		if got.Path != "src/a.go" || got.Line != 1 || got.Side != plan.SideNew || got.Body != "rename this" ||
+			!strings.Contains(got.Hunk, "+package a") {
+			t.Errorf("follow-up comment = %+v, want src/a.go new line 1 %q on its hunk", got, "rename this")
 		}
 	})
 
@@ -183,11 +283,11 @@ func TestChangesPage(t *testing.T) {
 		server := openServer(st, fixedClock(testNow), dataDir)
 
 		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
-		if _, disabled := page.One(t, "#review-popover button[type=submit]").Attr("disabled"); !disabled {
-			t.Error("GET changes Request changes button is enabled, want disabled")
+		if v, _ := page.One(t, "#request-changes").Attr("aria-disabled"); v != "true" {
+			t.Errorf("GET changes Request changes aria-disabled = %q, want true", v)
 		}
-		if got := page.One(t, "#review-popover").Text(); !strings.Contains(got, "merged") {
-			t.Errorf("GET changes popover = %q, want the state's reason", got)
+		if got := page.One(t, "#request-reason").Text(); !strings.Contains(got, "merged") {
+			t.Errorf("GET changes reason = %q, want the state's reason", got)
 		}
 		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: url.Values{"note": {"x"}}})
 		if rec.Code != http.StatusConflict {
@@ -196,6 +296,105 @@ func TestChangesPage(t *testing.T) {
 		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
 		if err != nil || len(intents) != 0 {
 			t.Errorf("PendingVerbIntents(follow-up) = %v, %v, want none", intents, err)
+		}
+	})
+
+	t.Run("the modal sends the chosen model and effort and shows the sent state", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		if got := page.One(t, "#req-sub").Text(); !strings.Contains(got, "1 pending comment") {
+			t.Errorf("GET changes modal subtitle = %q, want the pending count", got)
+		}
+		if len(page.Find("#request-dialog [role=tab]")) != 2 {
+			t.Error("GET changes modal tabs != 2, want Prompt and Comments")
+		}
+
+		hx := http.Header{"Hx-Request": {"true"}}
+		send := url.Values{"note": {"mind the API"}, "model": {"opus"}, "effort": {"high"}}
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: send, Header: hx})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body, "Sent to the agent") ||
+			!strings.Contains(rec.Body, "1 comment · opus · high") {
+			t.Fatalf("POST request = %d %q, want the sent state naming comment, model and effort", rec.Code, rec.Body)
+		}
+		if got := strings.Count(rec.Body, `hx-swap-oob="delete"`); got != 1 {
+			t.Errorf("POST request out-of-band row deletes = %d, want 1, one per sent comment", got)
+		}
+		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
+		if err != nil || len(intents) != 1 {
+			t.Fatalf("PendingVerbIntents(follow-up) = %v, %v, want one", intents, err)
+		}
+		payload := storepkg.DecodeFollowUpPayload(intents[0].Payload)
+		if payload.Model != "opus" || payload.Effort != plan.EffortHigh {
+			t.Errorf("follow-up model, effort = %q, %q, want opus, high", payload.Model, payload.Effort)
+		}
+	})
+
+	t.Run("request changes refuses an unknown model", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		send := url.Values{"note": {"x"}, "model": {"gpt"}}
+		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: send})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("POST request with model gpt = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("the preview previews the typed note and disables send when there is nothing to send", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		hx := http.Header{"Hx-Request": {"true"}}
+
+		empty := do(t, server, http.MethodGet, "/s/acme/web/1/changes/request/preview", req{Header: hx})
+		if !strings.Contains(empty.Body, `aria-disabled="true"`) {
+			t.Errorf("GET preview with no note or comments = %q, want a disabled send", empty.Body)
+		}
+		typed := do(t, server, http.MethodGet, "/s/acme/web/1/changes/request/preview?note=mind+the+API", req{Header: hx})
+		if !strings.Contains(typed.Body, `<span class="u">mind the API</span>`) ||
+			!strings.Contains(typed.Body, `type="submit"`) {
+			t.Errorf("GET preview with a note = %q, want the highlighted note and an enabled send", typed.Body)
+		}
+	})
+
+	t.Run("a comment removed in the modal can be restored", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
+		comments, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(comments) != 1 {
+			t.Fatalf("ReviewComments = %v, %v, want one", comments, err)
+		}
+		hx := http.Header{"Hx-Request": {"true"}}
+
+		removePath := "/s/acme/web/1/changes/request/comments/" + strconv.FormatInt(comments[0].ID, 10) + "/remove"
+		removed := do(t, server, http.MethodPost, removePath, req{Header: hx})
+		if removed.Code != http.StatusOK || !strings.Contains(removed.Body, "Undo") {
+			t.Fatalf("POST remove = %d %q, want an undo row", removed.Code, removed.Body)
+		}
+		if left, err := st.ReviewComments(t.Context(), sessionTicket); err != nil || len(left) != 0 {
+			t.Fatalf("ReviewComments after remove = %v, %v, want none", left, err)
+		}
+
+		restore := url.Values{
+			"tip": {string(comments[0].Tip)}, "path": {"src/a.go"}, "side": {"new"}, "line": {"1"},
+			"hunk": {comments[0].Hunk}, "body": {"rename this"},
+		}
+		restored := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request/comments/restore",
+			req{Form: restore, Header: hx})
+		if restored.Code != http.StatusOK || !strings.Contains(restored.Body, "rename this") {
+			t.Fatalf("POST restore = %d %q, want the comment back", restored.Code, restored.Body)
+		}
+		back, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(back) != 1 || back[0].Hunk != comments[0].Hunk {
+			t.Errorf("ReviewComments after restore = %+v, %v, want the original comment", back, err)
 		}
 	})
 
@@ -222,7 +421,7 @@ func TestChangesPage(t *testing.T) {
 		do(t, server, http.MethodPost, "/s/acme/web/1/changes/comments", req{Form: form})
 
 		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
-		got := page.One(t, "#review-popover").Text()
+		got := page.One(t, "#raise-popover").Text()
 		if !strings.Contains(got, "Raise PR") || !strings.Contains(got, "discards") {
 			t.Errorf("GET changes popover = %q, want Raise PR and the discard warning", got)
 		}

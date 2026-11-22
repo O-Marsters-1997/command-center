@@ -2,11 +2,14 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/O-Marsters-1997/treepad"
 
@@ -28,6 +31,7 @@ type spawnSpec struct {
 	step                             plan.Step
 	verify                           []string
 	cause                            plan.FollowUpCause
+	review                           []plan.ReviewComment
 }
 
 func (spec spawnSpec) session() store.RunSession {
@@ -214,6 +218,13 @@ func (l *Loop) spawnConfig(
 	}
 
 	prompt := spec.prompt
+	if len(spec.review) > 0 {
+		attached, err := l.writeReviewAttachment(runID, spec.review)
+		if err != nil {
+			return runner.SpawnConfig{}, err
+		}
+		prompt = strings.ReplaceAll(prompt, l.reviewAttachmentPath(plan.RunIDPlaceholder), attached)
+	}
 	canAsk := len(step.Tools) == 0 || slices.Contains(step.Tools, "Write")
 	if canAsk && spec.kind.Steerable() {
 		prompt += plan.ComposeAsking(l.questionPath(plan.RunID(runID)))
@@ -246,6 +257,22 @@ func (l *Loop) spawnConfig(
 		cfg.SystemPromptPath = systemPromptPath
 	}
 	return cfg, nil
+}
+
+func (l *Loop) reviewAttachmentPath(runID string) string {
+	return filepath.Join(l.ws.RunsDir, runID+"."+plan.ReviewAttachmentName)
+}
+
+func (l *Loop) writeReviewAttachment(runID int64, comments []plan.ReviewComment) (string, error) {
+	raw, err := json.MarshalIndent(comments, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode review comments for run %d: %w", runID, err)
+	}
+	path := l.reviewAttachmentPath(strconv.FormatInt(runID, 10))
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return "", fmt.Errorf("write review comments for run %d: %w", runID, err)
+	}
+	return path, nil
 }
 
 func (l *Loop) recordSpawnFailure(ctx context.Context, ticketURL string, runID int64, spawnErr error) error {

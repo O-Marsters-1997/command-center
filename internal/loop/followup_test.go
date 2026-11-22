@@ -1,10 +1,13 @@
 package loop_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
@@ -88,6 +91,46 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 
 func TestFollowUp(t *testing.T) {
 	t.Parallel()
+
+	t.Run("writes review comments as the run's attachment and names its path", func(t *testing.T) {
+		t.Parallel()
+		f := newPushFixture(t)
+		payload, err := storepkg.FollowUpPayload{Message: "mind the API", Comments: []plan.ReviewComment{
+			{Path: "a.go", Line: 3, Side: plan.SideNew, Hunk: "@@ -1 +1 @@\n+x", Body: "why"},
+			{Path: "b.go", Line: 9, Side: plan.SideOld, Hunk: "@@ -9 +9 @@\n-y", Body: "keep"},
+		}}.Encode()
+		if err != nil {
+			t.Fatalf("Encode: %v", err)
+		}
+		storetest.Verb(t, f.Store, storepkg.VerbRequest{
+			Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: payload, At: testAt,
+		})
+		fake := &runnertest.Runner{}
+		f.reset(testAt, fake)
+		f.tick(t)
+
+		spawns := fake.Spawns()
+		if len(spawns) != 1 {
+			t.Fatalf("spawns = %d, want 1", len(spawns))
+		}
+		path := filepath.Join(f.ws.RunsDir, "1.review-comments.json")
+		var got []plan.ReviewComment
+		if err := json.Unmarshal(readFile(t, path), &got); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		want := []plan.ReviewComment{
+			{Path: "a.go", Line: 3, Side: plan.SideNew, Hunk: "@@ -1 +1 @@\n+x", Body: "why"},
+			{Path: "b.go", Line: 9, Side: plan.SideOld, Hunk: "@@ -9 +9 @@\n-y", Body: "keep"},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("attachment mismatch (-want +got):\n%s", diff)
+		}
+		prompt := spawns[0].Prompt
+		if !strings.Contains(prompt, "`"+path+"`") || strings.Contains(prompt, "@@") ||
+			strings.Contains(prompt, plan.RunIDPlaceholder) {
+			t.Errorf("prompt = %q, want the attachment path %q and no hunk or placeholder", prompt, path)
+		}
+	})
 
 	t.Run("spawns a fresh run in the existing worktree with the typed prompt", func(t *testing.T) {
 		t.Parallel()

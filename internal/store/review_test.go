@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -57,6 +58,25 @@ func TestStore_ReviewComments(t *testing.T) {
 		})
 		if err == nil {
 			t.Error("AddReviewComment(empty body) = nil, want the CHECK to refuse it")
+		}
+	})
+
+	t.Run("an edit rewrites the body of its own ticket's comment only", func(t *testing.T) {
+		t.Parallel()
+		st, comment := reviewFixture(t)
+		err := st.EditReviewComment(t.Context(), "sandbox://CC-2", comment.ID, "hijacked")
+		if !errors.Is(err, storepkg.ErrNotFound) {
+			t.Errorf("EditReviewComment(other ticket) = %v, want ErrNotFound", err)
+		}
+		if err := st.EditReviewComment(t.Context(), "sandbox://CC-1", comment.ID, ""); err == nil {
+			t.Error("EditReviewComment(empty body) = nil, want the CHECK to refuse it")
+		}
+		if err := st.EditReviewComment(t.Context(), "sandbox://CC-1", comment.ID, "better"); err != nil {
+			t.Fatalf("EditReviewComment: %v", err)
+		}
+		got, err := st.ReviewComments(t.Context(), "sandbox://CC-1")
+		if err != nil || len(got) != 1 || got[0].Body != "better" {
+			t.Errorf("ReviewComments after edit = %v, %v, want one reading %q", got, err, "better")
 		}
 	})
 

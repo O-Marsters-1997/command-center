@@ -1,4 +1,5 @@
 import { initSidebar } from "./sidebar";
+import { applyViewed, toggleViewed } from "./viewed";
 
 export const maxLiveLines = 1000;
 
@@ -51,52 +52,39 @@ export function shouldHop(target: string | undefined, wide: boolean): boolean {
   return wide && target !== undefined && target !== "";
 }
 
-export function parseViewed(raw: string | null): string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
-  } catch {
-    return [];
+export function nextTab(current: number, count: number, key: string): number | null {
+  switch (key) {
+    case "ArrowRight":
+      return (current + 1) % count;
+    case "ArrowLeft":
+      return (current - 1 + count) % count;
+    case "Home":
+      return 0;
+    case "End":
+      return count - 1;
+    default:
+      return null;
   }
 }
 
-export function withViewed(viewed: string[], file: string, on: boolean): string[] {
-  const rest = viewed.filter((f) => f !== file);
-  return on ? [...rest, file] : rest;
-}
-
-export function viewedLabel(done: number, total: number): string {
-  return `${done} of ${total} viewed`;
-}
-
-function readViewed(key: string): string[] {
-  try {
-    return parseViewed(localStorage.getItem(key));
-  } catch {
-    return [];
+function selectTab(tab: HTMLElement): void {
+  const list = tab.closest("[data-tabs]");
+  if (!list) return;
+  for (const other of list.querySelectorAll<HTMLElement>("[role=tab]")) {
+    const on = other === tab;
+    other.setAttribute("aria-selected", String(on));
+    other.tabIndex = on ? 0 : -1;
+    const panel = document.getElementById(other.dataset.tab ?? "");
+    if (panel) panel.hidden = !on;
   }
+  tab.focus();
 }
 
-function writeViewed(key: string, viewed: string[]): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(viewed));
-  } catch {
-    return;
+function setTreeOpen(open: boolean): void {
+  document.getElementById("changes-tree")?.toggleAttribute("data-open", open);
+  for (const btn of document.querySelectorAll("button[data-toggle-tree]")) {
+    btn.setAttribute("aria-expanded", String(open));
   }
-}
-
-function applyViewed(root: HTMLElement): void {
-  const viewed = new Set(readViewed(root.dataset.viewedKey ?? ""));
-  let done = 0;
-  for (const file of root.querySelectorAll<HTMLDetailsElement>("details[data-file]")) {
-    const on = viewed.has(file.dataset.file ?? "");
-    const box = file.querySelector<HTMLInputElement>("input[data-viewed]");
-    if (box) box.checked = on;
-    file.open = !on;
-    if (on) done++;
-  }
-  const progress = root.querySelector("[data-viewed-progress]");
-  if (progress) progress.textContent = viewedLabel(done, Number(root.dataset.total));
 }
 
 function applyAllViewed(): void {
@@ -168,6 +156,12 @@ function eventElement(e: Event): Element | null {
   return e.target instanceof Element ? e.target : null;
 }
 
+function askForNote(): void {
+  const tab = document.getElementById("request-tab-prompt");
+  if (tab) selectTab(tab);
+  document.getElementById("request-note")?.focus();
+}
+
 function initGlue(): void {
   document.addEventListener("htmx:responseError", (e) => {
     const detail = e instanceof CustomEvent ? e.detail : undefined;
@@ -198,6 +192,35 @@ function initGlue(): void {
     const dialog = trigger && document.getElementById(trigger.getAttribute("data-show-modal") ?? "");
     if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
     eventElement(e)?.closest("[data-close-modal]")?.closest("dialog")?.close();
+
+    if (eventElement(e)?.closest("button[data-send][aria-disabled=true]")) askForNote();
+
+    const tab = eventElement(e)?.closest<HTMLElement>("[role=tab][data-tab]");
+    if (tab) selectTab(tab);
+
+    const toggle = eventElement(e)?.closest("[data-toggle-tree]");
+    if (toggle) setTreeOpen(!document.getElementById("changes-tree")?.hasAttribute("data-open"));
+    else if (eventElement(e)?.closest("#changes-tree a")) setTreeOpen(false);
+
+    const copy = eventElement(e)?.closest<HTMLElement>("[data-copy-path]");
+    if (copy) {
+      e.preventDefault();
+      void navigator.clipboard?.writeText(copy.dataset.copyPath ?? "");
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setTreeOpen(false);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const tab = eventElement(e)?.closest<HTMLElement>("[role=tab][data-tab]");
+    const tabs = tab?.closest("[data-tabs]")?.querySelectorAll<HTMLElement>("[role=tab]");
+    if (!tab || !tabs) return;
+    const next = nextTab([...tabs].indexOf(tab), tabs.length, e.key);
+    const target = next === null ? undefined : tabs[next];
+    if (!target) return;
+    e.preventDefault();
+    selectTab(target);
   });
 
   document.addEventListener("keydown", (e) => {
@@ -205,7 +228,8 @@ function initGlue(): void {
     const form = eventElement(e)?.closest("form[data-submit-on-mod-enter]");
     if (form instanceof HTMLFormElement) {
       e.preventDefault();
-      form.requestSubmit();
+      if (form.querySelector("button[data-send][aria-disabled=true]")) askForNote();
+      else form.requestSubmit();
     }
   });
 
@@ -235,9 +259,7 @@ function initGlue(): void {
     const root = box?.closest<HTMLElement>("[data-changes]");
     const file = box?.closest<HTMLElement>("[data-file]");
     if (!(box instanceof HTMLInputElement) || !box.hasAttribute("data-viewed") || !root || !file) return;
-    const key = root.dataset.viewedKey ?? "";
-    writeViewed(key, withViewed(readViewed(key), file.dataset.file ?? "", box.checked));
-    applyViewed(root);
+    toggleViewed(root, file.dataset.file ?? "", box.checked);
   });
   applyAllViewed();
   initSidebar(document);
