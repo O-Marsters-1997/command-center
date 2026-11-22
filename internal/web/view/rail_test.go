@@ -115,6 +115,36 @@ func TestBuildRail(t *testing.T) {
 		}
 	})
 
+	t.Run("a settled row keeps its done glyph while removal is queued", func(t *testing.T) {
+		t.Parallel()
+		row := railRow("5", "billing", plan.GlyphDone)
+		row.Worktree = "/wt"
+		rec := plan.IntentRecord{ID: 1, Verb: plan.VerbRemoveWorktree, At: testNow}
+		row.Intent = option.Some(plan.StatusOf(rec, option.None[plan.RunSummary](), testNow))
+
+		got := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
+
+		if got.Glyph != plan.GlyphDone {
+			t.Errorf("BuildRail().Settled.Items[0].Glyph = %q, want %q", got.Glyph, plan.GlyphDone)
+		}
+	})
+
+	t.Run("a settled row shows a failed removal", func(t *testing.T) {
+		t.Parallel()
+		row := railRow("5", "billing", plan.GlyphDone)
+		row.Worktree = "/wt"
+		rec := plan.IntentRecord{ID: 1, Verb: plan.VerbRemoveWorktree, At: testNow}
+		rec.ConsumedAt, rec.FinishedAt = option.Some(testNow), option.Some(testNow)
+		rec.Outcome = plan.IntentFailed
+		row.Intent = option.Some(plan.StatusOf(rec, option.None[plan.RunSummary](), testNow))
+
+		got := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
+
+		if got.Glyph != plan.GlyphFailed {
+			t.Errorf("BuildRail().Settled.Items[0].Glyph = %q, want %q", got.Glyph, plan.GlyphFailed)
+		}
+	})
+
 	t.Run("groups by attention", func(t *testing.T) {
 		t.Parallel()
 		rows := []view.Row{
