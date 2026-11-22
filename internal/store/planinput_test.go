@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -99,14 +100,22 @@ func TestStore_PlanInput(t *testing.T) {
 			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPRMerged},
 			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-2", Kind: storepkg.EventParked},
 			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-3", Kind: storepkg.EventRestacked},
+			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-4", Kind: storepkg.EventStageEntered, Detail: "ready"},
+			storepkg.Event{
+				At: testNow.Add(time.Hour), TicketURL: "sandbox://CC-4",
+				Kind: storepkg.EventStageEntered, Detail: "working",
+			},
 		)
 		want := map[plan.TicketURL]plan.Recorded{
 			"sandbox://CC-1": {Opened: true, Merged: true},
 			"sandbox://CC-2": {Parked: true},
 			"sandbox://CC-3": {},
-			"sandbox://CC-4": {},
+			"sandbox://CC-4": {Stage: plan.StageWorking, StageSince: option.Some(testNow.Add(time.Hour))},
 		}
-		if diff := cmp.Diff(want, read(t, st).Recorded); diff != "" {
+		equalTimes := cmp.Comparer(func(a, b option.Option[time.Time]) bool {
+			return a.IsSome() == b.IsSome() && (a.IsNone() || a.Unwrap().Equal(b.Unwrap()))
+		})
+		if diff := cmp.Diff(want, read(t, st).Recorded, equalTimes); diff != "" {
 			t.Errorf("PlanInput().Recorded mismatch (-want +got):\n%s", diff)
 		}
 	})

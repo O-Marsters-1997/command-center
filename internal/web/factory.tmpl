@@ -1,0 +1,145 @@
+{{define "factoryTab" -}}
+<a class="pill-tab" href="{{.Path}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "mark" .Mark}}{{.Label}}{{if .Count}} <span class="section-count">{{.Count}}</span>{{end}}</a>
+{{- end}}
+
+{{define "factoryChip" -}}
+<a class="chip factory-chip" href="{{.Path}}" {{template "nav" .Path}}{{if .Current}} aria-current="true" title="Remove this filter"{{end}}>{{template "mark" .Mark}}<span class="truncate">{{.Label}}</span>{{if .Current}}{{template "icon" "x"}}{{else}} <span class="text-meta">{{.Count}}</span>{{end}}</a>
+{{- end}}
+
+{{define "factorySubline" -}}
+{{- if .Flagged}}<p class="factory-card-line"><b class="font-medium text-fg">{{.Label}}.</b> {{.Detail}}</p>
+{{- else if .After}}<p class="factory-card-line">After {{range $i, $a := .After}}{{if $i}}, {{end}}<span class="font-mono">{{$a}}</span>{{end}}</p>
+{{- else if .Alive}}
+{{- else if .PRNumber}}<p class="factory-card-line"><span class="font-mono">PR #{{.PRNumber}}</span>{{if .ChecksTotal}} · {{.ChecksPassed}}/{{.ChecksTotal}} checks{{end}}</p>
+{{- else if .Detail}}<p class="factory-card-line">{{.Detail}}</p>{{end}}
+{{- end}}
+
+{{define "factoryCardBody" -}}
+  <a class="grid gap-1 text-inherit no-underline" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>
+    <span class="flex items-center gap-1.5">
+      <span class="glyph{{if .Alive}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" title="{{.Label}}"></span>
+      <span class="font-mono text-xs text-meta">{{.Ticket}}</span>
+      {{- if .InStage.IsSome}}<span class="ml-auto font-mono text-xs text-meta" title="Time in this stage">{{template "age" .InStage.Unwrap}}</span>{{end}}
+    </span>
+    <b class="factory-card-title">{{if .Title}}{{.Title}}{{else}}Untitled{{end}}</b>
+  </a>
+  <span class="flex min-w-0 items-center gap-1.5 text-xs text-muted">{{template "mark" .Mark}}<span class="truncate">{{.FeatureTitle}} · {{.Repo}}</span></span>
+  {{- if and .Alive .Step}}
+  <p class="factory-card-line flex items-center gap-1.5"><span class="chip h-[18px] shrink-0 px-1.5 font-mono text-[11px]">{{.Step}}</span>{{if .Last}}<span class="factory-live truncate" title="{{.Last}}">{{.Last}}</span>{{end}}</p>
+  {{- end}}
+  {{template "factorySubline" .}}
+  {{- if or .PRURL (gt .SpendPctWeek 0.0)}}
+  <span class="flex items-center gap-2">
+    {{- if gt .SpendPctWeek 0.0}}<span class="font-mono text-xs text-meta" title="Share of this week's usage">{{printf "%.1f" .SpendPctWeek}}% wk</span>{{end}}
+    {{- if .PRURL}}<a class="ml-auto text-xs text-muted" href="{{.PRURL}}" target="_blank" rel="noopener">PR #{{.PRNumber}}</a>{{end}}
+  </span>
+  {{- end}}
+{{- end}}
+
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<div id="factory" class="factory" hx-get="{{.FloorPath}}" hx-trigger="every {{.PollSeconds}}s" hx-select="#factory" hx-sync="this:drop" hx-swap="outerHTML transition:true">
+<header class="mb-5">
+  <h1>Factory</h1>
+  <p class="page-purpose flex flex-wrap gap-x-4 gap-y-1">
+    <span class="glyph{{if .Counts.Working}} glyph-pulse{{end}}" data-glyph="running">{{.Counts.Working}} {{if eq .Counts.Working 1}}agent{{else}}agents{{end}} working</span>
+    {{- if .Counts.NeedsYou}}<span class="glyph" data-glyph="failed">{{.Counts.NeedsYou}} {{if eq .Counts.NeedsYou 1}}needs{{else}}need{{end}} you</span>{{end}}
+    <span class="glyph" data-glyph="attention">{{.Counts.Reviewing}} to review</span>
+    <span class="glyph" data-glyph="done">{{.Counts.Merged}} merged</span>
+  </p>
+</header>
+
+<nav class="mb-4" aria-label="Factory scope">
+  <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <div class="pill-tabs factory-tabs" aria-label="Project">
+      {{template "factoryTab" .Scope.AllProjects}}
+      {{- range .Scope.Projects}}{{template "factoryTab" .}}{{end}}
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-medium text-muted">Group by</span>
+      <div class="pill-tabs factory-tabs" aria-label="Group by">
+        {{- range .LaneTabs}}{{template "factoryTab" .}}{{end}}
+      </div>
+    </div>
+  </div>
+  {{- if or (gt (len .Scope.Features) 1) (gt (len .Scope.Repos) 1)}}
+  <div class="mt-3 flex flex-wrap items-center gap-1.5">
+    {{- if gt (len .Scope.Features) 1}}
+    <span class="mr-1 text-xs font-medium text-muted">Feature</span>
+    {{- range .Scope.Features}}{{template "factoryChip" .}}{{end}}
+    {{- end}}
+    {{- if gt (len .Scope.Repos) 1}}
+    <span class="mx-1 ml-3 text-xs font-medium text-muted">Repo</span>
+    {{- range .Scope.Repos}}{{template "factoryChip" .}}{{end}}
+    {{- end}}
+    {{- with .Scope.Clear}}<a class="btn btn-sm btn-ghost ml-1" href="{{.}}" {{template "nav" .}}>Clear</a>{{end}}
+  </div>
+  {{- end}}
+</nav>
+
+{{- if .ExpandAll}}
+<p class="mb-2 flex items-center justify-end gap-1">
+  <a class="btn btn-sm btn-ghost" href="{{.ExpandAll}}" {{template "nav" .ExpandAll}}>Expand all</a>
+  <a class="btn btn-sm btn-ghost" href="{{.CollapseAll}}" {{template "nav" .CollapseAll}}>Collapse all</a>
+</p>
+{{- end}}
+{{- range .Lanes}}
+<div class="factory-lane">
+  {{- if .Key}}
+  <a class="factory-lane-head" href="{{.Toggle}}" {{template "nav" .Toggle}} aria-expanded="{{.Open}}">
+    {{template "icon" "chev"}}{{template "mark" .Mark}}
+    <b class="truncate font-medium text-fg">{{.Name}}</b>
+    <span class="section-count">{{.Count}}</span>
+    {{- if .Working}}<span class="glyph glyph-pulse text-xs" data-glyph="running">{{.Working}} working</span>{{end}}
+    {{- if .NeedsYou}}<span class="glyph text-xs" data-glyph="failed">{{.NeedsYou}} {{if eq .NeedsYou 1}}needs{{else}}need{{end}} you</span>{{end}}
+    <span class="segbar ml-auto" aria-hidden="true">
+      {{- range .Segments}}<span class="segbar-segment" data-glyph="{{.Glyph}}" title="{{.Title}}, {{.Count}}" style="flex-grow: {{.Count}}"></span>{{end -}}
+    </span>
+  </a>
+  {{- end}}
+  {{- if .Open}}
+  <div class="factory-floor">
+    {{- range .Columns}}
+    <section class="factory-col" data-stage="{{.Stage}}"{{if .Pressure}} data-pressure{{end}} aria-label="{{.Title}}, {{.Total}}">
+      <h3 class="factory-col-head flex h-[30px] items-center gap-2 px-1 text-sm font-medium text-fg-2">
+        <span class="glyph" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{.Title}} <span class="section-count">{{.Total}}</span>
+        {{- if .Oldest.IsSome}}<span class="ml-auto font-mono text-xs font-normal text-meta" title="Longest time in Review me">oldest {{template "age" .Oldest.Unwrap}}</span>{{end}}
+      </h3>
+      {{- range .Cards}}
+      <article class="factory-card" style="view-transition-name: {{.TransitionName}}"{{if .Flagged}} data-flagged="{{.Glyph}}"{{end}}{{if eq .Glyph "blocked"}} data-blocked{{end}}{{if not (or .Flagged .Launchable)}} data-calm{{end}}>
+        {{- template "factoryCardBody" .}}
+        {{- if or .Buttons .Launchable}}
+        <div class="factory-card-verbs">
+          {{- $row := .}}
+          {{- range .Buttons}}
+          <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-swap="none"{{with .Confirm}} hx-confirm="{{.}}"{{end}}>
+            <input type="hidden" name="ticket" value="{{$row.URL}}">
+            <input type="hidden" name="return" value="{{$.FloorPath}}">
+            <button class="btn btn-sm" type="submit" name="verb" value="{{.Verb}}"{{if .Pending}} disabled{{end}}>{{.Label}}</button>
+            {{- if .Pending}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+          </form>
+          {{- end}}
+          {{- if .Selectable}}
+          <form method="post" action="/launch" hx-post="/launch" hx-disabled-elt="find button" hx-swap="none">
+            <input type="hidden" name="ticket" value="{{.URL}}">
+            <input type="hidden" name="return" value="{{$.FloorPath}}">
+            <button class="btn btn-sm btn-primary" type="submit">{{if .WillArm}}Arm{{else}}Launch{{end}}</button>
+          </form>
+          {{- else if .Launchable}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+        </div>
+        {{- end}}
+      </article>
+      {{- else}}<p class="factory-empty">{{.Empty}}</p>{{end}}
+      {{- if .More}}<a class="btn btn-sm btn-ghost w-full" href="{{.More}}" {{template "nav" .More}}>Show {{.Hidden}} more</a>{{end}}
+      {{- if .Fewer}}<a class="btn btn-sm btn-ghost w-full" href="{{.Fewer}}" {{template "nav" .Fewer}}>Show fewer</a>{{end}}
+      {{- if .SeeAll}}<a class="btn btn-sm btn-ghost w-full" href="{{.SeeAll}}" {{template "nav" .SeeAll}}>See all {{.Total}} merged</a>{{end}}
+    </section>
+    {{- end}}
+  </div>
+  {{- end}}
+</div>
+{{- end}}
+</div>
+{{template "shellEnd" .}}

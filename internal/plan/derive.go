@@ -63,9 +63,11 @@ type RefreshFact struct {
 }
 
 type Recorded struct {
-	Opened bool
-	Merged bool
-	Parked bool
+	Opened     bool
+	Merged     bool
+	Parked     bool
+	Stage      Stage
+	StageSince option.Option[time.Time]
 }
 
 type VerdictFacts struct {
@@ -121,6 +123,7 @@ type Entry struct {
 	Workflow       string
 	Raise          RaiseMode
 	LockedBehind   int
+	StageSince     option.Option[time.Time]
 }
 
 func (e Entry) HoldsWorktree() bool {
@@ -266,7 +269,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		now:         in.Now,
 	}
 	unlocks := Unlocks(in.Tickets)
-	var parked []Transition
+	var parked, staged []Transition
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
 		base := unlock.BaseBranch
@@ -343,6 +346,11 @@ func (r Rules) Derive(in Input) Snapshot {
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			Restacked: in.Restacked[t.URL], LaunchID: membership.LaunchID, Base: base,
 			Next: next, Workflow: membership.Workflow, Raise: raise,
+			StageSince: in.Recorded[t.URL].StageSince,
+		}
+		if stage := state.Stage(); stage != in.Recorded[t.URL].Stage {
+			entry.StageSince = option.Some(in.Now)
+			staged = append(staged, Transition{Ticket: t.URL, Kind: TransitionStage, At: in.Now, Detail: string(stage)})
 		}
 		if rec, ok := in.Latest[t.URL]; ok {
 			entry.Intent = railIntent(rec, in.Runs[t.URL], state, in.Now)
@@ -361,6 +369,7 @@ func (r Rules) Derive(in Input) Snapshot {
 	}
 	snap.transitions, snap.verdicts = r.transitions(in)
 	snap.transitions = append(snap.transitions, parked...)
+	snap.transitions = append(snap.transitions, staged...)
 	return snap
 }
 

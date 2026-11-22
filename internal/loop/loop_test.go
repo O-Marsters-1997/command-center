@@ -210,7 +210,7 @@ func TestLoop_RunOnce(t *testing.T) {
 		for _, e := range storetest.Events(t, store, "") {
 			got = append(got, kindAt{e.Kind, e.At})
 		}
-		want := []kindAt{{"pr_opened", good}, {storepkg.EventTickError, bad}}
+		want := []kindAt{{"pr_opened", good}, {storepkg.EventStageEntered, good}, {storepkg.EventTickError, bad}}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("Events() mismatch (-want +got):\n%s", diff)
 		}

@@ -18,6 +18,7 @@ const (
 	TransitionChecksLanded TransitionKind = "checks_landed"
 	TransitionVerdict      TransitionKind = "verdict"
 	TransitionParked       TransitionKind = "parked"
+	TransitionStage        TransitionKind = "stage_entered"
 )
 
 type Transition struct {

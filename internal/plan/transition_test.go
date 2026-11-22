@@ -97,7 +97,7 @@ func TestSnapshot_Transitions(t *testing.T) {
 
 			tt.in.Now = now
 			tt.in.Tickets = []plan.Ticket{tk}
-			got := plan.Rules{}.Derive(tt.in).Transitions()
+			got := withoutStage(plan.Rules{}.Derive(tt.in).Transitions())
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("Transitions() mismatch (-want +got):\n%s", diff)
 			}
@@ -135,7 +135,7 @@ func TestSnapshot_Verdicts(t *testing.T) {
 		in.LastVerdicts = map[plan.TicketURL]string{tk.URL: "checking"}
 		snap := checked.Derive(in)
 
-		got := snap.Transitions()
+		got := withoutStage(snap.Transitions())
 		if len(got) != 1 || got[0].Kind != plan.TransitionVerdict || got[0].Ticket != tk.URL || got[0].At != now {
 			t.Fatalf("Transitions() = %+v, want one verdict transition for %s at %s", got, tk.URL, now)
 		}
@@ -152,7 +152,7 @@ func TestSnapshot_Verdicts(t *testing.T) {
 		in.LastVerdicts = map[plan.TicketURL]string{tk.URL: verdict.ReviewMe.String()}
 		snap := checked.Derive(in)
 
-		if got := snap.Transitions(); len(got) != 0 {
+		if got := withoutStage(snap.Transitions()); len(got) != 0 {
 			t.Errorf("Transitions() = %+v, want none", got)
 		}
 		if diff := cmp.Diff(in.LastVerdicts, snap.Verdicts()); diff != "" {
@@ -185,9 +185,61 @@ func TestSnapshot_Verdicts(t *testing.T) {
 
 			in, rules := base(), checked
 			tt.mutate(&in, &rules)
-			if got := rules.Derive(in).Transitions(); len(got) != 0 {
+			if got := withoutStage(rules.Derive(in).Transitions()); len(got) != 0 {
 				t.Errorf("Transitions() = %+v, want none", got)
 			}
 		})
 	}
+}
+
+func withoutStage(ts []plan.Transition) []plan.Transition {
+	var out []plan.Transition
+	for _, tr := range ts {
+		if tr.Kind != plan.TransitionStage {
+			out = append(out, tr)
+		}
+	}
+	return out
+}
+
+func TestSnapshot_StageEntered(t *testing.T) {
+	t.Parallel()
+
+	tk := ticket("1", "cc-1")
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	earlier := now.Add(-time.Hour)
+	stage := plan.Rules{}.Derive(plan.Input{Now: now, Tickets: []plan.Ticket{tk}}).Entries[0].State.Stage()
+
+	t.Run("a stage change emits one transition and stamps the entry", func(t *testing.T) {
+		t.Parallel()
+
+		in := plan.Input{Now: now, Tickets: []plan.Ticket{tk}, Recorded: map[plan.TicketURL]plan.Recorded{
+			tk.URL: {Stage: plan.StageMerged, StageSince: option.Some(earlier)},
+		}}
+		snap := plan.Rules{}.Derive(in)
+
+		want := []plan.Transition{{Ticket: tk.URL, Kind: plan.TransitionStage, At: now, Detail: string(stage)}}
+		if diff := cmp.Diff(want, snap.Transitions()); diff != "" {
+			t.Errorf("Transitions() mismatch (-want +got):\n%s", diff)
+		}
+		if got := snap.Entries[0].StageSince; got != option.Some(now) {
+			t.Errorf("StageSince = %v, want %v", got, now)
+		}
+	})
+
+	t.Run("an unchanged stage emits nothing and keeps the recorded time", func(t *testing.T) {
+		t.Parallel()
+
+		in := plan.Input{Now: now, Tickets: []plan.Ticket{tk}, Recorded: map[plan.TicketURL]plan.Recorded{
+			tk.URL: {Stage: stage, StageSince: option.Some(earlier)},
+		}}
+		snap := plan.Rules{}.Derive(in)
+
+		if got := snap.Transitions(); len(got) != 0 {
+			t.Errorf("Transitions() = %+v, want none", got)
+		}
+		if got := snap.Entries[0].StageSince; got != option.Some(earlier) {
+			t.Errorf("StageSince = %v, want %v", got, earlier)
+		}
+	})
 }

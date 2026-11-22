@@ -40,6 +40,60 @@ var stateDecisions = []struct {
 	{state: plan.WaitingToVerify},
 }
 
+func TestState_Stage(t *testing.T) {
+	t.Parallel()
+
+	want := map[plan.State]plan.Stage{
+		plan.Blocked:                 plan.StageBlocked,
+		plan.Ready:                   plan.StageReady,
+		plan.Queued:                  plan.StageReady,
+		plan.Running:                 plan.StageWorking,
+		plan.Failed:                  plan.StageWorking,
+		plan.PushPending:             plan.StageWorking,
+		plan.PushFailed:              plan.StageWorking,
+		plan.PushRefused:             plan.StageWorking,
+		plan.Verifying:               plan.StageWorking,
+		plan.WaitingToVerify:         plan.StageWorking,
+		plan.VerificationFailed:      plan.StageWorking,
+		plan.AwaitingInput:           plan.StageWorking,
+		plan.AwaitingPR:              plan.StagePR,
+		plan.Checking:                plan.StagePR,
+		plan.CIFailed:                plan.StagePR,
+		plan.Parked:                  plan.StagePR,
+		plan.BaseMoved:               plan.StagePR,
+		plan.ConflictsWithMain:       plan.StagePR,
+		plan.RefreshConflicted:       plan.StagePR,
+		plan.NeedsYou:                plan.StagePR,
+		plan.WaitingOnProducerDeploy: plan.StagePR,
+		plan.ReviewMe:                plan.StageReview,
+		plan.PRMerged:                plan.StageMerged,
+		plan.Withdrawn:               plan.StageNone,
+		plan.Cancelled:               plan.StageNone,
+	}
+	if len(want) != len(plan.AllStates()) {
+		t.Fatalf("table covers %d states, AllStates() has %d", len(want), len(plan.AllStates()))
+	}
+	for _, s := range plan.AllStates() {
+		if got := s.Stage(); got != want[s] {
+			t.Errorf("%s.Stage() = %q, want %q", s, got, want[s])
+		}
+	}
+	if got := plan.StateUnknown.Stage(); got != plan.StageNone {
+		t.Errorf("StateUnknown.Stage() = %q, want none", got)
+	}
+}
+
+func TestAllStages(t *testing.T) {
+	t.Parallel()
+
+	want := []plan.Stage{
+		plan.StageBlocked, plan.StageReady, plan.StageWorking, plan.StagePR, plan.StageReview, plan.StageMerged,
+	}
+	if diff := cmp.Diff(want, plan.AllStages()); diff != "" {
+		t.Errorf("AllStages() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestVerbs(t *testing.T) {
 	t.Parallel()
 
