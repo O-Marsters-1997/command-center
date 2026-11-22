@@ -193,6 +193,15 @@ func statusLatestRunOutcome(t *testing.T) {
 			reasonHas: []string{"Which database?"},
 		},
 		{
+			name: "a missing-dependency question derives awaiting input with its own wording",
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeAsked),
+				Question: plan.MissingDependencyMarker + " the #32 parser is not on this branch",
+			}),
+			wantState: plan.AwaitingInput,
+			reasonHas: []string{"blocker work missing from the branch", "the #32 parser"},
+		},
+		{
 			name: "a continued run derives queued while the resume is pending",
 			latestRun: option.Some(plan.RunFact{
 				Alive: false, Outcome: option.Some(plan.OutcomeContinued),
