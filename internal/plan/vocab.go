@@ -69,8 +69,21 @@ const (
 	GlyphDone      GlyphWord = "done"
 )
 
+type Stage string
+
+const (
+	StageNone    Stage = ""
+	StageBlocked Stage = "blocked"
+	StageReady   Stage = "ready"
+	StageWorking Stage = "working"
+	StagePR      Stage = "pr"
+	StageReview  Stage = "review"
+	StageMerged  Stage = "merged"
+)
+
 var (
-	allVerbs = []Verb{
+	allStages = []Stage{StageBlocked, StageReady, StageWorking, StagePR, StageReview, StageMerged}
+	allVerbs  = []Verb{
 		VerbLaunch, VerbKill, VerbReRun, VerbRetryPush, VerbRemoveWorktree, VerbCancel,
 		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbImport, VerbTrack,
 		VerbRaise, VerbAdoptHead,
@@ -79,6 +92,8 @@ var (
 	allRepoPhases   = []RepoPhase{RepoCloning, RepoReady, RepoRefused}
 	allRefusalKinds = []RefusalKind{RefusalMergeSettings, RefusalDefaultBranch, RefusalClone, RefusalSettingsParse}
 )
+
+func AllStages() []Stage { return slices.Clone(allStages) }
 
 func AllVerbs() []Verb { return slices.Clone(allVerbs) }
 
