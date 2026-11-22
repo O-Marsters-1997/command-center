@@ -447,7 +447,7 @@ function init(): void {
     }
   });
   for (const name of ["wheel", "touchmove", "pointerdown"]) {
-    document.addEventListener(name, () => (targetFile = null), { passive: true });
+    document.addEventListener(name, () => { targetFile = null; }, { passive: true });
   }
   window.addEventListener("hashchange", () => (document.getElementById("key-sheet") as HTMLDialogElement | null)?.close());
   let frame = 0;
