@@ -121,6 +121,59 @@ func TestFactoryPage(t *testing.T) {
 		}
 	})
 
+	t.Run("lanes split the floor, fold through the url and keep their cards", func(t *testing.T) {
+		t.Parallel()
+		st := openStore(t)
+		storetest.FeatureTicket(t, st, "sandbox://A-1", "cc-sandbox", "project:alpha")
+		storetest.FeatureTicket(t, st, "sandbox://A-2", "cc-sandbox", "project:alpha")
+		storetest.FeatureTicket(t, st, "sandbox://Z-1", "cc-sandbox", "project:zeta")
+		server := newServer(st, testNow)
+
+		root := htmltest.Parse(t, renderPath(t, server, "/factory?by=feature"))
+		if got := len(root.Find("article.factory-card")); got != 3 {
+			t.Errorf("grouped cards = %d, want the 3 of the ungrouped floor", got)
+		}
+		heads := root.Find("a.factory-lane-head")
+		if len(heads) != 2 {
+			t.Fatalf("lane heads = %d, want 2", len(heads))
+		}
+		if diff := cmp.Diff(
+			map[string]string{"aria-expanded": "true", "href": "/factory?by=feature&closed=f%3Aproject%3Aalpha"},
+			attrs(heads[0], "aria-expanded", "href"),
+		); diff != "" {
+			t.Errorf("first lane head mismatch (-want +got):\n%s", diff)
+		}
+
+		folded := htmltest.Parse(t, renderPath(t, server, "/factory?by=feature&closed=f:project:alpha"))
+		if got := len(folded.Find("article.factory-card")); got != 1 {
+			t.Errorf("cards with alpha folded = %d, want 1", got)
+		}
+		head := folded.Find("a.factory-lane-head")[0]
+		if expanded, _ := head.Attr("aria-expanded"); expanded != "false" {
+			t.Errorf("folded lane aria-expanded = %q, want false", expanded)
+		}
+		if poll, _ := folded.One(t, "div#factory").Attr("hx-get"); poll != "/factory?by=feature&closed=f%3Aproject%3Aalpha" {
+			t.Errorf("poll path = %q, want the fold kept", poll)
+		}
+		got := map[string]string{}
+		for _, a := range folded.Find("a.btn-ghost") {
+			href, _ := a.Attr("href")
+			got[strings.TrimSpace(a.Text())] = href
+		}
+		want := map[string]string{
+			"Expand all":   "/factory?by=feature",
+			"Collapse all": "/factory?by=feature&closed=f%3Aproject%3Aalpha&closed=f%3Aproject%3Azeta",
+		}
+		for text := range got {
+			if _, ok := want[text]; !ok {
+				delete(got, text)
+			}
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("fold-all links mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("the rail links to the floor", func(t *testing.T) {
 		t.Parallel()
 		root := htmltest.Parse(t, renderPath(t, newServer(seededStore(t, testNow), testNow), "/factory"))

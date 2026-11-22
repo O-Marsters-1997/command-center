@@ -2745,6 +2745,42 @@ summary.prompt-bar:focus-visible {
     stroke-width: 2;
   }
 
+  .factory-lane + .factory-lane {
+    margin-top: var(--space-3);
+  }
+
+  .factory-lane-head {
+    display: flex;
+    min-height: 36px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px var(--space-2);
+    margin-bottom: var(--space-2);
+    padding: 4px var(--space-2);
+    border-radius: var(--radius-lg);
+    color: var(--color-fg-2);
+    text-decoration: none;
+    font-size: var(--text-sm);
+  }
+
+  .factory-lane-head:hover {
+    background: var(--color-surface-2);
+    text-decoration: none;
+  }
+
+  .factory-lane-head .icon {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    transition: transform var(--motion-fast) var(--ease-out);
+  }
+
+  .factory-lane-head[aria-expanded="true"] .icon {
+    transform: rotate(90deg);
+  }
+
   .factory-floor {
     display: grid;
     gap: var(--space-2);

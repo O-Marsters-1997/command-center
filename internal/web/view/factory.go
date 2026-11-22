@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -18,18 +19,64 @@ const (
 	factoryBlockedCap = 4
 )
 
+type LaneBy string
+
+const (
+	LaneByNone    LaneBy = ""
+	LaneByProject LaneBy = "project"
+	LaneByFeature LaneBy = "feature"
+	LaneByRepo    LaneBy = "repo"
+)
+
 type FactoryParams struct {
 	Params
 	BlockedAll bool
+	By         LaneBy
+	Closed     []string
 }
 
 type Factory struct {
 	Chrome
 	Scope       ScopeBar
 	Counts      FactoryCounts
-	Columns     []Column
+	Lanes       []Lane
+	LaneTabs    []ScopeTab
+	ExpandAll   string
+	CollapseAll string
 	FloorPath   string
 	PollSeconds int
+}
+
+type Lane struct {
+	Key      string
+	Name     string
+	Mark     ProjectMark
+	Columns  []Column
+	Segments []LaneSegment
+	Count    int
+	Working  int
+	NeedsYou int
+	Open     bool
+	Toggle   string
+}
+
+type LaneSegment struct {
+	Glyph plan.GlyphWord
+	Title string
+	Count int
+}
+
+func (by LaneBy) lane(r Row) (key, name string) {
+	switch by {
+	case LaneByProject:
+		return "p:" + r.Project, cmp.Or(r.Project, "No project")
+	case LaneByFeature:
+		return "f:" + r.Feature, cmp.Or(strings.TrimPrefix(r.Feature, "project:"), "No feature")
+	case LaneByRepo:
+		return "r:" + r.Repo, cmp.Or(r.Repo, "No repo")
+	case LaneByNone:
+	}
+	return "", ""
 }
 
 type FactoryCounts struct {
@@ -83,25 +130,42 @@ func (r *Reader) Factory(ctx context.Context, now time.Time, params FactoryParam
 	if err != nil {
 		return Factory{}, err
 	}
-	p := f.params
-	columns, counts := buildFloor(rowsIn(scopeGroups(rows, p, f.project)), p, params.BlockedAll)
+	fp := params
+	fp.Params = f.params
+	switch fp.By {
+	case LaneByProject, LaneByFeature, LaneByRepo, LaneByNone:
+	default:
+		fp.By = LaneByNone
+	}
+	lanes, counts := buildFloor(rowsIn(scopeGroups(rows, fp.Params, f.project)), fp)
 	chrome := f.chrome
 	chrome.titled("Factory")
 	chrome.Crumbs = []Crumb{{Label: "Factory"}}
 	chrome.setCurrent(keyFactory)
-	return Factory{
+	page := Factory{
 		Chrome:      chrome,
-		Scope:       BuildScopeBar(rows, factoryQuery(p, false)),
+		Scope:       BuildScopeBar(rows, fp.query(false, fp.Closed)),
 		Counts:      counts,
-		Columns:     columns,
-		FloorPath:   withQuery(factoryPath, factoryQuery(p, params.BlockedAll).Encode()),
+		Lanes:       lanes,
+		LaneTabs:    fp.laneTabs(),
+		FloorPath:   fp.path(fp.BlockedAll, fp.Closed),
 		PollSeconds: r.boardPollSeconds,
-	}, nil
+	}
+	if fp.By != LaneByNone {
+		page.ExpandAll = fp.path(fp.BlockedAll, nil)
+		keys := make([]string, len(lanes))
+		for i, l := range lanes {
+			keys[i] = l.Key
+		}
+		page.CollapseAll = fp.path(fp.BlockedAll, keys)
+	}
+	return page, nil
 }
 
-func factoryQuery(p Params, blockedAll bool) url.Values {
+func (fp FactoryParams) query(blockedAll bool, closed []string) url.Values {
 	q := url.Values{}
-	for k, v := range map[string]string{"project": p.Project, "feature": p.Feature, "repo": p.Repo} {
+	scope := map[string]string{"project": fp.Project, "feature": fp.Feature, "repo": fp.Repo, "by": string(fp.By)}
+	for k, v := range scope {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -109,29 +173,110 @@ func factoryQuery(p Params, blockedAll bool) url.Values {
 	if blockedAll {
 		q.Set("blocked", "all")
 	}
+	if len(closed) > 0 {
+		q["closed"] = closed
+	}
 	return q
 }
 
-func buildFloor(rows []Row, p Params, blockedAll bool) ([]Column, FactoryCounts) {
+func (fp FactoryParams) path(blockedAll bool, closed []string) string {
+	return withQuery(factoryPath, fp.query(blockedAll, closed).Encode())
+}
+
+func (fp FactoryParams) laneTabs() []ScopeTab {
+	var tabs []ScopeTab
+	for _, t := range []struct {
+		by    LaneBy
+		label string
+	}{{LaneByNone, "None"}, {LaneByProject, "Project"}, {LaneByFeature, "Feature"}, {LaneByRepo, "Repo"}} {
+		next := fp
+		next.By = t.by
+		tabs = append(tabs, ScopeTab{Label: t.label, Path: next.path(fp.BlockedAll, fp.Closed), Current: t.by == fp.By})
+	}
+	return tabs
+}
+
+func (fp FactoryParams) toggled(key string) []string {
+	if slices.Contains(fp.Closed, key) {
+		return slices.DeleteFunc(slices.Clone(fp.Closed), func(k string) bool { return k == key })
+	}
+	return append(slices.Clone(fp.Closed), key)
+}
+
+type laneBuild struct {
+	Lane
+	byStage map[plan.Stage][]Card
+}
+
+func buildFloor(rows []Row, fp FactoryParams) ([]Lane, FactoryCounts) {
 	var counts FactoryCounts
-	byStage := map[plan.Stage][]Card{}
+	builds := map[string]*laneBuild{}
+	newBuild := func(key, name string, mark ProjectMark) *laneBuild {
+		b := &laneBuild{Lane: Lane{Key: key, Name: name, Mark: mark}, byStage: map[plan.Stage][]Card{}}
+		builds[key] = b
+		return b
+	}
+	if fp.By == LaneByNone {
+		newBuild("", "", ProjectMark{})
+	}
 	for _, r := range rows {
 		if r.Stage == plan.StageNone {
 			continue
 		}
+		key, name := fp.By.lane(r)
+		b, ok := builds[key]
+		if !ok {
+			mark := r.Mark()
+			if fp.By == LaneByRepo {
+				mark = ProjectMark{}
+			}
+			b = newBuild(key, name, mark)
+		}
 		c := Card{r}
-		byStage[r.Stage] = append(byStage[r.Stage], c)
+		b.byStage[r.Stage] = append(b.byStage[r.Stage], c)
+		b.Count++
 		if r.Alive {
+			b.Working++
 			counts.Working++
 		}
 		if c.Flagged() {
+			b.NeedsYou++
 			counts.NeedsYou++
 		}
+		switch r.Stage {
+		case plan.StageReview:
+			counts.Reviewing++
+		case plan.StageMerged:
+			counts.Merged++
+		case plan.StageNone, plan.StageBlocked, plan.StageReady, plan.StageWorking, plan.StagePR:
+		}
 	}
-	counts.Reviewing, counts.Merged = len(byStage[plan.StageReview]), len(byStage[plan.StageMerged])
 
-	more := withQuery(factoryPath, factoryQuery(p, true).Encode())
-	fewer := withQuery(factoryPath, factoryQuery(p, false).Encode())
+	lanes := make([]Lane, 0, len(builds))
+	for _, b := range builds {
+		b.Open = b.Key == "" || !slices.Contains(fp.Closed, b.Key)
+		b.Toggle = fp.path(fp.BlockedAll, fp.toggled(b.Key))
+		for _, def := range factoryColumns {
+			if n := len(b.byStage[def.Stage]); n > 0 {
+				b.Segments = append(b.Segments, LaneSegment{Glyph: def.Glyph, Title: def.Title, Count: n})
+			}
+		}
+		if b.Open {
+			b.Columns = floorColumns(b.byStage, fp)
+		}
+		lanes = append(lanes, b.Lane)
+	}
+	slices.SortFunc(lanes, func(a, b Lane) int {
+		return cmp.Or(compareFold(a.Name, b.Name), cmp.Compare(a.Key, b.Key))
+	})
+	return lanes, counts
+}
+
+func floorColumns(byStage map[plan.Stage][]Card, fp FactoryParams) []Column {
+	blockedAll := fp.BlockedAll
+	more := fp.path(true, fp.Closed)
+	fewer := fp.path(false, fp.Closed)
+	p := fp.Params
 	columns := make([]Column, len(factoryColumns))
 	for i, def := range factoryColumns {
 		cards := byStage[def.Stage]
@@ -168,7 +313,7 @@ func buildFloor(rows []Row, p Params, blockedAll bool) ([]Column, FactoryCounts)
 		col.Cards = cards
 		columns[i] = col
 	}
-	return columns, counts
+	return columns
 }
 
 type ScopeBar struct {
