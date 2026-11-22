@@ -2,6 +2,7 @@ package view_test
 
 import (
 	"net/url"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -100,5 +101,20 @@ func TestBuildScopeBar(t *testing.T) {
 				t.Errorf("BuildScopeBar mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestCard_TransitionName(t *testing.T) {
+	t.Parallel()
+	ident := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
+	a := view.Card{Row: view.Row{URL: "sandbox://PLA-1"}}.TransitionName()
+	b := view.Card{Row: view.Row{URL: "sandbox://PLA-2"}}.TransitionName()
+	if a == b {
+		t.Errorf("TransitionName() = %q for two tickets, want distinct", a)
+	}
+	for _, name := range []string{a, b} {
+		if !ident.MatchString(name) {
+			t.Errorf("TransitionName() = %q, want a CSS ident", name)
+		}
 	}
 }

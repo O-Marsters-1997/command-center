@@ -2782,10 +2782,29 @@ summary.prompt-bar:focus-visible {
     border-radius: var(--radius-lg);
     background: var(--color-surface);
     transition: border-color var(--motion-fast) var(--ease-out);
+    view-transition-class: factory-card;
   }
 
   .factory-card:hover {
     border-color: var(--color-border-strong);
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  ::view-transition-group(*.factory-card) {
+    animation-duration: 420ms;
+    animation-timing-function: var(--ease-out);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none !important;
+    }
   }
 
   .factory-card[data-blocked] {

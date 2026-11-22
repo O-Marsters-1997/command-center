@@ -60,6 +60,10 @@ func (c Card) Flagged() bool {
 	return c.Stage != plan.StageReview && (c.Glyph == plan.GlyphFailed || c.Glyph == plan.GlyphAttention)
 }
 
+func (c Card) TransitionName() string {
+	return "card-" + c.DetailID()
+}
+
 var factoryColumns = []struct {
 	Stage plan.Stage
 	Glyph plan.GlyphWord
