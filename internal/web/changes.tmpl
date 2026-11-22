@@ -236,7 +236,7 @@
 {{define "diffGap"}}
 <tr class="diff-gap"><td colspan="4"><span class="diff-gap-count">{{.Remaining}} hidden {{if eq .Remaining 1}}line{{else}}lines{{end}}</span>{{with .Section}} · <span class="diff-gap-section">{{.}}</span>{{end}}
   {{- if .CanExpandAll}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "all"}}" hx-target="closest tr" hx-swap="outerHTML">Expand all</button>
-  {{- else}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "above"}}" hx-target="closest tr" hx-swap="outerHTML">Expand up</button> <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "below"}}" hx-target="closest tr" hx-swap="outerHTML">Expand down</button>{{end}}</td></tr>
+  {{- else}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "above"}}" hx-target="closest tr" hx-swap="outerHTML">Expand down</button> <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "below"}}" hx-target="closest tr" hx-swap="outerHTML">Expand up</button>{{end}}</td></tr>
 {{- end}}
 
 {{define "expansion"}}
