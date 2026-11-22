@@ -2,7 +2,7 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<article class="changes" data-changes data-viewed-key="{{.ViewedKey}}" data-total="{{len .Files}}">
+<article class="changes" data-changes data-ticket="{{.Ticket}}" data-tip="{{.Tip}}" data-total="{{len .Files}}">
   <header class="changes-toolbar">
     {{- if .Files}}
     <button class="btn btn-ghost btn-sm btn-icon changes-navbtn" type="button" data-toggle-tree aria-controls="changes-tree" aria-expanded="false" aria-label="Show files"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h12"/></svg></button>
@@ -54,7 +54,7 @@
     <div class="changes-scrim" data-toggle-tree></div>
     <div class="changes-files">
       {{- range .Files}}{{$file := .}}
-      <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" data-kind="{{.Kind}}" open>
+      <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" data-diff-hash="{{.DiffHash}}" data-kind="{{.Kind}}" open>
         <summary class="diff-head">
           <svg class="icon diff-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
           <span class="diff-path font-mono text-sm" title="{{.Path}}">{{if .OldPath}}{{.OldPath}} → {{end}}<span class="diff-path-dir">{{.Dir}}</span><b>{{.Base}}</b></span>
