@@ -54,8 +54,11 @@
         {{- if .Protected}}<span class="flag flag-warning">protected</span>{{end}}
         {{- with .Updated}}{{if .Age}}<time class="rail-age" datetime="{{.Stamp}}">{{.Age}}</time>{{end}}{{end}}
       </a>
-      <p class="rail-context">{{template "mark" .Project}}<span>{{.Feature}}</span><span aria-hidden="true">·</span><span class="rail-ref">{{.Ref}}</span></p>
-      <p class="rail-reason{{if .Reply}} rail-question{{end}}"><b>{{.Label}}.</b>{{with .Detail}} {{.}}{{end}}{{with .Last}} {{.}}{{end}}</p>
+      <details class="rail-more" id="rail-more-{{idSlug .Path}}" hx-preserve="true">
+        <summary>Details</summary>
+        <p class="rail-context">{{template "mark" .Project}}<span>{{.Feature}}</span><span aria-hidden="true">·</span><span class="rail-ref">{{.Ref}}</span></p>
+        <p class="rail-reason{{if .Reply}} rail-question{{end}}"><b>{{.Label}}.</b>{{with .Detail}} {{.}}{{end}}{{with .Last}} {{.}}{{end}}</p>
+      </details>
       {{if .Reply}}{{template "railReply" .}}{{else if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
     {{- end}}

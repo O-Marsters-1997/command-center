@@ -1448,6 +1448,7 @@
   .rail-card {
     position: relative;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 3px;
     margin-bottom: var(--space-1);
     padding: 9px 10px 10px;
@@ -1498,6 +1499,15 @@
   .rail-card .rail-link[aria-current="page"] {
     background: transparent;
     box-shadow: none;
+  }
+
+  .rail-more > summary {
+    position: relative;
+    z-index: 1;
+    padding-left: 22px;
+    color: var(--color-meta);
+    font-size: var(--text-xs);
+    cursor: pointer;
   }
 
   .rail-context {
