@@ -275,9 +275,10 @@ function initGlue(): void {
     const tabs = tab?.closest("[data-tabs]")?.querySelectorAll<HTMLElement>("[role=tab]");
     if (!tab || !tabs) return;
     const next = nextTab([...tabs].indexOf(tab), tabs.length, e.key);
-    if (next === null) return;
+    const target = next === null ? undefined : tabs[next];
+    if (!target) return;
     e.preventDefault();
-    selectTab(tabs[next]);
+    selectTab(target);
   });
 
   document.addEventListener("keydown", (e) => {
