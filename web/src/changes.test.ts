@@ -28,7 +28,7 @@ describe("segments", () => {
 });
 
 describe("nextChange", () => {
-  const rows = [false, true, true, false, true];
+  const rows = [0, 1, 1, 0, 1];
 
   test.each([
     [-1, 1, 1],
@@ -39,6 +39,17 @@ describe("nextChange", () => {
     [-1, -1, 4],
   ] as const)("from %i step %i lands on %i", (cur, step, want) => {
     expect(nextChange(rows, cur, step)).toBe(want);
+  });
+});
+
+describe("nextChange across files", () => {
+  const rows = [1, 1, 2, 2];
+
+  test("treats adjacent runs from different files as separate", () => {
+    expect(nextChange(rows, 0, 1)).toBe(2);
+    expect(nextChange(rows, 3, -1)).toBe(0);
+    expect(nextChange([1, 1, 2, 2, 2], 4, -1)).toBe(0);
+    expect(nextChange([1, 2, 2], 0, 1)).toBe(1);
   });
 });
 

@@ -50,13 +50,14 @@ export function segments(text: string, lang: Lang, range?: { start: number; end:
   return out;
 }
 
-export function nextChange(changed: readonly boolean[], cur: number, step: 1 | -1): number {
+export function nextChange(runs: readonly number[], cur: number, step: 1 | -1): number {
   let i = cur;
-  if (i >= 0) while (changed[i]) i += step;
-  else i = step === 1 ? 0 : changed.length - 1;
-  while (i >= 0 && i < changed.length && !changed[i]) i += step;
-  if (i < 0 || i >= changed.length) return -1;
-  if (step === -1) while (i > 0 && changed[i - 1]) i--;
+  const id = runs[cur];
+  if (i >= 0) while (id && runs[i] === id) i += step;
+  else i = step === 1 ? 0 : runs.length - 1;
+  while (i >= 0 && i < runs.length && !runs[i]) i += step;
+  if (i < 0 || i >= runs.length) return -1;
+  if (step === -1) while (i > 0 && runs[i - 1] === runs[i]) i--;
   return i;
 }
 
@@ -260,8 +261,10 @@ function fileInView(): HTMLDetailsElement | null {
   return above[above.length - 1] ?? all[0] ?? null;
 }
 
+let targetFile: HTMLDetailsElement | null = null;
+
 function currentFile(): HTMLDetailsElement | null {
-  return fileOf(focused()) ?? fileInView();
+  return fileOf(focused()) ?? (targetFile?.isConnected ? targetFile : null) ?? fileInView();
 }
 
 function markActive(byScroll = false): void {
@@ -275,6 +278,7 @@ function markActive(byScroll = false): void {
 
 function goFile(file: HTMLDetailsElement | undefined): void {
   if (!file) return;
+  targetFile = file;
   file.scrollIntoView({ block: "start" });
   setFocus(file.open ? (file.querySelector<HTMLElement>("tr.diff-line:not([hidden])") ?? null) : null);
   markActive();
@@ -301,7 +305,7 @@ function act(action: DiffAction | CommentAction): void {
     case "prev-change": {
       const rows = lines();
       const i = nextChange(
-        rows.map((r) => r.dataset.kind !== "context" && !r.classList.contains("diff-ws")),
+        rows.map((r) => (r.dataset.kind !== "context" && !r.classList.contains("diff-ws") ? all.indexOf(fileOf(r) as HTMLDetailsElement) + 1 : 0)),
         rows.indexOf(focused() as HTMLElement),
         action === "next-change" ? 1 : -1,
       );
@@ -442,6 +446,10 @@ function init(): void {
       root.classList.toggle("is-wrap", box.checked);
     }
   });
+  for (const name of ["wheel", "touchmove", "pointerdown"]) {
+    document.addEventListener(name, () => { targetFile = null; }, { passive: true });
+  }
+  window.addEventListener("hashchange", () => (document.getElementById("key-sheet") as HTMLDialogElement | null)?.close());
   let frame = 0;
   document.addEventListener(
     "scroll",
