@@ -206,7 +206,7 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 func writeFiles(dir string, files map[string]string) error {
 	for name, contents := range files {
 		full := filepath.Join(dir, name)
-		if contents == "" {
+		if contents == deleted {
 			if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("remove %s: %w", name, err)
 			}

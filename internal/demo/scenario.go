@@ -6,6 +6,8 @@ const (
 	resultCommits  = "commits"
 	resultCrash    = "crash"
 	resultConflict = "conflict"
+
+	deleted = ""
 )
 
 // Scenario defines one demo run's repositories, ticket DAG, scripts and external commits.
@@ -33,7 +35,7 @@ type Ticket struct {
 	BlockedBy   []string
 	AgentAfter  time.Duration
 	Result      string
-	Files       map[string]string // path → content the scripted agent commits; empty content deletes the path
+	Files       map[string]string
 	CI          []string
 	CIAfter     time.Duration
 	MergeAfter  time.Duration

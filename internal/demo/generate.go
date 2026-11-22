@@ -136,7 +136,7 @@ func multiFolderScript(t *Ticket) {
 	t.CI = []string{ciPass}
 	t.CompatFails = false
 	t.Files = map[string]string{
-		legacyFile:           "",
+		legacyFile:           deleted,
 		"docs/api.md":        "# API\n\nThe handlers now return typed errors.\n",
 		"docs/changes.md":    "# Changes\n\n- typed errors\n",
 		"internal/api/v2.go": "package api\n\nfunc routesV2() {}\n",
