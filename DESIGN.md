@@ -180,359 +180,43 @@ components:
 
 # Design System: Command Centre
 
-## Overview
-
-**Creative North Star: "Signal"**
-
-The owner runs several features across several repos, with under ten agents live at once. The
-surface exists to answer one question at a glance: does anything need me? Signal is light, quiet
-and dense. It takes Linear's structure and type discipline and T3 Code's agent surfaces: a session
-rail, a transcript, a composer, and a "Settled" group for finished work.
-
-While agents work the screen stays still. A running agent is an amber pie and a shimmer line, and
-nothing else moves. Colour that pulls the eye is kept for the moments that need a human: a review
-waiting, a failure to repair, a question to answer. Indigo always means "your move", so a screen
-with nothing to do shows almost no indigo.
-
-**Key Characteristics:**
-
-- Light only. There is no dark theme and no toggle ([ADR 1](docs/adr/0001-one-global-stylesheet.md)).
-- Lists, not cards. Rows run 30–46px. Cards appear only for the few sessions that need you.
-- Structure comes from surface steps and spacing, with few borders and soft ones.
-- One status grammar: eight glyph words, each a 14px ring that fills as work progresses.
-- Agent work folds away into a single line and opens on demand.
-
-## Colors
-
-Warm, near-zero-chroma neutrals carry the structure. One indigo accent and four status hues carry
-the meaning. Every value is an oklch token in `web/app.css` `@theme`, named `--color-<key>` for
-each key in the frontmatter.
-
-### Primary
-
-- **Your-Move Indigo** (`accent`): the primary button, the send button, the focus ring,
-  review-ready glyphs, and the selected rail card. It appears at most once or twice per screen.
-  It shades to `accent-hover` when pressed, `accent-soft` for selected and attention backgrounds,
-  and `accent-line` for selected borders.
-
-### Secondary
-
-- **Working Amber** (`s-running`): running, push-pending and checking glyphs, and the running
-  badge on `s-running-soft`. It is quiet by design, never a full-surface fill.
-- **Merged Green** (`s-done`): the merged glyph and diff additions. `s-done-soft` is the done
-  badge.
-- **Repair Red** (`s-failed`): the failed glyph, failing checks, refused callouts and diff
-  deletions. `s-failed-soft` is the failed badge and callout ground.
-- **Queued Grey** (`s-queued`): the blocked ring and queued segments.
-
-### Tertiary
-
-- **Project hues** (`hue-1`…`hue-3`, each with an `-ink` partner): the project avatar's ground
-  and letter. Three soft hues (teal, orchid, sage) tell projects apart. They are never a status.
-
-### Neutral
-
-- **Canvas** (`canvas`): the app background and the session rail. The rail sits one step dimmer
-  than the content.
-- **Surface** (`surface`): the content pane, panels, inputs, cards and the composer.
-- **Surface 2 / 3** (`surface-2`, `surface-3`): hover, then selected or pressed.
-- **Ink ramp** (`fg` → `fg-2` → `muted` → `meta`): titles and values, body copy, secondary text,
-  then refs, counts and timestamps.
-- **Edges** (`border`, `border-soft`, `border-strong`): control edges, row separators, and
-  emphasis or hover.
-
-### Named Rules
-
-**The Your-Move Rule.** Indigo marks the next action and nothing else. If a screen has no action
-waiting, it should have almost no indigo.
-
-**The State-or-Nothing Rule.** A colour is a state, a project's hue, or your next move.
-Nothing else gets colour.
-
-**The No-Literal Rule.** Templates and islands never carry a colour literal. Colour is a token,
-composed by a named class.
-
-## Typography
-
-**Display Font:** Inter, variable with optical size 14–32 (system-ui fallback)
-**Body Font:** Inter, with `cv01` and `ss03` on
-**Label/Mono Font:** JetBrains Mono, for refs, branches, commands and durations only
-
-**Character:** One sans at a 13px UI default, with weight doing the hierarchy and mono kept for
-machine text. Both fonts are vendored woff2 under `internal/web/assets`; no page requests Google
-Fonts.
-
-### Hierarchy
-
-- **Display** (590, 22px, 1.25, −0.016em): the page title on every route and the session title.
-- **Headline** (510, 18px): the repo page's mono repo name and the detail titles.
-- **Title** (590, 15px, −0.016em): module headings within a page, and dialog titles.
-- **Body** (400, 13px, 1.45, −0.006em): the UI default. Row titles and controls use 510.
-- **Body-read** (400, 14px, 1.6): agent messages, prompts and the composer. Max 68ch.
-- **Label** (510, 12px): metadata, group heads, nav labels, chips and badges.
-- **Mono** (400, 0.9em, 0 tracking, tabular numerals): refs (`#42`), branches, commands and
-  durations.
-
-### Named Rules
-
-**The Sentence-Case Rule.** Every heading, label and group head is sentence case. No uppercase,
-no eyebrows, no tracking-widened caps.
-
-**The Mono-Is-Data Rule.** Mono marks machine text. It is never decoration and never a heading.
-
-## Layout
-
-The layout uses a 4px grid and a shell with two panes and an optional third.
-
-- **Shell.** A 300px session rail on `canvas`, then the main pane on `surface`. The rail is the
-  scroll container that never swaps; `#main` is the swap target
-  ([ADR 15](docs/adr/0015-pages-are-routes-beside-a-polling-rail.md)).
-- **Rail anatomy.** From the top: a 44px head with the mark and the launch button, a 30px search
-  field with a `⌘K` key hint, then the nav. Below that are three sections: Needs you (cards),
-  In flight (feature groups with 28px heads and 30px rows), and Settled (collapsed). A footer
-  holds the 5h and week meters, and the shortcuts button. The scope row opens a floating menu
-  (Float shadow, 16px corners) of All projects and each project with its avatar and a `⌘0`–`⌘9`
-  hint; search matches replace the three sections in the same rail.
-- **Top bar.** 44px: breadcrumbs on the left and at most one secondary action on the right.
-  Crumbs read `project / feature / title` on a session, `project / feature` on a feature,
-  `Repos / owner/name` (mono) on a repo, and a single crumb elsewhere. A project crumb carries
-  its avatar; every crumb but the last is a link.
-- **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
-  15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.
-- **Session.** The transcript is centred at max 720px, with the composer floating at the foot.
-  Voice leads: the agent's prose is the page's main text and everything else sits quieter. The
-  head is one line, wrapping only when narrow: the 22px title, then in `muted` the state badge,
-  mono `repo #n`, the mono branch (the worktree path on hover), the PR link and the time worked,
-  separated by small dots. The prompt is a closed bar: a white `surface` strip with a soft
-  border and 10px corners holding a doc icon, "Prompt", the prompt's first words clipped to one
-  line and the feature's launch age; it opens in place to the full text. Transcript and Raw log
-  are right-aligned pill tabs. A finished run's answer sits under a full-width `border-soft`
-  hairline headed by its state glyph and "Result", with no card, and fades in briefly unless the
-  user prefers reduced motion. Stored events (launched, pushed, PR opened, agent run finished)
-  read as record lines, and the checks that landed fold into one grid of glyph, name and
-  elapsed, with an output link on each failure. A 300px feature-stack panel sits on the right:
-  the feature with its avatar, a merged-progress meter with merged/total, and quiet Graph and
-  Board text links; then "This ticket" (blocked by, merging it unlocks); then "In flight", the
-  live members as rows (glyph, ref, title, right-aligned elapsed or wave) with the current
-  ticket tinted, and closed "Ready to launch", "Blocked" and "Merged" folds with counts. A small
-  PR, Checks and Spend list (share of week, never dollars) and a closed "Edit blockers" fold
-  close the panel. That panel is the Details tab of one right sidebar, with Activity (the tray's
-  body) as its second tab; feature boards and graphs carry the same sidebar, its Details tab
-  listing project, ticket and wave counts and the status counts. A chevron collapses it to a strip.
-  Pages without it keep the Activity dropdown in the top bar
-  ([ADR 26](docs/adr/0026-feature-and-ticket-pages-share-one-tabbed-sidebar.md)). Below 1180px the
-  sidebar becomes an overlay that opens on demand.
-- **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
-  → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
-  board rows are at least 46px.
-- **Feature page.** The top bar carries Graph/Board pill tabs and a secondary `Launch · N`. The
-  head is the name, `project · launched age · N tickets in M waves · V switches view`, and a
-  segment bar with its legend. The graph has one column per wave, headed `Wave n` with a
-  subtitle (`4 in progress`, `unlocks as wave 1 merges`). A node card is glyph, mono ref, title
-  and one subline (`PR #n · a/b checks`, `after #x, #y`, or the detail), with the state label
-  top-right only for Needs you. The board is the grouped list: glyph, ref, title over detail,
-  repo, checks, PR, and elapsed or spend, with no verbs, stack or state columns. A launchable row
-  (Ready to launch, or Blocked and not yet armed) has a checkbox column; the Ready to launch and
-  Blocked group heads carry `Select all` and `Clear`. See Selection below.
-- **All tickets.** The head is `All tickets` over a one-line count (`N open across F features in
-  P projects`), then pill tabs with counts, then the same grouped list. A row names its feature
-  in a chip with the project avatar where the feature page names the repo. A click opens the
-  session; the checkbox column selects launchable rows exactly as on the feature board.
-- **Selection.** Shift-click selects a range. `J`/`K` move a row cursor, `X` toggles the cursor
-  row, `L` launches the selection, `Esc` clears it and `Enter` opens the cursor row; on a page with
-  no selectable list `J`/`K` walk the rail. Once anything is selected a floating bar shows
-  `N selected · <feature or "across F features">`, Clear, and `Launch n now · arm m`, which goes to
-  `/launch?ticket=…`. Selected rows take the accent tint, meaning "your next move"; the glyph
-  stays the only status colour ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)).
-- **Meters.** With no usage reading a meter says `no reading`, never 0%. A stale reading (older
-  than an hour) draws faded with `read Xh ago`. Insights Limits shows `No reading`, `—` and
-  `reset unknown`, with a line saying readings come from the agents' own usage lines.
-- **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
-  Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
-  Pill tabs scroll sideways inside their own track, long paths wrap, and no page scrolls
-  horizontally.
-
-### Routes
-
-| App route | Page |
-|---|---|
-| `/s/{owner}/{name}/{n}` | Session: transcript or raw log, composer, stack panel |
-| `/f/{feature}/graph` | Feature graph: dependency waves |
-| `/f/{feature}` | Feature board, grouped by attention |
-| `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
-| `/tickets` | All tickets, filter tabs |
-| `/insights` | Limits with reset times, spend per merged ticket, spend split, merged tickets |
-| `/repos` | Projects: a project list beside the detail pane. Each project heading has Edit (name and an avatar-swatch hue picker) and Delete; each repo is a card with a check glyph, mono name, status line, open-ticket count, a project `<select>` and its GitHub features. An unimported feature offers `Import N tickets`, which imports that repo only, then a shimmer `Importing from owner/name…`, then `Imported` with `Launch N ready`. "No project" comes last, and `New project` has a name, swatches and repo checkboxes ([ADR 22](docs/adr/0022-import-is-per-repo.md)) |
-| `/repos/{owner}/{name}` | State badge, mono name, project · open tickets · base, settings callout, Checks, Tickets, and a `Project and imports` link to `/repos` |
-
-## Elevation & Depth
-
-Signal is flat at rest. Depth comes from tonal layering, with `canvas` under `surface` and
-`surface-2`/`surface-3` for interaction. Shadows are reserved for things that float above the
-page.
-
-### Shadow Vocabulary
-
-- **Float** (`box-shadow: 0 0 0 1px var(--color-border), 0 1px 1px rgb(20 20 24 / 0.03), 0 6px 20px -6px rgb(20 20 24 / 0.14)`):
-  the composer, menus, the track search results and chart tooltips.
-- **Overlay** (`box-shadow: 0 0 0 1px var(--color-border), 0 1px 2px rgb(20 20 24 / 0.05), 0 20px 44px -12px rgb(20 20 24 / 0.24)`):
-  dialogs, sheets, the stack panel as an overlay, and toasts.
-- **Focus ring** (`box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent-line)`):
-  every `:focus-visible`. Fields add a 3px `accent-soft` halo.
-
-### Named Rules
-
-**The Flat-By-Default Rule.** Nothing in the page flow carries a shadow. If it does not float, it
-is flat.
-
-## Shapes
-
-Small, consistent radii. Use 4px for kbd and avatars, 6px for controls, rows and nav items, 10px
-for panels, cards, callouts and graph nodes, 16px for the composer, dialogs and sheets, and a full
-pill for tabs, chips and the send button. Borders are 1px hairlines in `border` or `border-soft`.
-A blocked node or an empty state uses a dashed border.
-
-## Components
-
-### Status glyph
-
-This is the signature component. It is a 14px ring with a 1.5px stroke whose fill shows
-progress, drawn by the named class family `glyph glyph-{word}` with `[data-glyph]`. Go returns the
-word through `plan.Glyph`, and the template composes the class
-([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). The words are `plan.Glyph`'s.
-
-| Word | Ring | Covers |
-|---|---|---|
-| `blocked` | dashed grey ring, empty | blocked, waiting on producer deploy |
-| `ready` | solid `fg-2` ring, empty | ready, cancelled |
-| `running` | amber, half pie; breathes when live (`glyph-pulse`) | running |
-| `pending` | amber, ⅝ pie | push pending, queued, base moved |
-| `checking` | amber, ¾ pie | checking |
-| `attention` | indigo, ¾ pie | review me, needs you, awaiting input |
-| `done` | green disc with a check | merged |
-| `failed` | red disc with a bar | every state a human must repair |
-
-In lists the glyph is a bare ring, and the row's text says the state. In a page or session head
-it sits inside a **badge**: a 22px tinted pill with a 12px ring and the state word, on the
-state's soft colour.
-
-### Buttons
-
-- **Shape:** 28px tall with 6px corners (`rounded.sm`), in 13px/510 type with a faint 1px drop.
-- **Primary:** indigo with white text. **One primary per screen**, on the next move.
-- **Default / Ghost / Danger:** a bordered surface; a borderless muted button; a default button
-  that turns red on hover. `-sm` is 24px; `-icon` is square.
-- **Hover / Focus:** a step to `surface-2` in 120ms, then the focus ring.
-- Verbs are real buttons. Never a bare link or `[bracket]` text.
-
-### Chips, badges and avatars
-
-- **Chip:** a 22px pill with a hairline border, in 12px/510, for features, branches (mono
-  variant) and filters.
-- **Badge:** see Status glyph.
-- **Project avatar:** a 16px lettered square on a project hue, drawn by the named class `avatar`
-  with `[data-hue]`. A project is a named set of repos
-  ([ADR 6](docs/adr/0006-scope-is-a-view-concern.md)). The avatar marks the project beside
-  every ticket, feature and repo, and in the rail's scope menu (`⌘0`–`⌘9`, or `G 0`–`G 9`). A repo with no
-  project gets the neutral `surface-3` square.
-
-### Tabs
-
-Pill tabs in a 2px-gap row, 26px tall, with an optional count in `meta`. The selected tab is a
-raised `surface` with a hairline border. They are used for graph/board, transcript/raw, and the
-ticket filters. No underline tabs.
-
-### Lists and tables
-
-- **Rows:** borderless grid rows with a `border-soft` rule beneath, hovering to `surface-2`.
-  Columns: glyph, mono ref, title over a muted subline, then right-aligned metrics.
-- **Tables:** 34px heads in 12px/510 `muted`, 40px cells, `border-soft` rules only, inside a 10px
-  `border-soft` frame. No vertical rules and no tinted header.
-- **Modules:** a page body stacks modules (`.module`) 28px apart, each an `h2` 10px above its
-  content. Insights and the repo page use them; every table inside one sits in the frame.
-
-### Session rail
-
-- **Order:** head, search with `⌘K`, project scope row, nav with counts, then Needs you, In
-  flight and a collapsed Settled, with the 5h/Week meters and Shortcuts in the footer.
-- **Card** (Needs you only): a 10px panel holding the glyph and title with the age since the
-  ticket's latest event ("2m") in mono `meta` at the top right, then avatar · feature · mono ref in
-  `muted`, then "Label. Reason Last line" (the reason, then the run's final agent message from
-  `runs.last_message` when there is one) clamped to two lines with the label in medium weight
-  (tinted `accent` or `s-failed` by glyph), then one inline `btn-sm` verb (Reply for an agent's
-  question). The label is the state's sentence-case word and the detail is the reason with ticket
-  URLs shortened to refs; the raw state name and log paths never render. The selected card takes
-  an `accent-line` border and an `accent-soft` halo.
-- **Feature group:** a 28px head with a chevron, the scope avatar, the name, and merged/total in
-  `meta`. Its 30px rows carry the glyph, the title and a mono metric (timer or ref).
-- **Settled:** collapsed behind its head, and it reopens on new activity.
-
-### Transcript and composer
-
-- **Head:** the one-line session head above: a 22px title, then badge, repo, branch, PR and
-  "Worked for 1m 44s · 12 turns" in `muted`.
-- **Lines:** a grid of a 44px mono timestamp, an 18px icon and the body. Agent messages are
-  body-read at 68ch. Tool groups are disclosures with a hairline-indented sublist. Commands sit
-  in a bordered block with the exit status. Errors sit on a `s-failed-soft` block. Your messages
-  are right-aligned 16px bubbles on `surface-2`.
-- **Callouts:** a failed or attention panel on the soft state ground, holding the primary verb.
-- **Composer:** a 16px panel with Float, a body-read textarea, and a bar of 26px ghost pickers
-  ending in a 30px round indigo send button. The model and effort pickers are native selects
-  whose choice rides the follow-up; the "Worktree" access label with its lock icon is static, as
-  the permission mode stays pinned.
-
-### Inputs
-
-30px fields with 6px corners on `surface`. On focus the border turns `accent-line` with a 3px
-`accent-soft` halo. Labels are 12px/510 `fg-2` above the field. The caret is indigo.
-
-### Navigation
-
-28px nav items with a 15px `meta` icon, the label, and a right-aligned count. The current item is
-`surface-3` with `fg` text. Nav labels are 12px/510 `meta`, sentence case.
-
-### Dialogs, toasts and the shortcut sheet
-
-- **Dialog:** a scrim at 18% ink, a 620px panel with 16px corners and Overlay, at 12vh. Head,
-  scrolling body and footer are split by `border-soft`. On a phone it is a bottom sheet.
-- **Launch dialog:** the 620px dialog. The head holds the project avatar and name, `Launch
-  {feature}`, a ghost Change feature button and a close icon. The body has Ready now and On unlock
-  sections of rows (checkbox, glyph dot, ref, title, then the repo or `after #x, #y` right-aligned
-  in `meta`), and a `details` disclosure for tickets already in flight or refused. The footer holds
-  the Composer (extra context for every agent in the launch, a model select, an effort select and
-  a static `base origin/main` chip), then Cancel and the primary `Launch N now · arm M` with a `⌘↵`
-  kbd. `/launch` with no feature opens the
-  same dialog as a feature picker: one row per feature with its avatar and its ready and on-unlock
-  counts.
-- **Toast:** a centred dark pill (`fg` on `surface`), 38px, 72px off the bottom, carrying an
-  Undo button. Every triage verb gets one. Undo is target UI with no data yet.
-- **Shortcut sheet:** opened by `?`, a 480px dialog with a 15px title and grouped `dl` rows of
-  `kbd` keys.
-
-### Motion
-
-Use 120ms for hover and 180ms for state changes, on `cubic-bezier(0.2, 0, 0, 1)`. Only live things
-loop: the shimmer on a running line and a 2.4s breathe on a live glyph. Everything respects
-`prefers-reduced-motion`.
-
-## Do's and Don'ts
-
-### Do:
-
-- **Do** compose state colour through the named classes (`glyph`, `meter`, `meter-fill`,
-  `segbar-segment`, `banner`, `flag`, `avatar`, `line-*`, `[data-glyph]`, `[data-hue]`). Use
-  utilities only for layout and spacing.
-- **Do** pair every glyph with its state word somewhere on screen.
-- **Do** keep one primary button per screen, on the owner's next move.
-- **Do** check every changed page at 1440px and 390px.
-- **Do** keep every unblocking verb usable on a phone: 36–40px targets below 760px.
-
-### Don't:
-
-- **Don't** use ticket cards in lists, uppercase labels, gradients or a coloured sidebar.
-- **Don't** add a token outside the frontmatter. Legacy aliases (`bg`, `sunken`, `soft`,
-  `s-live`, `s-wait`, `s-stop`, `s-idle`, `s-check`) are on their way out.
-- **Don't** colour `running` indigo or `checking` teal. Every working state is amber.
-- **Don't** draw full table grids, tinted table heads or `[bracket]` buttons.
-- **Don't** use mono as decoration, or a colour that is not a state, a project hue or your move.
-- **Don't** add a dark theme, a component library, or a third-party font request.
+<!-- impeccable:design-map -->
+Name: Command Centre
+Colors: canvas oklch(0.968 0.002 90), surface oklch(0.995 0.001 90), surface-2 oklch(0.955 0.002 90), surface-3 oklch(0.925 0.003 90), fg oklch(0.22 0.004 270), fg-2 oklch(0.38 0.004 270), muted oklch(0.5 0.005 270) (+23 more in the frontmatter)
+Fonts: Inter (display, headline, title, body, body-read, label); JetBrains Mono (mono)
+Spacing: 1 4px, 2 8px, 3 12px, 4 16px, 5 20px, 6 24px, 8 32px, 10 40px
+Radius: xs 4px, sm 6px, lg 10px, xl 16px, pill 9999px
+North Star: "Signal"
+Rules:
+- The Your-Move Rule. Indigo marks the next action and nothing else.
+- The State-or-Nothing Rule. A colour is a state, a project's hue, or your next move.
+- The No-Literal Rule. Templates and islands never carry a colour literal.
+- The Sentence-Case Rule. Every heading, label and group head is sentence case.
+- The Mono-Is-Data Rule. Mono marks machine text.
+- The Flat-By-Default Rule. Nothing in the page flow carries a shadow.
+Elevation:
+- Float: 0 0 0 1px var(--color-border), 0 1px 1px rgb(20 20 24 / 0.03), 0 6px 20px -6px rgb(20 20 24 / 0.14)
+- Overlay: 0 0 0 1px var(--color-border), 0 1px 2px rgb(20 20 24 / 0.05), 0 20px 44px -12px rgb(20 20 24 / 0.24)
+- Focus ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent-line)
+Don't:
+- Don't use ticket cards in lists, uppercase labels, gradients or a coloured sidebar.
+- Don't add a token outside the frontmatter.
+- Don't colour `running` indigo or `checking` teal.
+- Don't draw full table grids, tinted table heads or `[bracket]` buttons.
+- Don't use mono as decoration, or a colour that is not a state, a project hue or your move.
+- Don't add a dark theme, a component library, or a third-party font request.
+Do:
+- Do compose state colour through the named classes (`glyph`, `meter`, `meter-fill`,
+- Do pair every glyph with its state word somewhere on screen.
+- Do keep one primary button per screen, on the owner's next move.
+- Do check every changed page at 1440px and 390px.
+- (+1 more)
+Map: docs/adr/0001-one-global-stylesheet.md
+Map: web/app.css
+Map: internal/web/assets
+Map: docs/adr/0015-pages-are-routes-beside-a-polling-rail.md
+Map: docs/adr/0026-feature-and-ticket-pages-share-one-tabbed-sidebar.md
+Map: docs/adr/0014-glyph-is-the-only-colour-key.md
+Map: docs/adr/0022-import-is-per-repo.md
+Map: docs/adr/0006-scope-is-a-view-concern.md
+Full: .impeccable/design-full.md (read a section when you need its detail)

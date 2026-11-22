@@ -39,7 +39,7 @@
 
   --color-accent: oklch(0.56 0.15 276);
   --color-accent-on: oklch(0.995 0.001 90);
-  --color-accent-hover: color-mix(in oklab, var(--color-accent), var(--color-ink) 12%);
+  --color-accent-hover: color-mix(in oklab, var(--color-accent), var(--color-ink) 8%);
   --color-accent-soft: color-mix(in oklab, var(--color-accent), var(--color-surface) 90%);
   --color-accent-line: color-mix(in oklab, var(--color-accent), var(--color-surface) 55%);
 
@@ -58,8 +58,6 @@
   --color-hue-2-ink: oklch(0.42 0.1 320);
   --color-hue-3: oklch(0.93 0.045 145);
   --color-hue-3-ink: oklch(0.42 0.1 145);
-
-  --color-accent-hover: color-mix(in oklab, var(--color-accent), var(--color-ink) 8%);
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
