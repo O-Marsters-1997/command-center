@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { actionFor, nextChange, nextUnviewed, pairRuns, segments } from "./changes";
+import { actionFor, nextChange, nextUnviewed, pairRuns, segments, whyOf } from "./changes";
 
 describe("pairRuns", () => {
   test("pairs a deleted run with the added run after it, by position", () => {
@@ -61,6 +61,24 @@ describe("nextUnviewed", () => {
 
   test("is -1 when every other file is viewed", () => {
     expect(nextUnviewed([true, true], 0)).toBe(-1);
+  });
+});
+
+describe("whyOf", () => {
+  test("reads data-why from the aria-disabled control", () => {
+    const seen: string[] = [];
+    const target = {
+      closest(sel: string) {
+        seen.push(sel);
+        return { dataset: { why: "PR merged" } };
+      },
+    };
+    expect(whyOf(target)).toBe("PR merged");
+    expect(seen).toEqual(['[aria-disabled="true"][data-why]']);
+  });
+
+  test("is undefined away from such a control", () => {
+    expect(whyOf({ closest: () => null })).toBeUndefined();
   });
 });
 

@@ -34,8 +34,8 @@
     {{- if .CanFollowUp}}
     <button id="request-changes" class="btn btn-primary btn-lg" type="button" data-show-modal="request-dialog" hx-get="{{.SessionPath}}/changes/request" hx-include="#request-note" hx-target="#request-body" hx-swap="innerHTML">Request changes{{template "reqChip" .Pending}}</button>
     {{- else}}
-    <button id="request-changes" class="btn btn-primary btn-lg" type="button" aria-disabled="true" popovertarget="request-reason">Request changes{{template "reqChip" .Pending}}</button>
-    <div id="request-reason" class="review-popover" popover role="status">{{.Reason}}</div>
+    <button id="request-changes" class="btn btn-primary btn-lg" type="button" aria-disabled="true" aria-describedby="request-why" data-why="{{.Reason}}">Request changes{{template "reqChip" .Pending}}</button>
+    <span id="request-why" hidden>{{.Reason}}</span>
     {{- end}}
   </header>
   <dialog id="request-dialog" class="launch-dialog request-dialog" aria-labelledby="request-title" aria-describedby="req-sub">
