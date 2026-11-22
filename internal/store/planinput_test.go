@@ -101,7 +101,10 @@ func TestStore_PlanInput(t *testing.T) {
 			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-2", Kind: storepkg.EventParked},
 			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-3", Kind: storepkg.EventRestacked},
 			storepkg.Event{At: testNow, TicketURL: "sandbox://CC-4", Kind: storepkg.EventStageEntered, Detail: "ready"},
-			storepkg.Event{At: testNow.Add(time.Hour), TicketURL: "sandbox://CC-4", Kind: storepkg.EventStageEntered, Detail: "working"},
+			storepkg.Event{
+				At: testNow.Add(time.Hour), TicketURL: "sandbox://CC-4",
+				Kind: storepkg.EventStageEntered, Detail: "working",
+			},
 		)
 		want := map[plan.TicketURL]plan.Recorded{
 			"sandbox://CC-1": {Opened: true, Merged: true},
