@@ -149,7 +149,7 @@ func (s *Server) handleRestoreComment(w http.ResponseWriter, r *http.Request) er
 	if err != nil {
 		return fmt.Errorf("restore comment: %w", err)
 	}
-	thread := view.ReviewThread{SessionPath: ref.Path(), Comment: c, Restored: true}
+	thread := view.ReviewThread{SessionPath: ref.Path(), Comment: c}
 	return s.renderThread(w, r, ticket, thread, "reviewRestored")
 }
 
