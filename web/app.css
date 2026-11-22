@@ -3865,14 +3865,17 @@ summary.prompt-bar:focus-visible {
   }
 
   .diff-hunk td {
+    height: auto;
     padding: 0;
+    border-bottom: 0;
     vertical-align: top;
   }
 
   .diff-no {
-    width: 3.5rem;
-    min-width: 3.5rem;
-    padding: 0 var(--space-2) !important;
+    position: relative;
+    width: 4.25rem;
+    min-width: 4.25rem;
+    padding: 0 var(--space-2) 0 1.75rem !important;
     border-right: 1px solid var(--color-border-soft);
     color: var(--color-meta);
     text-align: right;
@@ -3896,7 +3899,8 @@ summary.prompt-bar:focus-visible {
   }
 
   .diff-gap td {
-    padding: 4px var(--space-3);
+    padding: 0 var(--space-3);
+    line-height: 28px;
     border-block: 1px solid var(--color-border-soft);
     background: var(--color-surface-2);
     color: var(--color-muted);
@@ -3926,14 +3930,12 @@ summary.prompt-bar:focus-visible {
     font-family: var(--font-mono);
   }
 
-  .diff-gutter {
-    width: 2rem;
-    min-width: 2rem;
-    text-align: center;
-  }
-
   .diff-add-comment {
-    display: inline-grid;
+    position: absolute;
+    top: 1px;
+    left: 4px;
+    z-index: 1;
+    display: none;
     place-items: center;
     width: 1.5rem;
     height: 1.5rem;
@@ -3942,7 +3944,6 @@ summary.prompt-bar:focus-visible {
     border-radius: 4px;
     background: var(--color-surface);
     color: var(--color-accent);
-    opacity: 0;
     cursor: pointer;
   }
 
@@ -3964,13 +3965,13 @@ summary.prompt-bar:focus-visible {
     border-color: var(--color-s-running);
     background: var(--color-s-running-soft);
     color: var(--color-s-running);
-    opacity: 1;
+    display: grid;
   }
 
   .diff-line:hover .diff-add-comment,
   .diff-line.is-focus .diff-add-comment,
   .diff-add-comment:focus-visible {
-    opacity: 1;
+    display: grid;
   }
 
   .review-thread > td {
