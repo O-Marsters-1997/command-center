@@ -15,7 +15,7 @@
 {{- end}}
 
 {{define "factoryCard" -}}
-<article class="factory-card"{{if .Flagged}} data-flagged="{{.Glyph}}"{{end}}{{if eq .Glyph "blocked"}} data-blocked{{end}}>
+<article class="factory-card" style="view-transition-name: {{.TransitionName}}"{{if .Flagged}} data-flagged="{{.Glyph}}"{{end}}{{if eq .Glyph "blocked"}} data-blocked{{end}}>
   <a class="grid gap-1 text-inherit no-underline" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>
     <span class="flex items-center gap-1.5">
       <span class="glyph{{if .Alive}} glyph-pulse{{end}}" data-glyph="{{.Glyph}}" title="{{.Label}}"></span>
@@ -42,7 +42,7 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<div id="factory" class="factory" hx-get="{{.FloorPath}}" hx-trigger="every {{.PollSeconds}}s" hx-select="#factory" hx-sync="this:drop" hx-swap="outerHTML">
+<div id="factory" class="factory" hx-get="{{.FloorPath}}" hx-trigger="every {{.PollSeconds}}s" hx-select="#factory" hx-sync="this:drop" hx-swap="outerHTML transition:true">
 <header class="mb-5">
   <h1>Factory</h1>
   <p class="page-purpose flex flex-wrap gap-x-4 gap-y-1">

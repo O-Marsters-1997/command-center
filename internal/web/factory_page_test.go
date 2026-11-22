@@ -114,7 +114,7 @@ func TestFactoryPage(t *testing.T) {
 		got := attrs(root.One(t, "div#factory"), "hx-get", "hx-trigger", "hx-select", "hx-sync", "hx-swap")
 		want := map[string]string{
 			"hx-get": "/factory?feature=project%3Aalpha", "hx-trigger": "every 5s", "hx-select": "#factory",
-			"hx-sync": "this:drop", "hx-swap": "outerHTML",
+			"hx-sync": "this:drop", "hx-swap": "outerHTML transition:true",
 		}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("GET /factory poll mismatch (-want +got):\n%s", diff)
