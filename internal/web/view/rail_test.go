@@ -90,6 +90,9 @@ func TestBuildRail(t *testing.T) {
 		failed.ConsumedAt, failed.FinishedAt = option.Some(at), option.Some(at)
 		failed.Outcome, failed.Detail = plan.IntentFailed, "no conflict is recorded"
 
+		done := failed
+		done.Outcome, done.Detail = plan.IntentDone, ""
+
 		tests := []struct {
 			name       string
 			rec        plan.IntentRecord
@@ -100,6 +103,7 @@ func TestBuildRail(t *testing.T) {
 			{"queued", queued, plan.GlyphPending, "Resolve conflict queued", ""},
 			{"running", running, plan.GlyphRunning, "Resolving…", ""},
 			{"failed", failed, plan.GlyphFailed, "Resolve conflict failed", "no conflict is recorded"},
+			{"done", done, plan.GlyphDone, "Resolved locally, awaiting push", ""},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

@@ -199,6 +199,8 @@ func intentLabel(st plan.IntentStatus) string {
 		return words.action + " failed"
 	case st.Phase == plan.PhaseRunning:
 		return words.running
+	case st.Outcome == plan.IntentDone && st.Record.Verb == plan.VerbResolve:
+		return "Resolved locally, awaiting push"
 	}
 	return words.action + " queued"
 }
