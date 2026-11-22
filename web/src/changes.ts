@@ -200,6 +200,10 @@ function syncComments(): void {
   for (const row of document.querySelectorAll(".diff-line.has-comment")) row.classList.remove("has-comment");
   const refs = commentRefs();
   for (const r of refs) lineOf(r.thread)?.classList.add("has-comment");
+  for (const btn of document.querySelectorAll<HTMLElement>(".diff-add-comment")) {
+    const line = btn.closest("tr")?.dataset.line;
+    btn.setAttribute("aria-label", `${btn.closest(".has-comment") ? "Add another comment on" : "Comment on"} line ${line}`);
+  }
   const total = document.querySelector<HTMLElement>("[data-comments-total]");
   if (total) total.textContent = String(refs.length);
   const counts = countByFile(refs);

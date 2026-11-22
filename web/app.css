@@ -4088,6 +4088,10 @@ summary.prompt-bar:focus-visible {
     margin-left: auto;
   }
 
+  .tree-comments[hidden] {
+    display: none;
+  }
+
   .review-popover:not(:popover-open) {
     display: none;
   }

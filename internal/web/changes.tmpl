@@ -15,7 +15,7 @@
     <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-ws"> Ignore whitespace</label>
     <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-wrap"> Wrap lines</label>
     <span class="changes-progress"><span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span><span class="changes-meter" aria-hidden="true"><i data-viewed-meter></i></span></span>
-    <button id="comments-btn" class="btn btn-ghost btn-sm" type="button" data-show-modal="comments-drawer" title="Pending comments  L">Comments <span class="chip-count" data-comments-total>0</span></button>
+    <button id="comments-btn" class="btn btn-ghost btn-sm" type="button" data-show-modal="comments-drawer" title="Pending comments (Shift L)">Comments <span class="chip-count" data-comments-total>0</span></button>
     {{- if .CanRaise}}
     <button id="raise-pr" class="btn btn-lg" type="button" popovertarget="raise-popover">Raise PR</button>
     <div id="raise-popover" class="review-popover" popover role="dialog" aria-labelledby="raise-title">
