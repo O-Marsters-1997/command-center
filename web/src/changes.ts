@@ -382,19 +382,6 @@ function enhance(): void {
   syncComments();
 }
 
-export function whyOf(target: { closest(sel: string): { dataset: { why?: string } } | null }): string | undefined {
-  return target.closest('[aria-disabled="true"][data-why]')?.dataset.why;
-}
-
-function showWhy(why: string): void {
-  const toast = document.getElementById("toast");
-  if (!toast) return;
-  toast.textContent = why;
-  toast.style.animation = "none";
-  void toast.offsetWidth;
-  toast.style.animation = "";
-}
-
 function isField(el: Element | null): boolean {
   return el instanceof HTMLElement && (el.matches("input, textarea, select") || el.isContentEditable);
 }
@@ -415,13 +402,7 @@ function init(): void {
     { capture: true },
   );
   document.addEventListener("click", (e) => {
-    if (!(e.target instanceof Element)) return;
-    const why = whyOf(e.target);
-    if (why) {
-      showWhy(why);
-      return;
-    }
-    if (!document.querySelector("[data-changes]")) return;
+    if (!(e.target instanceof Element) || !document.querySelector("[data-changes]")) return;
     const goto = e.target.closest<HTMLElement>("[data-goto]");
     if (goto) {
       (goto.closest("dialog") as HTMLDialogElement | null)?.close();
