@@ -42,11 +42,16 @@ var templates = template.Must(template.New("").
 	Funcs(template.FuncMap{
 		"pathEscape":        url.PathEscape,
 		"queryEscape":       url.QueryEscape,
+		"idSlug":            idSlug,
 		"featurePath":       view.FeaturePath,
 		"featureGraphPath":  view.FeatureGraphPath,
 		"featureLaunchPath": view.FeatureLaunchPath,
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
+
+var nonIDChars = regexp.MustCompile(`[^A-Za-z0-9_-]+`)
+
+func idSlug(s string) string { return nonIDChars.ReplaceAllString(s, "-") }
 
 type Server struct {
 	logger     *slog.Logger

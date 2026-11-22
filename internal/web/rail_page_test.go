@@ -182,7 +182,14 @@ func TestRail(t *testing.T) {
 			t.Fatalf("AppendEvent(%q): %v", sessionTicket, err)
 		}
 		rail := htmltest.Parse(t, renderPath(t, newServer(failed, testNow), "/rail"))
-		card := rail.One(t, `[data-group="needs-you"] .rail-reason`)
+		more := rail.One(t, `[data-group="needs-you"] details.rail-more`)
+		if _, open := more.Attr("open"); open {
+			t.Errorf("GET /rail needs-you details rendered open: %s", more.HTML())
+		}
+		if id, _ := more.Attr("id"); strings.ContainsAny(id, "/.:") {
+			t.Errorf("GET /rail needs-you details id = %q, want a selector-safe id", id)
+		}
+		card := more.One(t, ".rail-reason")
 		label := card.One(t, "b").Text()
 		got := strings.TrimSpace(strings.TrimPrefix(card.Text(), label))
 		reason, ok := strings.CutSuffix(got, "Tests are red.")
