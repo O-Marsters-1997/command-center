@@ -71,14 +71,8 @@
         <table class="diff-hunk font-mono">
           <tbody>
             {{- range $i, $hunk := .Hunks}}
-            {{- with index $file.Gaps $i}}
-            <tr class="diff-gap"><td colspan="4">{{.}} hidden {{if eq . 1}}line{{else}}lines{{end}}{{with $hunk.Section}} · <span class="diff-gap-section">{{.}}</span>{{end}}</td></tr>
-            {{- end}}
-            {{- range .Lines}}
-            {{- $side := "new"}}{{$n := .NewLine}}{{if eq .Kind "deleted"}}{{$side = "old"}}{{$n = .OldLine}}{{end}}
-            <tr class="diff-line diff-{{.Kind}}" data-kind="{{.Kind}}" data-side="{{$side}}" data-line="{{$n}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
-            {{- range $.At $file.Path .}}{{template "reviewThread" $.Thread .}}{{end}}
-            {{- end}}
+            {{- if index $file.Gaps $i}}{{template "diffGap" ($.Gap $file $i)}}{{end}}
+            {{- range .Lines}}{{template "diffLine" ($.Row $file.Path .)}}{{end}}
             {{- end}}
           </tbody>
         </table>
@@ -103,6 +97,23 @@
 {{- range .Members}}
 <div class="tree-row tree-file" data-file="{{.Path}}"><input type="checkbox" data-viewed aria-label="Viewed {{.Path}}"><span class="tree-kind tree-kind-{{.Kind}}" title="{{.KindLabel}}" role="img" aria-label="{{.KindLabel}}"></span><a class="tree-name" href="#{{.ID}}" title="{{.Path}}">{{.Base}}</a>{{if .Protected.IsSome}}<span class="flag flag-warning">protected</span>{{end}}</div>
 {{- end}}
+{{- end}}
+
+{{define "diffLine"}}
+<tr class="diff-line diff-{{.Kind}}" data-kind="{{.Kind}}" data-side="{{.Side}}" data-line="{{.Number}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{.Number}}" hx-get="{{.CommentURL}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
+{{- $row := .}}{{range .Comments}}{{template "reviewThread" $row.Thread .}}{{end}}
+{{- end}}
+
+{{define "diffGap"}}
+<tr class="diff-gap"><td colspan="4"><span class="diff-gap-count">{{.Remaining}} hidden {{if eq .Remaining 1}}line{{else}}lines{{end}}</span>{{with .Section}} · <span class="diff-gap-section">{{.}}</span>{{end}}
+  {{- if .CanExpandAll}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "all"}}" hx-target="closest tr" hx-swap="outerHTML">Expand all</button>
+  {{- else}} <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "above"}}" hx-target="closest tr" hx-swap="outerHTML">Expand up</button> <button type="button" class="diff-gap-btn" hx-get="{{.ExpandURL "below"}}" hx-target="closest tr" hx-swap="outerHTML">Expand down</button>{{end}}</td></tr>
+{{- end}}
+
+{{define "expansion"}}
+{{- if and .Gap.Remaining (eq .Edge "below")}}{{template "diffGap" .Gap}}{{end}}
+{{- range .Rows}}{{template "diffLine" .}}{{end}}
+{{- if and .Gap.Remaining (ne .Edge "below")}}{{template "diffGap" .Gap}}{{end}}
 {{- end}}
 
 {{define "reviewButton"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover">Review changes{{if .}} ({{.}}){{end}}</button>{{end}}

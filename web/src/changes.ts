@@ -220,15 +220,20 @@ function act(action: DiffAction): void {
       return;
     }
     case "next-file":
-      return goFile(all[Math.min(all.length - 1, at + 1)]);
+      goFile(all[Math.min(all.length - 1, at + 1)]);
+      return;
     case "prev-file":
-      return goFile(all[Math.max(0, at - 1)]);
+      goFile(all[Math.max(0, at - 1)]);
+      return;
     case "first-file":
-      return goFile(all[0]);
+      goFile(all[0]);
+      return;
     case "last-file":
-      return goFile(all[all.length - 1]);
+      goFile(all[all.length - 1]);
+      return;
     case "toggle-viewed":
-      return viewedBox(here as HTMLDetailsElement)?.click();
+      if (here) viewedBox(here)?.click();
+      return;
     case "viewed-and-next": {
       const box = here && viewedBox(here);
       if (box && !box.checked) box.click();
