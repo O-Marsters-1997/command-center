@@ -48,6 +48,19 @@ export function modifierLabel(text: string, apple: boolean): string {
   return apple ? text : text.replace("⌘", "Ctrl ");
 }
 
+export function whyOf(target: { closest(sel: string): { dataset: { why?: string } } | null }): string | undefined {
+  return target.closest('[aria-disabled="true"][data-why]')?.dataset.why;
+}
+
+function showWhy(why: string): void {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = why;
+  toast.style.animation = "none";
+  void toast.offsetWidth;
+  toast.style.animation = "";
+}
+
 export function shouldHop(target: string | undefined, wide: boolean): boolean {
   return wide && target !== undefined && target !== "";
 }
@@ -194,6 +207,10 @@ function initGlue(): void {
     eventElement(e)?.closest("[data-close-modal]")?.closest("dialog")?.close();
 
     if (eventElement(e)?.closest("button[data-send][aria-disabled=true]")) askForNote();
+
+    const origin = eventElement(e);
+    const why = origin ? whyOf(origin) : undefined;
+    if (why) showWhy(why);
 
     const tab = eventElement(e)?.closest<HTMLElement>("[role=tab][data-tab]");
     if (tab) selectTab(tab);

@@ -9,7 +9,21 @@ import {
   railClosedCookie,
   scopeOf,
   shouldHop,
+  whyOf,
 } from "./glue";
+
+test("a disabled verb's reason is its data-why", () => {
+  const seen: string[] = [];
+  const target = {
+    closest(sel: string) {
+      seen.push(sel);
+      return { dataset: { why: "PR merged" } };
+    },
+  };
+  expect(whyOf(target)).toBe("PR merged");
+  expect(seen).toEqual(['[aria-disabled="true"][data-why]']);
+  expect(whyOf({ closest: () => null })).toBeUndefined();
+});
 
 test("a failed response names its status", () => {
   expect(failureText("responseError", 500)).toContain("500");

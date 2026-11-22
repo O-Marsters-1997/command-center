@@ -2613,9 +2613,10 @@ summary.prompt-bar:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 38px;
+  min-height: 38px;
+  max-width: min(36rem, calc(100vw - 2rem));
   margin: 0;
-  padding: 0 14px;
+  padding: 8px 14px;
   translate: -50% 0;
   border-radius: var(--radius-lg);
   background: var(--color-fg);
@@ -3682,8 +3683,13 @@ summary.prompt-bar:focus-visible {
   }
 
   .tree-dir[open] > summary > .tree-chev,
-  .diff-file[open] > summary > .diff-chev {
+  .diff-file[open] > summary .diff-chev {
     transform: rotate(90deg);
+  }
+
+  .changes-tree-foot {
+    padding: var(--space-2) var(--space-3);
+    border-top: 1px solid var(--color-border);
   }
 
   .tree-kind {
@@ -3863,14 +3869,17 @@ summary.prompt-bar:focus-visible {
   }
 
   .diff-hunk td {
+    height: auto;
     padding: 0;
+    border-bottom: 0;
     vertical-align: top;
   }
 
   .diff-no {
-    width: 3.5rem;
-    min-width: 3.5rem;
-    padding: 0 var(--space-2) !important;
+    position: relative;
+    width: 4.25rem;
+    min-width: 4.25rem;
+    padding: 0 var(--space-2) 0 1.75rem !important;
     border-right: 1px solid var(--color-border-soft);
     color: var(--color-meta);
     text-align: right;
@@ -3894,7 +3903,7 @@ summary.prompt-bar:focus-visible {
   }
 
   .diff-gap td {
-    padding: 4px var(--space-3);
+    padding: 0 var(--space-3);
     border-block: 1px solid var(--color-border-soft);
     background: var(--color-surface-2);
     color: var(--color-muted);
@@ -3904,6 +3913,7 @@ summary.prompt-bar:focus-visible {
 
   .diff-gap-btn {
     margin-inline-start: var(--space-2);
+    min-height: 28px;
     padding: 0 var(--space-2);
     border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-sm);
@@ -3924,14 +3934,12 @@ summary.prompt-bar:focus-visible {
     font-family: var(--font-mono);
   }
 
-  .diff-gutter {
-    width: 2rem;
-    min-width: 2rem;
-    text-align: center;
-  }
-
   .diff-add-comment {
-    display: inline-grid;
+    position: absolute;
+    top: 1px;
+    left: 4px;
+    z-index: 1;
+    display: none;
     place-items: center;
     width: 1.5rem;
     height: 1.5rem;
@@ -3940,7 +3948,6 @@ summary.prompt-bar:focus-visible {
     border-radius: 4px;
     background: var(--color-surface);
     color: var(--color-accent);
-    opacity: 0;
     cursor: pointer;
   }
 
@@ -3962,30 +3969,57 @@ summary.prompt-bar:focus-visible {
     border-color: var(--color-s-running);
     background: var(--color-s-running-soft);
     color: var(--color-s-running);
-    opacity: 1;
+    display: grid;
   }
 
   .diff-line:hover .diff-add-comment,
   .diff-line.is-focus .diff-add-comment,
+
+  .diff-line:hover .diff-add-comment,
+  .diff-line.is-focus .diff-add-comment,
   .diff-add-comment:focus-visible {
-    opacity: 1;
+    display: grid;
   }
 
   .review-thread > td {
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-s-running-soft);
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    background: var(--color-canvas);
+    border-block: 1px solid var(--color-border-soft);
   }
 
   .review-comment {
     display: grid;
     gap: var(--space-2);
+    max-width: 46rem;
+    margin-left: 4.25rem;
     font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--leading-ui);
   }
 
-  .review-head {
+  .review-comment {
+    padding: var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-left: 3px solid var(--color-s-running);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+
+  form.review-comment {
+    border-left-color: var(--color-accent);
+  }
+
+  .review-head,
+  .review-meta {
     display: flex;
     align-items: center;
     gap: var(--space-2);
+  }
+
+  .review-meta,
+  .review-hint {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
   }
 
   .review-head .flag {
@@ -3995,7 +4029,8 @@ summary.prompt-bar:focus-visible {
     cursor: default;
   }
 
-  .review-head .sp {
+  .review-head .sp,
+  .review-actions .sp {
     flex: 1;
   }
 
@@ -4007,12 +4042,24 @@ summary.prompt-bar:focus-visible {
 
   .review-comment textarea {
     width: 100%;
+    min-height: 5rem;
+    resize: vertical;
+    padding: var(--space-2);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-canvas);
     font: inherit;
+    color: var(--color-fg);
+  }
+
+  .review-comment textarea:focus-visible {
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow-focus);
   }
 
   .review-actions {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
     gap: var(--space-2);
   }
 
@@ -4025,14 +4072,11 @@ summary.prompt-bar:focus-visible {
       min-height: var(--hit-min);
     }
 
-    .diff-gutter {
-      width: 2.5rem;
-      min-width: 2.5rem;
-    }
-
     .diff-add-comment {
-      width: 2.25rem;
-      height: 2.25rem;
+      top: -2px;
+      left: 0;
+      width: 1.75rem;
+      height: 1.75rem;
     }
   }
 
@@ -4106,6 +4150,7 @@ summary.prompt-bar:focus-visible {
 
   .btn[aria-disabled="true"] {
     opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .chip-count {
@@ -4458,20 +4503,18 @@ summary.prompt-bar:focus-visible {
     background: var(--color-s-failed-soft);
   }
 
-  .diff-gutter {
-    background: var(--color-surface);
-  }
-
-  .diff-added .diff-gutter {
+  .diff-added .diff-no {
     background: var(--color-s-done-soft);
+    color: var(--color-s-done);
   }
 
-  .diff-deleted .diff-gutter {
+  .diff-deleted .diff-no {
     background: var(--color-s-failed-soft);
+    color: var(--color-s-failed);
   }
 
   .diff-line.diff-ws,
-  .diff-line.diff-ws .diff-gutter {
+  .diff-line.diff-ws .diff-no {
     background: transparent;
   }
 
