@@ -71,7 +71,7 @@ function saveRecord(root: HTMLElement, record: ViewedRecord): void {
 function render(root: HTMLElement, record: ViewedRecord): void {
   let done = 0;
   for (const file of root.querySelectorAll<HTMLElement>("[data-file]")) {
-    const on = Object.hasOwn(record.files, file.dataset.file ?? "");
+    const on = Object.prototype.hasOwnProperty.call(record.files, file.dataset.file ?? "");
     const box = file.querySelector<HTMLInputElement>("input[data-viewed]");
     if (box) box.checked = on;
     file.classList.toggle("is-viewed", on);
