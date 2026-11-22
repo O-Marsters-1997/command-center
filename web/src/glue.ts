@@ -85,18 +85,44 @@ function writeViewed(key: string, viewed: string[]): void {
   }
 }
 
+export function viewedCount(done: number, total: number): string {
+  return `${done}/${total}`;
+}
+
+export function viewedPercent(done: number, total: number): string {
+  return total === 0 ? "0%" : `${Math.round((done / total) * 100)}%`;
+}
+
 function applyViewed(root: HTMLElement): void {
   const viewed = new Set(readViewed(root.dataset.viewedKey ?? ""));
   let done = 0;
-  for (const file of root.querySelectorAll<HTMLDetailsElement>("details[data-file]")) {
+  for (const file of root.querySelectorAll<HTMLElement>("[data-file]")) {
     const on = viewed.has(file.dataset.file ?? "");
     const box = file.querySelector<HTMLInputElement>("input[data-viewed]");
     if (box) box.checked = on;
-    file.open = !on;
-    if (on) done++;
+    file.classList.toggle("is-viewed", on);
+    if (file instanceof HTMLDetailsElement) {
+      file.open = !on;
+      if (on) done++;
+    }
+  }
+  for (const dir of root.querySelectorAll<HTMLElement>("[data-dir]")) {
+    const count = dir.querySelector<HTMLElement>("[data-dir-count]");
+    const checked = dir.querySelectorAll("div[data-file] input[data-viewed]:checked").length;
+    if (count) count.textContent = viewedCount(checked, Number(count.dataset.total));
   }
   const progress = root.querySelector("[data-viewed-progress]");
-  if (progress) progress.textContent = viewedLabel(done, Number(root.dataset.total));
+  const total = Number(root.dataset.total);
+  if (progress) progress.textContent = viewedLabel(done, total);
+  const meter = root.querySelector<HTMLElement>("[data-viewed-meter]");
+  if (meter) meter.style.width = viewedPercent(done, total);
+}
+
+function setTreeOpen(open: boolean): void {
+  document.getElementById("changes-tree")?.toggleAttribute("data-open", open);
+  for (const btn of document.querySelectorAll("button[data-toggle-tree]")) {
+    btn.setAttribute("aria-expanded", String(open));
+  }
 }
 
 function applyAllViewed(): void {
@@ -198,6 +224,19 @@ function initGlue(): void {
     const dialog = trigger && document.getElementById(trigger.getAttribute("data-show-modal") ?? "");
     if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
     eventElement(e)?.closest("[data-close-modal]")?.closest("dialog")?.close();
+
+    const toggle = eventElement(e)?.closest("[data-toggle-tree]");
+    if (toggle) setTreeOpen(!document.getElementById("changes-tree")?.hasAttribute("data-open"));
+    else if (eventElement(e)?.closest("#changes-tree a")) setTreeOpen(false);
+
+    const copy = eventElement(e)?.closest<HTMLElement>("[data-copy-path]");
+    if (copy) {
+      e.preventDefault();
+      void navigator.clipboard?.writeText(copy.dataset.copyPath ?? "");
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setTreeOpen(false);
   });
 
   document.addEventListener("keydown", (e) => {

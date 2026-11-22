@@ -9,9 +9,17 @@ import {
   railClosedCookie,
   scopeOf,
   shouldHop,
+  viewedCount,
   viewedLabel,
+  viewedPercent,
   withViewed,
 } from "./glue";
+
+test("viewedCount and viewedPercent", () => {
+  expect(viewedCount(2, 5)).toBe("2/5");
+  expect(viewedPercent(1, 4)).toBe("25%");
+  expect(viewedPercent(0, 0)).toBe("0%");
+});
 
 test("parseViewed keeps only a stored list of paths", () => {
   expect(parseViewed('["a","b"]')).toEqual(["a", "b"]);

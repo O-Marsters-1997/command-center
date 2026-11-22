@@ -4,12 +4,15 @@
 {{template "shellContent" .}}
 <article class="changes" data-changes data-viewed-key="{{.ViewedKey}}" data-total="{{len .Files}}">
   <header class="changes-toolbar">
+    {{- if .Files}}
+    <button class="btn btn-ghost btn-sm btn-icon changes-navbtn" type="button" data-toggle-tree aria-controls="changes-tree" aria-expanded="false" aria-label="Show files"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h12"/></svg></button>
+    {{- end}}
     <a class="pill-tab" href="{{.SessionPath}}" {{template "nav" .SessionPath}}>&lsaquo; Session</a>
-    <span class="font-mono text-sm">{{len .Files}} {{if eq (len .Files) 1}}file{{else}}files{{end}}
+    <span class="changes-sm-hide font-mono text-sm">{{len .Files}} {{if eq (len .Files) 1}}file{{else}}files{{end}}
       <span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
-    <span class="text-muted text-sm">against <code>origin/{{.Base}}</code></span>
+    <span class="changes-sm-hide text-muted text-sm">against <code>origin/{{.Base}}</code></span>
     {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
-    <span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span>
+    <span class="changes-progress"><span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span><span class="changes-meter" aria-hidden="true"><i data-viewed-meter></i></span></span>
     {{template "reviewButton" .Pending}}
     <div id="review-popover" class="review-popover" popover>
       <form class="review-comment" method="post" action="{{.SessionPath}}/changes/request" hx-post="{{.SessionPath}}/changes/request" hx-disabled-elt="find button">
@@ -35,43 +38,48 @@
   <p class="text-muted">Nothing differs from <code>origin/{{.Base}}</code>.</p>
   {{- else}}
   <div class="changes-body">
-    <nav class="changes-tree" aria-label="changed files">
-      {{- range .Folders}}
-      <details open>
-        <summary class="font-mono text-xs">{{.Dir}}</summary>
-        <ul>
-          {{- range .Files}}
-          <li><a class="font-mono text-xs" href="#{{$.FileID .}}">{{.Path}}</a>{{if .Protected.IsSome}} <span class="flag flag-warning">protected</span>{{end}}</li>
-          {{- end}}
-        </ul>
-      </details>
-      {{- end}}
-    </nav>
+    <aside class="changes-tree" id="changes-tree" aria-label="Changed files">
+      <div class="changes-tree-head">Files changed <span class="changes-stat"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span></div>
+      <nav class="changes-tree-list" aria-label="Changed files tree">
+        {{- with .TreeRoot}}{{template "treeLevel" .}}{{end}}
+      </nav>
+    </aside>
+    <div class="changes-scrim" data-toggle-tree></div>
     <div class="changes-files">
       {{- range .Files}}{{$file := .}}
-      <details class="diff-file" id="{{$.FileID .}}" data-file="{{.Path}}" open>
+      <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" open>
         <summary class="diff-head">
-          <span class="font-mono text-sm">{{if .OldPath}}{{.OldPath}} → {{end}}{{.Path}}</span>
+          <svg class="icon diff-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="diff-path font-mono text-sm" title="{{.Path}}">{{if .OldPath}}{{.OldPath}} → {{end}}<span class="diff-path-dir">{{.Dir}}</span><b>{{.Base}}</b></span>
+          <button class="btn btn-ghost btn-sm btn-icon" type="button" data-copy-path="{{.Path}}" aria-label="Copy file path" title="Copy path"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 15V6a2 2 0 0 1 2-2h9"/></svg></button>
           {{- if .Protected.IsSome}} <span class="flag flag-warning" title="rule {{.Protected.Unwrap.Rule}}">protected</span>{{end}}
-          <span class="font-mono text-xs"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
-          <label class="text-xs"><input type="checkbox" data-viewed> Viewed</label>
+          <span class="diff-head-end">
+            <span class="font-mono text-xs"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
+            <span class="diff-bars" aria-hidden="true">{{range .Bar}}<i{{with .}} class="diff-bar-{{.}}"{{end}}></i>{{end}}</span>
+            <label class="diff-viewed"><input type="checkbox" data-viewed><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Viewed</label>
+          </span>
         </summary>
         {{- if .Binary}}
-        <p class="text-muted text-sm">Binary file not shown.</p>
+        <p class="diff-note">Binary file not shown.</p>
         {{- else if not .Hunks}}
-        <p class="text-muted text-sm">No content changes.</p>
-        {{- end}}
-        {{- range .Hunks}}
-        <table class="diff-hunk font-mono text-xs">
-          <caption class="text-muted">{{.Header}}</caption>
+        <p class="diff-note">No content changes.</p>
+        {{- else}}
+        <div class="diff-scroll">
+        <table class="diff-hunk font-mono">
           <tbody>
+            {{- range $i, $hunk := .Hunks}}
+            {{- with index $file.Gaps $i}}
+            <tr class="diff-gap"><td colspan="4">{{.}} hidden {{if eq . 1}}line{{else}}lines{{end}}{{with $hunk.Section}} · <span class="diff-gap-section">{{.}}</span>{{end}}</td></tr>
+            {{- end}}
             {{- range .Lines}}
             {{- $side := "new"}}{{$n := .NewLine}}{{if eq .Kind "deleted"}}{{$side = "old"}}{{$n = .OldLine}}{{end}}
-            <tr class="diff-line diff-{{.Kind}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre>{{.Text}}</pre></td></tr>
+            <tr class="diff-line diff-{{.Kind}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
             {{- range $.At $file.Path .}}{{template "reviewThread" $.Thread .}}{{end}}
+            {{- end}}
             {{- end}}
           </tbody>
         </table>
+        </div>
         {{- end}}
       </details>
       {{- end}}
@@ -80,6 +88,18 @@
   {{- end}}
 </article>
 {{template "shellEnd" .}}
+
+{{define "treeLevel"}}
+{{- range .Subdirs}}
+<details class="tree-dir" data-dir open>
+  <summary class="tree-row"><svg class="icon tree-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span class="tree-name">{{.Name}}</span><span class="changes-stat" data-dir-count data-total="{{.Total}}">0/{{.Total}}</span></summary>
+  {{- template "treeLevel" .}}
+</details>
+{{- end}}
+{{- range .Members}}
+<div class="tree-row tree-file" data-file="{{.Path}}"><input type="checkbox" data-viewed aria-label="Viewed {{.Path}}"><span class="tree-kind tree-kind-{{.Kind}}" title="{{.KindLabel}}" role="img" aria-label="{{.KindLabel}}"></span><a class="tree-name" href="#{{.ID}}" title="{{.Path}}">{{.Base}}</a>{{if .Protected.IsSome}}<span class="flag flag-warning">protected</span>{{end}}</div>
+{{- end}}
+{{- end}}
 
 {{define "reviewButton"}}<button id="review-changes" class="btn" type="button" popovertarget="review-popover">Review changes{{if .}} ({{.}}){{end}}</button>{{end}}
 

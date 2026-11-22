@@ -22,7 +22,9 @@ var ErrNoLocalTip = errors.New("view: ticket has no local tip")
 
 type ChangedFile struct {
 	git.FileDiff
+	ID        string // "f-<index>"
 	Protected option.Option[plan.PathMatch]
+	Gaps      []int // hidden lines before each hunk; len(Gaps) == len(Hunks)
 }
 
 type Changes struct {
@@ -49,9 +51,11 @@ func (c Changes) Pending() int {
 	return n
 }
 
-type ChangeFolder struct {
-	Dir   string
-	Files []ChangedFile
+type TreeDir struct {
+	Name  string // compacted: "internal/loop"
+	Path  string
+	Dirs  []TreeDir
+	Files []int // indexes into Changes.Files
 }
 
 type ChangesPage struct {
@@ -59,12 +63,8 @@ type ChangesPage struct {
 	Changes
 	SessionPath string
 	ViewedKey   string
-	Folders     []ChangeFolder
+	Tree        TreeDir
 	Reason      plan.Reason
-}
-
-func (p ChangesPage) FileID(f ChangedFile) string {
-	return "file-" + strconv.Itoa(slices.IndexFunc(p.Files, func(c ChangedFile) bool { return c.Path == f.Path }))
 }
 
 type changeSet struct {
@@ -128,8 +128,10 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef) (Ch
 	if row.PRURL != "" {
 		changes.PR = option.Some(row.PRURL)
 	}
-	for _, d := range diffs {
-		file := ChangedFile{FileDiff: d, Protected: option.None[plan.PathMatch]()}
+	for i, d := range diffs {
+		file := ChangedFile{
+			FileDiff: d, ID: "f-" + strconv.Itoa(i), Protected: option.None[plan.PathMatch](), Gaps: hunkGaps(d.Hunks),
+		}
 		if i := slices.IndexFunc(matches, func(m plan.PathMatch) bool { return m.Path == d.Path }); i >= 0 {
 			file.Protected = option.Some(matches[i])
 		}
@@ -150,7 +152,7 @@ func (r *Reader) Changes(ctx context.Context, now time.Time, ref SessionRef) (Ch
 		Changes:     changes,
 		SessionPath: self,
 		ViewedKey:   "cc:viewed:" + row.URL + ":" + string(tip),
-		Folders:     groupByFolder(changes.Files),
+		Tree:        buildTree(changes.Files),
 		Reason:      entry.Reason,
 	}, nil
 }
@@ -288,17 +290,113 @@ func (r *Reader) RaiseResult(ctx context.Context, now time.Time, ref SessionRef)
 	return RaiseResult{PRURL: search}, nil
 }
 
-func groupByFolder(files []ChangedFile) []ChangeFolder {
-	var folders []ChangeFolder
-	for _, f := range files {
-		dir := path.Dir(f.Path)
-		i := slices.IndexFunc(folders, func(c ChangeFolder) bool { return c.Dir == dir })
-		if i < 0 {
-			folders = append(folders, ChangeFolder{Dir: dir})
-			i = len(folders) - 1
+func buildTree(files []ChangedFile) TreeDir {
+	var root TreeDir
+	for i, f := range files {
+		dir := &root
+		if d := path.Dir(f.Path); d != "." {
+			for _, seg := range strings.Split(d, "/") {
+				j := slices.IndexFunc(dir.Dirs, func(c TreeDir) bool { return c.Name == seg })
+				if j < 0 {
+					dir.Dirs = append(dir.Dirs, TreeDir{Name: seg, Path: path.Join(dir.Path, seg)})
+					j = len(dir.Dirs) - 1
+				}
+				dir = &dir.Dirs[j]
+			}
 		}
-		folders[i].Files = append(folders[i].Files, f)
+		dir.Files = append(dir.Files, i)
 	}
-	slices.SortStableFunc(folders, func(a, b ChangeFolder) int { return cmp.Compare(a.Dir, b.Dir) })
-	return folders
+	root.compact()
+	return root
+}
+
+func (d *TreeDir) compact() {
+	for i := range d.Dirs {
+		c := &d.Dirs[i]
+		for len(c.Files) == 0 && len(c.Dirs) == 1 {
+			only := c.Dirs[0]
+			c.Name += "/" + only.Name
+			c.Path, c.Dirs, c.Files = only.Path, only.Dirs, only.Files
+		}
+		c.compact()
+	}
+	slices.SortFunc(d.Dirs, func(a, b TreeDir) int { return cmp.Compare(a.Name, b.Name) })
+}
+
+type TreeNode struct {
+	TreeDir
+	files []ChangedFile
+}
+
+func (p ChangesPage) TreeRoot() TreeNode { return TreeNode{TreeDir: p.Tree, files: p.Files} }
+
+func (n TreeNode) Subdirs() []TreeNode {
+	nodes := make([]TreeNode, len(n.Dirs))
+	for i, d := range n.Dirs {
+		nodes[i] = TreeNode{TreeDir: d, files: n.files}
+	}
+	return nodes
+}
+
+func (n TreeNode) Members() []ChangedFile {
+	members := make([]ChangedFile, len(n.Files))
+	for i, idx := range n.Files {
+		members[i] = n.files[idx]
+	}
+	return members
+}
+
+func (d TreeDir) Total() int {
+	n := len(d.Files)
+	for _, c := range d.Dirs {
+		n += c.Total()
+	}
+	return n
+}
+
+func (f ChangedFile) Dir() string {
+	if d := path.Dir(f.Path); d != "." {
+		return d + "/"
+	}
+	return ""
+}
+
+func (f ChangedFile) Base() string { return path.Base(f.Path) }
+
+func (f ChangedFile) KindLabel() string {
+	k := string(f.Kind)
+	if k == "" {
+		return ""
+	}
+	return strings.ToUpper(k[:1]) + k[1:]
+}
+
+func hunkGaps(hunks []git.Hunk) []int {
+	gaps := make([]int, len(hunks))
+	next := 1
+	for i, h := range hunks {
+		first := h.NewStart
+		if h.NewLines == 0 {
+			first++
+		}
+		gaps[i] = max(0, first-next)
+		next = first + h.NewLines
+	}
+	return gaps
+}
+
+func (f ChangedFile) Bar() [5]string {
+	var cells [5]string
+	total := f.Added + f.Deleted
+	if total == 0 {
+		return cells
+	}
+	added := (f.Added*5 + total/2) / total
+	for i := range cells {
+		cells[i] = "deleted"
+		if i < added {
+			cells[i] = "added"
+		}
+	}
+	return cells
 }

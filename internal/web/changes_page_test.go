@@ -89,6 +89,26 @@ func TestChangesPage(t *testing.T) {
 		}
 	})
 
+	t.Run("the tree lists each folder with its count, kind dot and a link to the file card", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		counts := page.Find(".tree-dir [data-dir-count]")
+		if len(counts) != 2 || counts[0].Text() != "0/1" {
+			t.Fatalf("GET changes folder counts = %d, want 2 folders reading 0/1", len(counts))
+		}
+		if got := len(page.Find(".tree-file .tree-kind-added")); got != 2 {
+			t.Errorf("GET changes added dots = %d, want 2", got)
+		}
+		link := page.One(t, `.tree-file a[href="#f-1"]`)
+		if link.Text() != "a.go" {
+			t.Errorf("GET changes tree link f-1 = %q, want a.go", link.Text())
+		}
+		page.One(t, "details.diff-file#f-1")
+	})
+
 	t.Run("the session page links to it from a Changes tab", func(t *testing.T) {
 		t.Parallel()
 		st, _ := changesFixture(t, func(string) string { return "" })
