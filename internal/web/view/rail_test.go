@@ -115,6 +115,38 @@ func TestBuildRail(t *testing.T) {
 		}
 	})
 
+	t.Run("a settled row's glyph under a removal intent", func(t *testing.T) {
+		t.Parallel()
+		queued := plan.IntentRecord{ID: 1, Verb: plan.VerbRemoveWorktree, At: testNow}
+		pickedUp := queued
+		pickedUp.ConsumedAt = option.Some(testNow)
+		failed := pickedUp
+		failed.FinishedAt = option.Some(testNow)
+		failed.Outcome = plan.IntentFailed
+
+		tests := []struct {
+			name      string
+			rec       plan.IntentRecord
+			wantGlyph plan.GlyphWord
+		}{
+			{"queued keeps done", queued, plan.GlyphDone},
+			{"picked up without finishing keeps done", pickedUp, plan.GlyphDone},
+			{"failed shows failed", failed, plan.GlyphFailed},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				row := railRow("5", "billing", plan.GlyphDone)
+				row.Worktree = "/wt"
+				row.Intent = option.Some(plan.StatusOf(tt.rec, option.None[plan.RunSummary](), testNow))
+				got := view.BuildRail([]view.Row{row}, testNow, view.RailParams{}).Settled.Items[0]
+				if got.Glyph != tt.wantGlyph {
+					t.Errorf("BuildRail().Settled.Items[0].Glyph = %q, want %q", got.Glyph, tt.wantGlyph)
+				}
+			})
+		}
+	})
+
 	t.Run("groups by attention", func(t *testing.T) {
 		t.Parallel()
 		rows := []view.Row{

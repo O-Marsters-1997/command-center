@@ -226,7 +226,8 @@ func BuildRail(rows []Row, now time.Time, params RailParams) Rail {
 			}
 		}
 		it.Pending = it.Verb != "" && slices.Contains(r.PendingVerbs, it.Verb)
-		if r.Intent.IsSome() {
+		group, _ := plan.RailGroup(r.Glyph)
+		if r.Intent.IsSome() && (group != plan.GroupSettled || r.Intent.Unwrap().Outcome == plan.IntentFailed) {
 			st := r.Intent.Unwrap()
 			it.Glyph, it.Label = st.Glyph, intentLabel(st)
 			if st.Outcome == plan.IntentFailed {
