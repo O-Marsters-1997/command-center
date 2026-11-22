@@ -365,6 +365,9 @@ func (f ChangedFile) Base() string { return path.Base(f.Path) }
 
 func (f ChangedFile) KindLabel() string {
 	k := string(f.Kind)
+	if k == "" {
+		return ""
+	}
 	return strings.ToUpper(k[:1]) + k[1:]
 }
 

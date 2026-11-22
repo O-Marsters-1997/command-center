@@ -46,6 +46,32 @@ func TestHunkGaps(t *testing.T) {
 	}
 }
 
+func TestChangedFile_Bar(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name           string
+		added, deleted int
+		want           [5]string
+	}{
+		{name: "nothing changed", want: [5]string{}},
+		{name: "all added", added: 10, want: [5]string{"added", "added", "added", "added", "added"}},
+		{name: "all deleted", deleted: 10, want: [5]string{"deleted", "deleted", "deleted", "deleted", "deleted"}},
+		{
+			name: "rounds to the nearest cell", added: 1, deleted: 1,
+			want: [5]string{"added", "added", "deleted", "deleted", "deleted"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := view.ChangedFile{FileDiff: git.FileDiff{Added: tt.added, Deleted: tt.deleted}}
+			if diff := cmp.Diff(tt.want, f.Bar()); diff != "" {
+				t.Errorf("Bar() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestBuildTree(t *testing.T) {
 	t.Parallel()
 	paths := []string{
