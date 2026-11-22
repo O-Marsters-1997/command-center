@@ -3989,17 +3989,16 @@ summary.prompt-bar:focus-visible {
     line-height: var(--leading-ui);
   }
 
-  div.review-comment {
-    padding-left: var(--space-3);
+  .review-comment {
+    padding: var(--space-3);
+    border: 1px solid var(--color-border-strong);
     border-left: 3px solid var(--color-s-running);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
   }
 
   form.review-comment {
-    padding: var(--space-3);
-    border: 1px solid var(--color-border-strong);
-    border-left: 3px solid var(--color-accent);
-    border-radius: var(--radius-sm);
-    background: var(--color-surface);
+    border-left-color: var(--color-accent);
   }
 
   .review-head,
