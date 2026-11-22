@@ -79,6 +79,11 @@ LIMIT sqlc.arg(max_rows);
 SELECT DISTINCT ticket_id, kind FROM events
 WHERE kind IN (SELECT jsonb_array_elements_text(sqlc.arg(kinds)::jsonb)) AND ticket_id IS NOT NULL;
 
+-- name: ListLatestStageEvents :many
+SELECT DISTINCT ON (ticket_id) ticket_id, at, detail FROM events
+WHERE kind = 'stage_entered' AND ticket_id IS NOT NULL
+ORDER BY ticket_id, id DESC;
+
 -- name: HasEventDetail :one
 SELECT EXISTS (
     SELECT 1 FROM events

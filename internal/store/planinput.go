@@ -7,6 +7,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 )
 
 func (s *Store) autoHistories(ctx context.Context) (map[plan.TicketURL]plan.AutoHistory, error) {
@@ -160,6 +161,17 @@ func (s *Store) recordedEvents(ctx context.Context, tickets []Ticket) (map[plan.
 		rec.Merged = rec.Merged || kind == EventPRMerged
 		rec.Parked = rec.Parked || kind == EventParked
 		recorded[url] = rec
+	}
+	stages, err := s.q.ListLatestStageEvents(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select latest stage events: %w", err)
+	}
+	for _, row := range stages {
+		url := plan.TicketURL(row.TicketID.String)
+		if rec, ok := recorded[url]; ok {
+			rec.Stage, rec.StageSince = plan.Stage(row.Detail), option.Some(row.At)
+			recorded[url] = rec
+		}
 	}
 	return recorded, nil
 }

@@ -25,6 +25,7 @@ var transitionEvents = map[plan.TransitionKind]store.EventKind{
 	plan.TransitionChecksLanded: store.EventChecksLanded,
 	plan.TransitionVerdict:      store.EventVerdictTransition,
 	plan.TransitionParked:       store.EventParked,
+	plan.TransitionStage:        store.EventStageEntered,
 }
 
 func (l *Loop) recordTransitions(ctx context.Context, snap plan.Snapshot) error {
