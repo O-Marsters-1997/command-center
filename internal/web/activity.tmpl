@@ -4,7 +4,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
 
 {{define "activityRow" -}}
 <details id="act-{{.ID}}" class="border-b border-border-soft" hx-preserve="true" data-row>
-  <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-2 py-1 hover:bg-surface-2 md:grid-cols-[3.5rem_auto_9rem_9rem_minmax(0,1fr)_9rem_5rem_4rem] md:gap-y-1">
+  <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-2 py-1 hover:bg-surface-2 md:grid-cols-[3.5rem_auto_9rem_12rem_minmax(0,1fr)_9rem_5rem_4rem] md:gap-y-1">
     <time class="hidden text-xs text-muted md:block" datetime="{{.Queued.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.Queued.Format "15:04"}}</time>
     <span class="glyph" data-glyph="{{.Glyph}}" title="{{.Outcome}}"></span>
     <span class="min-w-0 truncate font-medium md:col-auto">{{.Action}}{{if .Auto}} <span class="flag">auto</span>{{end}} <span class="font-mono text-xs text-muted md:hidden">{{.Ref}}</span></span>
@@ -14,7 +14,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
     <span class="col-start-3 row-start-1 text-right text-xs md:col-start-auto md:row-start-auto">{{.Outcome}}</span>
     <span class="hidden text-right text-xs text-muted md:block">{{.Duration}}</span>
   </summary>
-  <div class="px-2 pb-3 pl-10 text-sm">
+  <div class="px-2 pb-3 text-sm md:pl-[4.75rem]">
     <ol class="m-0 list-none p-0">
       {{- range .Trail}}
       <li class="flex gap-3"><span class="w-12 text-right font-mono text-xs text-muted">{{$.Offset .}}</span><span>{{.Phase}}{{with .Outcome}} · {{.}}{{end}}</span></li>
@@ -36,7 +36,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
   hx-get="/activity" hx-target="#activity-results" hx-select="#activity-results" hx-swap="outerHTML" hx-push-url="true"
   hx-sync="this:replace" hx-trigger="change, input changed delay:250ms from:#activity-q">
   <div class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border-soft bg-surface py-2">
-    <input id="activity-q" class="min-h-[30px] min-w-0 flex-1 rounded-sm border border-border px-2 text-sm" type="search" name="q" value="{{.Params.Query}}" placeholder="Search ref, title, feature, detail  /" aria-label="Search activity" data-key="/" autocomplete="off">
+    <input id="activity-q" class="min-h-[30px] min-w-0 basis-full rounded-sm sm:flex-1 sm:basis-0 border border-border px-2 text-sm" type="search" name="q" value="{{.Params.Query}}" placeholder="Search ref, title, feature, detail  /" aria-label="Search activity" data-key="/" autocomplete="off">
     <select class="select" name="verb" aria-label="Action">
       <option value="">All actions</option>
       {{range .Verbs}}<option value="{{.}}"{{if eq . $.Params.Verb}} selected{{end}}>{{.}}</option>{{end}}
