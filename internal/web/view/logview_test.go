@@ -25,6 +25,16 @@ func readTestdata(t *testing.T, name string) string {
 	return string(body)
 }
 
+func TestRecordShown(t *testing.T) {
+	t.Parallel()
+	if view.RecordShown(store.Event{Kind: store.EventStageEntered}) {
+		t.Error("RecordShown(stage_entered) = true, want false")
+	}
+	if !view.RecordShown(store.Event{Kind: store.EventPROpened}) {
+		t.Error("RecordShown(pr_opened) = false, want true")
+	}
+}
+
 func logDetail(src view.LogSource, mode view.LogFilter) view.LogDetail {
 	return view.BuildLogDetail(src, view.Params{Log: mode})
 }
