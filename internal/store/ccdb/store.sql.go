@@ -168,6 +168,41 @@ func (q *Queries) ListEvents(ctx context.Context, maxRows int32) ([]ListEventsRo
 	return items, nil
 }
 
+const listLatestStageEvents = `-- name: ListLatestStageEvents :many
+SELECT DISTINCT ON (ticket_id) ticket_id, at, detail FROM events
+WHERE kind = 'stage_entered' AND ticket_id IS NOT NULL
+ORDER BY ticket_id, id DESC
+`
+
+type ListLatestStageEventsRow struct {
+	TicketID sql.NullString
+	At       time.Time
+	Detail   string
+}
+
+func (q *Queries) ListLatestStageEvents(ctx context.Context) ([]ListLatestStageEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestStageEvents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestStageEventsRow
+	for rows.Next() {
+		var i ListLatestStageEventsRow
+		if err := rows.Scan(&i.TicketID, &i.At, &i.Detail); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecordedEvents = `-- name: ListRecordedEvents :many
 SELECT DISTINCT ticket_id, kind FROM events
 WHERE kind IN (SELECT jsonb_array_elements_text($1::jsonb)) AND ticket_id IS NOT NULL
