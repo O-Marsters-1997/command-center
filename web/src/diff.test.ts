@@ -24,9 +24,9 @@ describe("tokenize", () => {
   const cases: [Lang, string, string, string][] = [
     ["go", `func f() { return "a" + 12 } // done`, "//", "func"],
     ["ts", `const x = 'a'; // c`, "//", "const"],
-    ["sql", `SELECT 1 -- c`, "--", "SELECT"],
+    ["sql", "SELECT 1 -- c", "--", "SELECT"],
     ["sh", `if true; then echo "x" # c`, "#", "if"],
-    ["", `anything // here`, "", ""],
+    ["", "anything // here", "", ""],
   ];
   test.each(cases)("%s round-trips and finds comments and keywords", (lang, line, marker, kw) => {
     expect(join(line, lang)).toBe(line);
