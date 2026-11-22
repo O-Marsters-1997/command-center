@@ -101,6 +101,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", s.handle(s.handleIndex))
 	mux.Handle("GET /tickets", s.handle(s.handleTickets))
+	mux.Handle("GET /factory", s.handle(s.handleFactory))
 	mux.Handle("GET /f/{feature}", s.handle(s.handleFeature))
 	mux.Handle("GET /f/{feature}/graph", s.handle(s.handleFeatureGraph))
 	mux.Handle("GET /f/{feature}/launch", s.handle(s.handleFeatureLaunch))

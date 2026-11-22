@@ -59,6 +59,7 @@ func ParseSidebar(width, collapsed string) Sidebar {
 }
 
 const (
+	keyFactory  = "g f"
 	keyTickets  = "g t"
 	keyInsights = "g i"
 	keyRepos    = "g r"

@@ -25,6 +25,8 @@ type Row struct {
 	ProjectHue     int                              `json:"-"`
 	Title          string                           `json:"title"`
 	State          plan.State                       `json:"state"`
+	Stage          plan.Stage                       `json:"-"`
+	Step           plan.StepName                    `json:"-"`
 	Reason         string                           `json:"reason"`
 	Label          string                           `json:"label"`
 	Detail         string                           `json:"detail"`
@@ -175,6 +177,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			ProjectHue:     projects[t.Repo].Hue,
 			Title:          cmp.Or(in.Obs.Titles[url], pr.Title),
 			State:          e.State,
+			Stage:          e.State.Stage(),
+			Step:           latestRun.Step,
 			Reason:         string(e.Reason),
 			Label:          e.State.Label(),
 			Detail:         detailOf(string(e.Reason)),
