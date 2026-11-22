@@ -149,16 +149,10 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, fmt.Errorf("load frame: %w", err)
 	}
 	params = f.params
-	ticketSpend, err := r.store.BoardTicketSpend(ctx, params.Repo, params.Feature)
+	rows, err := r.spentRows(ctx, f)
 	if err != nil {
-		return Board{}, fmt.Errorf("load board ticket spend: %w", err)
+		return Board{}, err
 	}
-	rows := slices.Clone(f.rows)
-	if err := applySpend(rows, r.spend); err != nil {
-		return Board{}, fmt.Errorf("apply spend: %w", err)
-	}
-	ApplyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
-	applyViewState(rows, params)
 	groups := scopeGroups(rows, params, f.project)
 	chrome := f.chrome
 	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
@@ -202,6 +196,20 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		repos:            f.repos,
 		split:            f.split,
 	}, nil
+}
+
+func (r *Reader) spentRows(ctx context.Context, f frame) ([]Row, error) {
+	ticketSpend, err := r.store.BoardTicketSpend(ctx, f.params.Repo, f.params.Feature)
+	if err != nil {
+		return nil, fmt.Errorf("load board ticket spend: %w", err)
+	}
+	rows := slices.Clone(f.rows)
+	if err := applySpend(rows, r.spend); err != nil {
+		return nil, fmt.Errorf("apply spend: %w", err)
+	}
+	ApplyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
+	applyViewState(rows, f.params)
+	return rows, nil
 }
 
 func scopeGroups(rows []Row, params Params, project store.Project) []Group {
@@ -253,6 +261,7 @@ func (r *Reader) buildChrome(f frame) Chrome {
 		FeatureScope: params.Feature,
 		Launch:       NavItem{Path: params.withScope("/launch"), Key: keyLaunch},
 		Nav: []NavItem{
+			{Label: "Factory", Path: params.withScope(factoryPath), Key: keyFactory, Icon: "zap"},
 			{Label: "All tickets", Path: params.withScope(ticketsPath), Key: keyTickets, Icon: "inbox", Badge: "0"},
 			{
 				Label: "Insights", Key: keyInsights, Icon: "chart",
