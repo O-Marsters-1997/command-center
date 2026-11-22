@@ -316,7 +316,12 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   live members as rows (glyph, ref, title, right-aligned elapsed or wave) with the current
   ticket tinted, and closed "Ready to launch", "Blocked" and "Merged" folds with counts. A small
   PR, Checks and Spend list (share of week, never dollars) and a closed "Edit blockers" fold
-  close the panel. Below 1180px the panel becomes an overlay that opens on demand.
+  close the panel. That panel is the Details tab of one right sidebar, with Activity (the tray's
+  body) as its second tab; feature boards and graphs carry the same sidebar, its Details tab
+  listing project, ticket and wave counts and the status counts. A chevron collapses it to a strip.
+  Pages without it keep the Activity dropdown in the top bar
+  ([ADR 26](docs/adr/0026-feature-and-ticket-pages-share-one-tabbed-sidebar.md)). Below 1180px the
+  sidebar becomes an overlay that opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
   → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.

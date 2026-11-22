@@ -229,7 +229,7 @@ func statusFromRun(latest option.Option[RunFact], unlock Unlock, raise RaiseMode
 		state, reason := statusFromPush(run, unlock, raise)
 		return state, reason, true
 	case OutcomeAsked:
-		return AwaitingInput, firstLine(run.Question), true
+		return AwaitingInput, askedReason(run.Question), true
 	case OutcomeContinued:
 		return Queued, "resuming with your message", true
 	case OutcomePassed:
@@ -272,6 +272,15 @@ func statusFromNext(next option.Option[Next]) (State, Reason, bool) {
 	case NextNone, NextDone:
 	}
 	return StateUnknown, "", false
+}
+
+const MissingDependencyMarker = "MISSING-DEPENDENCY:"
+
+func askedReason(question string) Reason {
+	if rest, ok := strings.CutPrefix(question, MissingDependencyMarker); ok {
+		return "blocker work missing from the branch: " + firstLine(strings.TrimSpace(rest))
+	}
+	return firstLine(question)
 }
 
 func firstLine(s string) Reason {

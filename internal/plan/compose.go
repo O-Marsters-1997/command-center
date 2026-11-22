@@ -105,8 +105,10 @@ func ComposeAsking(questionPath string) string {
 	return fmt.Sprintf(
 		"\n\n## Asking the owner\n\n"+
 			"If you need a decision only the owner can make, write one question to %s and end your turn. "+
-			"The owner's answer resumes this session. Do not ask what you can decide yourself.",
-		questionPath)
+			"The owner's answer resumes this session. Do not ask what you can decide yourself.\n\n"+
+			"If code from a blocking ticket is missing from your branch, start the question with %s "+
+			"and name what is missing. Do not implement the blocker's work yourself.",
+		questionPath, MissingDependencyMarker)
 }
 
 func ComposeMessage(text string, after Outcome) string {

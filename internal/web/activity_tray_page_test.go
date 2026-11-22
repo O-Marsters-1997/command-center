@@ -85,3 +85,32 @@ func TestActivityTray(t *testing.T) {
 		}
 	})
 }
+
+func TestActivitySidebar(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		path        string
+		wantSidebar bool
+	}{
+		{"/s/acme/web/2", true},
+		{"/f/checkout", true},
+		{"/f/checkout/graph", true},
+		{"/insights", false},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			t.Parallel()
+			rec := do(t, newServer(stackStore(t), testNow), http.MethodGet, tt.path, req{})
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d, want 200", tt.path, rec.Code)
+			}
+			doc := htmltest.Parse(t, rec.Body)
+			if got := len(doc.Find("#rightbar #activity-tray-body")) == 1; got != tt.wantSidebar {
+				t.Errorf("GET %s has the Activity sidebar = %v, want %v", tt.path, got, tt.wantSidebar)
+			}
+			if got := len(doc.Find("#activity-button")) == 1; got == tt.wantSidebar {
+				t.Errorf("GET %s has the Activity dropdown = %v, want %v", tt.path, got, !tt.wantSidebar)
+			}
+		})
+	}
+}

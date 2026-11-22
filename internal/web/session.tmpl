@@ -1,8 +1,8 @@
 {{template "shellStart" .}}
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
-{{template "shellContent" .}}
-<article class="session" data-session="{{.Row.URL}}">
+{{template "shellContentBare" .}}
+<article class="session has-rightbar" data-session="{{.Row.URL}}">
 <div class="session-main">
   <header class="session-head">
     <h1 class="session-ref">{{or .Row.Title .Ref}}</h1>
@@ -114,8 +114,7 @@
   {{template "sessionActions" .}}
   {{template "sessionComposer" .}}
 </div>
-<button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
-  <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
+{{template "rightbarStart" .}}
     {{- with .Stack}}
     {{- if .Feature}}
     <header class="flex flex-col gap-2">
@@ -177,7 +176,7 @@
         <button type="submit" class="btn">save</button>
       </form>
     </details>
-  </aside>
+{{template "rightbarEnd" .}}
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
   {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}
