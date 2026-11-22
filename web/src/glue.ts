@@ -156,6 +156,12 @@ function eventElement(e: Event): Element | null {
   return e.target instanceof Element ? e.target : null;
 }
 
+function askForNote(): void {
+  const tab = document.getElementById("request-tab-prompt");
+  if (tab) selectTab(tab);
+  document.getElementById("request-note")?.focus();
+}
+
 function initGlue(): void {
   document.addEventListener("htmx:responseError", (e) => {
     const detail = e instanceof CustomEvent ? e.detail : undefined;
@@ -186,6 +192,8 @@ function initGlue(): void {
     const dialog = trigger && document.getElementById(trigger.getAttribute("data-show-modal") ?? "");
     if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
     eventElement(e)?.closest("[data-close-modal]")?.closest("dialog")?.close();
+
+    if (eventElement(e)?.closest("button[data-send][aria-disabled=true]")) askForNote();
 
     const tab = eventElement(e)?.closest<HTMLElement>("[role=tab][data-tab]");
     if (tab) selectTab(tab);
@@ -220,8 +228,8 @@ function initGlue(): void {
     const form = eventElement(e)?.closest("form[data-submit-on-mod-enter]");
     if (form instanceof HTMLFormElement) {
       e.preventDefault();
-      if (form.querySelector("button[data-send][aria-disabled=true]")) return;
-      form.requestSubmit();
+      if (form.querySelector("button[data-send][aria-disabled=true]")) askForNote();
+      else form.requestSubmit();
     }
   });
 

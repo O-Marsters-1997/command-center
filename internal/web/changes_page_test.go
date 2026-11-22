@@ -320,6 +320,9 @@ func TestChangesPage(t *testing.T) {
 			!strings.Contains(rec.Body, "1 comment · opus · high") {
 			t.Fatalf("POST request = %d %q, want the sent state naming comment, model and effort", rec.Code, rec.Body)
 		}
+		if got := strings.Count(rec.Body, `hx-swap-oob="delete"`); got != 1 {
+			t.Errorf("POST request out-of-band row deletes = %d, want 1, one per sent comment", got)
+		}
 		intents, err := st.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
 		if err != nil || len(intents) != 1 {
 			t.Fatalf("PendingVerbIntents(follow-up) = %v, %v, want one", intents, err)
