@@ -44,7 +44,7 @@ func (o Outcome) Glyph() GlyphWord {
 	case OutcomePush, OutcomeContinued, OutcomePassed:
 		return GlyphDone
 	case OutcomeAsked:
-		return GlyphAttention
+		return GlyphAsked
 	case OutcomeFailed, OutcomeCutFailed, OutcomeUnknown:
 		return GlyphFailed
 	}

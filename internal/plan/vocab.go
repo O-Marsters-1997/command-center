@@ -61,6 +61,7 @@ const (
 	GlyphUnknown   GlyphWord = ""
 	GlyphFailed    GlyphWord = "failed"
 	GlyphAttention GlyphWord = "attention"
+	GlyphAsked     GlyphWord = "asked"
 	GlyphRunning   GlyphWord = "running"
 	GlyphPending   GlyphWord = "pending"
 	GlyphChecking  GlyphWord = "checking"

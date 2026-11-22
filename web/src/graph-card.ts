@@ -6,7 +6,7 @@ type Card = Pick<
 >;
 
 export function cardTag(row: Pick<Row, "glyph" | "label">): string {
-  return row.glyph === "failed" || row.glyph === "attention" ? row.label : "";
+  return row.glyph === "failed" || row.glyph === "attention" || row.glyph === "asked" ? row.label : "";
 }
 
 export function subline(row: Card): string {

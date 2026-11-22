@@ -30,7 +30,7 @@ func sectionKey(glyph plan.GlyphWord) SectionKey {
 		return SectionDone
 	}
 	switch glyph {
-	case plan.GlyphFailed, plan.GlyphAttention:
+	case plan.GlyphFailed, plan.GlyphAttention, plan.GlyphAsked:
 		return SectionNeedsYou
 	case plan.GlyphRunning, plan.GlyphPending, plan.GlyphChecking:
 		return SectionInProgress

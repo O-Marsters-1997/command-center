@@ -10,7 +10,7 @@ func OpenGlyph(glyph GlyphWord) bool { return glyph != GlyphDone && glyph != Gly
 
 func RailGroup(glyph GlyphWord) (group string, folded bool) {
 	switch glyph {
-	case GlyphFailed, GlyphAttention:
+	case GlyphFailed, GlyphAttention, GlyphAsked:
 		return GroupNeedsYou, false
 	case GlyphDone:
 		return GroupSettled, false

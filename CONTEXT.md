@@ -178,8 +178,8 @@ One `rate_limit_event`'s account-wide utilization of a window, stored with its t
 _Avoid_: Quota, limit (the limit is what utilization is a fraction of)
 
 **Glyph**:
-The status mark drawn beside a ticket, one of eight words derived from its state by `plan.Glyph`:
-blocked, ready, running, pending, checking, attention, done, failed. The surface colours by glyph,
+The status mark drawn beside a ticket, one of nine words derived from its state by `plan.Glyph`:
+blocked, ready, running, pending, checking, attention, asked, done, failed. The surface colours by glyph,
 never by state, and the rail's group is a function of it (ADR 14).
 _Avoid_: Pill, tone, badge, icon, status
 

@@ -150,6 +150,8 @@ type Turn struct {
 	You string
 	Log LogDetail
 	Ask string
+
+	Glyph plan.GlyphWord
 }
 
 type Prompt struct {
@@ -278,7 +280,10 @@ func (r *Reader) Session(
 	if row.Log.Worked.Label != "" {
 		worked = option.Some(row.Log.Summary)
 	}
-	turns := []Turn{{Log: row.Log}}
+	turns := []Turn{{Log: row.Log, Glyph: row.Glyph}}
+	if len(runs) > 0 {
+		turns[0].Glyph = outcomeGlyph(runs[len(runs)-1].Outcome, row.Glyph)
+	}
 	if raw.IsNone() {
 		turns = buildTurns(row, runs)
 	}
@@ -322,7 +327,7 @@ func (r *Reader) Session(
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		Actions:        actions,
-		Callout:        row.Glyph == plan.GlyphFailed || row.Glyph == plan.GlyphAttention,
+		Callout:        row.Glyph == plan.GlyphFailed || row.Glyph == plan.GlyphAttention || row.Glyph == plan.GlyphAsked,
 		PRURL:          row.PRURL,
 		Chrome:         chrome,
 		Row:            row,
@@ -344,11 +349,16 @@ func (r *Reader) Session(
 
 func buildTurns(row Row, runs []store.SessionRun) []Turn {
 	if len(runs) < 2 {
-		return []Turn{{Log: row.Log, Ask: row.Question}}
+		turn := Turn{Log: row.Log, Ask: row.Question, Glyph: row.Glyph}
+		if len(runs) == 1 {
+			turn.Glyph = outcomeGlyph(runs[0].Outcome, row.Glyph)
+		}
+		return []Turn{turn}
 	}
 	turns := make([]Turn, len(runs))
 	for i, run := range runs {
 		turns[i].Log = row.Log
+		turns[i].Glyph = outcomeGlyph(run.Outcome, row.Glyph)
 		turns[i].Ask = run.Question
 		if i != len(runs)-1 || run.LogPath != row.LogPath {
 			turns[i].Log = BuildLogDetail(LogSource{Path: run.LogPath, TicketURL: row.URL}, Params{Log: "all"})
@@ -359,6 +369,14 @@ func buildTurns(row Row, runs []store.SessionRun) []Turn {
 		}
 	}
 	return turns
+}
+
+func outcomeGlyph(outcome string, fallback plan.GlyphWord) plan.GlyphWord {
+	o, err := plan.ParseOutcome(outcome)
+	if err != nil {
+		return fallback
+	}
+	return o.Glyph()
 }
 
 func readPrompt(logPath string) (Prompt, error) {

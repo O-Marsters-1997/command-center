@@ -406,6 +406,26 @@ func TestSessionPage(t *testing.T) {
 		result.One(t, "[data-glyph]")
 	})
 
+	t.Run("a Result head shows the run's outcome glyph, so an asked run is not read as done", func(t *testing.T) {
+		t.Parallel()
+		st, _ := sessionStoreEnding(t, sessionRunOpts{
+			Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeAsked,
+		})
+		runs, err := st.SessionRunsForTicket(t.Context(), sessionTicket)
+		if err != nil || len(runs) == 0 {
+			t.Fatalf("SessionRunsForTicket = %d runs, %v, want a run", len(runs), err)
+		}
+		answer := `{"type":"assistant","timestamp":"2026-08-20T12:00:02Z",` +
+			`"message":{"content":[{"type":"text","text":"Which database?"}]}}` + "\n" +
+			`{"type":"result","subtype":"success","duration_ms":500,"num_turns":1}` + "\n"
+		if err := os.WriteFile(runs[0].LogPath, []byte(answer), 0o600); err != nil {
+			t.Fatalf("WriteFile(%q): %v", runs[0].LogPath, err)
+		}
+
+		main := sessionMain(t, st, "/s/acme/web/1")
+		main.One(t, `section[aria-label="Result"] [data-glyph="asked"]`)
+	})
+
 	t.Run("dropped log kinds never reach the render", func(t *testing.T) {
 		t.Parallel()
 		logPath := writeRunLog(t, mustReadTestdata(t, "dropped_kinds.jsonl"))

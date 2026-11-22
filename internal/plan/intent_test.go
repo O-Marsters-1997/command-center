@@ -15,7 +15,7 @@ import (
 var equateOptions = cmpopts.EquateComparable(option.Option[time.Time]{}, option.Option[plan.RunID]{})
 
 var allGlyphWords = []plan.GlyphWord{
-	plan.GlyphFailed, plan.GlyphAttention, plan.GlyphRunning, plan.GlyphPending,
+	plan.GlyphFailed, plan.GlyphAttention, plan.GlyphAsked, plan.GlyphRunning, plan.GlyphPending,
 	plan.GlyphChecking, plan.GlyphReady, plan.GlyphBlocked, plan.GlyphDone,
 }
 
