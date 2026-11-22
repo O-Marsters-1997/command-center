@@ -86,16 +86,15 @@ export function langOf(path: string): Lang {
 
 export function tokenize(text: string, lang: Lang): Token[] {
   if (!lang) return text ? [{ kind: "text", text }] : [];
-  const marker = commentMarker[lang].replace(/[/]/g, "\\/");
   const re = new RegExp(
-    `(${marker}.*$)|("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`[^\`]*\`)|(\\b\\d[\\w.]*\\b)|([A-Za-z_]\\w*)|(\\{\\{.*?\\}\\})`,
+    `(${commentMarker[lang]}.*$)|("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`[^\`]*\`)|(\\b\\d[\\w.]*\\b)|([A-Za-z_]\\w*)|(\\{\\{.*?\\}\\})`,
     "g",
   );
   const out: Token[] = [];
   const push = (kind: TokenKind, s: string) => {
     if (!s) return;
-    const last = out[out.length - 1];
-    if (kind === "text" && last?.kind === "text") last.text += s;
+    const prev = out[out.length - 1];
+    if (kind === "text" && prev?.kind === "text") prev.text += s;
     else out.push({ kind, text: s });
   };
   let last = 0;
