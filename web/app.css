@@ -3962,6 +3962,101 @@ summary.prompt-bar:focus-visible {
     background: var(--color-s-failed-soft);
   }
 
+  .diff-line.diff-ws,
+  .diff-line.diff-ws .diff-gutter {
+    background: transparent;
+  }
+
+  .diff-line.is-focus {
+    outline: 2px solid var(--color-accent-line);
+    outline-offset: -2px;
+  }
+
+  .tk-kw {
+    color: var(--color-fg);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .tk-str,
+  .tk-num {
+    color: var(--color-fg-2);
+  }
+
+  .tk-com {
+    color: var(--color-muted);
+    font-style: italic;
+  }
+
+  .diff-word {
+    border-radius: var(--radius-xs);
+    background: color-mix(in oklab, var(--color-s-done) 30%, transparent);
+    color: inherit;
+  }
+
+  .diff-deleted .diff-word {
+    background: color-mix(in oklab, var(--color-s-failed) 30%, transparent);
+  }
+
+  .changes.is-wrap .diff-text pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .changes-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .changes-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 var(--space-3) var(--space-2);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-canvas);
+    color: var(--color-muted);
+  }
+
+  .changes-filter input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-fg);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .changes-filter input:focus-visible {
+    box-shadow: none;
+  }
+
+  .changes-filter:focus-within {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .changes-filter kbd {
+    padding: 0 5px;
+    border-radius: var(--radius-xs);
+    background: var(--color-surface-3);
+    color: var(--color-fg-2);
+    font: 11px/1.5 var(--font-mono);
+  }
+
+  .changes-tree [hidden] {
+    display: none;
+  }
+
+  .tree-file.is-active {
+    background: var(--color-accent-soft);
+  }
+
   .review-thread > td {
     white-space: normal;
   }

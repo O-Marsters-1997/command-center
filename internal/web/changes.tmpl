@@ -12,6 +12,8 @@
       <span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
     <span class="changes-sm-hide text-muted text-sm">against <code>origin/{{.Base}}</code></span>
     {{- with .PR}}{{if .IsSome}}<a class="text-sm" href="{{.Unwrap}}" target="_blank" rel="noopener">Pull request</a>{{end}}{{end}}
+    <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-ws"> Ignore whitespace</label>
+    <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-wrap"> Wrap lines</label>
     <span class="changes-progress"><span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span><span class="changes-meter" aria-hidden="true"><i data-viewed-meter></i></span></span>
     {{template "reviewButton" .Pending}}
     <div id="review-popover" class="review-popover" popover>
@@ -40,6 +42,7 @@
   <div class="changes-body">
     <aside class="changes-tree" id="changes-tree" aria-label="Changed files">
       <div class="changes-tree-head">Files changed <span class="changes-stat"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span></div>
+      <label class="changes-filter"><input id="changes-filter" type="search" placeholder="Filter files…" aria-label="Filter files" autocomplete="off"><kbd aria-hidden="true">/</kbd></label>
       <nav class="changes-tree-list" aria-label="Changed files tree">
         {{- with .TreeRoot}}{{template "treeLevel" .}}{{end}}
       </nav>
@@ -47,7 +50,7 @@
     <div class="changes-scrim" data-toggle-tree></div>
     <div class="changes-files">
       {{- range .Files}}{{$file := .}}
-      <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" open>
+      <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" data-kind="{{.Kind}}" open>
         <summary class="diff-head">
           <svg class="icon diff-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
           <span class="diff-path font-mono text-sm" title="{{.Path}}">{{if .OldPath}}{{.OldPath}} → {{end}}<span class="diff-path-dir">{{.Dir}}</span><b>{{.Base}}</b></span>
@@ -73,7 +76,7 @@
             {{- end}}
             {{- range .Lines}}
             {{- $side := "new"}}{{$n := .NewLine}}{{if eq .Kind "deleted"}}{{$side = "old"}}{{$n = .OldLine}}{{end}}
-            <tr class="diff-line diff-{{.Kind}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
+            <tr class="diff-line diff-{{.Kind}}" data-kind="{{.Kind}}" data-side="{{$side}}" data-line="{{$n}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{$n}}" hx-get="{{$.SessionPath}}/changes/comment?path={{queryEscape $file.Path}}&amp;side={{$side}}&amp;line={{$n}}" hx-target="closest tr" hx-swap="afterend">+</button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
             {{- range $.At $file.Path .}}{{template "reviewThread" $.Thread .}}{{end}}
             {{- end}}
             {{- end}}
@@ -86,6 +89,7 @@
     </div>
   </div>
   {{- end}}
+<script type="module" src="/assets/dist/changes.js"></script>
 </article>
 {{template "shellEnd" .}}
 
