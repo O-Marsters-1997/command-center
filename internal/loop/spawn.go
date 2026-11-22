@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/O-Marsters-1997/treepad"
@@ -222,8 +223,7 @@ func (l *Loop) spawnConfig(
 		if err != nil {
 			return runner.SpawnConfig{}, err
 		}
-		placeholder := filepath.Join(l.ws.RunsDir, plan.RunIDPlaceholder+"."+plan.ReviewAttachmentName)
-		prompt = strings.ReplaceAll(prompt, placeholder, attached)
+		prompt = strings.ReplaceAll(prompt, l.reviewAttachmentPath(plan.RunIDPlaceholder), attached)
 	}
 	canAsk := len(step.Tools) == 0 || slices.Contains(step.Tools, "Write")
 	if canAsk && spec.kind.Steerable() {
@@ -259,12 +259,16 @@ func (l *Loop) spawnConfig(
 	return cfg, nil
 }
 
+func (l *Loop) reviewAttachmentPath(runID string) string {
+	return filepath.Join(l.ws.RunsDir, runID+"."+plan.ReviewAttachmentName)
+}
+
 func (l *Loop) writeReviewAttachment(runID int64, comments []plan.ReviewComment) (string, error) {
 	raw, err := json.MarshalIndent(comments, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("encode review comments for run %d: %w", runID, err)
 	}
-	path := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.%s", runID, plan.ReviewAttachmentName))
+	path := l.reviewAttachmentPath(strconv.FormatInt(runID, 10))
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		return "", fmt.Errorf("write review comments for run %d: %w", runID, err)
 	}

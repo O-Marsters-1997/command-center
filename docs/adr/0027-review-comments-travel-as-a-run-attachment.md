@@ -18,9 +18,10 @@ owner's own words.
   address every entry. It no longer contains a hunk.
 - Request changes queues the owner's note as the follow-up's message and the comments as a separate
   field of the intent payload, still deleting the comments in the same transaction.
-- `plan.FollowUpPrompt.Compose` is the only place a follow-up prompt is composed. The run id is
-  unknown until the run row exists, so the loop composes with `plan.RunIDPlaceholder` in the path
-  and substitutes the id when it spawns.
+- `plan.FollowUpPrompt.Compose` composes a follow-up prompt. The run id is unknown until the run
+  row exists, so the loop composes with `plan.RunIDPlaceholder` in the path and substitutes the id
+  when it spawns. The loop leaves `AskPath` empty and appends the ask suffix itself after any CI
+  logs, which keeps those prompts byte-identical.
 - The loop is the only writer of the attachment ([ADR 9](0009-the-loop-owns-reconciled-state.md)).
   It writes the file before it records the prompt.
 

@@ -19,11 +19,6 @@ func TestFollowUpPrompt_Compose(t *testing.T) {
 		"Leave code the comments do not concern alone, and commit your work to this branch when you are done."
 	const attachment = "/runs/7.review-comments.json"
 	paragraph := fmt.Sprintf(paragraphFor, attachment)
-	const asking = "\n\n## Asking the owner\n\n" +
-		"If you need a decision only the owner can make, write one question to /runs/7.question and end your turn. " +
-		"The owner's answer resumes this session. Do not ask what you can decide yourself.\n\n" +
-		"If code from a blocking ticket is missing from your branch, start the question with " +
-		plan.MissingDependencyMarker + " and name what is missing. Do not implement the blocker's work yourself."
 	fresh := plan.ComposeFollowUp
 
 	tests := []struct {
@@ -61,7 +56,7 @@ func TestFollowUpPrompt_Compose(t *testing.T) {
 		{
 			name: "with AskPath",
 			in:   plan.FollowUpPrompt{Message: "tidy up", AskPath: "/runs/7.question"},
-			want: fresh("tidy up") + asking,
+			want: fresh("tidy up") + plan.ComposeAsking("/runs/7.question"),
 		},
 		{
 			name: "run id placeholder in the attachment path",
@@ -69,10 +64,7 @@ func TestFollowUpPrompt_Compose(t *testing.T) {
 				Comments: 1, Attachment: "/runs/" + plan.RunIDPlaceholder + "." + plan.ReviewAttachmentName,
 			},
 			want: fresh("Changes requested on this branch.\n\n" +
-				"Address every review comment in `/runs/<run id>.review-comments.json` (attached to this run). " +
-				"Each entry has the file, the side and line, the diff hunk it was left on, and the comment. " +
-				"For each one, make the change, or say in your final message why you did not. " +
-				"Leave code the comments do not concern alone, and commit your work to this branch when you are done."),
+				fmt.Sprintf(paragraphFor, "/runs/<run id>.review-comments.json")),
 		},
 	}
 	for _, tt := range tests {

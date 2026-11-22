@@ -86,7 +86,7 @@ func (l *Loop) followUpOne(
 	}
 	followUp := plan.FollowUpPrompt{
 		Message: promptText, Comments: len(picked.Comments),
-		Attachment: filepath.Join(l.ws.RunsDir, plan.RunIDPlaceholder+"."+plan.ReviewAttachmentName),
+		Attachment: l.reviewAttachmentPath(plan.RunIDPlaceholder),
 	}
 
 	launched, _ := snap.Entry(url)
