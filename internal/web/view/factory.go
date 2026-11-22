@@ -60,7 +60,12 @@ func BuildScopeBar(rows []Row, q url.Values) ScopeBar {
 		inProject = slices.DeleteFunc(slices.Clone(rows), func(r Row) bool { return r.Project != project })
 	}
 	bar := ScopeBar{
-		AllProjects: ScopeTab{Label: "All projects", Path: pickProject(""), Count: unmergedCount(rows), Current: project == ""},
+		AllProjects: ScopeTab{
+			Label:   "All projects",
+			Path:    pickProject(""),
+			Count:   unmergedCount(rows),
+			Current: project == "",
+		},
 		Projects: scopeTabs(rows, func(r Row) (string, string) { return r.Project, r.Project }, project,
 			func(v string) string {
 				if v == project {
