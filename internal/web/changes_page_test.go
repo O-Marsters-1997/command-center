@@ -157,8 +157,8 @@ func TestChangesPage(t *testing.T) {
 		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
 		threads := page.Find(".review-thread")
 		if len(threads) != 1 || !strings.Contains(threads[0].Text(), "rename this") ||
-			!strings.Contains(threads[0].Text(), "Pending") {
-			t.Fatalf("GET changes threads = %d, want one Pending thread reading %q", len(threads), "rename this")
+			!strings.Contains(threads[0].Text(), "Pending") || !strings.Contains(threads[0].Text(), "Line 1") {
+			t.Fatalf("GET changes threads = %d, want one Pending Line 1 thread reading %q", len(threads), "rename this")
 		}
 		if got := page.One(t, "#request-changes").Text(); !strings.Contains(got, "(1 pending comment)") {
 			t.Errorf("GET changes request button = %q, want the pending count in its name", got)
