@@ -29,7 +29,7 @@
     </div>
     {{- end}}
     {{- if .CanFollowUp}}
-    <button id="request-changes" class="btn btn-primary btn-lg" type="button" data-show-modal="request-dialog" hx-get="{{.SessionPath}}/changes/request" hx-target="#request-body" hx-swap="innerHTML">Request changes{{template "reqChip" .Pending}}</button>
+    <button id="request-changes" class="btn btn-primary btn-lg" type="button" data-show-modal="request-dialog" hx-get="{{.SessionPath}}/changes/request" hx-include="#request-note" hx-target="#request-body" hx-swap="innerHTML">Request changes{{template "reqChip" .Pending}}</button>
     {{- else}}
     <button id="request-changes" class="btn btn-primary btn-lg" type="button" aria-disabled="true" popovertarget="request-reason">Request changes{{template "reqChip" .Pending}}</button>
     <div id="request-reason" class="review-popover" popover role="status">{{.Reason}}</div>
@@ -180,7 +180,7 @@
   {{- if .CanSend}}
   <button type="submit" class="btn btn-primary" aria-describedby="req-why">Send to agent <kbd>⌘↵</kbd></button>
   {{- else}}
-  <button type="button" class="btn btn-primary" aria-disabled="true" aria-describedby="req-why">Send to agent <kbd>⌘↵</kbd></button>
+  <button type="button" class="btn btn-primary" aria-disabled="true" data-send aria-describedby="req-why">Send to agent <kbd>⌘↵</kbd></button>
   {{- end}}
 </div>{{end}}
 
@@ -203,7 +203,7 @@
 
 {{define "requestRemoved"}}<li class="request-undo" role="status">Comment on <span class="font-mono">{{.Where}}</span> removed
   <button type="button" class="btn btn-ghost btn-sm" hx-post="{{.SessionPath}}/changes/request/comments/restore" hx-vals="{{.Vals}}" hx-target="closest li" hx-swap="outerHTML">Undo</button>
-</li>{{template "requestOOB" .Part}}{{end}}
+</li><tr id="c-{{.Comment.ID}}" hx-swap-oob="delete"></tr>{{template "requestOOB" .Part}}{{end}}
 
 {{define "requestRestored"}}{{template "requestItem" .RequestItem}}{{template "requestOOB" .Part}}{{end}}
 

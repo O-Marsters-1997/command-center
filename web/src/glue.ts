@@ -285,6 +285,7 @@ function initGlue(): void {
     const form = eventElement(e)?.closest("form[data-submit-on-mod-enter]");
     if (form instanceof HTMLFormElement) {
       e.preventDefault();
+      if (form.querySelector("button[data-send][aria-disabled=true]")) return;
       form.requestSubmit();
     }
   });

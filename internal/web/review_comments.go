@@ -115,7 +115,7 @@ func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) er
 
 func (s *Server) handleRequestDialog(w http.ResponseWriter, r *http.Request) error {
 	ref := sessionRef(r)
-	req, err := s.view.RequestChanges(r.Context(), s.clock.Now(), ref, "")
+	req, err := s.view.RequestChanges(r.Context(), s.clock.Now(), ref, r.FormValue("note"))
 	if err != nil {
 		return fmt.Errorf("load request changes: %w", err)
 	}

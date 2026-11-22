@@ -89,13 +89,15 @@ type PreviewParts struct {
 }
 
 func (r RequestChanges) Preview() PreviewParts {
-	composed := r.Prompt.Compose()
 	if r.Note == "" {
-		return PreviewParts{Before: composed}
+		return PreviewParts{Before: r.Prompt.Compose()}
 	}
-	before, after, found := strings.Cut(composed, r.Note)
+	const slot = "\x00note\x00"
+	marked := r.Prompt
+	marked.Message = slot
+	before, after, found := strings.Cut(marked.Compose(), slot)
 	if !found {
-		return PreviewParts{Before: composed}
+		return PreviewParts{Before: r.Prompt.Compose()}
 	}
 	return PreviewParts{Before: before, Note: r.Note, After: after}
 }

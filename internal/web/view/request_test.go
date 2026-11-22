@@ -49,6 +49,16 @@ func TestNewRequestChanges(t *testing.T) {
 		}
 	})
 
+	t.Run("a note that repeats the boilerplate is marked in its own slot", func(t *testing.T) {
+		t.Parallel()
+		got := view.NewRequestChanges("/s/o/n/1", "0123456789", true, "", "branch", comments).Preview()
+		inSlot := strings.HasSuffix(got.Before, "on this branch.\n\n") &&
+			strings.HasPrefix(got.After, "\n\nAddress every review")
+		if !inSlot {
+			t.Errorf("Preview() = %+v, want the note between the preamble and the attachment text", got)
+		}
+	})
+
 	t.Run("send is allowed only with text or comments and where follow-up is offered", func(t *testing.T) {
 		t.Parallel()
 		tests := []struct {
