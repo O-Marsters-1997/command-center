@@ -33,7 +33,7 @@ type Ticket struct {
 	BlockedBy   []string
 	AgentAfter  time.Duration
 	Result      string
-	Files       []string
+	Files       map[string]string // path → content the scripted agent commits; empty content deletes the path
 	CI          []string
 	CIAfter     time.Duration
 	MergeAfter  time.Duration
