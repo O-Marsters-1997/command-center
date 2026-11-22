@@ -199,7 +199,7 @@ with nothing to do shows almost no indigo.
 - Light only. There is no dark theme and no toggle ([ADR 1](docs/adr/0001-one-global-stylesheet.md)).
 - Lists, not cards. Rows run 30–46px. Cards appear only for the few sessions that need you.
 - Structure comes from surface steps and spacing, with few borders and soft ones.
-- One status grammar: eight glyph words, each a 14px ring that fills as work progresses.
+- One status grammar: nine glyph words, each a 14px ring that fills as work progresses.
 - Agent work folds away into a single line and opens on demand.
 
 ## Colors
@@ -403,7 +403,8 @@ word through `plan.Glyph`, and the template composes the class
 | `running` | amber, half pie; breathes when live (`glyph-pulse`) | running |
 | `pending` | amber, ⅝ pie | push pending, queued, base moved |
 | `checking` | amber, ¾ pie | checking |
-| `attention` | indigo, ¾ pie | review me, needs you, awaiting input |
+| `attention` | indigo, ¾ pie | review me, needs you |
+| `asked` | indigo disc with a question mark | awaiting input, a run that stopped to ask |
 | `done` | green disc with a check | merged |
 | `failed` | red disc with a bar | every state a human must repair |
 
@@ -470,7 +471,7 @@ ticket filters. No underline tabs.
   body-read at 68ch. Tool groups are disclosures with a hairline-indented sublist. Commands sit
   in a bordered block with the exit status. Errors sit on a `s-failed-soft` block. Your messages
   are right-aligned 16px bubbles on `surface-2`.
-- **Callouts:** a failed or attention panel on the soft state ground, holding the primary verb.
+- **Callouts:** a failed, attention or asked panel on the soft state ground, holding the primary verb.
 - **Composer:** a 16px panel with Float, a body-read textarea, and a bar of 26px ghost pickers
   ending in a 30px round indigo send button. The model and effort pickers are native selects
   whose choice rides the follow-up; the "Worktree" access label with its lock icon is static, as
