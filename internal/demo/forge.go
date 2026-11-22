@@ -152,7 +152,7 @@ func (f *Forge) Advance(ctx context.Context) error {
 
 func (f *Forge) collide(ctx context.Context, pr *pullRequest) error {
 	files := make(map[string]string, len(pr.issue.Files))
-	for _, name := range pr.issue.Files {
+	for name := range pr.issue.Files {
 		files[name] = "package main // landed on main\n"
 	}
 	if err := f.sb.LandOnMain(ctx, pr.issue.Repo, files); err != nil {

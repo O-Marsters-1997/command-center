@@ -138,13 +138,11 @@ func (r *agentRun) finish(ctx context.Context, now time.Time) error {
 }
 
 func (r *agentRun) commitWork(ctx context.Context) error {
-	content := "package main\n"
+	files := maps.Clone(r.issue.Files)
 	if r.issue.Result == resultConflict {
-		content = "package main // " + r.issue.ID + "\n"
-	}
-	files := make(map[string]string, len(r.issue.Files))
-	for _, name := range r.issue.Files {
-		files[name] = content
+		for name := range files {
+			files[name] = "package main // " + r.issue.ID + "\n"
+		}
 	}
 	return commitAll(ctx, r.worktree, "implement "+r.issue.Title, files)
 }

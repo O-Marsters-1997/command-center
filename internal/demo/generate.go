@@ -36,7 +36,7 @@ func Generate(seed int64, tickets int) Scenario {
 		repos[n] = Repo{
 			Name:     repoNames[n],
 			Stacking: n == 0,
-			Files:    map[string]string{"go.mod": "module " + repoNames[n] + "\n", "main.go": "package main\n"},
+			Files:    seedFiles(repoNames[n]),
 		}
 	}
 	repos[1].CompatCheck = compatCheck
@@ -56,6 +56,9 @@ func Generate(seed int64, tickets int) Scenario {
 		t.BlockedBy, level = pickBlockers(rng, sc.Tickets, depth, t)
 		depth = append(depth, level)
 		drawScript(rng, &t, repos[feature%len(repos)])
+		if n == 0 {
+			multiFolderScript(&t)
+		}
 		sc.Tickets = append(sc.Tickets, t)
 	}
 	sc.Main = mainCommits(rng, repos)
@@ -88,7 +91,7 @@ func drawScript(rng *rand.Rand, t *Ticket, repo Repo) {
 	t.MergeAfter = between(rng, 30*time.Second, 120*time.Second)
 	t.Result = resultCommits
 	t.CI = []string{ciPass}
-	t.Files = []string{strings.ToLower(t.ID) + ".go"}
+	t.Files = map[string]string{strings.ToLower(t.ID) + ".go": "package main\n"}
 
 	if rng.Float64() < cleanOutcome {
 		return
@@ -109,6 +112,52 @@ func drawScript(rng *rand.Rand, t *Ticket, repo Repo) {
 	default:
 		t.AgentAfter = between(rng, 4*time.Minute, 6*time.Minute)
 	}
+}
+
+var editedFolders = []string{"api", "store", "queue", "worker", "cache", "metrics", "auth"}
+
+const legacyFile = "internal/legacy/legacy.go"
+
+func seedFiles(repo string) map[string]string {
+	files := map[string]string{
+		"go.mod":      "module " + repo + "\n",
+		"main.go":     "package main\n",
+		legacyFile:    funcBody("legacy"),
+		"docs/api.md": "# API\n",
+	}
+	for _, f := range editedFolders {
+		files["internal/"+f+"/"+f+".go"] = funcBody(f)
+	}
+	return files
+}
+
+func multiFolderScript(t *Ticket) {
+	t.Result = resultCommits
+	t.CI = []string{ciPass}
+	t.CompatFails = false
+	t.Files = map[string]string{
+		legacyFile:           deleted,
+		"docs/api.md":        "# API\n\nThe handlers now return typed errors.\n",
+		"docs/changes.md":    "# Changes\n\n- typed errors\n",
+		"internal/api/v2.go": "package api\n\nfunc routesV2() {}\n",
+	}
+	for _, f := range editedFolders {
+		t.Files["internal/"+f+"/"+f+".go"] = funcBody(f, 4, 34)
+	}
+}
+
+func funcBody(pkg string, tuned ...int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "package %s\n\nfunc run() {\n", pkg)
+	for n := 1; n <= 36; n++ {
+		suffix := ""
+		if slices.Contains(tuned, n) {
+			suffix = " // tuned"
+		}
+		fmt.Fprintf(&b, "\tstep%02d()%s\n", n, suffix)
+	}
+	b.WriteString("}\n")
+	return b.String()
 }
 
 func mainCommits(rng *rand.Rand, repos []Repo) []Main {

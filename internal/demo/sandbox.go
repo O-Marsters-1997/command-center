@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path"
@@ -205,6 +206,12 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 func writeFiles(dir string, files map[string]string) error {
 	for name, contents := range files {
 		full := filepath.Join(dir, name)
+		if contents == deleted {
+			if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("remove %s: %w", name, err)
+			}
+			continue
+		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 			return fmt.Errorf("create dir for %s: %w", name, err)
 		}
