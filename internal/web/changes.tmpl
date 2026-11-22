@@ -15,7 +15,7 @@
     <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-ws"> Ignore whitespace</label>
     <label class="changes-check changes-sm-hide"><input type="checkbox" id="changes-wrap"> Wrap lines</label>
     <span class="changes-progress"><span class="text-sm" data-viewed-progress aria-live="polite">0 of {{len .Files}} viewed</span><span class="changes-meter" aria-hidden="true"><i data-viewed-meter></i></span></span>
-    <button id="comments-btn" class="btn btn-ghost btn-sm" type="button" data-show-modal="comments-drawer" title="Pending comments (Shift L)">Comments <span class="chip-count" data-comments-total>0</span></button>
+    <button id="comments-btn" class="btn btn-ghost btn-sm" type="button" data-show-modal="comments-drawer" title="Pending comments (Shift L)" aria-label="Pending comments"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4Z"/></svg><span class="chip-count" data-comments-total>0</span></button>
     {{- if .CanRaise}}
     <button id="raise-pr" class="btn btn-lg" type="button" popovertarget="raise-popover">Raise PR</button>
     <div id="raise-popover" class="review-popover" popover role="dialog" aria-labelledby="raise-title">
@@ -54,18 +54,20 @@
   {{- else}}
   <div class="changes-body">
     <aside class="changes-tree" id="changes-tree" aria-label="Changed files">
-      <div class="changes-tree-head">Files changed <span class="changes-stat"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span></div>
+      <div class="changes-tree-head">Files changed <span class="changes-stat"><span class="diff-added-count">+{{.Added}}</span> <span class="diff-deleted-count">−{{.Deleted}}</span></span>
+        <button class="btn btn-ghost btn-sm btn-icon" type="button" data-collapse-dirs title="Collapse all folders" aria-label="Collapse all folders"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 4 6 6 6-6M6 20l6-6 6 6"/></svg></button></div>
       <label class="changes-filter"><input id="changes-filter" type="search" placeholder="Filter files…" aria-label="Filter files" autocomplete="off"><kbd aria-hidden="true">/</kbd></label>
       <nav class="changes-tree-list" aria-label="Changed files tree">
         {{- with .TreeRoot}}{{template "treeLevel" .}}{{end}}
       </nav>
+      <div class="changes-tree-foot"><button class="btn btn-ghost btn-sm" type="button" data-show-modal="key-sheet">{{template "icon" "keys"}}Shortcuts <kbd>?</kbd></button></div>
     </aside>
     <div class="changes-scrim" data-toggle-tree></div>
     <div class="changes-files">
       {{- range .Files}}{{$file := .}}
       <details class="diff-file" id="{{.ID}}" data-file="{{.Path}}" data-diff-hash="{{.DiffHash}}" data-kind="{{.Kind}}" open>
-        <summary class="diff-head">
-          <svg class="icon diff-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        <summary class="diff-head" tabindex="-1">
+          <button class="btn btn-ghost btn-sm btn-icon" type="button" data-collapse-file aria-expanded="true" aria-label="Collapse file"><svg class="icon diff-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
           <span class="diff-path font-mono text-sm" title="{{.Path}}">{{if .OldPath}}{{.OldPath}} → {{end}}<span class="diff-path-dir">{{.Dir}}</span><b>{{.Base}}</b></span>
           <button class="btn btn-ghost btn-sm btn-icon" type="button" data-copy-path="{{.Path}}" aria-label="Copy file path" title="Copy path"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 15V6a2 2 0 0 1 2-2h9"/></svg></button>
           {{- if .Protected.IsSome}} <span class="flag flag-warning" title="rule {{.Protected.Unwrap.Rule}}">protected</span>{{end}}
@@ -229,7 +231,7 @@
 </div>{{range .Comments}}<tr id="c-{{.ID}}" hx-swap-oob="delete"></tr>{{end}}{{template "reqChipSwap" 0}}{{end}}
 
 {{define "diffLine"}}
-<tr class="diff-line diff-{{.Kind}}{{if .Comments}} has-comment{{end}}" id="{{.ID}}" data-kind="{{.Kind}}" data-side="{{.Side}}" data-line="{{.Number}}"><td class="diff-gutter"><button type="button" class="diff-add-comment" aria-label="Comment on line {{.Number}}" title="Comment  c" hx-get="{{.CommentURL}}" hx-target="closest tr" hx-swap="afterend"><svg class="icon icon-add" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/><path d="M12 9v6M9 12h6"/></svg><svg class="icon icon-has" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/></svg></button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
+<tr class="diff-line diff-{{.Kind}}{{if .Comments}} has-comment{{end}}" id="{{.ID}}" data-kind="{{.Kind}}" data-side="{{.Side}}" data-line="{{.Number}}"><td class="diff-gutter"><span class="diff-has" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/></svg></span><button type="button" class="diff-add-comment" aria-label="Comment on line {{.Number}}" title="Comment  c" hx-get="{{.CommentURL}}" hx-target="closest tr" hx-swap="afterend"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/><path d="M12 9v6M9 12h6"/></svg></button></td><td class="diff-no">{{if .OldLine}}{{.OldLine}}{{end}}</td><td class="diff-no">{{if .NewLine}}{{.NewLine}}{{end}}</td><td class="diff-text"><pre><span class="diff-sign" aria-hidden="true">{{if eq .Kind "added"}}+{{else if eq .Kind "deleted"}}−{{else}} {{end}}</span>{{.Text}}</pre></td></tr>
 {{- $row := .}}{{range .Comments}}{{template "reviewThread" $row.Thread .}}{{end}}
 {{- end}}
 
