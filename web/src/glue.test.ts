@@ -5,6 +5,7 @@ import {
   failureText,
   maxLiveLines,
   modifierLabel,
+  nextTab,
   parseViewed,
   railClosedCookie,
   scopeOf,
@@ -90,4 +91,13 @@ test("shouldHop needs a target and a wide viewport", () => {
 
 test("the live tail keeps a thousand lines", () => {
   expect(maxLiveLines).toBe(1000);
+});
+
+test("nextTab wraps with the arrow keys and ignores other keys", () => {
+  expect(nextTab(0, 2, "ArrowRight")).toBe(1);
+  expect(nextTab(1, 2, "ArrowRight")).toBe(0);
+  expect(nextTab(0, 2, "ArrowLeft")).toBe(1);
+  expect(nextTab(1, 2, "Home")).toBe(0);
+  expect(nextTab(0, 2, "End")).toBe(1);
+  expect(nextTab(0, 2, "a")).toBeNull();
 });

@@ -69,6 +69,34 @@ export function viewedLabel(done: number, total: number): string {
   return `${done} of ${total} viewed`;
 }
 
+export function nextTab(current: number, count: number, key: string): number | null {
+  switch (key) {
+    case "ArrowRight":
+      return (current + 1) % count;
+    case "ArrowLeft":
+      return (current - 1 + count) % count;
+    case "Home":
+      return 0;
+    case "End":
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
+function selectTab(tab: HTMLElement): void {
+  const list = tab.closest("[data-tabs]");
+  if (!list) return;
+  for (const other of list.querySelectorAll<HTMLElement>("[role=tab]")) {
+    const on = other === tab;
+    other.setAttribute("aria-selected", String(on));
+    other.tabIndex = on ? 0 : -1;
+    const panel = document.getElementById(other.dataset.tab ?? "");
+    if (panel) panel.hidden = !on;
+  }
+  tab.focus();
+}
+
 function readViewed(key: string): string[] {
   try {
     return parseViewed(localStorage.getItem(key));
@@ -225,6 +253,9 @@ function initGlue(): void {
     if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
     eventElement(e)?.closest("[data-close-modal]")?.closest("dialog")?.close();
 
+    const tab = eventElement(e)?.closest<HTMLElement>("[role=tab][data-tab]");
+    if (tab) selectTab(tab);
+
     const toggle = eventElement(e)?.closest("[data-toggle-tree]");
     if (toggle) setTreeOpen(!document.getElementById("changes-tree")?.hasAttribute("data-open"));
     else if (eventElement(e)?.closest("#changes-tree a")) setTreeOpen(false);
@@ -240,10 +271,22 @@ function initGlue(): void {
   });
 
   document.addEventListener("keydown", (e) => {
+    const tab = eventElement(e)?.closest<HTMLElement>("[role=tab][data-tab]");
+    const tabs = tab?.closest("[data-tabs]")?.querySelectorAll<HTMLElement>("[role=tab]");
+    if (!tab || !tabs) return;
+    const next = nextTab([...tabs].indexOf(tab), tabs.length, e.key);
+    const target = next === null ? undefined : tabs[next];
+    if (!target) return;
+    e.preventDefault();
+    selectTab(target);
+  });
+
+  document.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
     const form = eventElement(e)?.closest("form[data-submit-on-mod-enter]");
     if (form instanceof HTMLFormElement) {
       e.preventDefault();
+      if (form.querySelector("button[data-send][aria-disabled=true]")) return;
       form.requestSubmit();
     }
   });
