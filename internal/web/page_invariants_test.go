@@ -95,6 +95,19 @@ func TestPageInvariants(t *testing.T) {
 			}
 		})
 
+		t.Run(page.name+" lets a closed activity tray stay hidden", func(t *testing.T) {
+			t.Parallel()
+			for _, tray := range htmltest.Parse(t, page.html).Find("#activity-tray") {
+				class, _ := tray.Attr("class")
+				for _, token := range strings.Fields(class) {
+					switch token {
+					case "flex", "block", "grid", "inline-flex", "inline-block", "contents":
+						t.Errorf("%s #activity-tray has display utility %q outside :popover-open", page.name, token)
+					}
+				}
+			}
+		})
+
 		t.Run(page.name+" is light only and first party", func(t *testing.T) {
 			t.Parallel()
 			root := htmltest.Parse(t, page.html)
