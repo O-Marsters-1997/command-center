@@ -11,12 +11,16 @@ import (
 func (s *Server) handleExpand(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	e := view.Expand{Path: q.Get("path"), Edge: view.ExpandEdge(q.Get("edge"))}
-	var err error
-	if e.Hunk, err = strconv.Atoi(q.Get("hunk")); err != nil {
-		return errorf(http.StatusBadRequest, "hunk %q is not a number", q.Get("hunk"))
+	var nums [3]int
+	for i, key := range []string{"hunk", "above", "below"} {
+		n, err := strconv.Atoi(q.Get(key))
+		if err != nil {
+			return errorf(http.StatusBadRequest, "%s %q is not a number", key, q.Get(key))
+		}
+		nums[i] = n
 	}
-	above, _ := strconv.Atoi(q.Get("above"))
-	below, _ := strconv.Atoi(q.Get("below"))
+	e.Hunk = nums[0]
+	above, below := nums[1], nums[2]
 	x, err := s.view.ExpandMore(r.Context(), s.clock.Now(), sessionRef(r), e, above, below)
 	if err != nil {
 		return fmt.Errorf("expand gap: %w", err)

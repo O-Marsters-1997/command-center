@@ -389,9 +389,9 @@ func (f ChangedFile) KindLabel() string {
 }
 
 type gapSpan struct {
-	first int // first hidden line, in new-file numbering
-	count int
-	delta int // old line number minus new line number across the gap
+	firstNew    int
+	count       int
+	oldMinusNew int
 }
 
 func gapSpans(hunks []git.Hunk) []gapSpan {
@@ -405,7 +405,7 @@ func gapSpans(hunks []git.Hunk) []gapSpan {
 		if h.OldLines == 0 {
 			oldFirst++
 		}
-		spans[i] = gapSpan{first: next, count: max(0, first-next), delta: oldFirst - first}
+		spans[i] = gapSpan{firstNew: next, count: max(0, first-next), oldMinusNew: oldFirst - first}
 		next = first + h.NewLines
 	}
 	return spans

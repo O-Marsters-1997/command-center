@@ -121,11 +121,11 @@ func (r *Reader) ExpandMore(
 		return Expansion{}, ErrNoSuchLine
 	}
 	n := min(expandStep, left)
-	first := span.first + above
+	first := span.firstNew + above
 	switch e.Edge {
 	case ExpandAbove:
 	case ExpandBelow:
-		first = span.first + span.count - below - n
+		first = span.firstNew + span.count - below - n
 	case ExpandAll:
 		n = left
 	default:
@@ -152,7 +152,7 @@ func (r *Reader) ExpandMore(
 	self := ref.Path()
 	rows := make([]LineRow, len(texts))
 	for j, text := range texts {
-		l := git.DiffLine{Kind: git.LineContext, OldLine: first + j + span.delta, NewLine: first + j, Text: text}
+		l := git.DiffLine{Kind: git.LineContext, OldLine: first + j + span.oldMinusNew, NewLine: first + j, Text: text}
 		rows[j] = LineRow{DiffLine: l, SessionPath: self, Path: e.Path, Comments: commentsAt(onPath, l)}
 	}
 	if e.Edge == ExpandBelow {
