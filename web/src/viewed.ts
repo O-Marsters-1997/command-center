@@ -1,4 +1,4 @@
-export type ViewedRecord = { tip: string; files: Record<string, string> }; // path → diff hash
+export type ViewedRecord = { tip: string; files: Record<string, string> };
 
 export function viewedKey(ticketURL: string): string {
   return `cc:viewed:${ticketURL}`;
@@ -71,7 +71,7 @@ function saveRecord(root: HTMLElement, record: ViewedRecord): void {
 function render(root: HTMLElement, record: ViewedRecord): void {
   let done = 0;
   for (const file of root.querySelectorAll<HTMLElement>("[data-file]")) {
-    const on = (file.dataset.file ?? "") in record.files;
+    const on = Object.hasOwn(record.files, file.dataset.file ?? "");
     const box = file.querySelector<HTMLInputElement>("input[data-viewed]");
     if (box) box.checked = on;
     file.classList.toggle("is-viewed", on);
