@@ -2615,9 +2615,10 @@ summary.prompt-bar:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 38px;
+  min-height: 38px;
+  max-width: min(36rem, calc(100vw - 2rem));
   margin: 0;
-  padding: 0 14px;
+  padding: 8px 14px;
   translate: -50% 0;
   border-radius: var(--radius-lg);
   background: var(--color-fg);
@@ -4106,6 +4107,7 @@ summary.prompt-bar:focus-visible {
 
   .btn[aria-disabled="true"] {
     opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .chip-count {

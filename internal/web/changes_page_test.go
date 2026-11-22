@@ -286,8 +286,14 @@ func TestChangesPage(t *testing.T) {
 		if v, _ := page.One(t, "#request-changes").Attr("aria-disabled"); v != "true" {
 			t.Errorf("GET changes Request changes aria-disabled = %q, want true", v)
 		}
-		if got := page.One(t, "#request-reason").Text(); !strings.Contains(got, "merged") {
+		if got := page.One(t, "#request-why").Text(); !strings.Contains(got, "merged") {
 			t.Errorf("GET changes reason = %q, want the state's reason", got)
+		}
+		if v, _ := page.One(t, "#request-changes").Attr("data-why"); !strings.Contains(v, "merged") {
+			t.Errorf("GET changes data-why = %q, want the state's reason", v)
+		}
+		if v, _ := page.One(t, "#request-changes").Attr("aria-describedby"); v != "request-why" {
+			t.Errorf("GET changes aria-describedby = %q, want request-why", v)
 		}
 		rec := do(t, server, http.MethodPost, "/s/acme/web/1/changes/request", req{Form: url.Values{"note": {"x"}}})
 		if rec.Code != http.StatusConflict {
