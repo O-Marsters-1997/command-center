@@ -252,7 +252,7 @@
 {{define "reviewThread"}}<tr class="review-thread" id="c-{{.Comment.ID}}" data-comment data-path="{{.Comment.Path}}" data-line="{{.Comment.Line}}"><td colspan="3">
   <div class="review-comment">
     <div class="review-head">
-      <span class="flag">Pending</span><span class="sp"></span>
+      <span class="flag">Pending</span><span>{{if eq .Comment.Side "old"}}Removed{{else}}Line{{end}} {{.Comment.Line}}</span><span class="sp"></span>
       <button type="button" class="btn btn-ghost btn-sm" hx-get="{{.SessionPath}}/changes/comments/{{.Comment.ID}}/edit" hx-target="closest tr" hx-swap="outerHTML" aria-label="Edit comment on line {{.Comment.Line}}">Edit</button>
       <button type="button" class="btn btn-ghost btn-sm" hx-post="{{.SessionPath}}/changes/comments/{{.Comment.ID}}/delete" hx-target="closest tr" hx-swap="outerHTML" aria-label="Delete comment on line {{.Comment.Line}}">Delete</button>
     </div>
@@ -265,20 +265,24 @@
     <input type="hidden" name="path" value="{{.Path}}">
     <input type="hidden" name="side" value="{{.Side}}">
     <input type="hidden" name="line" value="{{.Line}}">
-    <textarea name="body" required rows="3" aria-label="Comment" autofocus></textarea>
+    <div class="review-meta">Comment on · {{if eq .Side "old"}}Removed line{{else}}Line{{end}} {{.Line}}</div>
+    <textarea name="body" required aria-label="Comment" placeholder="Leave a comment for the agent" autofocus></textarea>
     <div class="review-actions">
-      <button class="btn" type="button" data-cancel>Cancel <kbd>Esc</kbd></button>
-      <button class="btn btn-primary" type="submit">Comment <kbd>⌘↵</kbd></button>
+      <span class="review-hint"><kbd>⌘</kbd> <kbd>Enter</kbd> to add, <kbd>Esc</kbd> to cancel</span><span class="sp"></span>
+      <button class="btn" type="button" data-cancel>Cancel</button>
+      <button class="btn btn-primary" type="submit">Add comment</button>
     </div>
   </form>
 </td></tr>{{end}}
 
 {{define "reviewEdit"}}<tr class="review-thread" id="c-{{.Comment.ID}}" data-comment data-path="{{.Comment.Path}}" data-line="{{.Comment.Line}}"><td colspan="3">
   <form class="review-comment" hx-post="{{.SessionPath}}/changes/comments/{{.Comment.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-submit-on-mod-enter>
-    <textarea name="body" required rows="3" aria-label="Edit comment" autofocus>{{.Comment.Body}}</textarea>
+    <div class="review-meta">Edit comment · {{if eq .Comment.Side "old"}}Removed line{{else}}Line{{end}} {{.Comment.Line}}</div>
+    <textarea name="body" required aria-label="Edit comment" placeholder="Leave a comment for the agent" autofocus>{{.Comment.Body}}</textarea>
     <div class="review-actions">
-      <button class="btn" type="button" data-cancel hx-get="{{.SessionPath}}/changes/comments/{{.Comment.ID}}" hx-target="closest tr" hx-swap="outerHTML">Cancel <kbd>Esc</kbd></button>
-      <button class="btn btn-primary" type="submit">Save <kbd>⌘↵</kbd></button>
+      <span class="review-hint"><kbd>⌘</kbd> <kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel</span><span class="sp"></span>
+      <button class="btn" type="button" data-cancel hx-get="{{.SessionPath}}/changes/comments/{{.Comment.ID}}" hx-target="closest tr" hx-swap="outerHTML">Cancel</button>
+      <button class="btn btn-primary" type="submit">Save</button>
     </div>
   </form>
 </td></tr>{{end}}

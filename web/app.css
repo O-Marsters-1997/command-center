@@ -3976,20 +3976,44 @@ summary.prompt-bar:focus-visible {
   }
 
   .review-thread > td {
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-s-running-soft);
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    background: var(--color-canvas);
+    border-block: 1px solid var(--color-border-soft);
   }
 
   .review-comment {
     display: grid;
     gap: var(--space-2);
+    max-width: 46rem;
+    margin-left: 4.25rem;
     font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--leading-ui);
   }
 
-  .review-head {
+  .review-comment {
+    padding: var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-left: 3px solid var(--color-s-running);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+
+  form.review-comment {
+    border-left-color: var(--color-accent);
+  }
+
+  .review-head,
+  .review-meta {
     display: flex;
     align-items: center;
     gap: var(--space-2);
+  }
+
+  .review-meta,
+  .review-hint {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
   }
 
   .review-head .flag {
@@ -3999,7 +4023,8 @@ summary.prompt-bar:focus-visible {
     cursor: default;
   }
 
-  .review-head .sp {
+  .review-head .sp,
+  .review-actions .sp {
     flex: 1;
   }
 
@@ -4011,12 +4036,24 @@ summary.prompt-bar:focus-visible {
 
   .review-comment textarea {
     width: 100%;
+    min-height: 5rem;
+    resize: vertical;
+    padding: var(--space-2);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-canvas);
     font: inherit;
+    color: var(--color-fg);
+  }
+
+  .review-comment textarea:focus-visible {
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow-focus);
   }
 
   .review-actions {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
     gap: var(--space-2);
   }
 
