@@ -22,14 +22,27 @@ type DiffLine struct {
 	Text    string
 }
 
+type FileKind string
+
+const (
+	FileAdded    FileKind = "added"
+	FileModified FileKind = "modified"
+	FileDeleted  FileKind = "deleted"
+	FileRenamed  FileKind = "renamed"
+)
+
 type Hunk struct {
-	Header string // the "@@ -a,b +c,d @@ …" line
-	Lines  []DiffLine
+	Header             string // the "@@ -a,b +c,d @@ …" line
+	OldStart, OldLines int
+	NewStart, NewLines int
+	Section            string // the text after the closing "@@", usually the enclosing function
+	Lines              []DiffLine
 }
 
 type FileDiff struct {
 	Path    string
 	OldPath string // set on a rename
+	Kind    FileKind
 	Binary  bool
 	Added   int
 	Deleted int
@@ -56,7 +69,7 @@ func parseDiff(out string) ([]FileDiff, error) {
 	)
 	for _, line := range strings.Split(out, "\n") {
 		if rest, ok := strings.CutPrefix(line, "diff --git "); ok {
-			files = append(files, FileDiff{Path: headerPath(rest)})
+			files = append(files, FileDiff{Path: headerPath(rest), Kind: FileModified})
 			continue
 		}
 		if len(files) == 0 {
@@ -66,11 +79,12 @@ func parseDiff(out string) ([]FileDiff, error) {
 		inHunk := len(f.Hunks) > 0
 		switch {
 		case strings.HasPrefix(line, "@@ "):
-			var err error
-			if oldNo, newNo, err = hunkStarts(line); err != nil {
+			h, err := parseHunkHeader(line)
+			if err != nil {
 				return nil, err
 			}
-			f.Hunks = append(f.Hunks, Hunk{Header: line})
+			oldNo, newNo = h.OldStart, h.NewStart
+			f.Hunks = append(f.Hunks, h)
 		case inHunk && line != "" && line[0] != '\\':
 			h := &f.Hunks[len(f.Hunks)-1]
 			text := line[1:]
@@ -89,7 +103,12 @@ func parseDiff(out string) ([]FileDiff, error) {
 				newNo++
 			}
 		case inHunk:
+		case strings.HasPrefix(line, "new file mode "):
+			f.Kind = FileAdded
+		case strings.HasPrefix(line, "deleted file mode "):
+			f.Kind = FileDeleted
 		case strings.HasPrefix(line, "rename from "):
+			f.Kind = FileRenamed
 			f.OldPath = strings.TrimPrefix(line, "rename from ")
 		case strings.HasPrefix(line, "rename to "):
 			f.Path = strings.TrimPrefix(line, "rename to ")
@@ -108,27 +127,41 @@ func headerPath(rest string) string {
 	return path
 }
 
-func hunkStarts(header string) (oldStart, newStart int, err error) {
-	fields := strings.Fields(header)
-	if len(fields) < 3 {
-		return 0, 0, fmt.Errorf("parse hunk header %q", header)
+func parseHunkHeader(header string) (Hunk, error) {
+	rest, ok := strings.CutPrefix(header, "@@ ")
+	if !ok {
+		return Hunk{}, fmt.Errorf("parse hunk header %q", header)
 	}
-	oldStart, err = rangeStart(fields[1], "-")
-	if err != nil {
-		return 0, 0, fmt.Errorf("parse hunk header %q: %w", header, err)
+	ranges, section, ok := strings.Cut(rest, " @@")
+	fields := strings.Fields(ranges)
+	if !ok || len(fields) != 2 {
+		return Hunk{}, fmt.Errorf("parse hunk header %q", header)
 	}
-	newStart, err = rangeStart(fields[2], "+")
-	if err != nil {
-		return 0, 0, fmt.Errorf("parse hunk header %q: %w", header, err)
+	h := Hunk{Header: header, Section: strings.TrimSpace(section)}
+	var err error
+	if h.OldStart, h.OldLines, err = parseRange(fields[0], "-"); err != nil {
+		return Hunk{}, fmt.Errorf("parse hunk header %q: %w", header, err)
 	}
-	return oldStart, newStart, nil
+	if h.NewStart, h.NewLines, err = parseRange(fields[1], "+"); err != nil {
+		return Hunk{}, fmt.Errorf("parse hunk header %q: %w", header, err)
+	}
+	return h, nil
 }
 
-func rangeStart(field, sign string) (int, error) {
-	start, _, _ := strings.Cut(strings.TrimPrefix(field, sign), ",")
-	n, err := strconv.Atoi(start)
-	if err != nil {
-		return 0, fmt.Errorf("range %q: %w", field, err)
+func parseRange(field, sign string) (start, lines int, err error) {
+	body, ok := strings.CutPrefix(field, sign)
+	if !ok {
+		return 0, 0, fmt.Errorf("range %q: missing %q", field, sign)
 	}
-	return n, nil
+	first, count, hasCount := strings.Cut(body, ",")
+	if start, err = strconv.Atoi(first); err != nil {
+		return 0, 0, fmt.Errorf("range %q: %w", field, err)
+	}
+	if !hasCount {
+		return start, 1, nil
+	}
+	if lines, err = strconv.Atoi(count); err != nil {
+		return 0, 0, fmt.Errorf("range %q: %w", field, err)
+	}
+	return start, lines, nil
 }
