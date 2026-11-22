@@ -172,6 +172,55 @@ func TestChangesPage(t *testing.T) {
 		}
 	})
 
+	t.Run("a comment is edited in place and a deleted one is restored by its undo", func(t *testing.T) {
+		t.Parallel()
+		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })
+		server := openServer(st, fixedClock(testNow), dataDir)
+		base := "/s/acme/web/1/changes/comments"
+		form := url.Values{"path": {"src/a.go"}, "side": {"new"}, "line": {"1"}, "body": {"rename this"}}
+		do(t, server, http.MethodPost, base, req{Form: form})
+		comments, err := st.ReviewComments(t.Context(), sessionTicket)
+		if err != nil || len(comments) != 1 {
+			t.Fatalf("ReviewComments = %v, %v, want one", comments, err)
+		}
+		one := comments[0]
+		id := strconv.FormatInt(one.ID, 10)
+
+		editForm := do(t, server, http.MethodGet, base+"/"+id+"/edit", req{})
+		if editForm.Code != http.StatusOK || !strings.Contains(editForm.Body, "rename this") {
+			t.Fatalf("GET edit = %d %q, want 200 with the body in a textarea", editForm.Code, editForm.Body)
+		}
+		edited := do(t, server, http.MethodPost, base+"/"+id, req{Form: url.Values{"body": {"first\nsecond"}}})
+		if edited.Code != http.StatusOK || !strings.Contains(edited.Body, "first\nsecond") {
+			t.Fatalf("POST edit = %d %q, want 200 with the line break kept", edited.Code, edited.Body)
+		}
+		blank := do(t, server, http.MethodPost, base+"/"+id, req{Form: url.Values{"body": {"  "}}})
+		if blank.Code != http.StatusBadRequest {
+			t.Errorf("POST edit with a blank body = %d, want %d", blank.Code, http.StatusBadRequest)
+		}
+
+		deleted := do(t, server, http.MethodPost, base+"/"+id+"/delete", req{})
+		if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body, "Undo") {
+			t.Fatalf("POST delete = %d %q, want 200 with an Undo toast", deleted.Code, deleted.Body)
+		}
+		restore := url.Values{
+			"tip": {string(one.Tip)}, "path": {one.Path}, "side": {string(one.Side)},
+			"line": {strconv.Itoa(one.Line)}, "hunk": {one.Hunk}, "body": {"first\nsecond"},
+		}
+		restored := do(t, server, http.MethodPost, base+"/restore", req{Form: restore})
+		if restored.Code != http.StatusOK || !strings.Contains(restored.Body, `hx-swap-oob="afterend:#l-`) {
+			t.Fatalf("POST restore = %d %q, want 200 placing the card after its line", restored.Code, restored.Body)
+		}
+
+		page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/1/changes"))
+		threads := page.Find(".review-thread")
+		if len(threads) != 1 || !strings.Contains(threads[0].Text(), "first") {
+			t.Errorf("GET changes threads after undo = %d, want one reading %q", len(threads), "first")
+		}
+		page.One(t, "tr.diff-line.has-comment")
+		page.One(t, "#comments-drawer")
+	})
+
 	t.Run("request changes queues one follow-up quoting the comments and clears them", func(t *testing.T) {
 		t.Parallel()
 		st, dataDir := changesFixture(t, func(repo string) string { return gittest.Run(t, repo, "rev-parse", "cc-1") })

@@ -34,6 +34,21 @@ export const diffKeys: Readonly<Record<string, DiffAction>> = {
   "?": "help",
 };
 
+export type CommentAction = "comment" | "comments";
+
+export const commentKeys: Readonly<Record<string, CommentAction>> = {
+  c: "comment",
+  L: "comments",
+};
+
+export type CommentRef = { id: string; path: string; line: number; body: string };
+
+export function countByFile(refs: readonly Pick<CommentRef, "path">[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const r of refs) counts.set(r.path, (counts.get(r.path) ?? 0) + 1);
+  return counts;
+}
+
 const keywords: Record<Exclude<Lang, "">, Set<string>> = {
   go: new Set(
     "break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false".split(

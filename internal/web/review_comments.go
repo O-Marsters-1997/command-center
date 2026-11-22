@@ -63,19 +63,94 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 	return s.renderThread(w, r, anchor.Ticket, view.ReviewThread{SessionPath: ref.Path(), Comment: c}, "reviewPosted")
 }
 
-func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) pendingComment(r *http.Request) (plan.TicketURL, plan.ReviewComment, error) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		return errorf(http.StatusBadRequest, "comment id %q is not a number", r.PathValue("id"))
+		return "", plan.ReviewComment{}, errorf(http.StatusBadRequest, "comment id %q is not a number", r.PathValue("id"))
 	}
 	ticket, err := s.view.SessionTicket(r.Context(), s.clock.Now(), sessionRef(r))
 	if err != nil {
-		return fmt.Errorf("resolve ticket: %w", err)
+		return "", plan.ReviewComment{}, fmt.Errorf("resolve ticket: %w", err)
 	}
-	if err := s.store.DeleteReviewComment(r.Context(), ticket, id); err != nil {
+	comments, err := s.store.ReviewComments(r.Context(), ticket)
+	if err != nil {
+		return "", plan.ReviewComment{}, fmt.Errorf("load comments: %w", err)
+	}
+	i := slices.IndexFunc(comments, func(c plan.ReviewComment) bool { return c.ID == id })
+	if i < 0 {
+		return "", plan.ReviewComment{}, errorf(http.StatusNotFound, "no pending comment %d", id)
+	}
+	return ticket, comments[i], nil
+}
+
+func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) error {
+	ticket, c, err := s.pendingComment(r)
+	if err != nil {
+		return err
+	}
+	if err := s.store.DeleteReviewComment(r.Context(), ticket, c.ID); err != nil {
 		return fmt.Errorf("delete comment: %w", err)
 	}
-	return s.renderThread(w, r, ticket, view.ReviewThread{}, "reviewDeleted")
+	return s.renderThread(w, r, ticket, view.ReviewThread{SessionPath: sessionRef(r).Path(), Comment: c}, "reviewDeleted")
+}
+
+func (s *Server) handleComment(w http.ResponseWriter, r *http.Request) error {
+	_, c, err := s.pendingComment(r)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "reviewThread", view.ReviewThread{SessionPath: sessionRef(r).Path(), Comment: c})
+}
+
+func (s *Server) handleEditCommentForm(w http.ResponseWriter, r *http.Request) error {
+	_, c, err := s.pendingComment(r)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "reviewEdit", view.ReviewThread{SessionPath: sessionRef(r).Path(), Comment: c})
+}
+
+func (s *Server) handleEditComment(w http.ResponseWriter, r *http.Request) error {
+	ticket, c, err := s.pendingComment(r)
+	if err != nil {
+		return err
+	}
+	body := strings.TrimSpace(r.FormValue("body"))
+	if body == "" {
+		return errorf(http.StatusBadRequest, "comment body is empty")
+	}
+	if err := s.store.EditReviewComment(r.Context(), ticket, c.ID, body); err != nil {
+		return fmt.Errorf("edit comment: %w", err)
+	}
+	c.Body = body
+	return renderHTML(w, "reviewThread", view.ReviewThread{SessionPath: sessionRef(r).Path(), Comment: c})
+}
+
+func (s *Server) handleRestoreComment(w http.ResponseWriter, r *http.Request) error {
+	target, err := commentTarget(r)
+	if err != nil {
+		return err
+	}
+	body := strings.TrimSpace(r.FormValue("body"))
+	tip := plan.SHA(r.FormValue("tip"))
+	if body == "" || tip == "" {
+		return errorf(http.StatusBadRequest, "a restored comment needs its tip and body")
+	}
+	ref := sessionRef(r)
+	now := s.clock.Now()
+	ticket, err := s.view.SessionTicket(r.Context(), now, ref)
+	if err != nil {
+		return fmt.Errorf("resolve ticket: %w", err)
+	}
+	c := plan.ReviewComment{
+		Tip: tip, Path: target.Path, Line: target.Line, Side: target.Side, Hunk: r.FormValue("hunk"), Body: body,
+	}
+	c.ID, err = s.store.AddReviewComment(r.Context(), store.NewReviewComment{Ticket: ticket, ReviewComment: c, At: now})
+	if err != nil {
+		return fmt.Errorf("restore comment: %w", err)
+	}
+	thread := view.ReviewThread{SessionPath: ref.Path(), Comment: c, Restored: true}
+	return s.renderThread(w, r, ticket, thread, "reviewRestored")
 }
 
 func (s *Server) handleRequestChanges(w http.ResponseWriter, r *http.Request) error {

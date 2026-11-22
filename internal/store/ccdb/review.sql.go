@@ -66,6 +66,24 @@ func (q *Queries) DeleteReviewComments(ctx context.Context, ticketID string) err
 	return err
 }
 
+const editReviewComment = `-- name: EditReviewComment :execrows
+UPDATE review_comments SET body = $1 WHERE ticket_id = $2 AND id = $3
+`
+
+type EditReviewCommentParams struct {
+	Body     string
+	TicketID string
+	ID       int64
+}
+
+func (q *Queries) EditReviewComment(ctx context.Context, arg EditReviewCommentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, editReviewComment, arg.Body, arg.TicketID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listReviewComments = `-- name: ListReviewComments :many
 SELECT id, tip, path, line, side, hunk, body
 FROM review_comments

@@ -206,10 +206,11 @@ type RemovedComment struct {
 	Part RequestPart
 }
 
-func (c RemovedComment) Vals() (string, error) {
+func (c RemovedComment) Vals() (string, error) { return restoreVals(c.Comment) }
+
+func restoreVals(c plan.ReviewComment) (string, error) {
 	raw, err := json.Marshal(map[string]any{
-		"tip": c.Comment.Tip, "path": c.Comment.Path, "line": c.Comment.Line,
-		"side": c.Comment.Side, "hunk": c.Comment.Hunk, "body": c.Comment.Body,
+		"tip": c.Tip, "path": c.Path, "line": c.Line, "side": c.Side, "hunk": c.Hunk, "body": c.Body,
 	})
 	if err != nil {
 		return "", fmt.Errorf("encode removed comment: %w", err)

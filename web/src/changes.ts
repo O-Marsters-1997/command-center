@@ -1,4 +1,17 @@
-import { diffKeys, langOf, tokenize, treeMatches, wordDiff, type DiffAction, type Lang, type TokenKind } from "./diff";
+import {
+  commentKeys,
+  countByFile,
+  diffKeys,
+  langOf,
+  tokenize,
+  treeMatches,
+  wordDiff,
+  type CommentAction,
+  type CommentRef,
+  type DiffAction,
+  type Lang,
+  type TokenKind,
+} from "./diff";
 
 export type Segment = { kind: TokenKind; text: string; changed: boolean };
 
@@ -59,9 +72,11 @@ function stripSpace(s: string): string {
   return s.replace(/\s+/g, "");
 }
 
-export function actionFor(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "isComposing">): DiffAction | undefined {
+export function actionFor(
+  e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "isComposing">,
+): DiffAction | CommentAction | undefined {
   if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return undefined;
-  return diffKeys[e.key];
+  return diffKeys[e.key] ?? commentKeys[e.key];
 }
 
 function stored(key: string): boolean {
@@ -153,12 +168,82 @@ function focused(): HTMLElement | null {
   return document.querySelector<HTMLElement>("tr.diff-line.is-focus");
 }
 
-function setFocus(tr: HTMLElement | null): void {
+function setFocus(tr: HTMLElement | null, scroll = true): void {
   focused()?.classList.remove("is-focus");
   if (!tr) return;
   tr.classList.add("is-focus");
-  tr.scrollIntoView({ block: "center" });
+  if (scroll) tr.scrollIntoView({ block: "center" });
   markActive();
+}
+
+function threads(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>("tr.review-thread[data-comment]")];
+}
+
+function lineOf(thread: HTMLElement): HTMLElement | null {
+  let row = thread.previousElementSibling;
+  while (row && !row.matches("tr.diff-line")) row = row.previousElementSibling;
+  return row instanceof HTMLElement ? row : null;
+}
+
+function commentRefs(): (CommentRef & { thread: HTMLElement })[] {
+  return threads().map((thread) => ({
+    thread,
+    id: thread.id,
+    path: thread.dataset.path ?? "",
+    line: Number(thread.dataset.line),
+    body: thread.querySelector("[data-body]")?.textContent ?? thread.querySelector("textarea")?.value ?? "",
+  }));
+}
+
+function syncComments(): void {
+  for (const row of document.querySelectorAll(".diff-line.has-comment")) row.classList.remove("has-comment");
+  const refs = commentRefs();
+  for (const r of refs) lineOf(r.thread)?.classList.add("has-comment");
+  const total = document.querySelector<HTMLElement>("[data-comments-total]");
+  if (total) total.textContent = String(refs.length);
+  const counts = countByFile(refs);
+  for (const row of document.querySelectorAll<HTMLElement>(".tree-file")) {
+    const n = counts.get(row.dataset.file ?? "") ?? 0;
+    const badge = row.querySelector<HTMLElement>("[data-file-comments]");
+    if (!badge) continue;
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+  }
+  const list = document.getElementById("comments-list");
+  const empty = document.getElementById("comments-empty");
+  if (empty) empty.hidden = refs.length > 0;
+  list?.replaceChildren(
+    ...refs.map((r) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.goto = r.id;
+      const loc = document.createElement("span");
+      loc.className = "loc";
+      loc.textContent = `${r.path}:${r.line}`;
+      const body = document.createElement("span");
+      body.className = "body";
+      body.textContent = r.body;
+      btn.append(loc, body);
+      li.append(btn);
+      return li;
+    }),
+  );
+}
+
+function openComments(): void {
+  syncComments();
+  (document.getElementById("comments-drawer") as HTMLDialogElement | null)?.showModal();
+}
+
+function goToComment(id: string): void {
+  const row = document.getElementById(id);
+  const file = fileOf(row);
+  if (!row || !file) return;
+  file.open = true;
+  const line = lineOf(row);
+  if (line) setFocus(line);
 }
 
 function files(): HTMLDetailsElement[] {
@@ -195,7 +280,7 @@ function viewedBox(file: HTMLDetailsElement): HTMLInputElement | null {
   return file.querySelector<HTMLInputElement>("summary input[data-viewed]");
 }
 
-function act(action: DiffAction): void {
+function act(action: DiffAction | CommentAction): void {
   const all = files();
   const here = currentFile();
   const at = here ? all.indexOf(here) : -1;
@@ -251,6 +336,12 @@ function act(action: DiffAction): void {
       return;
     case "help":
       (document.getElementById("key-sheet") as HTMLDialogElement | null)?.showModal();
+      return;
+    case "comment":
+      focused()?.querySelector<HTMLElement>(".diff-add-comment")?.click();
+      return;
+    case "comments":
+      openComments();
   }
 }
 
@@ -280,6 +371,7 @@ function enhance(): void {
     }
   }
   markActive();
+  syncComments();
 }
 
 function isField(el: Element | null): boolean {
@@ -301,6 +393,30 @@ function init(): void {
     },
     { capture: true },
   );
+  document.addEventListener("click", (e) => {
+    if (!(e.target instanceof Element) || !document.querySelector("[data-changes]")) return;
+    const goto = e.target.closest<HTMLElement>("[data-goto]");
+    if (goto) {
+      (goto.closest("dialog") as HTMLDialogElement | null)?.close();
+      goToComment(goto.dataset.goto ?? "");
+      return;
+    }
+    const cancel = e.target.closest("[data-cancel]");
+    if (cancel) {
+      if (!cancel.hasAttribute("hx-get")) cancel.closest("tr")?.remove();
+      syncComments();
+      return;
+    }
+    const row = e.target.closest<HTMLElement>("tr.diff-line");
+    if (row && !e.target.closest("button")) setFocus(row, false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !(e.target instanceof HTMLTextAreaElement)) return;
+    const cancel = e.target.closest("form")?.querySelector<HTMLElement>("[data-cancel]");
+    if (!cancel) return;
+    e.preventDefault();
+    cancel.click();
+  });
   document.addEventListener("input", (e) => {
     if (e.target instanceof HTMLInputElement && e.target.id === "changes-filter") filterTree(e.target.value.trim());
   });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { diffKeys, langOf, tokenize, treeMatches, wordDiff, type Lang } from "./diff";
+import { commentKeys, countByFile, diffKeys, langOf, tokenize, treeMatches, wordDiff, type Lang } from "./diff";
 
 const join = (s: string, l: Lang) =>
   tokenize(s, l)
@@ -122,5 +122,22 @@ describe("diffKeys", () => {
     expect(diffKeys.v).toBe("toggle-viewed");
     expect(diffKeys.V).toBe("viewed-and-next");
     expect(diffKeys["?"]).toBe("help");
+  });
+});
+
+describe("commentKeys", () => {
+  test("c comments and Shift+L opens the drawer", () => {
+    expect(commentKeys.c).toBe("comment");
+    expect(commentKeys.L).toBe("comments");
+    expect(commentKeys.l).toBe(undefined);
+  });
+});
+
+describe("countByFile", () => {
+  test("counts comments per path", () => {
+    const counts = countByFile([{ path: "a.go" }, { path: "b.go" }, { path: "a.go" }]);
+    expect(counts.get("a.go")).toBe(2);
+    expect(counts.get("b.go")).toBe(1);
+    expect(counts.get("c.go")).toBe(undefined);
   });
 });
