@@ -506,6 +506,10 @@ ticket filters. No underline tabs.
   counts.
 - **Toast:** a centred dark pill (`fg` on `surface`), 38px, 72px off the bottom, carrying an
   Undo button. Every triage verb gets one. Undo is target UI with no data yet.
+  The same pill with no button is the explanation variant: activating any `aria-disabled` verb
+  that carries `data-why` shows that reason in `#toast`. It wraps at 36rem (or the viewport less
+  2rem), grows past 38px to fit, and uses tokens only. The control also gets `cursor: not-allowed`
+  and `aria-describedby` on the same reason.
 - **Shortcut sheet:** opened by `?`, a 480px dialog with a 15px title and grouped `dl` rows of
   `kbd` keys.
 
