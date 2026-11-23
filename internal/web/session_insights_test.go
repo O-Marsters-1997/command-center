@@ -121,6 +121,14 @@ func TestSessionInsightsTab(t *testing.T) {
 		}
 	})
 
+	t.Run("a ticket without skill phases says its stages are not recorded", func(t *testing.T) {
+		t.Parallel()
+		main := insightsMain(t, insightsTicketStore(t, now, true), now)
+		if got := main.Text(); !strings.Contains(got, "Not recorded") {
+			t.Errorf("GET insights text = %q, want the stage share to say not recorded", got)
+		}
+	})
+
 	t.Run("the chart route serves the cumulative spend as JSON", func(t *testing.T) {
 		t.Parallel()
 		body := renderPath(t, newServer(insightsTicketStore(t, now, true), now), "/s/acme/alpha/7/insights/chart")

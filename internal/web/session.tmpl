@@ -64,6 +64,11 @@
       {{- else}}<p class="text-muted">No run has finished yet.</p>{{end}}
     </div>
     <div class="pulse-card">
+      <h2>Stage share</h2>
+      {{- with .StageRows}}{{template "stageList" .}}
+      {{- else}}<p class="text-muted">Not recorded: this ticket's runs carry no skill phases.</p>{{end}}
+    </div>
+    <div class="pulse-card">
       <h2>Tool use</h2>
       {{- with .ToolBars}}
       <ul class="pulse-limits" aria-label="tool use">

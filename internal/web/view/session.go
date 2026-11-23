@@ -447,6 +447,8 @@ func (s SessionInsights) ToolBars() []ToolBar {
 	return bars
 }
 
+func (s SessionInsights) StageRows() []StageRow { return stageRows(s.Report.Stages) }
+
 func (s SessionInsights) RunRows() []RunRow {
 	rows := make([]RunRow, len(s.Report.Runs))
 	for i, run := range s.Report.Runs {

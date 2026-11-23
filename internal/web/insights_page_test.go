@@ -181,6 +181,42 @@ func TestInsightsPage(t *testing.T) {
 		}
 	})
 
+	t.Run("stage share and the skills ledger follow the repo pick", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		id := storetest.Run(t, store, storetest.RunOpts{
+			TicketURL: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "h",
+			StartedAt: now.Add(-3 * time.Hour),
+		})
+		metrics := agentlog.RunMetrics{
+			Input: 1000, Output: 500,
+			Phases: []agentlog.PhaseTokens{{Skill: "tdd", Tokens: 900}, {Skill: "review", Tokens: 300}},
+		}
+		err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+			RunID: plan.RunID(id), Outcome: plan.OutcomePush, Metrics: option.Some(metrics), EndedAt: now.Add(-2 * time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("RecordDisposition: %v", err)
+		}
+		storetest.Merged(t, store, "sandbox://CC-1", now.Add(-time.Hour))
+		server := newServer(track(t, store, named("cc-sandbox")...), now)
+
+		all := htmltest.Parse(t, renderPath(t, server, "/insights")).One(t, "main#main")
+		if got := all.Text(); !strings.Contains(got, "Pick a repo above to see its skills.") {
+			t.Errorf("GET /insights text = %q, want the pick-a-repo note", got)
+		}
+		all.One(t, `ul[aria-label="token share by stage"] [data-stage="1"]`)
+
+		one := htmltest.Parse(t, renderPath(t, server, "/insights?repo=cc-sandbox")).One(t, "main#main")
+		rows := one.One(t, `table[aria-label="skills"]`).Text()
+		for _, want := range []string{"tdd", "review", "100%"} {
+			if !strings.Contains(rows, want) {
+				t.Errorf("GET /insights?repo skills = %q, want %q", rows, want)
+			}
+		}
+	})
+
 	t.Run("shows each limit's reset time", func(t *testing.T) {
 		t.Parallel()
 		store := openStore(t)
