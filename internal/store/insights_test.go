@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -414,12 +415,11 @@ func TestStore_TicketInsightFacts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("MergedTicketFacts: %v", err)
 		}
-		var fact insight.TicketFact
-		for _, f := range facts {
-			if f.Ticket == url {
-				fact = f
-			}
+		i := slices.IndexFunc(facts, func(f insight.TicketFact) bool { return f.Ticket == url })
+		if i < 0 {
+			t.Fatalf("MergedTicketFacts has no %s", url)
 		}
+		fact := facts[i]
 		if report.Tokens != fact.Tokens || report.ToolCalls != fact.ToolCalls {
 			t.Errorf("report tokens, tools = %d, %d, want %d, %d", report.Tokens, report.ToolCalls, fact.Tokens, fact.ToolCalls)
 		}
