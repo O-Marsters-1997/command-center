@@ -64,7 +64,18 @@ func (r *Reader) sessionRow(ctx context.Context, now time.Time, ref SessionRef) 
 		return Board{}, Row{}, fmt.Errorf("load board: %w", err)
 	}
 	row, ok := board.rowFor(ref)
-	if ok {
+	if !ok {
+		return Board{}, Row{}, ErrSessionNotFound
+	}
+	return board, row, nil
+}
+
+func (r *Reader) readSessionRow(ctx context.Context, now time.Time, ref SessionRef) (Board, Row, error) {
+	board, err := r.Board(ctx, now, Params{})
+	if err != nil {
+		return Board{}, Row{}, fmt.Errorf("load board: %w", err)
+	}
+	if row, ok := board.rowFor(ref); ok {
 		return board, row, nil
 	}
 	url := "https://github.com/" + ref.Owner + "/" + ref.Name + "/issues/" + ref.N
