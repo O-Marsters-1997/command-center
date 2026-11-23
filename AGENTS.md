@@ -69,7 +69,8 @@ The stack is unusual and the wrong assumption is expensive.
 
 **Do not load `tailwind-shadcn`**: it mistakes `solid-js` for a shadcn-solid project. Add no
 component library, CLI scaffolding or new package to `web/`, test tooling included: island logic
-lives in pure `.ts` under `bun test`.
+lives in pure `.ts` under `bun test`. The one exception is `@tanstack/charts`, the only approved
+chart package, used by `web/src/insights-chart.tsx` (`cc-insights-chart`).
 
 - Utilities go in the template, for layout and spacing.
 - The state grammar stays named classes, because Go composes them at render time and Tailwind's
