@@ -522,48 +522,6 @@
     background: var(--glyph);
   }
 
-  .chart-grid {
-    stroke: var(--color-border);
-  }
-
-  .chart-tick {
-    fill: var(--color-muted);
-    font-size: 10px;
-  }
-
-  .chart-legend {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3em;
-  }
-
-  .chart-legend-swatch {
-    display: inline-block;
-    width: 0.6em;
-    height: 0.6em;
-    border-radius: 999px;
-  }
-
-  .chart-line {
-    fill: none;
-    stroke-width: 1.5;
-  }
-
-  .chart-series-1 {
-    stroke: var(--color-s-done);
-    background: var(--color-s-done);
-  }
-
-  .chart-series-3 {
-    stroke: var(--color-s-failed);
-    background: var(--color-s-failed);
-  }
-
-  .chart-dot {
-    fill: var(--color-s-attention);
-    background: var(--color-s-attention);
-  }
-
   .line {
     --glyph: var(--color-s-queued);
     display: flex;
@@ -3510,93 +3468,161 @@ summary.prompt-bar:focus-visible {
     font-size: var(--text-sm);
   }
 
-  .limits {
-    display: grid;
-    gap: var(--space-3);
-    margin: 0;
-    padding: 14px var(--space-4);
-    border: 1px solid var(--color-border-soft);
-    border-radius: var(--radius-lg);
-    list-style: none;
+  .pulse-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
   }
 
-  .limit {
+  .pulse-head .pill-tabs {
+    margin-bottom: 0;
+    align-self: auto;
+  }
+
+  .pulse-grid {
     display: grid;
-    grid-template-columns: 140px minmax(0, 1fr) 44px 120px;
-    align-items: center;
-    gap: var(--space-3);
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .pulse-card {
+    padding: 22px 24px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+  }
+
+  .pulse-card > h2 {
+    margin: 0;
+  }
+
+  .pulse-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+  }
+
+  .pulse-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .pulse-tile:hover {
+    background: var(--color-surface-2);
+  }
+
+  .pulse-tile[aria-current="page"] {
+    border-color: var(--color-border);
+    background: var(--color-viz-soft);
+  }
+
+  .pulse-tile-label {
+    color: var(--color-muted);
     font-size: var(--text-sm);
   }
 
-  .limit b {
-    font-weight: var(--font-weight-medium);
+  .pulse-tile-figure {
+    font-size: 24px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
-    text-align: right;
+    letter-spacing: -0.02em;
   }
 
-  .limit .meter {
+  .pulse-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .pulse-chip[data-tone="good"] {
+    background: var(--color-s-done-soft);
+    color: color-mix(in oklab, var(--color-s-done), black 28%);
+  }
+
+  .pulse-chip[data-tone="bad"] {
+    background: var(--color-s-failed-soft);
+    color: color-mix(in oklab, var(--color-s-failed), black 20%);
+  }
+
+  .pulse-spark {
+    display: block;
+    flex: none;
+    overflow: visible;
+  }
+
+  .pulse-spark-line {
+    fill: none;
+    stroke: var(--color-viz);
+    stroke-width: 1.5;
+  }
+
+  .pulse-spark-top,
+  .pulse-spark-bottom {
+    stop-color: var(--color-viz);
+  }
+
+  .pulse-spark-top {
+    stop-opacity: 0.25;
+  }
+
+  .pulse-spark-bottom {
+    stop-opacity: 0;
+  }
+
+  .pulse-limits {
+    display: grid;
+    gap: var(--space-4);
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pulse-limit {
+    display: grid;
+    gap: 6px;
+    font-size: var(--text-sm);
+  }
+
+  .pulse-limit .meter {
     width: auto;
     height: 6px;
   }
 
-  .chart {
-    position: relative;
-    width: 100%;
-    max-width: calc(var(--w) * 1px);
+  @media (max-width: 1023px) {
+    .pulse-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
-  .chart svg {
-    display: block;
-    width: 100%;
-    height: auto;
-    overflow: visible;
-  }
+  @media (max-width: 560px) {
+    .pulse-card {
+      padding: 18px 16px;
+    }
 
-  .chart-pt {
-    position: absolute;
-    left: calc(var(--x) / var(--w) * 100%);
-    top: calc(var(--y) / var(--h) * 100%);
-    width: 8px;
-    height: 8px;
-    translate: -50% -50%;
-    border: 2px solid var(--color-surface);
-    border-radius: 50%;
-    background: var(--color-fg-2);
-    box-sizing: content-box;
-  }
+    .pulse-tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 
-  .chart-pt::before {
-    content: "";
-    position: absolute;
-    inset: -8px;
-  }
-
-  .chart-pt:hover,
-  .chart-pt:focus-visible {
-    z-index: 5;
-    background: var(--color-accent);
-  }
-
-  .chart-tip {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    display: none;
-    width: max-content;
-    max-width: 260px;
-    translate: -50% 0;
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-float);
-    color: var(--color-fg);
-    font-size: var(--text-xs);
-    pointer-events: none;
-  }
-
-  .chart-pt:hover .chart-tip,
-  .chart-pt:focus-visible .chart-tip {
-    display: block;
+    .pulse-tile-figure {
+      font-size: 20px;
+    }
   }
 
   .repo-group {
@@ -3735,24 +3761,6 @@ summary.prompt-bar:focus-visible {
 }
 
 @media (max-width: 759px) {
-  .limit {
-    grid-template-columns: minmax(0, 1fr) 44px;
-  }
-
-  .limit .meter {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .limit b {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .limit > :last-child {
-    grid-column: 1 / -1;
-  }
-
   .repo-row {
     grid-template-columns: 14px minmax(0, 1fr) 14px;
     min-height: 60px;

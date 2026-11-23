@@ -9,6 +9,5 @@ var (
 	BuildFloor      = buildFloor
 	BuildTree       = buildTree
 	HunkGaps        = hunkGaps
-
-	BuildWorkflowSeries = buildWorkflowSeries
+	BuildTiles      = buildTiles
 )
