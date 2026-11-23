@@ -19,6 +19,7 @@ const (
 )
 
 type InsightsSettings struct {
+	Stages       []string `toml:"stages"`
 	RollupChecks []string `toml:"rollup_checks"`
 }
 

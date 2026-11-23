@@ -31,6 +31,7 @@ type RunFact struct {
 	Tokens             int64
 	Tools              map[string]int
 	Outcome            string
+	Phases             []SkillLoad
 }
 
 type TicketFacts struct {
@@ -60,6 +61,7 @@ type TicketReport struct {
 	Cumulative    []SpendStep
 	Tools         []ToolCount
 	Runs          []RunFact
+	Stages        []StageShare
 }
 
 func DeriveTicket(f TicketFacts, fit spend.Result) TicketReport {
@@ -99,6 +101,11 @@ func DeriveTicket(f TicketFacts, fit spend.Result) TicketReport {
 		total += run.Tokens
 		r.Cumulative = append(r.Cumulative, SpendStep{At: run.EndedAt, Tokens: total})
 	}
+
+	loads, followUp, resolve, recorded := StageFacts(f.Runs)
+	r.Stages = ticketStages(TicketFact{
+		Tokens: r.Tokens, Recorded: recorded, Loads: loads, FollowUpTokens: followUp, ResolveTokens: resolve,
+	})
 
 	for name, n := range tools {
 		r.Tools = append(r.Tools, ToolCount{Name: name, Calls: n})

@@ -88,10 +88,10 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	storetest.FeatureTicket(t, store, "sandbox://CC-2", "cc-other", "feat-a")
 
-	run := func(url string, started, ended time.Time, usd float64, m agentlog.RunMetrics) {
+	runKind := func(kind plan.RunKind, url string, started, ended time.Time, usd float64, m agentlog.RunMetrics) {
 		t.Helper()
 		id := storetest.Run(t, store, storetest.RunOpts{
-			TicketURL: url, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "h" + ended.String(), StartedAt: started,
+			TicketURL: url, Kind: kind, BaselineSHA: "deadbeef", PromptHash: "h" + ended.String(), StartedAt: started,
 		})
 		err := store.RecordDisposition(t.Context(), storepkg.Disposition{
 			RunID: plan.RunID(id), Outcome: plan.OutcomePush, Cost: option.Some(usd),
@@ -101,11 +101,23 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 			t.Fatalf("RecordDisposition: %v", err)
 		}
 	}
+	run := func(url string, started, ended time.Time, usd float64, m agentlog.RunMetrics) {
+		t.Helper()
+		runKind(plan.RunKindAgent, url, started, ended, usd, m)
+	}
 	run("sandbox://CC-1", first.Add(time.Hour), mergedAt.Add(-3*time.Hour), 1, agentlog.RunMetrics{
 		Input: 10, CacheWrite: 20, CacheRead: 1000, Output: 30, Tools: map[string]int{"Bash": 2, "Read": 3},
+		Phases: []agentlog.PhaseTokens{{Skill: "", Tokens: 10}, {Skill: "tdd", Tokens: 50}},
 	})
 	run("sandbox://CC-1", first, mergedAt.Add(-2*time.Hour), 2, agentlog.RunMetrics{
 		Input: 1, Output: 1, Tools: map[string]int{"Bash": 1},
+		Phases: []agentlog.PhaseTokens{{Skill: "review", Tokens: 2}},
+	})
+	runKind(plan.RunKindFollowUp, "sandbox://CC-1", first, mergedAt.Add(-time.Hour), 0, agentlog.RunMetrics{
+		Input: 5, Phases: []agentlog.PhaseTokens{{Tokens: 5}},
+	})
+	runKind(plan.RunKindResolve, "sandbox://CC-1", first, mergedAt.Add(-30*time.Minute), 0, agentlog.RunMetrics{
+		Input: 3, Phases: []agentlog.PhaseTokens{{Tokens: 3}},
 	})
 	run("sandbox://CC-1", first, mergedAt.Add(time.Hour), 9, agentlog.RunMetrics{Input: 999})
 	storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
@@ -133,6 +145,9 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	event(storepkg.EventRefreshed, mergedAt.Add(time.Hour), "after merge")
 	run("sandbox://CC-2", first, mergedAt.Add(-time.Hour), 1, agentlog.RunMetrics{})
 	storetest.Merged(t, store, "sandbox://CC-2", mergedAt)
+	storetest.FeatureTicket(t, store, "sandbox://CC-3", "cc-sandbox", "feat-a")
+	run("sandbox://CC-3", first, mergedAt.Add(-time.Hour), 1, agentlog.RunMetrics{Input: 4})
+	storetest.Merged(t, store, "sandbox://CC-3", mergedAt)
 
 	q := june10
 	q.Repo = "cc-sandbox"
@@ -140,15 +155,23 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MergedTicketFacts: %v", err)
 	}
-	want := []insight.TicketFact{{
-		Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Feature: "feat-a", FirstRunAt: first, MergedAt: mergedAt,
-		WeightUSD: 3, Tokens: 62, ToolCalls: 6,
-		Pushes: []insight.PushFact{
-			{At: mergedAt.Add(-4 * time.Hour), Verdict: insight.PushRed},
-			{At: mergedAt.Add(-3 * time.Hour), Verdict: insight.PushGreen},
+	want := []insight.TicketFact{
+		{
+			Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Feature: "feat-a", FirstRunAt: first, MergedAt: mergedAt,
+			WeightUSD: 3, Tokens: 70, ToolCalls: 6, Recorded: true,
+			Loads:          []insight.SkillLoad{{Skill: "tdd", Order: 0, Tokens: 50}, {Skill: "review", Order: 1, Tokens: 2}},
+			FollowUpTokens: 5, ResolveTokens: 3,
+			Pushes: []insight.PushFact{
+				{At: mergedAt.Add(-4 * time.Hour), Verdict: insight.PushRed},
+				{At: mergedAt.Add(-3 * time.Hour), Verdict: insight.PushGreen},
+			},
+			Refreshes: 4, Conflicted: 1,
 		},
-		Refreshes: 4, Conflicted: 1,
-	}}
+		{
+			Ticket: "sandbox://CC-3", Repo: "cc-sandbox", Feature: "feat-a", FirstRunAt: first, MergedAt: mergedAt,
+			WeightUSD: 1, Tokens: 4,
+		},
+	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(insight.TicketFact{}, "Title")); diff != "" {
 		t.Errorf("MergedTicketFacts(cc-sandbox, june 10) mismatch (-want +got):\n%s", diff)
 	}

@@ -74,13 +74,16 @@ const MinChangeTickets = 10
 const rollingTickets = 10
 
 type TicketFact struct {
-	Ticket, Title, Repo, Feature string
-	FirstRunAt, MergedAt         time.Time
-	WeightUSD                    float64
-	Tokens                       int64
-	ToolCalls                    int
-	Pushes                       []PushFact
-	Refreshes, Conflicted        int
+	Ticket, Title, Repo, Feature  string
+	FirstRunAt, MergedAt          time.Time
+	WeightUSD                     float64
+	Tokens                        int64
+	ToolCalls                     int
+	Pushes                        []PushFact
+	Refreshes, Conflicted         int
+	Recorded                      bool
+	Loads                         []SkillLoad
+	FollowUpTokens, ResolveTokens int64
 }
 
 type Change struct {

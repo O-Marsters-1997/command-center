@@ -43,6 +43,7 @@ verify_command = ["go", "vet"]
 raise          = "manual"
 
 [insights]
+stages        = ["grill", "tdd"]
 rollup_checks = ["gate", "*-all"]
 
 [checks]
@@ -56,8 +57,10 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 			Settings: config.RepoSettings{
 				Tracker: "linear", Stacking: true, CompatCheck: "compat", MergifySHA: "sha256:1",
 				Deny: []string{"go.mod"}, VerifyCommand: []string{"go", "vet"},
-				Raise:    plan.RaiseManual,
-				Insights: plan.InsightsSettings{RollupChecks: []string{"gate", "*-all"}},
+				Raise: plan.RaiseManual,
+				Insights: plan.InsightsSettings{
+					Stages: []string{"grill", "tdd"}, RollupChecks: []string{"gate", "*-all"},
+				},
 				Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 					{Success: "Lint"},
 					{AnyOf: []verdict.Predicate{{Success: "A"}, {Author: "bot"}}},
