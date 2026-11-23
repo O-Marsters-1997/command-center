@@ -2,11 +2,14 @@ package loop_test
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
@@ -14,8 +17,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner/runnertest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
@@ -399,6 +404,77 @@ func TestRefresh(t *testing.T) {
 		}
 		if len(pending) != 0 {
 			t.Errorf("pending refresh intents = %+v, want none: consumed", pending)
+		}
+	})
+
+	t.Run("a conflicted refresh writes one event and a row per unmerged path", func(t *testing.T) {
+		t.Parallel()
+		root, repoPath := repoWithOrigin(t)
+		dsn := cctest.DSN(t)
+		store, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(2), storepkg.SkipMigrate())
+		if err != nil {
+			t.Fatalf("OpenStore: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := store.Close(); err != nil {
+				t.Errorf("close store: %v", err)
+			}
+		})
+		at := testAt
+
+		f := newStackedFixture(t, repoPath, store, at)
+		parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
+
+		obs := baseObservation(f, parentTip1)
+		obs.BranchTips[branchRef("repo", "child")] = plan.SHA(gittest.Run(t, repoPath, "rev-parse", "refs/heads/child"))
+		observe := func(ctx context.Context) (plan.Observation, error) {
+			mid, err := git.MidMerge(ctx, f.childWorktree)
+			if err != nil {
+				return plan.Observation{}, err
+			}
+			obs.MidMerge[branchRef("repo", "child")] = mid
+			return obs, nil
+		}
+
+		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+		lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+		runOnce(t, lp)
+
+		if got := len(storetest.Events(t, store, storepkg.EventRefreshConflicted)); got != 1 {
+			t.Errorf("refresh_conflicted events = %d, want 1", got)
+		}
+		db, err := sql.Open("pgx", dsn)
+		if err != nil {
+			t.Fatalf("sql.Open(pgx): %v", err)
+		}
+		t.Cleanup(func() {
+			if err := db.Close(); err != nil {
+				t.Errorf("close raw database: %v", err)
+			}
+		})
+		rows, err := db.QueryContext(t.Context(), `SELECT path, generated FROM conflict_paths ORDER BY path`)
+		if err != nil {
+			t.Fatalf("select conflict_paths: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := rows.Close(); err != nil {
+				t.Errorf("close conflict_paths rows: %v", err)
+			}
+		})
+		var got []insight.ConflictPath
+		for rows.Next() {
+			var p insight.ConflictPath
+			if err := rows.Scan(&p.Path, &p.Generated); err != nil {
+				t.Fatalf("scan conflict_paths: %v", err)
+			}
+			got = append(got, p)
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("read conflict_paths: %v", err)
+		}
+		want := []insight.ConflictPath{{Path: "shared.txt"}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("conflict_paths mismatch (-want +got):\n%s", diff)
 		}
 	})
 

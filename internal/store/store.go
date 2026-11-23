@@ -407,6 +407,17 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 	return matchedRow(n, err, fmt.Sprintf("repair blocked_by of %d tickets", len(updates)))
 }
 
+func (s *Store) MergedWithdrawnTicket(ctx context.Context, url string) (Ticket, error) {
+	row, err := s.q.GetMergedWithdrawnTicket(ctx, url)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Ticket{}, fmt.Errorf("merged withdrawn ticket %s: %w", url, ErrNotFound)
+	}
+	if err != nil {
+		return Ticket{}, fmt.Errorf("select merged withdrawn ticket %s: %w", url, err)
+	}
+	return Ticket{URL: row.URL, Repo: row.Repo, Branch: row.Branch, Title: row.Title, Feature: row.Feature}, nil
+}
+
 // WithdrawTicket retains historical references and prunes merged blockers from other tickets.
 func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) ([]plan.RunID, error) {
 	var runs []plan.RunID

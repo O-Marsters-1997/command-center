@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -37,6 +39,9 @@ type SessionPage struct {
 	RawPath        string
 	ChangesPath    string
 	ActionsPath    string
+	InsightsPath   string
+	InsightsOn     bool
+	Insights       SessionInsights
 	Actions        []VerbButton
 	Callout        bool
 	PRURL          string
@@ -220,7 +225,7 @@ type RawLog struct {
 func (r *Reader) Session(
 	ctx context.Context, now time.Time, ref SessionRef, raw option.Option[RawFilter],
 ) (SessionPage, error) {
-	board, row, err := r.sessionRow(ctx, now, ref)
+	board, row, err := r.readSessionRow(ctx, now, ref)
 	if err != nil {
 		return SessionPage{}, err
 	}
@@ -334,12 +339,140 @@ func (r *Reader) Session(
 		TranscriptPath: self,
 		RawPath:        self + "?log=raw",
 		ChangesPath:    self + "/changes",
+		InsightsPath:   self + "?log=insights",
 
 		PendingMessages: pendingMessages,
 		Model:           model,
 		Models:          models,
 		Efforts:         plan.AllEfforts(),
 	}, nil
+}
+
+type SessionInsights struct {
+	Report   insight.TicketReport
+	Figures  []Figure
+	ChartSrc string
+}
+
+type Figure struct{ Label, Value string }
+
+type TicketChartWire struct {
+	Steps []struct {
+		At     string `json:"at"`
+		Tokens int64  `json:"tokens"`
+	} `json:"steps"`
+}
+
+type RunRow struct {
+	ID                                     int64
+	Step, Start, Duration, Tokens, Outcome string
+	ToolCalls                              int
+	Mix                                    string
+}
+
+type ToolBar struct {
+	Name  string
+	Calls int
+	Pct   int
+}
+
+func (r *Reader) SessionInsights(ctx context.Context, now time.Time, ref SessionRef) (SessionInsights, error) {
+	board, row, err := r.readSessionRow(ctx, now, ref)
+	if err != nil {
+		return SessionInsights{}, err
+	}
+	facts, err := r.store.TicketInsightFacts(ctx, row.URL)
+	if err != nil {
+		return SessionInsights{}, fmt.Errorf("load ticket insight facts: %w", err)
+	}
+	report := insight.DeriveTicket(facts, board.split[agentlog.SevenDay].Fit)
+	return SessionInsights{Report: report, Figures: ticketFigures(report), ChartSrc: ref.Path() + "/insights/chart"}, nil
+}
+
+func (r *Reader) TicketChart(ctx context.Context, ref SessionRef) (TicketChartWire, error) {
+	_, row, err := r.readSessionRow(ctx, time.Time{}, ref)
+	if err != nil {
+		return TicketChartWire{}, err
+	}
+	facts, err := r.store.TicketInsightFacts(ctx, row.URL)
+	if err != nil {
+		return TicketChartWire{}, fmt.Errorf("load ticket insight facts: %w", err)
+	}
+	report := insight.DeriveTicket(facts, spend.Result{})
+	var wire TicketChartWire
+	wire.Steps = slices.Grow(wire.Steps, len(report.Cumulative))
+	for _, step := range report.Cumulative {
+		wire.Steps = append(wire.Steps, struct {
+			At     string `json:"at"`
+			Tokens int64  `json:"tokens"`
+		}{At: step.At.UTC().Format(time.RFC3339), Tokens: step.Tokens})
+	}
+	return wire, nil
+}
+
+func ticketFigures(r insight.TicketReport) []Figure {
+	suffix := ""
+	if !r.Merged {
+		suffix = " so far"
+	}
+	pct := "Calibrating"
+	if v, ok := r.PctWeek.Get(); ok {
+		pct = formatMetric(insight.MetricPct, v)
+	}
+	launch, pushes := "—", "—"
+	if d, ok := r.LaunchToMerge.Get(); ok {
+		launch = formatMetric(insight.MetricWall, d.Seconds())
+	}
+	if n, ok := r.PushesToGreen.Get(); ok {
+		pushes = strconv.Itoa(n)
+	}
+	return []Figure{
+		{"Launch to merge", launch},
+		{"Agents working" + suffix, formatMetric(insight.MetricWall, r.AgentsWorking.Seconds())},
+		{"Tokens" + suffix, formatMetric(insight.MetricTokens, float64(r.Tokens))},
+		{"% of week" + suffix, pct},
+		{"Tool calls" + suffix, strconv.Itoa(r.ToolCalls)},
+		{"Pushes to green" + suffix, pushes},
+	}
+}
+
+func (s SessionInsights) ToolBars() []ToolBar {
+	if len(s.Report.Tools) == 0 || s.Report.Tools[0].Calls == 0 {
+		return nil
+	}
+	bars := make([]ToolBar, len(s.Report.Tools))
+	for i, t := range s.Report.Tools {
+		bars[i] = ToolBar{Name: t.Name, Calls: t.Calls, Pct: t.Calls * 100 / s.Report.Tools[0].Calls}
+	}
+	return bars
+}
+
+func (s SessionInsights) StageRows() []StageRow { return stageRows(s.Report.Stages) }
+
+func (s SessionInsights) RunRows() []RunRow {
+	rows := make([]RunRow, len(s.Report.Runs))
+	for i, run := range s.Report.Runs {
+		row := RunRow{
+			ID: run.ID, Step: cmp.Or(run.Step, run.Kind), Start: "—", Duration: "—",
+			Tokens:  formatMetric(insight.MetricTokens, float64(run.Tokens)),
+			Outcome: cmp.Or(run.Outcome, "running"),
+		}
+		if !run.StartedAt.IsZero() {
+			row.Start = run.StartedAt.UTC().Format("2 Jan 15:04")
+			if !run.EndedAt.IsZero() {
+				row.Duration = formatMetric(insight.MetricWall, run.EndedAt.Sub(run.StartedAt).Seconds())
+			}
+		}
+		names := slices.Sorted(maps.Keys(run.Tools))
+		parts := make([]string, len(names))
+		for j, name := range names {
+			parts[j] = fmt.Sprintf("%s %d", name, run.Tools[name])
+			row.ToolCalls += run.Tools[name]
+		}
+		row.Mix = strings.Join(parts, ", ")
+		rows[i] = row
+	}
+	return rows
 }
 
 func buildTurns(row Row, runs []store.SessionRun) []Turn {

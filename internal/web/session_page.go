@@ -22,6 +22,12 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
+	if query.Get("log") == "insights" {
+		page.InsightsOn = true
+		if page.Insights, err = s.view.SessionInsights(r.Context(), s.clock.Now(), ref); err != nil {
+			return fmt.Errorf("load session insights: %w", err)
+		}
+	}
 	page.Sidebar = sidebarFrom(r)
 	return renderHTML(w, "session.tmpl", page)
 }

@@ -23,7 +23,8 @@ One binary, `cmd/cc`, wired together in `internal/app`.
 
 - `internal/plan`: pure decisions. **Only `plan` derives**
   ([ADR 13](docs/adr/0013-only-plan-derives.md)) and it imports only `plan/spend`, `plan/verdict`
-  and `plan/option`. `plan/agentlog` parses agent transcripts.
+  and `plan/option`. `plan/agentlog` parses agent transcripts; `plan/insight` is a leaf deriving the
+  insights page from merged-ticket facts.
 - `internal/loop`: the tick loop. **The loop is the only writer of reconciled state**
   ([ADR 9](docs/adr/0009-the-loop-owns-reconciled-state.md)); verbs queue intents for it.
 - `internal/store`: Postgres, and the only importer of the generated `internal/store/ccdb`
@@ -68,7 +69,8 @@ The stack is unusual and the wrong assumption is expensive.
 
 **Do not load `tailwind-shadcn`**: it mistakes `solid-js` for a shadcn-solid project. Add no
 component library, CLI scaffolding or new package to `web/`, test tooling included: island logic
-lives in pure `.ts` under `bun test`.
+lives in pure `.ts` under `bun test`. The one exception is `@tanstack/charts`, the only approved
+chart package, used by `web/src/insights-chart.tsx` (`cc-insights-chart`).
 
 - Utilities go in the template, for layout and spacing.
 - The state grammar stays named classes, because Go composes them at render time and Tailwind's

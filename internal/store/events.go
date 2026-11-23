@@ -1,8 +1,12 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"slices"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 type EventKind string
@@ -55,6 +59,37 @@ var allEventKinds = []EventKind{
 	EventMergeAbortFailed, EventFollowUpRefused, EventDraftReady, EventDraftReadyFailed, EventLaunch,
 	EventResolveStarted, EventResolveRefused, EventRaiseRefused, EventCILogUnavailable,
 	EventParked, EventStageEntered,
+}
+
+func (s *Store) RecordRefreshConflict(ctx context.Context, ticket, detail string, paths []insight.ConflictPath) error {
+	type row struct {
+		Path      string `json:"path"`
+		Generated bool   `json:"generated"`
+	}
+	rows := make([]row, len(paths))
+	for i, p := range paths {
+		rows[i] = row{Path: p.Path, Generated: p.Generated}
+	}
+	encoded, err := encodeJSON("conflict paths", rows)
+	if err != nil {
+		return fmt.Errorf("record %s for %s: %w", EventRefreshConflicted, ticket, err)
+	}
+	err = s.inTx(ctx, func(q *ccdb.Queries) error {
+		id, err := q.AppendEventReturningID(ctx, ccdb.AppendEventReturningIDParams{
+			TicketID: nullIfEmpty(ticket), Kind: string(EventRefreshConflicted), Detail: detail,
+		})
+		if err != nil {
+			return fmt.Errorf("append event: %w", err)
+		}
+		if err := q.InsertConflictPaths(ctx, ccdb.InsertConflictPathsParams{EventID: id, Paths: encoded}); err != nil {
+			return fmt.Errorf("insert conflict paths: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("record %s for %s: %w", EventRefreshConflicted, ticket, err)
+	}
+	return nil
 }
 
 func AllEventKinds() []EventKind { return slices.Clone(allEventKinds) }

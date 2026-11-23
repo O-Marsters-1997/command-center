@@ -276,17 +276,17 @@ func TestParse(t *testing.T) {
 		}
 	})
 
-	t.Run("keeps a subagent's skill and turns out of the main run", func(t *testing.T) {
+	t.Run("starts a phase for a subagent's skill but counts no turn for it", func(t *testing.T) {
 		t.Parallel()
 		run := parseString(t, `{"type":"assistant","request_id":"r1","message":{"content":[`+
 			`{"type":"tool_use","id":"task","name":"Task","input":{"prompt":"go"}}]}}
 {"type":"assistant","request_id":"r2","parent_tool_use_id":"task","message":{"content":[`+
 			`{"type":"tool_use","id":"s","name":"Skill","input":{"skill":"tdd"}}]}}
 `)
-		want := []agentlog.Phase{{Turns: 1, Events: []agentlog.Event{
-			{Kind: agentlog.Tool, Tool: "Task", Detail: "go", CallID: "task"},
-			{Kind: agentlog.Tool, Tool: "Skill", Detail: "tdd", CallID: "s"},
-		}}}
+		want := []agentlog.Phase{
+			{Turns: 1, Events: []agentlog.Event{{Kind: agentlog.Tool, Tool: "Task", Detail: "go", CallID: "task"}}},
+			{Skill: "tdd"},
+		}
 		if diff := cmp.Diff(want, run.Phases, cmpopts.IgnoreFields(agentlog.Phase{}, "Spend")); diff != "" {
 			t.Errorf("Parse() phases mismatch (-want +got):\n%s", diff)
 		}

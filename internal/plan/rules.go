@@ -18,6 +18,13 @@ const (
 	RaiseManual RaiseMode = "manual"
 )
 
+type InsightsSettings struct {
+	Stages       []string `toml:"stages"`
+	RollupChecks []string `toml:"rollup_checks"`
+}
+
+var DefaultRollupChecks = []string{"*-status-check"}
+
 type RepoSettings struct {
 	Tracker       string            `toml:"tracker"`
 	Stacking      bool              `toml:"stacking"`
@@ -28,6 +35,7 @@ type RepoSettings struct {
 	Checks        verdict.Predicate `toml:"checks"`
 	VerifyCommand []string          `toml:"verify_command"`
 	Raise         RaiseMode         `toml:"raise"`
+	Insights      InsightsSettings  `toml:"insights"`
 }
 
 type Rules struct {

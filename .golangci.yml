@@ -76,6 +76,21 @@ linters:
               desc: verdict derives from facts without SQL
             - pkg: net/http
               desc: verdict derives from facts without HTTP
+        insight-pure:
+          files: ["**/internal/plan/insight/**", "!$test"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/plan/insight
+            - github.com/O-Marsters-1997/command-center/internal/plan/spend
+            - github.com/O-Marsters-1997/command-center/internal/plan/option
+          deny:
+            - pkg: database/sql
+              desc: insight derives from facts without SQL
+            - pkg: os/exec
+              desc: insight derives from facts without shelling out
+            - pkg: net/http
+              desc: insight derives from facts without HTTP
         plan-pure:
           files: ["**/internal/plan/*.go", "!$test"]
           list-mode: strict

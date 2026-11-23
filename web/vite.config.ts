@@ -8,7 +8,7 @@ export default defineConfig({
     emptyOutDir: false,
     minify: "esbuild",
     lib: {
-      entry: { graph: "src/graph.tsx", "launch-modal": "src/launch-modal.tsx", keys: "src/keys.ts", glue: "src/glue.ts", changes: "src/changes.ts" },
+      entry: { graph: "src/graph.tsx", "launch-modal": "src/launch-modal.tsx", "insights-chart": "src/insights-chart.tsx", keys: "src/keys.ts", glue: "src/glue.ts", changes: "src/changes.ts" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },

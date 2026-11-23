@@ -111,6 +111,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /activity/tray", s.handle(s.handleActivityTray))
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
+	mux.Handle("GET /s/{owner}/{name}/{n}/insights/chart", s.handle(s.handleTicketChart))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes/expand", s.handle(s.handleExpand))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes/comment", s.handle(s.handleCommentForm))
@@ -129,6 +130,8 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /s/{owner}/{name}/{n}/actions", s.handle(s.handleSessionActions))
 	mux.Handle("GET /activity", s.handle(s.handleActivity))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
+	mux.Handle("GET /insights/chart", s.handle(s.handleInsightsChart))
+	mux.Handle("GET /insights/rework", s.handle(s.handleInsightsRework))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", s.handle(s.handleLog))
@@ -392,6 +395,30 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("load board: %w", err)
 	}
 	return writeJSON(w, view.Graph(board.Groups))
+}
+
+func (s *Server) handleInsightsChart(w http.ResponseWriter, r *http.Request) error {
+	wire, err := s.view.InsightsChart(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
+	if err != nil {
+		return fmt.Errorf("load insights chart: %w", err)
+	}
+	return writeJSON(w, wire)
+}
+
+func (s *Server) handleInsightsRework(w http.ResponseWriter, r *http.Request) error {
+	wire, err := s.view.InsightsRework(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
+	if err != nil {
+		return fmt.Errorf("load insights rework: %w", err)
+	}
+	return writeJSON(w, wire)
+}
+
+func (s *Server) handleTicketChart(w http.ResponseWriter, r *http.Request) error {
+	wire, err := s.view.TicketChart(r.Context(), sessionRef(r))
+	if err != nil {
+		return fmt.Errorf("load ticket chart: %w", err)
+	}
+	return writeJSON(w, wire)
 }
 
 func writeJSON(w http.ResponseWriter, v any) error {
@@ -912,7 +939,7 @@ func randomGroup() (string, error) {
 }
 
 func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) error {
-	data, err := s.view.InsightsPage(r.Context(), s.now(), r.URL.Query())
+	data, err := s.view.InsightsPage(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
 	if err != nil {
 		return fmt.Errorf("load insights page: %w", err)
 	}

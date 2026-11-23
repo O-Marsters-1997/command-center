@@ -35,13 +35,15 @@ spend is re-read from their logs per render.
 
 **A ticket's spend is every run it needed, every kind, until its PR merged.** The cutoff is
 `pr_merged.at` per ticket; `withdrawn_at` cannot stand in for it, since removing a worktree withdraws
-merged tickets too. `MergedTicketSpend` returns one row per merged ticket, and `WithdrawnTicketWaste`
-sums disposed runs of tickets withdrawn with no `pr_merged`, reported separately and never averaged
-in.
+merged tickets too. `MergedTicketFacts` returns one row per merged ticket. Tickets withdrawn with no
+`pr_merged` are not counted: Insights shows no waste line.
 
 Insights convert weights with one trailing seven-day factor per request (`spend.PctWeek`). Below
-`spend.MinSamples` every value is 0, the masthead's `Calibrating`. Merged tickets plot by merge date as
-a dot each with a rolling median over the trailing ten, and waste as a dashed line.
+`spend.MinSamples` every value is 0, the masthead's `Calibrating`, and the % of week tile reads
+"Calibrating (n intervals)". The Pulse page shows four tiles (tokens, % of week, wall clock, tool
+calls), each a median over the range with a change chip against the prior window, and plots merged
+tickets by merge date as a dot each with a rolling median over the trailing ten. There is no
+workflow table.
 
 ## Consequences
 

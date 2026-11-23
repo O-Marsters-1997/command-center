@@ -33,6 +33,33 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error 
 	return err
 }
 
+const getMergedWithdrawnTicket = `-- name: GetMergedWithdrawnTicket :one
+SELECT t.url, t.repo, t.branch, t.title, t.feature FROM tickets t
+WHERE t.url = $1 AND t.withdrawn_at IS NOT NULL
+  AND EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged')
+`
+
+type GetMergedWithdrawnTicketRow struct {
+	URL     string
+	Repo    string
+	Branch  string
+	Title   string
+	Feature string
+}
+
+func (q *Queries) GetMergedWithdrawnTicket(ctx context.Context, url string) (GetMergedWithdrawnTicketRow, error) {
+	row := q.db.QueryRowContext(ctx, getMergedWithdrawnTicket, url)
+	var i GetMergedWithdrawnTicketRow
+	err := row.Scan(
+		&i.URL,
+		&i.Repo,
+		&i.Branch,
+		&i.Title,
+		&i.Feature,
+	)
+	return i, err
+}
+
 const getMeta = `-- name: GetMeta :one
 SELECT value FROM meta WHERE key = $1
 `

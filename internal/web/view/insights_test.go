@@ -1,196 +1,111 @@
 package view_test
 
 import (
+	"net/url"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
+	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-func TestNewInsightsPage(t *testing.T) {
+func TestParseInsightsParams(t *testing.T) {
 	t.Parallel()
 
-	t.Run("no points draws nothing", func(t *testing.T) {
+	t.Run("an empty query takes the defaults", func(t *testing.T) {
 		t.Parallel()
-		page := view.NewInsightsPage(view.Chrome{}, view.InsightsResponse{WastePctWeek: 3}, testNow)
-		if diff := cmp.Diff(view.InsightsChart{}, page.Chart); diff != "" {
-			t.Errorf("NewInsightsPage(no points).Chart mismatch (-want +got):\n%s", diff)
+		got := view.ParseInsightsParams(url.Values{})
+		if got.Range != insight.Range30d || got.Metric != insight.MetricTokens || got.View != insight.ViewTicket {
+			t.Errorf("ParseInsightsParams({}) = %v %v %v, want 30d tokens ticket", got.Range, got.Metric, got.View)
 		}
 	})
 
-	t.Run("chart ticks, dots and waste share one scale", func(t *testing.T) {
+	t.Run("unknown values fall back", func(t *testing.T) {
 		t.Parallel()
-		resp := view.InsightsResponse{
-			Points:       []view.InsightsPoint{{Ticket: "A", PctWeek: 9}, {Ticket: "B", PctWeek: 2}},
-			WastePctWeek: 4,
-		}
-		chart := view.NewInsightsPage(view.Chrome{}, resp, testNow).Chart
-
-		var labels []string
-		for _, tick := range chart.Ticks {
-			labels = append(labels, tick.Label)
-		}
-		if diff := cmp.Diff([]string{"0%", "5%", "10%"}, labels); diff != "" {
-			t.Errorf("NewInsightsPage() tick labels mismatch (-want +got):\n%s", diff)
-		}
-		if got, want := chart.WasteY, 123.2; !cmp.Equal(got, want, cmpopts.EquateApprox(0, 1e-9)) || !chart.HasWaste {
-			t.Errorf("NewInsightsPage() waste = {HasWaste: %v, WasteY: %v}, want {true %v}", chart.HasWaste, got, want)
-		}
-		if chart.Dots[0].Y >= chart.Dots[1].Y {
-			t.Errorf("NewInsightsPage() dot Y = %v, %v, want the 9%% point above the 2%% point",
-				chart.Dots[0].Y, chart.Dots[1].Y)
+		got := view.ParseInsightsParams(url.Values{"range": {"1y"}, "metric": {"vibes"}, "view": {"pie"}})
+		if got.Range != insight.Range30d || got.Metric != insight.MetricTokens || got.View != insight.ViewTicket {
+			t.Errorf("ParseInsightsParams(unknown) = %v %v %v, want the defaults", got.Range, got.Metric, got.View)
 		}
 	})
 
-	t.Run("all-zero points still draw a zero tick", func(t *testing.T) {
+	t.Run("a path keeps every choice that is not a default", func(t *testing.T) {
 		t.Parallel()
-		resp := view.InsightsResponse{Points: []view.InsightsPoint{{Ticket: "A"}}}
-		chart := view.NewInsightsPage(view.Chrome{}, resp, testNow).Chart
-		if len(chart.Ticks) != 1 || chart.Ticks[0].Label != "0%" {
-			t.Errorf("NewInsightsPage(zero) ticks = %+v, want one 0%% tick", chart.Ticks)
+		q := url.Values{"range": {"7d"}, "metric": {"wall"}, "view": {"week"}, "repo": {"cc"}, "feature": {"f"}}
+		p := view.ParseInsightsParams(q)
+		want := "/insights?feature=f&metric=wall&range=7d&repo=cc&view=week"
+		if got := p.ViewPath(insight.ViewWeek); got != want {
+			t.Errorf("ViewPath(week) = %q, want %q", got, want)
 		}
-	})
-
-	t.Run("the median trails the points", func(t *testing.T) {
-		t.Parallel()
-		resp := view.InsightsResponse{Points: []view.InsightsPoint{{PctWeek: 1}, {PctWeek: 5}, {PctWeek: 2}, {PctWeek: 8}}}
-		chart := view.NewInsightsPage(view.Chrome{}, resp, testNow).Chart
-		want := "M 135.50 176.00 L 302.50 128.00 L 469.50 152.00 L 636.50 116.00"
-		if chart.MedianPath != want {
-			t.Errorf("NewInsightsPage(1,5,2,8).Chart.MedianPath = %q, want %q (medians 1, 3, 2, 3.5)", chart.MedianPath, want)
-		}
-	})
-
-	t.Run("limits", func(t *testing.T) {
-		t.Parallel()
-		chrome := view.Chrome{Gauges: []view.Gauge{
-			{Label: "five-hour", Pct: 40, ResetsAt: testNow.Add(26*time.Hour + 10*time.Minute)},
-			{Label: "session", ResetsAt: testNow.Add(3*time.Hour + 5*time.Minute)},
-			{Label: "past", ResetsAt: testNow.Add(-time.Minute)},
-			{Label: "weekly"},
-		}}
-		got := view.NewInsightsPage(chrome, view.InsightsResponse{}, testNow).Limits
-		want := []view.Limit{
-			{Label: "five-hour", Pct: 40, ResetsIn: "in 1d 2h", ResetsAt: "2026-08-21T14:10:00Z"},
-			{Label: "session", ResetsIn: "in 3h 05m", ResetsAt: "2026-08-20T15:05:00Z"},
-			{Label: "past", ResetsIn: "resetting now", ResetsAt: "2026-08-20T11:59:00Z"},
-			{Label: "weekly"},
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("NewInsightsPage().Limits mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	t.Run("split rows sum to the total", func(t *testing.T) {
-		t.Parallel()
-		resp := view.InsightsResponse{Points: []view.InsightsPoint{
-			{PctWeek: 1.125, AgentPctWeek: 1, FollowUpPctWeek: 0.125},
-			{PctWeek: 2, AgentPctWeek: 1.75, FollowUpPctWeek: 0.25},
-		}}
-		got := view.NewInsightsPage(view.Chrome{}, resp, testNow).Split
-		want := view.SpendSplit{
-			Rows:  []view.SplitRow{{Kind: "agent", Pct: 2.75}, {Kind: "follow-up", Pct: 0.375}},
-			Total: 3.125,
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("NewInsightsPage().Split mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	t.Run("merged rows run newest first in the response's timezone", func(t *testing.T) {
-		t.Parallel()
-		paris, err := time.LoadLocation("Europe/Paris")
-		if err != nil {
-			t.Fatalf("LoadLocation(Europe/Paris): %v", err)
-		}
-		resp := view.InsightsResponse{
-			Loc: paris,
-			Points: []view.InsightsPoint{
-				{
-					Ticket: "A", Feature: "f", MergedAt: time.Date(2026, 8, 19, 23, 30, 0, 0, time.UTC),
-					PctWeek: 3, AgentPctWeek: 2, FollowUpPctWeek: 1,
-				},
-				{Ticket: "B", Title: "Bee", MergedAt: time.Date(2026, 8, 20, 8, 0, 0, 0, time.UTC), PctWeek: 1, AgentPctWeek: 1},
-			},
-		}
-		got := view.NewInsightsPage(view.Chrome{}, resp, testNow).Merged
-		want := []view.MergedRow{
-			{Name: "Bee", Day: "2026-08-20", Agent: 1, Total: 1},
-			{Name: "A", Feature: "f", Day: "2026-08-20", Agent: 2, FollowUp: 1, Total: 3},
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("NewInsightsPage().Merged mismatch (-want +got):\n%s", diff)
+		if got := p.Days(); got != 7 {
+			t.Errorf("Days() = %d, want 7", got)
 		}
 	})
 }
 
-func TestInsightsRange(t *testing.T) {
+func TestBuildTiles(t *testing.T) {
 	t.Parallel()
-
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		t.Fatalf("time.LoadLocation(Europe/Paris): %v", err)
+	p := view.ParseInsightsParams(url.Values{})
+	change := option.Some(insight.Change{Fraction: -0.125, Tone: insight.ToneGood})
+	cost := insight.Cost{
+		Selected: insight.MetricTokens,
+		Buckets:  []insight.Bucket{{N: 2}, {N: 0}, {N: 1}},
+		Tiles: []insight.Tile{
+			{Metric: insight.MetricTokens, Median: 12500, N: 12, Change: change, Spark: []float64{1, 3, 2}},
+			{Metric: insight.MetricWall, Median: 4500, N: 12, Spark: []float64{1, 3, 2}},
+			{Metric: insight.MetricTools, Median: 0, N: 0},
+		},
 	}
 
-	t.Run("since", func(t *testing.T) {
-		t.Parallel()
-		thirtyDaysBack := time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC)
-		tests := []struct {
-			name string
-			raw  string
-			want time.Time
-		}{
-			{name: "valid date", raw: "2026-08-01", want: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)},
-			{name: "absent", want: thirtyDaysBack},
-			{name: "unparseable", raw: "not-a-date", want: thirtyDaysBack},
-			{name: "wrong format", raw: "20/26/09", want: thirtyDaysBack},
-		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-				if since, _, _ := view.InsightsRange(testNow, tt.raw); !since.Equal(tt.want) {
-					t.Errorf("InsightsRange(%v, %q) since = %v, want %v", testNow, tt.raw, since, tt.want)
-				}
-			})
-		}
-	})
+	tiles := view.BuildTiles(p, cost, spend.Result{})
+	figures := make([]string, len(tiles))
+	chips := make([]string, len(tiles))
+	for i, tile := range tiles {
+		figures[i], chips[i] = tile.Figure, tile.Chip
+	}
+	if diff := cmp.Diff([]string{"12.5k", "1h 15m", "—"}, figures); diff != "" {
+		t.Errorf("BuildTiles() figures mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"↘ -12.5%", "n too small", ""}, chips); diff != "" {
+		t.Errorf("BuildTiles() chips mismatch (-want +got):\n%s", diff)
+	}
+	if tiles[0].Spark == "" {
+		t.Errorf("BuildTiles() tokens spark is empty, want a path over two populated buckets")
+	}
 
-	t.Run("until keeps the wall-clock date at UTC midnight", func(t *testing.T) {
-		t.Parallel()
-		now := time.Date(2026, 6, 15, 23, 30, 0, 0, paris)
-		want := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
-		if _, until, _ := view.InsightsRange(now, ""); !until.Equal(want) {
-			t.Errorf("InsightsRange(%v) until = %v, want %v", now, until, want)
-		}
-	})
+	cost.Buckets = []insight.Bucket{{N: 3}, {N: 0}, {N: 0}}
+	if got := view.BuildTiles(p, cost, spend.Result{})[0].Spark; got != "" {
+		t.Errorf("BuildTiles(one populated bucket) spark = %q, want it hidden", got)
+	}
 
-	t.Run("timezone", func(t *testing.T) {
-		t.Parallel()
-		tests := []struct {
-			loc  *time.Location
-			want string
-		}{
-			{loc: paris, want: "Europe/Paris"},
-			{loc: time.UTC, want: "UTC"},
-		}
-		for _, tt := range tests {
-			t.Run(tt.want, func(t *testing.T) {
-				t.Parallel()
-				if _, _, tz := view.InsightsRange(testNow.In(tt.loc), ""); tz != tt.want {
-					t.Errorf("InsightsRange(in %v) timezone = %q, want %q", tt.loc, tz, tt.want)
-				}
-			})
-		}
-	})
+	cost.Calibrating = true
+	cost.Tiles = []insight.Tile{{Metric: insight.MetricPct, Median: 0, N: 4}}
+	got := view.BuildTiles(p, cost, spend.Result{Samples: 3})[0].Figure
+	if want := "Calibrating (3 intervals)"; got != want {
+		t.Errorf("BuildTiles(calibrating) pct figure = %q, want %q", got, want)
+	}
+}
 
-	t.Run("time.Local resolves to a loadable zone name", func(t *testing.T) {
-		t.Parallel()
-		_, _, tz := view.InsightsRange(testNow.In(time.Local), "")
-		if _, err := time.LoadLocation(tz); tz == "Local" || err != nil {
-			t.Errorf("InsightsRange(in Local) timezone = %q (load error %v), want an IANA name", tz, err)
-		}
-	})
+func TestStageRanked(t *testing.T) {
+	t.Parallel()
+	page := view.InsightsPage{Stages: insight.Stages{Share: []insight.StageShare{
+		{Stage: insight.Stage{Kind: insight.StageSetup}, Tokens: 1000, Share: 0.1},
+		{Stage: insight.Stage{Kind: insight.StageSkill, Skill: "tdd"}, Tokens: 6000, Share: 0.6},
+		{Stage: insight.Stage{Kind: insight.StageSkill, Skill: "review"}, Tokens: 2000, Share: 0.2},
+		{Stage: insight.Stage{Kind: insight.StageResolve}, Tokens: 1000, Share: 0.1},
+	}}}
+
+	var got []string
+	for _, r := range page.StageRanked() {
+		got = append(got, r.Label+" "+r.Hue+" "+r.Pct)
+	}
+	want := []string{"tdd 1 60%", "review 2 20%", "Setup setup 10%", "Resolve resolve 10%"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("StageRanked() mismatch (-want +got):\n%s", diff)
+	}
+	if ranked := page.StageRanked(); !ranked[0].Top || ranked[1].Top {
+		t.Errorf("StageRanked() Top = %v %v, want only the first", ranked[0].Top, ranked[1].Top)
+	}
 }

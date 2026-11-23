@@ -7,6 +7,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -98,8 +99,16 @@ func (l *Loop) refreshOne(
 			}
 		}
 		baseTip := obs.BranchTips[plan.BranchRef{Repo: ticket.Repo, Branch: unlock.BaseBranch}]
-		return failedWith("merge conflict with origin/" + unlock.BaseBranch), l.event(ctx, url, store.EventRefreshConflicted,
-			conflictDetail(obs.BranchTips[ticket.Ref()], baseTip, err))
+		conflicts, pathsErr := conflictPaths(ctx, worktreePath)
+		if pathsErr != nil {
+			l.logger.WarnContext(ctx, "read conflicted paths", "ticket", url, "err", pathsErr)
+		}
+		if err := l.store.RecordRefreshConflict(
+			ctx, url, conflictDetail(obs.BranchTips[ticket.Ref()], baseTip, err), conflicts,
+		); err != nil {
+			return handled{}, fmt.Errorf("record conflict of %s: %w", url, err)
+		}
+		return failedWith("merge conflict with origin/" + unlock.BaseBranch), nil
 	}
 
 	kind := store.EventRefreshed
@@ -110,6 +119,22 @@ func (l *Loop) refreshOne(
 		return handled{}, fmt.Errorf("record %s of %s: %w", kind, url, err)
 	}
 	return succeeded, nil
+}
+
+func conflictPaths(ctx context.Context, worktreePath string) ([]insight.ConflictPath, error) {
+	paths, err := git.ConflictedPaths(ctx, worktreePath)
+	if err != nil {
+		return nil, fmt.Errorf("list conflicts: %w", err)
+	}
+	generated, err := git.GeneratedPaths(ctx, worktreePath, paths)
+	if err != nil {
+		return nil, fmt.Errorf("tag generated conflicts: %w", err)
+	}
+	conflicts := make([]insight.ConflictPath, len(paths))
+	for i, path := range paths {
+		conflicts[i] = insight.ConflictPath{Path: path, Generated: generated[path]}
+	}
+	return conflicts, nil
 }
 
 func advanceOnto(
