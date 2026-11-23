@@ -34,7 +34,10 @@ func TestInsightsChart(t *testing.T) {
 	storetest.Merged(t, store, url, now.Add(-time.Hour))
 	server := newServer(store, now)
 
-	for _, path := range []string{"/insights/chart", "/insights/chart?metric=wall&view=week&range=7d"} {
+	for _, path := range []string{
+		"/insights/chart", "/insights/chart?metric=pct", "/insights/chart?metric=tools",
+		"/insights/chart?metric=wall&view=week&range=7d",
+	} {
 		t.Run(path, func(t *testing.T) {
 			t.Parallel()
 			var got view.ChartWire

@@ -24,7 +24,7 @@ export function parseWire(raw: unknown): ChartWire {
   if (!isRecord(raw) || !Array.isArray(raw.dots) || !Array.isArray(raw.buckets)) {
     throw new Error("chart response is malformed");
   }
-  if ((raw.view !== "ticket" && raw.view !== "week") || typeof raw.unit !== "string") {
+  if ((raw.view !== "ticket" && raw.view !== "week") || typeof raw.unit !== "string" || typeof raw.range_median !== "number") {
     throw new Error("chart response is malformed");
   }
   return raw as ChartWire;
