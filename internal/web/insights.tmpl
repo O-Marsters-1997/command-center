@@ -82,4 +82,36 @@
     <p class="module-sub mt-4 mb-0">Readings come from the usage lines agents write while they run, so a window with no recent run has no reading.</p>
   </section>
 </div>
+<div class="pulse-grid mt-4">
+  <section class="pulse-card" aria-labelledby="hotspots-h">
+    <h2 id="hotspots-h">Conflict hotspots</h2>
+    <p class="module-sub mb-0">Paths merge conflicts left unresolved. A repeat is a ticket conflicting again on a path it already conflicted on.</p>
+    {{if .Hotspots}}<div class="table-frame mt-3">
+      <table class="w-full" aria-label="conflict hotspots">
+        <thead><tr><th scope="col">Path</th><th scope="col" class="text-right">Tickets</th><th scope="col" class="text-right">Repeats</th></tr></thead>
+        <tbody>
+          {{range .Hotspots}}<tr>
+            <th scope="row" class="w-full max-w-0"><span class="flex min-w-0 items-center gap-2"><span class="truncate font-mono" title="{{.Path}}">{{.Path}}</span>{{if .Generated}}<span class="chip shrink-0">generated</span>{{end}}</span></th>
+            <td class="text-right tabular-nums"><span class="inline-flex items-center justify-end gap-2"><span class="meter hidden w-16 sm:block" aria-hidden="true"><span class="meter-fill" style="width: {{$.HotspotShare .Tickets}}%"></span></span>{{.Tickets}}</span></td>
+            <td class="text-right tabular-nums{{if not .Repeats}} text-muted{{end}}">{{if .Repeats}}{{.Repeats}}{{else}}—{{end}}</td>
+          </tr>
+          {{end -}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}<p class="text-muted mt-3 mb-0">No conflicts recorded in the last {{.Params.Days}} days</p>{{end}}
+  </section>
+  <section class="pulse-card" aria-labelledby="stack-h">
+    <h2 id="stack-h">Should have been stacked</h2>
+    <p class="module-sub mb-0">Tickets in one feature, open at once, that conflicted on the same hand-written path.</p>
+    {{if .Pairs}}<ul class="insight-pairs mt-3">
+      {{range .Pairs}}<li class="insight-pair">
+        <span><span class="font-mono" title="{{.A}}">{{$.TicketName .A}}</span> <span class="text-muted">and</span> <span class="font-mono" title="{{.B}}">{{$.TicketName .B}}</span></span>
+        <span class="min-w-0 truncate font-mono text-muted" title="{{.Path}}">{{.Path}}</span>
+      </li>
+      {{end -}}
+    </ul>
+    {{else}}<p class="text-muted mt-3 mb-0">No pairs in the last {{.Params.Days}} days</p>{{end}}
+  </section>
+</div>
 {{template "shellEnd" .}}

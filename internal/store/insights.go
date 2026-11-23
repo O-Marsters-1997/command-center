@@ -70,6 +70,43 @@ func (s *Store) TicketInsightFacts(ctx context.Context, ticket string) (insight.
 	return facts, nil
 }
 
+func (s *Store) ConflictFacts(ctx context.Context, q SpendQuery) (insight.ConflictFacts, error) {
+	repo, feature, tz := nullIfEmpty(q.Repo), nullIfEmpty(q.Feature), q.timezone()
+	rows, err := s.q.ConflictPathEvents(ctx, ccdb.ConflictPathEventsParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ConflictFacts{}, fmt.Errorf("select conflict paths: %w", err)
+	}
+	spans, err := s.q.ConflictOpenSpans(ctx, ccdb.ConflictOpenSpansParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ConflictFacts{}, fmt.Errorf("select conflict open spans: %w", err)
+	}
+
+	var facts insight.ConflictFacts
+	var lastEvent int64
+	for _, row := range rows {
+		if len(facts.Conflicts) == 0 || row.EventID != lastEvent {
+			lastEvent = row.EventID
+			facts.Conflicts = append(facts.Conflicts, insight.ConflictFact{
+				Ticket: row.TicketID, Repo: row.Repo, Feature: row.Feature, At: row.At,
+			})
+		}
+		last := &facts.Conflicts[len(facts.Conflicts)-1]
+		last.Paths = append(last.Paths, insight.ConflictPath{Path: row.Path, Generated: row.Generated})
+	}
+	for _, row := range spans {
+		span := insight.OpenSpan{Ticket: row.TicketID, Feature: row.Feature, From: row.FromAt}
+		if row.ToAt.Valid {
+			span.To = option.Some(row.ToAt.Time)
+		}
+		facts.Spans = append(facts.Spans, span)
+	}
+	return facts, nil
+}
+
 // BoardTicketSpend holds a ticket's current weight, merged or not.
 type BoardTicketSpend struct {
 	AgentUSD, FollowUpUSD float64
