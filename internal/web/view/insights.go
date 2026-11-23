@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
@@ -19,6 +20,7 @@ import (
 const (
 	insightsPath   = "/insights"
 	insightsChart  = "/insights/chart"
+	insightsRework = "/insights/rework"
 	sparkWidth     = 72.0
 	sparkHeight    = 28.0
 	sparkMinPoints = 2
@@ -26,12 +28,15 @@ const (
 
 var insightRanges = []insight.Range{insight.Range7d, insight.Range30d, insight.Range90d}
 
+var reworkMetrics = []insight.ReworkMetric{insight.ReworkGreen, insight.ReworkConflicted, insight.ReworkPushes}
+
 var insightMetrics = []insight.Metric{insight.MetricTokens, insight.MetricPct, insight.MetricWall, insight.MetricTools}
 
 type InsightsParams struct {
 	Params
 	Range   insight.Range
 	Metric  insight.Metric
+	Rework  insight.ReworkMetric
 	View    insight.View
 	Repo    string
 	Feature string
@@ -47,11 +52,18 @@ func ParseInsightsParams(q url.Values) InsightsParams {
 	if !slices.Contains(insightMetrics, metric) {
 		metric = insight.MetricTokens
 	}
+	rework := insight.ReworkMetric(q.Get("rework"))
+	if !slices.Contains(reworkMetrics, rework) {
+		rework = insight.ReworkGreen
+	}
 	view := insight.ViewTicket
 	if q.Get("view") == string(insight.ViewWeek) {
 		view = insight.ViewWeek
 	}
-	return InsightsParams{Params: base, Range: rng, Metric: metric, View: view, Repo: base.Repo, Feature: base.Feature}
+	return InsightsParams{
+		Params: base, Range: rng, Metric: metric, Rework: rework, View: view,
+		Repo: base.Repo, Feature: base.Feature,
+	}
 }
 
 func (p InsightsParams) Days() int {
@@ -71,6 +83,7 @@ func (p InsightsParams) query() url.Values {
 	set("feature", p.Feature, "")
 	set("range", string(p.Range), string(insight.Range30d))
 	set("metric", string(p.Metric), string(insight.MetricTokens))
+	set("rework", string(p.Rework), string(insight.ReworkGreen))
 	set("view", string(p.View), string(insight.ViewTicket))
 	return q
 }
@@ -97,6 +110,12 @@ type InsightsPage struct {
 	ChartSrc string
 	Hotspots []insight.HotspotRow
 	Pairs    []insight.StackPair
+
+	Rework     insight.Rework
+	ReworkSrc  string
+	ReworkView []TileView
+	Parks      []insight.ParkRow
+	Jobs       []insight.JobRow
 }
 
 func (p InsightsPage) HotspotShare(tickets int) int {
@@ -104,10 +123,57 @@ func (p InsightsPage) HotspotShare(tickets int) int {
 	for _, h := range p.Hotspots {
 		top = max(top, h.Tickets)
 	}
+	return share(tickets, top)
+}
+
+func (p InsightsPage) ParkShare(times int) int {
+	top := 0
+	for _, r := range p.Parks {
+		top = max(top, r.Times)
+	}
+	return share(times, top)
+}
+
+func (p InsightsPage) JobShare(failures int) int {
+	top := 0
+	for _, r := range p.Jobs {
+		top = max(top, r.Failures)
+	}
+	return share(failures, top)
+}
+
+func (InsightsPage) Tokens(n int64) string { return formatMetric(insight.MetricTokens, float64(n)) }
+
+func share(n, top int) int {
 	if top == 0 {
 		return 0
 	}
-	return tickets * 100 / top
+	return n * 100 / top
+}
+
+type BandView struct {
+	Label, Glyph, Share, Tokens, Wall string
+	Count                             int
+}
+
+var bandLooks = map[insight.PushBand]struct{ label, glyph string }{
+	insight.BandFirst:     {"First push", "done"},
+	insight.BandTwo:       {"Two pushes", "running"},
+	insight.BandThreePlus: {"Three or more", "failed"},
+}
+
+func (p InsightsPage) Bands() []BandView {
+	bands := make([]BandView, len(p.Rework.Columns))
+	for i, c := range p.Rework.Columns {
+		look := bandLooks[c.Band]
+		bands[i] = BandView{
+			Label: look.label, Glyph: look.glyph, Count: c.Count,
+			Share:  fmt.Sprintf("%.0f%%", c.Share*100),
+			Tokens: formatMetric(insight.MetricTokens, float64(c.MedianTokens)),
+			Wall:   formatMetric(insight.MetricWall, c.MedianWall.Seconds()),
+		}
+	}
+	return bands
 }
 
 func (InsightsPage) TicketName(ticket string) string { return ticketName(ticket) }
@@ -144,6 +210,10 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsPara
 	if err != nil {
 		return InsightsPage{}, fmt.Errorf("load conflict facts: %w", err)
 	}
+	reworkFacts, err := r.store.ReworkFacts(ctx, spendQuery(p, c.loc, c.current, 0))
+	if err != nil {
+		return InsightsPage{}, fmt.Errorf("load rework facts: %w", err)
+	}
 
 	chrome := f.chrome
 	chrome.setCurrent(keyInsights)
@@ -171,6 +241,10 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsPara
 		Tiles: buildTiles(p, cost, fit), Cost: cost, Limits: limitsWithReset(chrome.Gauges, now),
 		ChartSrc: p.path(insightsChart, func(*InsightsParams) {}),
 		Hotspots: insight.Hotspots(conflicts.Conflicts), Pairs: insight.StackPairs(conflicts),
+		Rework: c.rework, ReworkSrc: p.path(insightsRework, func(*InsightsParams) {}),
+		ReworkView: buildReworkTiles(p, c.rework),
+		Parks:      insight.ParkLedger(reworkFacts.Parks),
+		Jobs:       insight.JobLedger(reworkFacts, rollupChecks(f.repos, f.in.Obs.Settings)),
 	}, nil
 }
 
@@ -180,6 +254,7 @@ type insightsCostData struct {
 	loc     *time.Location
 	current insight.Window
 	cost    insight.Cost
+	rework  insight.Rework
 	fit     spend.Result
 }
 
@@ -207,7 +282,8 @@ func (r *Reader) insightsCost(ctx context.Context, now time.Time, p InsightsPara
 	fit := f.split[agentlog.SevenDay].Fit
 	return insightsCostData{
 		frame: f, params: p, loc: loc, current: current, fit: fit,
-		cost: insight.DeriveCost(currentFacts, priorFacts, p.Range, p.Metric, fit),
+		cost:   insight.DeriveCost(currentFacts, priorFacts, p.Range, p.Metric, fit),
+		rework: insight.DeriveRework(currentFacts, priorFacts, p.Range, p.Rework),
 	}, nil
 }
 
@@ -264,6 +340,68 @@ func (r *Reader) InsightsChart(ctx context.Context, now time.Time, p InsightsPar
 		wire.Buckets = append(wire.Buckets, BucketWire{Start: b.Start.UTC().Format(time.RFC3339), Median: b.Median, N: b.N})
 	}
 	return wire, nil
+}
+
+type ReworkWire struct {
+	Metric    insight.ReworkMetric `json:"metric"`
+	Weeks     []ReworkWeekWire     `json:"weeks"`
+	Histogram []BucketWire         `json:"histogram"`
+}
+
+type ReworkWeekWire struct {
+	Start string `json:"start"`
+	Hit   int    `json:"hit"`
+	Miss  int    `json:"miss"`
+}
+
+func (r *Reader) InsightsRework(ctx context.Context, now time.Time, p InsightsParams) (ReworkWire, error) {
+	c, err := r.insightsCost(ctx, now, p)
+	if err != nil {
+		return ReworkWire{}, err
+	}
+	wire := ReworkWire{Metric: c.params.Rework, Weeks: []ReworkWeekWire{}, Histogram: []BucketWire{}}
+	for _, w := range c.rework.Weeks {
+		wire.Weeks = append(wire.Weeks, ReworkWeekWire{Start: w.Start.UTC().Format(time.RFC3339), Hit: w.Hit, Miss: w.Miss})
+	}
+	for _, b := range c.rework.Histogram {
+		start := b.Start.UTC().Format(time.RFC3339)
+		wire.Histogram = append(wire.Histogram, BucketWire{Start: start, Median: b.Median * 100, N: b.N})
+	}
+	return wire, nil
+}
+
+var reworkLabels = map[insight.ReworkMetric]string{
+	insight.ReworkGreen:      "First push green",
+	insight.ReworkConflicted: "Refreshes conflicted",
+	insight.ReworkPushes:     "Three or more pushes",
+}
+
+func buildReworkTiles(p InsightsParams, rework insight.Rework) []TileView {
+	tiles := make([]TileView, len(rework.Tiles))
+	for i, t := range rework.Tiles {
+		m := insight.ReworkMetric(t.Metric)
+		tv := TileView{
+			Tile: t, Label: reworkLabels[m], Figure: "—", Chip: chipText(t),
+			Path: p.path(insightsPath, func(n *InsightsParams) { n.Rework = m }),
+		}
+		if t.N > 0 {
+			tv.Figure = fmt.Sprintf("%.0f%%", t.Median*100)
+			tv.Spark = sparkPath(t.Spark)
+		}
+		tiles[i] = tv
+	}
+	return tiles
+}
+
+func rollupChecks(repos []store.Repo, settings map[string]plan.RepoSettings) map[string][]string {
+	rollups := make(map[string][]string, len(repos))
+	for _, repo := range repos {
+		rollups[repo.Name] = plan.DefaultRollupChecks
+		if checks := settings[repo.Name].Insights.RollupChecks; len(checks) > 0 {
+			rollups[repo.Name] = checks
+		}
+	}
+	return rollups
 }
 
 func spendQuery(p InsightsParams, loc *time.Location, w insight.Window, endShiftDays int) store.SpendQuery {

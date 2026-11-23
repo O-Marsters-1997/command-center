@@ -3620,8 +3620,82 @@ summary.prompt-bar:focus-visible {
     font-size: var(--text-sm);
   }
 
+  .pulse-grid-even {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pulse-tiles[data-cols="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .band-cols {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .band-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0 4px var(--space-3);
+    border-left: 3px solid var(--band-color);
+  }
+
+  .band-col[data-band="done"] {
+    --band-color: var(--color-s-done);
+  }
+
+  .band-col[data-band="running"] {
+    --band-color: var(--color-s-running);
+  }
+
+  .band-col[data-band="failed"] {
+    --band-color: var(--color-s-failed);
+  }
+
+  .band-label {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .band-figure {
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .ledger th {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .ledger tbody th {
+    font-family: inherit;
+    font-size: var(--text-sm);
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .ledger-bar {
+    width: 64px;
+    height: 6px;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    overflow: hidden;
+  }
+
+  .ledger-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--color-viz);
+  }
+
   @media (max-width: 1023px) {
-    .pulse-grid {
+    .pulse-grid,
+    .pulse-grid-even {
       grid-template-columns: minmax(0, 1fr);
     }
   }
@@ -3631,8 +3705,13 @@ summary.prompt-bar:focus-visible {
       padding: 18px 16px;
     }
 
-    .pulse-tiles {
+    .pulse-tiles,
+    .pulse-tiles[data-cols="3"] {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .band-cols {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .pulse-tile-figure {

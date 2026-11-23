@@ -10,9 +10,12 @@ import {
 import { defineIsland } from "./island";
 import {
   type ChartWire,
+  type ReworkWire,
   type TicketWire,
+  parseReworkWire,
   parseTicketWire,
   parseWire,
+  reworkChart,
   spendChart,
   ticketChart,
   weekChart,
@@ -20,7 +23,7 @@ import {
 
 type Status =
   | { kind: "loading" }
-  | { kind: "ok"; wire: ChartWire | TicketWire }
+  | { kind: "ok"; wire: ChartWire | TicketWire | ReworkWire }
   | { kind: "error"; message: string };
 
 const accent = () =>
@@ -30,7 +33,9 @@ const accent = () =>
 
 defineIsland("cc-insights-chart", { src: "", mode: "" }, (props, element) => {
   const src = props.src || element.getAttribute("src") || "/insights/chart";
-  const spend = (props.mode || element.getAttribute("mode")) === "ticket";
+  const mode = props.mode || element.getAttribute("mode");
+  const rework = mode === "rework";
+  const spend = mode === "ticket";
   const [status, setStatus] = createSignal<Status>({ kind: "loading" });
 
   const ctl = new AbortController();
@@ -41,7 +46,11 @@ defineIsland("cc-insights-chart", { src: "", mode: "" }, (props, element) => {
       const body: unknown = await res.json();
       setStatus({
         kind: "ok",
-        wire: spend ? parseTicketWire(body) : parseWire(body),
+        wire: rework
+          ? parseReworkWire(body)
+          : spend
+            ? parseTicketWire(body)
+            : parseWire(body),
       });
     } catch (err) {
       if (ctl.signal.aborted) return;
@@ -60,6 +69,7 @@ defineIsland("cc-insights-chart", { src: "", mode: "" }, (props, element) => {
   const definition = createMemo(() => {
     const w = wire();
     if (!w) return undefined;
+    if ("metric" in w) return reworkChart(w);
     if (!("view" in w)) return spendChart(w, accent());
     return w.view === "week" ? weekChart(w, accent()) : ticketChart(w);
   });
@@ -83,7 +93,13 @@ defineIsland("cc-insights-chart", { src: "", mode: "" }, (props, element) => {
         {(def) => (
           <Chart
             definition={def()}
-            ariaLabel={spend ? "Cumulative ticket spend" : "Merged ticket cost"}
+            ariaLabel={
+              rework
+                ? "Rework by week"
+                : spend
+                  ? "Cumulative ticket spend"
+                  : "Merged ticket cost"
+            }
             aspectRatio={3}
             onSelect={open}
           />

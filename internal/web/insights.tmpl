@@ -1,5 +1,5 @@
 {{define "insightsKeep"}}{{with .Project}}<input type="hidden" name="project" value="{{.}}">{{end}}
-<input type="hidden" name="range" value="{{.Range}}"><input type="hidden" name="metric" value="{{.Metric}}"><input type="hidden" name="view" value="{{.View}}">{{end}}
+<input type="hidden" name="range" value="{{.Range}}"><input type="hidden" name="metric" value="{{.Metric}}"><input type="hidden" name="rework" value="{{.Rework}}"><input type="hidden" name="view" value="{{.View}}">{{end}}
 
 {{define "insightsSpark"}}<svg class="pulse-spark" width="72" height="28" viewBox="0 0 72 28" aria-hidden="true">
   <defs><linearGradient id="spark-{{.Metric}}" x1="0" y1="0" x2="0" y2="1"><stop class="pulse-spark-top" offset="0"></stop><stop class="pulse-spark-bottom" offset="1"></stop></linearGradient></defs>
@@ -81,6 +81,73 @@
       {{end -}}
     </ul>
     <p class="module-sub mt-4 mb-0">Readings come from the usage lines agents write while they run, so a window with no recent run has no reading.</p>
+  </section>
+</div>
+<section class="pulse-card mt-4" aria-labelledby="rework-h">
+  <h2 id="rework-h">Rework</h2>
+  <p class="module-sub mb-0">How many pushes merged tickets needed before CI went green, and what the extra pushes cost.</p>
+  <nav class="pulse-tiles" data-cols="3" aria-label="Rework metric">
+    {{range $t := .ReworkView}}<a class="pulse-tile" href="{{$t.Path}}" {{template "nav" $t.Path}}{{if eq (printf "%s" $t.Metric) (printf "%s" $.Rework.Selected)}} aria-current="page"{{end}}>
+      <span class="pulse-tile-label">{{$t.Label}}</span>
+      <span class="flex items-end justify-between gap-2">
+        <b class="pulse-tile-figure">{{$t.Figure}}</b>
+        {{if $t.Spark}}{{template "insightsSpark" $t}}{{end}}
+      </span>
+      {{with $t.Chip}}<span><span class="pulse-chip"{{if $t.Change.IsSome}} data-tone="{{$t.Change.Unwrap.Tone}}"{{end}}>{{.}}</span></span>{{end}}
+    </a>
+    {{end -}}
+  </nav>
+  {{if .Rework.Weeks}}<div class="mt-4">
+    <cc-insights-chart mode="rework" src="{{.ReworkSrc}}">Loading chart…</cc-insights-chart>
+    <script type="module" src="/assets/dist/insights-chart.js"></script>
+  </div>
+  <div class="band-cols mt-4">
+    {{range .Bands}}<div class="band-col" data-band="{{.Glyph}}">
+      <span class="band-label">{{.Label}}</span>
+      <b class="band-figure">{{.Count}} <span class="text-muted font-normal">{{.Share}}</span></b>
+      <span class="text-muted text-sm">median {{.Tokens}} tokens · {{.Wall}}</span>
+    </div>
+    {{end -}}
+  </div>
+  {{else}}<p class="text-muted mt-4 mb-0">No merged tickets in the last {{.Params.Days}} days</p>{{end}}
+</section>
+<div class="pulse-grid pulse-grid-even mt-4">
+  <section class="pulse-card" aria-labelledby="parks-h">
+    <h2 id="parks-h">Why runs parked</h2>
+    <p class="module-sub mb-0">Reasons agents handed a ticket back to you, with the tokens those runs spent.</p>
+    {{if .Parks}}<div class="table-frame mt-3">
+      <table class="ledger w-full" aria-label="why runs parked">
+        <thead><tr><th scope="col">Reason</th><th scope="col" class="text-right">Times</th><th scope="col" class="text-right">Tokens</th></tr></thead>
+        <tbody>
+          {{range .Parks}}<tr>
+            <th scope="row" class="w-full max-w-0"><span class="block truncate" title="{{.Example}}">{{.Reason}}</span></th>
+            <td class="text-right tabular-nums"><span class="inline-flex items-center justify-end gap-2"><span class="ledger-bar hidden sm:block" aria-hidden="true"><span style="width: {{$.ParkShare .Times}}%"></span></span>{{.Times}}</span></td>
+            <td class="text-right tabular-nums">{{$.Tokens .Tokens}}</td>
+          </tr>
+          {{end -}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}<p class="text-muted mt-3 mb-0">No parked runs in the last {{.Params.Days}} days</p>{{end}}
+  </section>
+  <section class="pulse-card" aria-labelledby="jobs-h">
+    <h2 id="jobs-h">Failing jobs</h2>
+    <p class="module-sub mb-0">CI checks that failed on a pushed ticket, with the tokens fix runs spent on them.</p>
+    {{if .Jobs}}<div class="table-frame mt-3">
+      <table class="ledger w-full" aria-label="failing jobs">
+        <thead><tr><th scope="col">Job</th><th scope="col" class="text-right">Failures</th><th scope="col" class="text-right">Fix tokens</th></tr></thead>
+        <tbody>
+          {{range .Jobs}}<tr>
+            <th scope="row" class="w-full max-w-0"><span class="flex min-w-0 items-center gap-2"><span class="truncate font-mono" title="{{.Name}}">{{.Name}}</span><span class="chip shrink-0">{{.Repo}}</span></span></th>
+            <td class="text-right tabular-nums"><span class="inline-flex items-center justify-end gap-2"><span class="ledger-bar hidden sm:block" aria-hidden="true"><span style="width: {{$.JobShare .Failures}}%"></span></span>{{.Failures}}</span></td>
+            <td class="text-right tabular-nums">{{$.Tokens .FixTokens}}</td>
+          </tr>
+          {{end -}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}<p class="text-muted mt-3 mb-0">No failing jobs in the last {{.Params.Days}} days</p>{{end}}
+    <p class="module-sub mt-3 mb-0">Rollup checks, such as the repo's insights.rollup_checks (default *-status-check), are left out: they fail whenever any job does.</p>
   </section>
 </div>
 <div class="pulse-grid mt-4">

@@ -52,4 +52,15 @@ func TestInsightsChart(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("rework mode answers weeks and a histogram for the chosen metric", func(t *testing.T) {
+		t.Parallel()
+		var got view.ReworkWire
+		if err := json.Unmarshal([]byte(renderPath(t, server, "/insights/rework?rework=pushes")), &got); err != nil {
+			t.Fatalf("GET /insights/rework: decode: %v", err)
+		}
+		if got.Metric != "pushes" || len(got.Weeks) == 0 || len(got.Histogram) == 0 {
+			t.Errorf("GET /insights/rework?rework=pushes = %+v, want the pushes metric with weeks and a histogram", got)
+		}
+	})
 }
