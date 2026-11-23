@@ -158,7 +158,7 @@ export function parseReworkWire(raw: unknown): ReworkWire {
   return raw as ReworkWire;
 }
 
-const HIT_NOUN = { green: "green on the first push", conflicted: "refreshed without conflict" };
+const HIT_NOUN = { green: "green on the first push", conflicted: "refreshed without conflict", pushes: "" };
 
 export function reworkBars(wire: ReworkWire): ReworkBar[] {
   if (wire.metric === "pushes") {
