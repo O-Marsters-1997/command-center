@@ -1,15 +1,36 @@
 import { Chart } from "@tanstack/charts/solid";
-import { Match, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import {
+  Match,
+  Switch,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from "solid-js";
 import { defineIsland } from "./island";
-import { type ChartWire, parseWire, ticketChart, weekChart } from "./insights-chart.ts";
+import {
+  type ChartWire,
+  type TicketWire,
+  parseTicketWire,
+  parseWire,
+  spendChart,
+  ticketChart,
+  weekChart,
+} from "./insights-chart.ts";
 
-type Status = { kind: "loading" } | { kind: "ok"; wire: ChartWire } | { kind: "error"; message: string };
+type Status =
+  | { kind: "loading" }
+  | { kind: "ok"; wire: ChartWire | TicketWire }
+  | { kind: "error"; message: string };
 
 const accent = () =>
-  getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim() || "gray";
+  getComputedStyle(document.documentElement)
+    .getPropertyValue("--color-accent")
+    .trim() || "gray";
 
-defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
+defineIsland("cc-insights-chart", { src: "", mode: "" }, (props, element) => {
   const src = props.src || element.getAttribute("src") || "/insights/chart";
+  const spend = (props.mode || element.getAttribute("mode")) === "ticket";
   const [status, setStatus] = createSignal<Status>({ kind: "loading" });
 
   const ctl = new AbortController();
@@ -17,10 +38,17 @@ defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
     try {
       const res = await fetch(src, { signal: ctl.signal });
       if (!res.ok) throw new Error(`chart request failed: ${res.status}`);
-      setStatus({ kind: "ok", wire: parseWire(await res.json()) });
+      const body: unknown = await res.json();
+      setStatus({
+        kind: "ok",
+        wire: spend ? parseTicketWire(body) : parseWire(body),
+      });
     } catch (err) {
       if (ctl.signal.aborted) return;
-      setStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   });
   onCleanup(() => ctl.abort());
@@ -32,6 +60,7 @@ defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
   const definition = createMemo(() => {
     const w = wire();
     if (!w) return undefined;
+    if (!("view" in w)) return spendChart(w, accent());
     return w.view === "week" ? weekChart(w, accent()) : ticketChart(w);
   });
 
@@ -51,7 +80,14 @@ defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
         </p>
       </Match>
       <Match when={definition()}>
-        {(def) => <Chart definition={def()} ariaLabel="Merged ticket cost" aspectRatio={3} onSelect={open} />}
+        {(def) => (
+          <Chart
+            definition={def()}
+            ariaLabel={spend ? "Cumulative ticket spend" : "Merged ticket cost"}
+            aspectRatio={3}
+            onSelect={open}
+          />
+        )}
       </Match>
     </Switch>
   );

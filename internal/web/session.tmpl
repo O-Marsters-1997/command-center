@@ -43,11 +43,62 @@
   {{- end}}
   {{template "stepStrip" .}}
   <nav class="pill-tabs" aria-label="log view">
-    <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not (or .Raw .InsightsOn)}} aria-current="page"{{end}}>Transcript</a>
     <a class="pill-tab" href="{{.RawPath}}" {{template "nav" .RawPath}}{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+    <a class="pill-tab" href="{{.InsightsPath}}" {{template "nav" .InsightsPath}}{{if .InsightsOn}} aria-current="page"{{end}}>Insights</a>
     <a class="pill-tab" href="{{.ChangesPath}}" {{template "nav" .ChangesPath}}>Changes</a>
   </nav>
-  {{- if .Raw}}
+  {{- if .InsightsOn}}
+  {{- with .Insights}}
+  <section aria-label="Ticket insights" class="flex flex-col gap-4">
+    <div class="pulse-tiles mt-0">
+      {{- range .Figures}}
+      <div class="pulse-tile"><span class="pulse-tile-label">{{.Label}}</span><b class="pulse-tile-figure">{{.Value}}</b></div>
+      {{- end}}
+    </div>
+    <div class="pulse-card">
+      <h2>Spend</h2>
+      {{- if .Report.Cumulative}}
+      <cc-insights-chart mode="ticket" src="{{.ChartSrc}}">Loading chart…</cc-insights-chart>
+      <script type="module" src="/assets/dist/insights-chart.js"></script>
+      {{- else}}<p class="text-muted">No run has finished yet.</p>{{end}}
+    </div>
+    <div class="pulse-card">
+      <h2>Tool use</h2>
+      {{- with .ToolBars}}
+      <ul class="pulse-limits" aria-label="tool use">
+        {{- range .}}
+        <li class="pulse-limit">
+          <span class="flex items-baseline justify-between gap-2"><span class="font-mono">{{.Name}}</span><b class="tabular-nums">{{.Calls}}</b></span>
+          <span class="meter" role="meter" aria-valuenow="{{.Pct}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.Name}}"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
+        </li>
+        {{- end}}
+      </ul>
+      {{- else}}<p class="text-muted">No tool calls recorded.</p>{{end}}
+    </div>
+    <div class="pulse-card">
+      <h2>Runs</h2>
+      {{- with .RunRows}}
+      <div class="table-frame"><table class="w-full" aria-label="runs">
+        <thead><tr><th scope="col">step</th><th scope="col">start</th><th scope="col">duration</th><th scope="col">tokens</th><th scope="col">tool calls</th><th scope="col">outcome</th></tr></thead>
+        <tbody>
+          {{- range .}}
+          <tr>
+            <td><details><summary>{{.Step}}</summary><p class="text-muted text-xs">{{if .Mix}}{{.Mix}}{{else}}No tool calls.{{end}}</p>{{$run := printf "%s?run=%d" $.TranscriptPath .ID}}<a href="{{$run}}" {{template "nav" $run}}>Open transcript</a></details></td>
+            <td class="font-mono">{{.Start}}</td>
+            <td class="font-mono">{{.Duration}}</td>
+            <td class="font-mono">{{.Tokens}}</td>
+            <td class="font-mono">{{.ToolCalls}}</td>
+            <td>{{.Outcome}}</td>
+          </tr>
+          {{- end}}
+        </tbody>
+      </table></div>
+      {{- else}}<p class="text-muted">No runs yet.</p>{{end}}
+    </div>
+  </section>
+  {{- end}}
+  {{- else if .Raw}}
   {{- with .RawLog}}{{if .Total}}
   <form class="flex flex-wrap items-center gap-2 mb-3" method="get" action="{{$.TranscriptPath}}" role="search" {{template "nav" $.TranscriptPath}}>
     <input type="hidden" name="log" value="raw">
