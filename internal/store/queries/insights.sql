@@ -107,3 +107,27 @@ ORDER BY s.pushed_at, s.id;
 
 -- name: TicketMergedAt :many
 SELECT at FROM events WHERE ticket_id = sqlc.arg(ticket) AND kind = 'pr_merged' ORDER BY at LIMIT 1;
+
+-- name: ConflictPathEvents :many
+SELECT e.id AS event_id, t.url AS ticket_id, t.repo, t.feature, e.at, c.path, c.generated
+FROM events e
+JOIN conflict_paths c ON c.event_id = e.id
+JOIN tickets t ON t.url = e.ticket_id
+WHERE e.kind = 'refresh_conflicted'
+  AND (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
+  AND (e.at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date
+ORDER BY e.at, e.id, c.path;
+
+-- name: ConflictOpenSpans :many
+SELECT t.url AS ticket_id, t.feature, MIN(r.proc_started_at)::timestamptz AS from_at,
+       COALESCE((SELECT MIN(e.at) FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged'), t.withdrawn_at) AS to_at
+FROM tickets t
+JOIN runs r ON r.ticket_id = t.url AND r.proc_started_at IS NOT NULL
+WHERE (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
+  AND EXISTS (SELECT 1 FROM events e JOIN conflict_paths c ON c.event_id = e.id
+              WHERE e.ticket_id = t.url AND e.kind = 'refresh_conflicted'
+                AND (e.at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date)
+GROUP BY t.url, t.feature, t.withdrawn_at
+ORDER BY t.url;

@@ -203,6 +203,76 @@ func TestStore_ReworkFacts(t *testing.T) {
 	}
 }
 
+func TestStore_ConflictFacts(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	at := func(day, hour int) time.Time { return time.Date(2026, 6, day, hour, 0, 0, 0, time.UTC) }
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-2", "other", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-3", "cc-sandbox", "feat-b")
+
+	start := func(url string, when time.Time) {
+		t.Helper()
+		id, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: url, Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "h" + url,
+		})
+		if err != nil {
+			t.Fatalf("InsertSessionRunSkeleton: %v", err)
+		}
+		if err := store.RecordSpawn(ctx, storepkg.Spawn{RunID: plan.RunID(id), StartedAt: when}); err != nil {
+			t.Fatalf("RecordSpawn: %v", err)
+		}
+	}
+	conflict := func(url string, paths ...insight.ConflictPath) {
+		t.Helper()
+		if err := store.RecordRefreshConflict(ctx, url, "conflicted", paths); err != nil {
+			t.Fatalf("RecordRefreshConflict(%s): %v", url, err)
+		}
+	}
+	start("sandbox://CC-1", at(9, 8))
+	start("sandbox://CC-2", at(9, 8))
+	start("sandbox://CC-3", at(9, 8))
+	storetest.Merged(t, store, "sandbox://CC-1", at(11, 9))
+
+	conflict("sandbox://CC-1", insight.ConflictPath{Path: "a.go"}, insight.ConflictPath{Path: "gen.sql", Generated: true})
+	conflict("sandbox://CC-2", insight.ConflictPath{Path: "a.go"})
+	conflict("sandbox://CC-3", insight.ConflictPath{Path: "a.go"})
+	legacy := storepkg.Event{TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshConflicted}
+	if err := store.AppendEvent(ctx, legacy); err != nil {
+		t.Fatalf("AppendEvent: %v", err)
+	}
+
+	now := time.Now().UTC()
+	q := storepkg.SpendQuery{
+		Loc: time.UTC, Repo: "cc-sandbox", Feature: "feat-a",
+		Since: now.AddDate(0, 0, -1), Until: now.AddDate(0, 0, 1),
+	}
+	got, err := store.ConflictFacts(ctx, q)
+	if err != nil {
+		t.Fatalf("ConflictFacts(%+v): %v", q, err)
+	}
+	want := insight.ConflictFacts{
+		Conflicts: []insight.ConflictFact{{
+			Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Feature: "feat-a",
+			Paths: []insight.ConflictPath{{Path: "a.go"}, {Path: "gen.sql", Generated: true}},
+		}},
+		Spans: []insight.OpenSpan{{Ticket: "sandbox://CC-1", Feature: "feat-a", From: at(9, 8), To: option.Some(at(11, 9))}},
+	}
+	opts := cmp.Options{
+		cmpopts.IgnoreFields(insight.ConflictFact{}, "At"),
+		cmp.AllowUnexported(option.Option[time.Time]{}),
+	}
+	if diff := cmp.Diff(want, got, opts); diff != "" {
+		t.Errorf("ConflictFacts(%+v) mismatch (-want +got):\n%s", q, diff)
+	}
+
+	q.Since, q.Until = at(1, 0), at(2, 0)
+	if got, err := store.ConflictFacts(ctx, q); err != nil || len(got.Conflicts) != 0 || len(got.Spans) != 0 {
+		t.Errorf("ConflictFacts(%+v) = %+v, %v, want nothing outside the window", q, got, err)
+	}
+}
+
 func TestStore_TicketInsightFacts(t *testing.T) {
 	store := openStore(t)
 	const url = "sandbox://CC-1"

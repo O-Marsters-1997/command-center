@@ -201,6 +201,136 @@ func (q *Queries) ChecksLandedEvents(ctx context.Context, arg ChecksLandedEvents
 	return items, nil
 }
 
+const conflictOpenSpans = `-- name: ConflictOpenSpans :many
+SELECT t.url AS ticket_id, t.feature, MIN(r.proc_started_at)::timestamptz AS from_at,
+       COALESCE((SELECT MIN(e.at) FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged'), t.withdrawn_at) AS to_at
+FROM tickets t
+JOIN runs r ON r.ticket_id = t.url AND r.proc_started_at IS NOT NULL
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND EXISTS (SELECT 1 FROM events e JOIN conflict_paths c ON c.event_id = e.id
+              WHERE e.ticket_id = t.url AND e.kind = 'refresh_conflicted'
+                AND (e.at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date)
+GROUP BY t.url, t.feature, t.withdrawn_at
+ORDER BY t.url
+`
+
+type ConflictOpenSpansParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type ConflictOpenSpansRow struct {
+	TicketID string
+	Feature  string
+	FromAt   time.Time
+	ToAt     sql.NullTime
+}
+
+func (q *Queries) ConflictOpenSpans(ctx context.Context, arg ConflictOpenSpansParams) ([]ConflictOpenSpansRow, error) {
+	rows, err := q.db.QueryContext(ctx, conflictOpenSpans,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ConflictOpenSpansRow
+	for rows.Next() {
+		var i ConflictOpenSpansRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.Feature,
+			&i.FromAt,
+			&i.ToAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const conflictPathEvents = `-- name: ConflictPathEvents :many
+SELECT e.id AS event_id, t.url AS ticket_id, t.repo, t.feature, e.at, c.path, c.generated
+FROM events e
+JOIN conflict_paths c ON c.event_id = e.id
+JOIN tickets t ON t.url = e.ticket_id
+WHERE e.kind = 'refresh_conflicted'
+  AND ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (e.at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY e.at, e.id, c.path
+`
+
+type ConflictPathEventsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type ConflictPathEventsRow struct {
+	EventID   int64
+	TicketID  string
+	Repo      string
+	Feature   string
+	At        time.Time
+	Path      string
+	Generated bool
+}
+
+func (q *Queries) ConflictPathEvents(ctx context.Context, arg ConflictPathEventsParams) ([]ConflictPathEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, conflictPathEvents,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ConflictPathEventsRow
+	for rows.Next() {
+		var i ConflictPathEventsRow
+		if err := rows.Scan(
+			&i.EventID,
+			&i.TicketID,
+			&i.Repo,
+			&i.Feature,
+			&i.At,
+			&i.Path,
+			&i.Generated,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertConflictPaths = `-- name: InsertConflictPaths :exec
 INSERT INTO conflict_paths (event_id, path, generated)
 SELECT $1, p.path, p.generated
