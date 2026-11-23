@@ -101,7 +101,7 @@ func (l *Loop) refreshOne(
 		baseTip := obs.BranchTips[plan.BranchRef{Repo: ticket.Repo, Branch: unlock.BaseBranch}]
 		conflicts, pathsErr := conflictPaths(ctx, worktreePath)
 		if pathsErr != nil {
-			return handled{}, fmt.Errorf("read conflicts in %s: %w", worktreePath, pathsErr)
+			l.logger.WarnContext(ctx, "read conflicted paths", "ticket", url, "err", pathsErr)
 		}
 		if err := l.store.RecordRefreshConflict(
 			ctx, url, conflictDetail(obs.BranchTips[ticket.Ref()], baseTip, err), conflicts,

@@ -68,7 +68,7 @@ func (s *Store) RecordRefreshConflict(ctx context.Context, ticket, detail string
 	}
 	rows := make([]row, len(paths))
 	for i, p := range paths {
-		rows[i] = row(p)
+		rows[i] = row{Path: p.Path, Generated: p.Generated}
 	}
 	encoded, err := encodeJSON("conflict paths", rows)
 	if err != nil {

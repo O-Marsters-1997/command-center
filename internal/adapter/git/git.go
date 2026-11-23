@@ -285,13 +285,17 @@ func GeneratedPaths(ctx context.Context, worktreePath string, paths []string) (m
 		return nil, fmt.Errorf("check generated attribute: %w", err)
 	}
 	fields := strings.Split(string(out), "\x00")
+	optedOut := make(map[string]bool)
 	for i := 0; i+2 < len(fields); i += 3 {
-		if v := fields[i+2]; v == "set" || v == "true" {
+		switch fields[i+2] {
+		case "set", "true":
 			generated[fields[i]] = true
+		case "unset", "false":
+			optedOut[fields[i]] = true
 		}
 	}
 	for _, path := range paths {
-		if generated[path] {
+		if generated[path] || optedOut[path] || filepath.Ext(path) != ".go" {
 			continue
 		}
 		hasHeader, err := hasGeneratedHeader(filepath.Join(worktreePath, path))
