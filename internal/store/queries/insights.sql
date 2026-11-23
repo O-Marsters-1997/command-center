@@ -105,3 +105,13 @@ WHERE (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
 GROUP BY t.url, t.title, t.repo, t.feature, m.merged_at
 HAVING MIN(r.proc_started_at) IS NOT NULL
 ORDER BY m.merged_at, t.url;
+
+-- name: AppendEventReturningID :one
+INSERT INTO events (at, ticket_id, kind, detail)
+VALUES (now(), sqlc.arg(ticket_id), sqlc.arg(kind), sqlc.arg(detail))
+RETURNING id;
+
+-- name: InsertConflictPaths :exec
+INSERT INTO conflict_paths (event_id, path, generated)
+SELECT sqlc.arg(event_id), p.path, p.generated
+FROM jsonb_to_recordset(sqlc.arg(paths)::jsonb) AS p(path text, generated boolean);

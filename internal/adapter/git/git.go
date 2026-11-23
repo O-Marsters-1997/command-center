@@ -272,6 +272,57 @@ func ConflictedPaths(ctx context.Context, worktreePath string) ([]string, error)
 	return strings.FieldsFunc(string(out), func(r rune) bool { return r == 0 }), nil
 }
 
+// GeneratedPaths marks each path generated when it carries Go's "Code generated ... DO NOT EDIT."
+// header (https://go.dev/s/generatedcode) or the linguist-generated attribute.
+func GeneratedPaths(ctx context.Context, worktreePath string, paths []string) (map[string]bool, error) {
+	generated := make(map[string]bool, len(paths))
+	if len(paths) == 0 {
+		return generated, nil
+	}
+	args := append([]string{"check-attr", "-z", "linguist-generated", "--"}, paths...)
+	out, err := git(ctx, worktreePath, args...)
+	if err != nil {
+		return nil, fmt.Errorf("check generated attribute: %w", err)
+	}
+	fields := strings.Split(string(out), "\x00")
+	for i := 0; i+2 < len(fields); i += 3 {
+		if v := fields[i+2]; v == "set" || v == "true" {
+			generated[fields[i]] = true
+		}
+	}
+	for _, path := range paths {
+		if generated[path] {
+			continue
+		}
+		hasHeader, err := hasGeneratedHeader(filepath.Join(worktreePath, path))
+		if err != nil {
+			return nil, err
+		}
+		generated[path] = hasHeader
+	}
+	return generated, nil
+}
+
+func hasGeneratedHeader(path string) (bool, error) {
+	body, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+	for line := range strings.Lines(string(body)) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "package ") {
+			return false, nil
+		}
+		if strings.HasPrefix(line, "// Code generated ") && strings.HasSuffix(line, " DO NOT EDIT.") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	merging, err := refExists(ctx, worktreePath, "MERGE_HEAD")
 	if err != nil {
