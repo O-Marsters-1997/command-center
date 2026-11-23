@@ -81,6 +81,39 @@ func TestDeriveTicket(t *testing.T) {
 			},
 		},
 		{
+			name: "recorded runs split into stage shares",
+			facts: insight.TicketFacts{Runs: []insight.RunFact{
+				{
+					ID: 1, Kind: "agent", StartedAt: at(0), EndedAt: at(10), Tokens: 80,
+					Phases: []insight.SkillLoad{{Skill: "", Tokens: 20}, {Skill: "tdd", Order: 1, Tokens: 60}},
+				},
+				{
+					ID: 2, Kind: "follow_up", StartedAt: at(20), EndedAt: at(30), Tokens: 20,
+					Phases: []insight.SkillLoad{{Skill: "", Tokens: 20}},
+				},
+			}},
+			fit: calibrating,
+			want: insight.TicketReport{
+				AgentsWorking: 20 * time.Minute, Tokens: 100,
+				Cumulative: []insight.SpendStep{{At: at(10), Tokens: 80}, {At: at(30), Tokens: 100}},
+				Stages: []insight.StageShare{
+					{Stage: insight.Stage{Kind: insight.StageSetup}, Tokens: 20, Share: 0.2},
+					{Stage: insight.Stage{Kind: insight.StageSkill, Skill: "tdd"}, Tokens: 60, Share: 0.6},
+					{Stage: insight.Stage{Kind: insight.StageFollowUps}, Tokens: 20, Share: 0.2},
+				},
+				Runs: []insight.RunFact{
+					{
+						ID: 1, Kind: "agent", StartedAt: at(0), EndedAt: at(10), Tokens: 80,
+						Phases: []insight.SkillLoad{{Skill: "", Tokens: 20}, {Skill: "tdd", Order: 1, Tokens: 60}},
+					},
+					{
+						ID: 2, Kind: "follow_up", StartedAt: at(20), EndedAt: at(30), Tokens: 20,
+						Phases: []insight.SkillLoad{{Skill: "", Tokens: 20}},
+					},
+				},
+			},
+		},
+		{
 			name:  "no runs",
 			facts: insight.TicketFacts{MergedAt: option.Some(at(60))},
 			fit:   calibrate,

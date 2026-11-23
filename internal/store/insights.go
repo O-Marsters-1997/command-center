@@ -16,22 +16,49 @@ import (
 )
 
 func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.TicketFact, error) {
+	repo, feature, tz := nullIfEmpty(q.Repo), nullIfEmpty(q.Feature), q.timezone()
 	rows, err := s.q.MergedTicketFacts(ctx, ccdb.MergedTicketFactsParams{
-		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("select merged ticket facts: %w", err)
 	}
+	metricRows, err := s.q.MergedTicketRunMetrics(ctx, ccdb.MergedTicketRunMetricsParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select merged ticket run metrics: %w", err)
+	}
+	runs := make(map[string][]insight.RunFact)
+	for _, row := range metricRows {
+		var m agentlog.RunMetrics
+		if err := json.Unmarshal(row.Metrics, &m); err != nil {
+			return nil, fmt.Errorf("decode metrics of run %d: %w", row.ID, err)
+		}
+		runs[row.TicketID] = append(runs[row.TicketID], insight.RunFact{
+			ID: row.ID, Kind: row.Kind, Tokens: m.Input + m.CacheWrite + m.Output, Phases: phaseLoads(m),
+		})
+	}
 
 	facts := make([]insight.TicketFact, len(rows))
 	for i, row := range rows {
+		loads, followUp, resolve, recorded := insight.StageFacts(runs[row.TicketID])
 		facts[i] = insight.TicketFact{
 			Ticket: row.TicketID, Title: row.Title, Repo: row.Repo, Feature: row.Feature,
 			FirstRunAt: row.FirstRunAt, MergedAt: row.MergedAt,
 			WeightUSD: row.WeightUsd, Tokens: row.Tokens, ToolCalls: int(row.ToolCalls),
+			Recorded: recorded, Loads: loads, FollowUpTokens: followUp, ResolveTokens: resolve,
 		}
 	}
 	return facts, nil
+}
+
+func phaseLoads(m agentlog.RunMetrics) []insight.SkillLoad {
+	var loads []insight.SkillLoad
+	for i, p := range m.Phases {
+		loads = append(loads, insight.SkillLoad{Skill: p.Skill, Order: i, Tokens: p.Tokens})
+	}
+	return loads
 }
 
 func (s *Store) TicketInsightFacts(ctx context.Context, ticket string) (insight.TicketFacts, error) {
@@ -58,7 +85,8 @@ func (s *Store) TicketInsightFacts(ctx context.Context, ticket string) (insight.
 		facts.Runs = append(facts.Runs, insight.RunFact{
 			ID: row.ID, Step: row.Step, Kind: row.Kind,
 			StartedAt: row.ProcStartedAt.Time, EndedAt: row.EndedAt.Time,
-			WeightUSD: row.CostUsd, Tokens: m.Input + m.CacheWrite + m.Output, Tools: m.Tools, Outcome: row.Outcome,
+			WeightUSD: row.CostUsd, Tokens: m.Input + m.CacheWrite + m.Output, Tools: m.Tools,
+			Outcome: row.Outcome, Phases: phaseLoads(m),
 		})
 	}
 	for _, row := range pushRows {

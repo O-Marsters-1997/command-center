@@ -226,7 +226,7 @@ SELECT t.url AS ticket_id, t.title, t.repo, t.feature, m.merged_at,
        COALESCE(SUM(r.cost_usd), 0)::double precision AS weight_usd,
        COALESCE(SUM(COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
                     + COALESCE((r.metrics->>'output')::bigint, 0)), 0)::bigint AS tokens,
-       COALESCE(SUM((SELECT COALESCE(SUM(v::int), 0) FROM jsonb_each_text(COALESCE(r.metrics->'tools', '{}'::jsonb)) AS e(k, v))), 0)::bigint AS tool_calls
+       COALESCE(SUM((SELECT COALESCE(SUM(v::int), 0) FROM jsonb_each_text(COALESCE(NULLIF(r.metrics->'tools', 'null'::jsonb), '{}'::jsonb)) AS e(k, v))), 0)::bigint AS tool_calls
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
 JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
@@ -283,6 +283,69 @@ func (q *Queries) MergedTicketFacts(ctx context.Context, arg MergedTicketFactsPa
 			&i.WeightUsd,
 			&i.Tokens,
 			&i.ToolCalls,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mergedTicketRunMetrics = `-- name: MergedTicketRunMetrics :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+)
+SELECT t.url AS ticket_id, r.id, r.kind, COALESCE(r.metrics, '{}'::jsonb) AS metrics
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY t.url, r.id
+`
+
+type MergedTicketRunMetricsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type MergedTicketRunMetricsRow struct {
+	TicketID string
+	ID       int64
+	Kind     string
+	Metrics  json.RawMessage
+}
+
+func (q *Queries) MergedTicketRunMetrics(ctx context.Context, arg MergedTicketRunMetricsParams) ([]MergedTicketRunMetricsRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketRunMetrics,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MergedTicketRunMetricsRow
+	for rows.Next() {
+		var i MergedTicketRunMetricsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.ID,
+			&i.Kind,
+			&i.Metrics,
 		); err != nil {
 			return nil, err
 		}
