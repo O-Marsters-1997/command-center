@@ -30,7 +30,9 @@ func TestParseMetrics(t *testing.T) {
 				CostUSD: option.Some(cost),
 				Wall:    option.Some(561464 * time.Millisecond),
 				Turns:   4, Input: 82, CacheWrite: 62232, CacheRead: 9858576, Output: 35983,
-				Tools: map[string]int{"Bash": 2, "Read": 1, "Skill": 2},
+				Tools:  map[string]int{"Bash": 2, "Read": 1, "Skill": 2},
+				Skills: []string{"go-idiomatic", "clean-comments"},
+				Phases: []agentlog.PhaseTokens{{Tokens: 28716}, {Skill: "go-idiomatic", Tokens: 2814}},
 				Requests: []agentlog.RequestUsage{
 					{Input: 2, CacheCreate: 28560, CacheRead: 24902, Output: 6},
 					{Input: 2, CacheCreate: 138, CacheRead: 125101, Output: 8},
@@ -44,7 +46,9 @@ func TestParseMetrics(t *testing.T) {
 			fixture: "alive.jsonl",
 			want: agentlog.RunMetrics{
 				Turns: 3, Input: 11, CacheWrite: 22, CacheRead: 33, Output: 16,
-				Tools: map[string]int{"Bash": 1, "Edit": 1, "Skill": 1},
+				Tools:  map[string]int{"Bash": 1, "Edit": 1, "Skill": 1},
+				Skills: []string{"tdd"},
+				Phases: []agentlog.PhaseTokens{{Tokens: 42}, {Skill: "tdd", Tokens: 7}},
 				Requests: []agentlog.RequestUsage{
 					{Input: 10, CacheCreate: 20, CacheRead: 30, Output: 5},
 					{Input: 1, CacheCreate: 2, CacheRead: 3, Output: 4},
@@ -57,6 +61,7 @@ func TestParseMetrics(t *testing.T) {
 			fixture: "no_cost.jsonl",
 			want: agentlog.RunMetrics{
 				Wall: option.Some(500 * time.Millisecond), Turns: 1, Input: 5, Output: 3, Tools: map[string]int{"Bash": 1},
+				Phases:   []agentlog.PhaseTokens{{Tokens: 3}},
 				Requests: []agentlog.RequestUsage{{Output: 3}},
 			},
 		},
@@ -65,7 +70,29 @@ func TestParseMetrics(t *testing.T) {
 			fixture: "subagent.jsonl",
 			want: agentlog.RunMetrics{
 				Turns: 2, Input: 4, Output: 4, Tools: map[string]int{"Task": 1, "Bash": 1},
+				Phases:   []agentlog.PhaseTokens{{Tokens: 8}},
 				Requests: slices.Repeat([]agentlog.RequestUsage{{Input: 1, Output: 1}}, 4),
+			},
+		},
+		{
+			name:    "requests are attributed to the latest skill of their own agent, else the main agent's",
+			fixture: "skills.jsonl",
+			want: agentlog.RunMetrics{
+				Turns: 3, Input: 15, CacheWrite: 10, CacheRead: 500, Output: 15,
+				Tools:  map[string]int{"Skill": 2, "Task": 1},
+				Skills: []string{"tdd", "code-review"},
+				Phases: []agentlog.PhaseTokens{
+					{Skill: "", Tokens: 12},
+					{Skill: "tdd", Tokens: 20},
+					{Skill: "code-review", Tokens: 8},
+				},
+				Requests: []agentlog.RequestUsage{
+					{Input: 1, CacheCreate: 10, CacheRead: 100, Output: 1},
+					{Input: 2, CacheRead: 100, Output: 2},
+					{Input: 3, CacheRead: 100, Output: 3},
+					{Input: 4, CacheRead: 100, Output: 4},
+					{Input: 5, CacheRead: 100, Output: 5},
+				},
 			},
 		},
 	}
@@ -78,7 +105,8 @@ func TestParseMetrics(t *testing.T) {
 			}
 			equalOption := cmpopts.EquateComparable(option.Option[float64]{}, option.Option[time.Duration]{})
 			tokensOnly := cmpopts.IgnoreFields(agentlog.RequestUsage{}, "At", "Model")
-			if diff := cmp.Diff(tt.want, got, equalOption, tokensOnly); diff != "" {
+			weightless := cmpopts.IgnoreFields(agentlog.PhaseTokens{}, "WeightUSD")
+			if diff := cmp.Diff(tt.want, got, equalOption, tokensOnly, weightless); diff != "" {
 				t.Errorf("ParseMetrics(%s) mismatch (-want +got):\n%s", tt.fixture, diff)
 			}
 		})
