@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+type ConflictPath struct {
+	EventID   int64
+	Path      string
+	Generated bool
+}
+
 type Event struct {
 	ID       int64
 	At       time.Time
