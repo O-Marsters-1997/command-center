@@ -5,8 +5,10 @@ import {
   formatValue,
   gradientStops,
   parseReworkWire,
+  parseTicketWire,
   parseWire,
   reworkBars,
+  stepsOf,
 } from "./insights-chart.ts";
 
 const wire = {
@@ -39,10 +41,29 @@ describe("parseWire", () => {
 
 describe("series", () => {
   test("dots carry parsed dates", () => {
-    expect(dotsOf(parseWire(wire))[0]?.merged.toISOString()).toBe("2026-09-20T10:00:00.000Z");
+    expect(dotsOf(parseWire(wire))[0]?.merged.toISOString()).toBe(
+      "2026-09-20T10:00:00.000Z",
+    );
   });
   test("buckets rename median to value", () => {
     expect(bucketsOf(parseWire(wire))[0]?.value).toBe(900);
+  });
+});
+
+describe("parseTicketWire", () => {
+  test("accepts steps and a null list", () => {
+    expect(
+      stepsOf(
+        parseTicketWire({
+          steps: [{ at: "2026-09-20T10:00:00Z", tokens: 40 }],
+        }),
+      )[0]?.at.toISOString(),
+    ).toBe("2026-09-20T10:00:00.000Z");
+    expect(stepsOf(parseTicketWire({ steps: null }))).toEqual([]);
+  });
+  test("rejects a malformed response", () => {
+    expect(() => parseTicketWire({ steps: "x" })).toThrow();
+    expect(() => parseTicketWire(null)).toThrow();
   });
 });
 
