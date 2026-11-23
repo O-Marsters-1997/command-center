@@ -111,6 +111,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /activity/tray", s.handle(s.handleActivityTray))
 	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
+	mux.Handle("GET /s/{owner}/{name}/{n}/insights/chart", s.handle(s.handleTicketChart))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes", s.handle(s.handleChanges))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes/expand", s.handle(s.handleExpand))
 	mux.Handle("GET /s/{owner}/{name}/{n}/changes/comment", s.handle(s.handleCommentForm))
@@ -399,6 +400,14 @@ func (s *Server) handleInsightsChart(w http.ResponseWriter, r *http.Request) err
 	wire, err := s.view.InsightsChart(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
 	if err != nil {
 		return fmt.Errorf("load insights chart: %w", err)
+	}
+	return writeJSON(w, wire)
+}
+
+func (s *Server) handleTicketChart(w http.ResponseWriter, r *http.Request) error {
+	wire, err := s.view.TicketChart(r.Context(), sessionRef(r))
+	if err != nil {
+		return fmt.Errorf("load ticket chart: %w", err)
 	}
 	return writeJSON(w, wire)
 }
