@@ -12,6 +12,25 @@ import (
 	"time"
 )
 
+const appendEventReturningID = `-- name: AppendEventReturningID :one
+INSERT INTO events (at, ticket_id, kind, detail)
+VALUES (now(), $1, $2, $3)
+RETURNING id
+`
+
+type AppendEventReturningIDParams struct {
+	TicketID sql.NullString
+	Kind     string
+	Detail   string
+}
+
+func (q *Queries) AppendEventReturningID(ctx context.Context, arg AppendEventReturningIDParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, appendEventReturningID, arg.TicketID, arg.Kind, arg.Detail)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const boardTicketSpend = `-- name: BoardTicketSpend :many
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
@@ -66,6 +85,22 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertConflictPaths = `-- name: InsertConflictPaths :exec
+INSERT INTO conflict_paths (event_id, path, generated)
+SELECT $1, p.path, p.generated
+FROM jsonb_to_recordset($2::jsonb) AS p(path text, generated boolean)
+`
+
+type InsertConflictPathsParams struct {
+	EventID int64
+	Paths   json.RawMessage
+}
+
+func (q *Queries) InsertConflictPaths(ctx context.Context, arg InsertConflictPathsParams) error {
+	_, err := q.db.ExecContext(ctx, insertConflictPaths, arg.EventID, arg.Paths)
+	return err
 }
 
 const mergedTicketFacts = `-- name: MergedTicketFacts :many

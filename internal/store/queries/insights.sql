@@ -106,6 +106,16 @@ GROUP BY t.url, t.title, t.repo, t.feature, m.merged_at
 HAVING MIN(r.proc_started_at) IS NOT NULL
 ORDER BY m.merged_at, t.url;
 
+-- name: AppendEventReturningID :one
+INSERT INTO events (at, ticket_id, kind, detail)
+VALUES (now(), sqlc.arg(ticket_id), sqlc.arg(kind), sqlc.arg(detail))
+RETURNING id;
+
+-- name: InsertConflictPaths :exec
+INSERT INTO conflict_paths (event_id, path, generated)
+SELECT sqlc.arg(event_id), p.path, p.generated
+FROM jsonb_to_recordset(sqlc.arg(paths)::jsonb) AS p(path text, generated boolean);
+
 -- name: TicketInsightRuns :many
 SELECT r.id, r.step, r.kind, r.proc_started_at, r.ended_at,
        COALESCE(r.cost_usd, 0)::double precision AS cost_usd,
