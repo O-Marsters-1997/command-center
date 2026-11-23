@@ -84,7 +84,7 @@ func testInsightsNoReading(t *testing.T) {
 	t.Parallel()
 
 	server := newServer(seededStore(t, testNow), testNow)
-	limits := htmltest.Parse(t, renderPath(t, server, "/insights")).One(t, "ul.limits").Text()
+	limits := htmltest.Parse(t, renderPath(t, server, "/insights")).One(t, `ul[aria-label="limits"]`).Text()
 	for _, want := range []string{"No reading", "reset unknown"} {
 		if !strings.Contains(limits, want) {
 			t.Errorf("GET /insights limits = %q, want it to contain %q", limits, want)

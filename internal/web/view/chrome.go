@@ -141,6 +141,7 @@ type Gauge struct {
 	Calibrating bool
 	CCPct       int
 	ResetsAt    time.Time
+	ResetsIn    string
 	NoReading   bool
 	Stale       bool
 	ReadAgo     string

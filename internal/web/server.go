@@ -912,7 +912,7 @@ func randomGroup() (string, error) {
 }
 
 func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) error {
-	data, err := s.view.InsightsPage(r.Context(), s.now(), r.URL.Query())
+	data, err := s.view.InsightsPage(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
 	if err != nil {
 		return fmt.Errorf("load insights page: %w", err)
 	}
