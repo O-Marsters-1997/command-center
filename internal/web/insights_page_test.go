@@ -7,6 +7,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -98,6 +99,46 @@ func TestInsightsPage(t *testing.T) {
 		main.One(t, `[aria-label="limits"]`)
 		if got := main.Text(); !strings.Contains(got, "1 merged ticket in the last 30 days") {
 			t.Errorf("GET /insights text = %q, want the scope line", got)
+		}
+	})
+
+	t.Run("empty conflict ledgers say so", func(t *testing.T) {
+		t.Parallel()
+		main := htmltest.Parse(t, renderPath(t, newServer(openStore(t), now), "/insights")).One(t, "main#main")
+		got := main.Text()
+		wants := []string{"Conflict hotspots", "No conflicts recorded in the last 30 days", "No pairs in the last 30 days"}
+		for _, want := range wants {
+			if !strings.Contains(got, want) {
+				t.Errorf("GET /insights text = %q, want %q", got, want)
+			}
+		}
+	})
+
+	t.Run("conflicts fill the hotspot and stacking ledgers", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		wall := time.Now()
+		for _, url := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+			storetest.FeatureTicket(t, store, url, "cc-sandbox", "feat-a")
+			storetest.Run(t, store, storetest.RunOpts{
+				TicketURL: url, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "h" + url, StartedAt: wall.Add(-time.Hour),
+			})
+			paths := []insight.ConflictPath{{Path: "internal/a.go"}, {Path: "gen/x.sql", Generated: true}}
+			if err := store.RecordRefreshConflict(t.Context(), url, "conflicted", paths); err != nil {
+				t.Fatalf("RecordRefreshConflict(%s): %v", url, err)
+			}
+		}
+
+		main := htmltest.Parse(t, renderPath(t, newServer(store, wall), "/insights")).One(t, "main#main")
+		rows := main.One(t, `table[aria-label="conflict hotspots"]`).Text()
+		for _, want := range []string{"internal/a.go", "gen/x.sql", "generated"} {
+			if !strings.Contains(rows, want) {
+				t.Errorf("GET /insights hotspots = %q, want %q", rows, want)
+			}
+		}
+		pairs := main.One(t, "ul.insight-pairs").Text()
+		if !strings.Contains(pairs, "CC-1") || !strings.Contains(pairs, "CC-2") || strings.Contains(pairs, "gen/x.sql") {
+			t.Errorf("GET /insights pairs = %q, want CC-1 and CC-2 on internal/a.go only", pairs)
 		}
 	})
 

@@ -95,6 +95,27 @@ type InsightsPage struct {
 	Cost     insight.Cost
 	Limits   []Gauge
 	ChartSrc string
+	Hotspots []insight.HotspotRow
+	Pairs    []insight.StackPair
+}
+
+func (p InsightsPage) HotspotShare(tickets int) int {
+	top := 0
+	for _, h := range p.Hotspots {
+		top = max(top, h.Tickets)
+	}
+	if top == 0 {
+		return 0
+	}
+	return tickets * 100 / top
+}
+
+func (InsightsPage) TicketName(ticket string) string {
+	name := ticket[strings.LastIndexByte(ticket, '/')+1:]
+	if _, err := strconv.Atoi(name); err == nil {
+		return "#" + name
+	}
+	return name
 }
 
 type TileView struct {
@@ -134,6 +155,10 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsPara
 	}
 	fit := f.split[agentlog.SevenDay].Fit
 	cost := insight.DeriveCost(currentFacts, priorFacts, p.Range, p.Metric, fit)
+	conflicts, err := r.store.ConflictFacts(ctx, spendQuery(p, loc, current, 0))
+	if err != nil {
+		return InsightsPage{}, fmt.Errorf("load conflict facts: %w", err)
+	}
 
 	chrome := f.chrome
 	chrome.setCurrent(keyInsights)
@@ -160,6 +185,7 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsPara
 		Repos: repos, Features: features, Ranges: ranges,
 		Tiles: buildTiles(p, cost, fit), Cost: cost, Limits: limitsWithReset(chrome.Gauges, now),
 		ChartSrc: p.path(insightsChart, func(*InsightsParams) {}),
+		Hotspots: insight.Hotspots(conflicts.Conflicts), Pairs: insight.StackPairs(conflicts),
 	}, nil
 }
 

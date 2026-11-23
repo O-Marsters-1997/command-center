@@ -121,6 +121,28 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	})
 	run("sandbox://CC-1", first, mergedAt.Add(time.Hour), 9, agentlog.RunMetrics{Input: 999})
 	storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
+	event := func(kind storepkg.EventKind, when time.Time, detail string) {
+		t.Helper()
+		ev := storepkg.Event{At: when, TicketURL: "sandbox://CC-1", Kind: kind, Detail: detail}
+		if err := store.AppendEvent(t.Context(), ev); err != nil {
+			t.Fatalf("AppendEvent(%s): %v", kind, err)
+		}
+	}
+	for i, tip := range []string{"t1", "t2", "t3"} {
+		at := mergedAt.Add(time.Duration(i-4) * time.Hour)
+		if i == 2 {
+			at = mergedAt.Add(time.Hour)
+		}
+		storetest.Pushed(t, store, storetest.PushedOpts{URL: "sandbox://CC-1", Tip: tip, Base: "main", BaseTip: "b", At: at})
+	}
+	event(storepkg.EventVerdictTransition, mergedAt.Add(-4*time.Hour+time.Minute), "ci_failed: lint")
+	event(storepkg.EventVerdictTransition, mergedAt.Add(-3*time.Hour+time.Minute), "review_me: green")
+	event(storepkg.EventRefreshed, mergedAt.Add(-5*time.Hour), "merged origin/main")
+	event(storepkg.EventRefreshed, mergedAt.Add(-4*time.Hour), "merged origin/main")
+	event(storepkg.EventRestacked, mergedAt.Add(-3*time.Hour), "restacked onto origin/main")
+	event(storepkg.EventRefreshConflicted, mergedAt.Add(-2*time.Hour), "conflict")
+	event(storepkg.EventRefreshRefused, mergedAt.Add(-time.Hour), "dirty")
+	event(storepkg.EventRefreshed, mergedAt.Add(time.Hour), "after merge")
 	run("sandbox://CC-2", first, mergedAt.Add(-time.Hour), 1, agentlog.RunMetrics{})
 	storetest.Merged(t, store, "sandbox://CC-2", mergedAt)
 	storetest.FeatureTicket(t, store, "sandbox://CC-3", "cc-sandbox", "feat-a")
@@ -139,6 +161,11 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 			WeightUSD: 3, Tokens: 70, ToolCalls: 6, Recorded: true,
 			Loads:          []insight.SkillLoad{{Skill: "tdd", Order: 0, Tokens: 50}, {Skill: "review", Order: 1, Tokens: 2}},
 			FollowUpTokens: 5, ResolveTokens: 3,
+			Pushes: []insight.PushFact{
+				{At: mergedAt.Add(-4 * time.Hour), Verdict: insight.PushRed},
+				{At: mergedAt.Add(-3 * time.Hour), Verdict: insight.PushGreen},
+			},
+			Refreshes: 4, Conflicted: 1,
 		},
 		{
 			Ticket: "sandbox://CC-3", Repo: "cc-sandbox", Feature: "feat-a", FirstRunAt: first, MergedAt: mergedAt,
@@ -223,6 +250,76 @@ func TestStore_ReworkFacts(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ReworkFacts(%+v) mismatch (-want +got):\n%s", q, diff)
+	}
+}
+
+func TestStore_ConflictFacts(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	at := func(day, hour int) time.Time { return time.Date(2026, 6, day, hour, 0, 0, 0, time.UTC) }
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-2", "other", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-3", "cc-sandbox", "feat-b")
+
+	start := func(url string, when time.Time) {
+		t.Helper()
+		id, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: url, Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "h" + url,
+		})
+		if err != nil {
+			t.Fatalf("InsertSessionRunSkeleton: %v", err)
+		}
+		if err := store.RecordSpawn(ctx, storepkg.Spawn{RunID: plan.RunID(id), StartedAt: when}); err != nil {
+			t.Fatalf("RecordSpawn: %v", err)
+		}
+	}
+	conflict := func(url string, paths ...insight.ConflictPath) {
+		t.Helper()
+		if err := store.RecordRefreshConflict(ctx, url, "conflicted", paths); err != nil {
+			t.Fatalf("RecordRefreshConflict(%s): %v", url, err)
+		}
+	}
+	start("sandbox://CC-1", at(9, 8))
+	start("sandbox://CC-2", at(9, 8))
+	start("sandbox://CC-3", at(9, 8))
+	storetest.Merged(t, store, "sandbox://CC-1", at(11, 9))
+
+	conflict("sandbox://CC-1", insight.ConflictPath{Path: "a.go"}, insight.ConflictPath{Path: "gen.sql", Generated: true})
+	conflict("sandbox://CC-2", insight.ConflictPath{Path: "a.go"})
+	conflict("sandbox://CC-3", insight.ConflictPath{Path: "a.go"})
+	legacy := storepkg.Event{TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshConflicted}
+	if err := store.AppendEvent(ctx, legacy); err != nil {
+		t.Fatalf("AppendEvent: %v", err)
+	}
+
+	now := time.Now().UTC()
+	q := storepkg.SpendQuery{
+		Loc: time.UTC, Repo: "cc-sandbox", Feature: "feat-a",
+		Since: now.AddDate(0, 0, -1), Until: now.AddDate(0, 0, 1),
+	}
+	got, err := store.ConflictFacts(ctx, q)
+	if err != nil {
+		t.Fatalf("ConflictFacts(%+v): %v", q, err)
+	}
+	want := insight.ConflictFacts{
+		Conflicts: []insight.ConflictFact{{
+			Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Feature: "feat-a",
+			Paths: []insight.ConflictPath{{Path: "a.go"}, {Path: "gen.sql", Generated: true}},
+		}},
+		Spans: []insight.OpenSpan{{Ticket: "sandbox://CC-1", Feature: "feat-a", From: at(9, 8), To: option.Some(at(11, 9))}},
+	}
+	opts := cmp.Options{
+		cmpopts.IgnoreFields(insight.ConflictFact{}, "At"),
+		cmp.AllowUnexported(option.Option[time.Time]{}),
+	}
+	if diff := cmp.Diff(want, got, opts); diff != "" {
+		t.Errorf("ConflictFacts(%+v) mismatch (-want +got):\n%s", q, diff)
+	}
+
+	q.Since, q.Until = at(1, 0), at(2, 0)
+	if got, err := store.ConflictFacts(ctx, q); err != nil || len(got.Conflicts) != 0 || len(got.Spans) != 0 {
+		t.Errorf("ConflictFacts(%+v) = %+v, %v, want nothing outside the window", q, got, err)
 	}
 }
 

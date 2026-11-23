@@ -40,6 +40,18 @@ func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.
 		})
 	}
 
+	pushRows, err := s.q.MergedTicketPushes(ctx, ccdb.MergedTicketPushesParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select merged ticket pushes: %w", err)
+	}
+	pushes := make(map[string][]insight.PushFact)
+	for _, p := range pushRows {
+		push := insight.PushFact{At: p.PushedAt, Verdict: insight.PushVerdict(p.Verdict)}
+		pushes[p.TicketID] = append(pushes[p.TicketID], push)
+	}
+
 	facts := make([]insight.TicketFact, len(rows))
 	for i, row := range rows {
 		loads, followUp, resolve, recorded := insight.StageFacts(runs[row.TicketID])
@@ -47,6 +59,7 @@ func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.
 			Ticket: row.TicketID, Title: row.Title, Repo: row.Repo, Feature: row.Feature,
 			FirstRunAt: row.FirstRunAt, MergedAt: row.MergedAt,
 			WeightUSD: row.WeightUsd, Tokens: row.Tokens, ToolCalls: int(row.ToolCalls),
+			Pushes: pushes[row.TicketID], Refreshes: int(row.Refreshes), Conflicted: int(row.Conflicted),
 			Recorded: recorded, Loads: loads, FollowUpTokens: followUp, ResolveTokens: resolve,
 		}
 	}
@@ -94,6 +107,43 @@ func (s *Store) TicketInsightFacts(ctx context.Context, ticket string) (insight.
 	}
 	if len(merged) > 0 {
 		facts.MergedAt = option.Some(merged[0])
+	}
+	return facts, nil
+}
+
+func (s *Store) ConflictFacts(ctx context.Context, q SpendQuery) (insight.ConflictFacts, error) {
+	repo, feature, tz := nullIfEmpty(q.Repo), nullIfEmpty(q.Feature), q.timezone()
+	rows, err := s.q.ConflictPathEvents(ctx, ccdb.ConflictPathEventsParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ConflictFacts{}, fmt.Errorf("select conflict paths: %w", err)
+	}
+	spans, err := s.q.ConflictOpenSpans(ctx, ccdb.ConflictOpenSpansParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ConflictFacts{}, fmt.Errorf("select conflict open spans: %w", err)
+	}
+
+	var facts insight.ConflictFacts
+	var lastEvent int64
+	for _, row := range rows {
+		if len(facts.Conflicts) == 0 || row.EventID != lastEvent {
+			lastEvent = row.EventID
+			facts.Conflicts = append(facts.Conflicts, insight.ConflictFact{
+				Ticket: row.TicketID, Repo: row.Repo, Feature: row.Feature, At: row.At,
+			})
+		}
+		last := &facts.Conflicts[len(facts.Conflicts)-1]
+		last.Paths = append(last.Paths, insight.ConflictPath{Path: row.Path, Generated: row.Generated})
+	}
+	for _, row := range spans {
+		span := insight.OpenSpan{Ticket: row.TicketID, Feature: row.Feature, From: row.FromAt}
+		if row.ToAt.Valid {
+			span.To = option.Some(row.ToAt.Time)
+		}
+		facts.Spans = append(facts.Spans, span)
 	}
 	return facts, nil
 }

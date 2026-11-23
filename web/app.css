@@ -3605,6 +3605,21 @@ summary.prompt-bar:focus-visible {
     height: 6px;
   }
 
+  .insight-pairs {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .insight-pair {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    font-size: var(--text-sm);
+  }
+
   @media (max-width: 1023px) {
     .pulse-grid {
       grid-template-columns: minmax(0, 1fr);
