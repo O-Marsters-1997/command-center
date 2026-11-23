@@ -68,6 +68,86 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 	return items, nil
 }
 
+const mergedTicketFacts = `-- name: MergedTicketFacts :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+)
+SELECT t.url AS ticket_id, t.title, t.repo, t.feature, m.merged_at,
+       MIN(r.proc_started_at)::timestamptz AS first_run_at,
+       COALESCE(SUM(r.cost_usd), 0)::double precision AS weight_usd,
+       COALESCE(SUM(COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
+                    + COALESCE((r.metrics->>'output')::bigint, 0)), 0)::bigint AS tokens,
+       COALESCE(SUM((SELECT COALESCE(SUM(v::int), 0) FROM jsonb_each_text(COALESCE(r.metrics->'tools', '{}'::jsonb)) AS e(k, v))), 0)::bigint AS tool_calls
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+GROUP BY t.url, t.title, t.repo, t.feature, m.merged_at
+HAVING MIN(r.proc_started_at) IS NOT NULL
+ORDER BY m.merged_at, t.url
+`
+
+type MergedTicketFactsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type MergedTicketFactsRow struct {
+	TicketID   string
+	Title      string
+	Repo       string
+	Feature    string
+	MergedAt   time.Time
+	FirstRunAt time.Time
+	WeightUsd  float64
+	Tokens     int64
+	ToolCalls  int64
+}
+
+func (q *Queries) MergedTicketFacts(ctx context.Context, arg MergedTicketFactsParams) ([]MergedTicketFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketFacts,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MergedTicketFactsRow
+	for rows.Next() {
+		var i MergedTicketFactsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.Title,
+			&i.Repo,
+			&i.Feature,
+			&i.MergedAt,
+			&i.FirstRunAt,
+			&i.WeightUsd,
+			&i.Tokens,
+			&i.ToolCalls,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mergedTicketRework = `-- name: MergedTicketRework :many
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'

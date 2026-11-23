@@ -23,7 +23,8 @@ One binary, `cmd/cc`, wired together in `internal/app`.
 
 - `internal/plan`: pure decisions. **Only `plan` derives**
   ([ADR 13](docs/adr/0013-only-plan-derives.md)) and it imports only `plan/spend`, `plan/verdict`
-  and `plan/option`. `plan/agentlog` parses agent transcripts.
+  and `plan/option`. `plan/agentlog` parses agent transcripts; `plan/insight` is a leaf deriving the
+  insights page from merged-ticket facts.
 - `internal/loop`: the tick loop. **The loop is the only writer of reconciled state**
   ([ADR 9](docs/adr/0009-the-loop-owns-reconciled-state.md)); verbs queue intents for it.
 - `internal/store`: Postgres, and the only importer of the generated `internal/store/ccdb`

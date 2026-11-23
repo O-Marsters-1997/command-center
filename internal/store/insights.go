@@ -9,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
@@ -44,6 +45,25 @@ func (s *Store) MergedTicketSpend(ctx context.Context, q SpendQuery) ([]TicketSp
 		}
 	}
 	return points, nil
+}
+
+func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.TicketFact, error) {
+	rows, err := s.q.MergedTicketFacts(ctx, ccdb.MergedTicketFactsParams{
+		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select merged ticket facts: %w", err)
+	}
+
+	facts := make([]insight.TicketFact, len(rows))
+	for i, row := range rows {
+		facts[i] = insight.TicketFact{
+			Ticket: row.TicketID, Title: row.Title, Repo: row.Repo, Feature: row.Feature,
+			FirstRunAt: row.FirstRunAt, MergedAt: row.MergedAt,
+			WeightUSD: row.WeightUsd, Tokens: row.Tokens, ToolCalls: int(row.ToolCalls),
+		}
+	}
+	return facts, nil
 }
 
 // BoardTicketSpend holds a ticket's current weight, merged or not.
