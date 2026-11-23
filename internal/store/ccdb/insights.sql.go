@@ -361,6 +361,133 @@ func (q *Queries) MergedTicketSpend(ctx context.Context, arg MergedTicketSpendPa
 	return items, nil
 }
 
+const ticketInsightPushes = `-- name: TicketInsightPushes :many
+WITH spans AS (
+    SELECT p.id, p.pushed_at,
+           COALESCE(LEAD(p.pushed_at) OVER (ORDER BY p.pushed_at, p.id), 'infinity'::timestamptz) AS next_at
+    FROM pushes p
+    WHERE p.ticket_id = $1
+)
+SELECT s.pushed_at,
+       (CASE
+           WHEN EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = $1 AND e.kind = 'verdict_transition'
+                        AND e.detail LIKE 'review_me:%' AND e.at >= s.pushed_at AND e.at < s.next_at) THEN 'green'
+           WHEN EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = $1 AND e.kind = 'verdict_transition'
+                        AND e.detail LIKE 'ci_failed:%' AND e.at >= s.pushed_at AND e.at < s.next_at) THEN 'red'
+           ELSE 'pending'
+       END)::text AS verdict
+FROM spans s
+ORDER BY s.pushed_at, s.id
+`
+
+type TicketInsightPushesRow struct {
+	PushedAt time.Time
+	Verdict  string
+}
+
+func (q *Queries) TicketInsightPushes(ctx context.Context, ticket sql.NullString) ([]TicketInsightPushesRow, error) {
+	rows, err := q.db.QueryContext(ctx, ticketInsightPushes, ticket)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TicketInsightPushesRow
+	for rows.Next() {
+		var i TicketInsightPushesRow
+		if err := rows.Scan(&i.PushedAt, &i.Verdict); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ticketInsightRuns = `-- name: TicketInsightRuns :many
+SELECT r.id, r.step, r.kind, r.proc_started_at, r.ended_at,
+       COALESCE(r.cost_usd, 0)::double precision AS cost_usd,
+       COALESCE(r.metrics, '{}'::jsonb) AS metrics, COALESCE(r.outcome, '')::text AS outcome
+FROM runs r
+WHERE r.ticket_id = $1 AND r.ended_at IS NOT NULL
+  AND r.ended_at < COALESCE((SELECT MIN(e.at) FROM events e WHERE e.ticket_id = r.ticket_id AND e.kind = 'pr_merged'), 'infinity'::timestamptz)
+ORDER BY r.id
+`
+
+type TicketInsightRunsRow struct {
+	ID            int64
+	Step          string
+	Kind          string
+	ProcStartedAt sql.NullTime
+	EndedAt       sql.NullTime
+	CostUsd       float64
+	Metrics       json.RawMessage
+	Outcome       string
+}
+
+func (q *Queries) TicketInsightRuns(ctx context.Context, ticket sql.NullString) ([]TicketInsightRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, ticketInsightRuns, ticket)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TicketInsightRunsRow
+	for rows.Next() {
+		var i TicketInsightRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Step,
+			&i.Kind,
+			&i.ProcStartedAt,
+			&i.EndedAt,
+			&i.CostUsd,
+			&i.Metrics,
+			&i.Outcome,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ticketMergedAt = `-- name: TicketMergedAt :many
+SELECT at FROM events WHERE ticket_id = $1 AND kind = 'pr_merged' ORDER BY at LIMIT 1
+`
+
+func (q *Queries) TicketMergedAt(ctx context.Context, ticket sql.NullString) ([]time.Time, error) {
+	rows, err := q.db.QueryContext(ctx, ticketMergedAt, ticket)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []time.Time
+	for rows.Next() {
+		var at time.Time
+		if err := rows.Scan(&at); err != nil {
+			return nil, err
+		}
+		items = append(items, at)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const withdrawnTicketWaste = `-- name: WithdrawnTicketWaste :one
 SELECT COALESCE(SUM(r.cost_usd), 0)::double precision AS waste_usd
 FROM tickets t

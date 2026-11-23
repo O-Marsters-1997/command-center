@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
@@ -322,4 +323,111 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(insight.TicketFact{}, "Title")); diff != "" {
 		t.Errorf("MergedTicketFacts(cc-sandbox, june 10) mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func TestStore_TicketInsightFacts(t *testing.T) {
+	store := openStore(t)
+	const url = "sandbox://CC-1"
+	base := time.Date(2026, 6, 10, 8, 0, 0, 0, time.UTC)
+	at := func(m int) time.Time { return base.Add(time.Duration(m) * time.Minute) }
+	storetest.FeatureTicket(t, store, url, "cc-sandbox", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
+
+	run := func(ticket string, started, ended time.Time, usd float64, m agentlog.RunMetrics) int64 {
+		t.Helper()
+		id := storetest.Run(t, store, storetest.RunOpts{
+			TicketURL: ticket, Kind: "agent", Step: "implement", BaselineSHA: "deadbeef",
+			PromptHash: "h" + ended.String(), StartedAt: started,
+		})
+		err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+			RunID: plan.RunID(id), Outcome: plan.OutcomePush, Cost: option.Some(usd),
+			Metrics: option.Some(m), EndedAt: ended,
+		})
+		if err != nil {
+			t.Fatalf("RecordDisposition: %v", err)
+		}
+		return id
+	}
+	verdict := func(when time.Time, detail string) {
+		t.Helper()
+		ev := storepkg.Event{At: when, TicketURL: url, Kind: storepkg.EventVerdictTransition, Detail: detail}
+		if err := store.AppendEvent(t.Context(), ev); err != nil {
+			t.Fatalf("AppendEvent: %v", err)
+		}
+	}
+	push := func(when time.Time, tip string) {
+		storetest.Pushed(t, store, storetest.PushedOpts{URL: url, Tip: tip, Base: "main", BaseTip: "b", At: when})
+	}
+
+	first := run(url, at(0), at(10), 1, agentlog.RunMetrics{
+		Input: 10, CacheWrite: 20, CacheRead: 1000, Output: 30, Tools: map[string]int{"Bash": 2, "Read": 3},
+	})
+	run(url, at(20), at(50), 2, agentlog.RunMetrics{Input: 1, Output: 1, Tools: map[string]int{"Bash": 1}})
+	run("sandbox://CC-2", at(0), at(5), 7, agentlog.RunMetrics{Input: 500})
+	push(at(11), "t1")
+	verdict(at(12), "ci_failed: lint")
+	push(at(30), "t2")
+	verdict(at(31), "review_me: green")
+	push(at(45), "t3")
+
+	t.Run("unmerged ticket", func(t *testing.T) {
+		got, err := store.TicketInsightFacts(t.Context(), url)
+		if err != nil {
+			t.Fatalf("TicketInsightFacts: %v", err)
+		}
+		if got.MergedAt.IsSome() {
+			t.Errorf("MergedAt = %v, want none", got.MergedAt)
+		}
+		wantPushes := []insight.PushFact{
+			{At: at(11), Verdict: insight.PushRed},
+			{At: at(30), Verdict: insight.PushGreen},
+			{At: at(45), Verdict: insight.PushPending},
+		}
+		if diff := cmp.Diff(wantPushes, got.Pushes); diff != "" {
+			t.Errorf("TicketInsightFacts pushes mismatch (-want +got):\n%s", diff)
+		}
+		if len(got.Runs) != 2 {
+			t.Fatalf("runs = %d, want 2", len(got.Runs))
+		}
+		wantFirst := insight.RunFact{
+			ID: first, Step: "implement", Kind: "agent", StartedAt: at(0), EndedAt: at(10),
+			WeightUSD: 1, Tokens: 60, Tools: map[string]int{"Bash": 2, "Read": 3}, Outcome: plan.OutcomePush.String(),
+		}
+		if diff := cmp.Diff(wantFirst, got.Runs[0]); diff != "" {
+			t.Errorf("TicketInsightFacts first run mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("merged ticket matches its TicketFact", func(t *testing.T) {
+		storetest.Merged(t, store, url, at(60))
+		run(url, at(70), at(80), 9, agentlog.RunMetrics{Input: 999})
+		got, err := store.TicketInsightFacts(t.Context(), url)
+		if err != nil {
+			t.Fatalf("TicketInsightFacts: %v", err)
+		}
+		if got.MergedAt.IsNone() || !got.MergedAt.Unwrap().Equal(at(60)) {
+			t.Errorf("MergedAt = %v, want %v", got.MergedAt, at(60))
+		}
+		report := insight.DeriveTicket(got, spend.Result{Factor: 0.01, Samples: spend.MinSamples})
+
+		facts, err := store.MergedTicketFacts(t.Context(), june10)
+		if err != nil {
+			t.Fatalf("MergedTicketFacts: %v", err)
+		}
+		var fact insight.TicketFact
+		for _, f := range facts {
+			if f.Ticket == url {
+				fact = f
+			}
+		}
+		if report.Tokens != fact.Tokens || report.ToolCalls != fact.ToolCalls {
+			t.Errorf("report tokens, tools = %d, %d, want %d, %d", report.Tokens, report.ToolCalls, fact.Tokens, fact.ToolCalls)
+		}
+		if want := fact.MergedAt.Sub(fact.FirstRunAt); report.LaunchToMerge.UnwrapOr(0) != want {
+			t.Errorf("LaunchToMerge = %v, want %v", report.LaunchToMerge, want)
+		}
+		if want := spend.PctWeek(fact.WeightUSD, 0.01); report.PctWeek.UnwrapOr(-1) != want {
+			t.Errorf("PctWeek = %v, want %v", report.PctWeek, want)
+		}
+	})
 }
