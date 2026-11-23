@@ -87,3 +87,25 @@ func TestBuildTiles(t *testing.T) {
 		t.Errorf("BuildTiles(calibrating) pct figure = %q, want %q", got, want)
 	}
 }
+
+func TestStageRanked(t *testing.T) {
+	t.Parallel()
+	page := view.InsightsPage{Stages: insight.Stages{Share: []insight.StageShare{
+		{Stage: insight.Stage{Kind: insight.StageSetup}, Tokens: 1000, Share: 0.1},
+		{Stage: insight.Stage{Kind: insight.StageSkill, Skill: "tdd"}, Tokens: 6000, Share: 0.6},
+		{Stage: insight.Stage{Kind: insight.StageSkill, Skill: "review"}, Tokens: 2000, Share: 0.2},
+		{Stage: insight.Stage{Kind: insight.StageResolve}, Tokens: 1000, Share: 0.1},
+	}}}
+
+	var got []string
+	for _, r := range page.StageRanked() {
+		got = append(got, r.Label+" "+r.Hue+" "+r.Pct)
+	}
+	want := []string{"tdd 1 60%", "review 2 20%", "Setup setup 10%", "Resolve resolve 10%"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("StageRanked() mismatch (-want +got):\n%s", diff)
+	}
+	if ranked := page.StageRanked(); !ranked[0].Top || ranked[1].Top {
+		t.Errorf("StageRanked() Top = %v %v, want only the first", ranked[0].Top, ranked[1].Top)
+	}
+}

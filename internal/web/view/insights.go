@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/url"
@@ -116,6 +117,97 @@ type InsightsPage struct {
 	ReworkView []TileView
 	Parks      []insight.ParkRow
 	Jobs       []insight.JobRow
+	Stages     insight.Stages
+}
+
+type StageRow struct {
+	Label, Hue, Tokens string
+	Pct, Width         string
+	Top                bool
+	share              float64
+}
+
+type StageBarView struct {
+	Label string
+	Rows  []StageRow
+}
+
+type SkillView struct {
+	Skill, Tokens, Pct string
+	Tickets            int
+	Width              int
+}
+
+const stageRampSteps = 6
+
+func stageRows(shares []insight.StageShare) []StageRow {
+	rows := make([]StageRow, len(shares))
+	var topShare float64
+	skills := 0
+	for i, s := range shares {
+		row := StageRow{
+			Tokens: formatMetric(insight.MetricTokens, float64(s.Tokens)),
+			Pct:    fmt.Sprintf("%.0f%%", s.Share*100),
+			Width:  fmt.Sprintf("%.2f", s.Share*100),
+			share:  s.Share,
+		}
+		switch s.Stage.Kind {
+		case insight.StageSetup:
+			row.Label, row.Hue = "Setup", "setup"
+		case insight.StageSkill:
+			skills++
+			row.Label, row.Hue = s.Stage.Skill, strconv.Itoa(min(skills, stageRampSteps))
+		case insight.StageOtherSkills:
+			row.Label, row.Hue = "Other skills", "other"
+		case insight.StageFollowUps:
+			row.Label, row.Hue = "Follow-ups", "follow-ups"
+		case insight.StageResolve:
+			row.Label, row.Hue = "Resolve", "resolve"
+		}
+		rows[i] = row
+		topShare = max(topShare, s.Share)
+	}
+	if topShare > 0 {
+		if i := slices.IndexFunc(rows, func(r StageRow) bool { return r.share == topShare }); i >= 0 {
+			rows[i].Top = true
+		}
+	}
+	return rows
+}
+
+func (p InsightsPage) StageFlow() []StageRow { return stageRows(p.Stages.Share) }
+
+func (p InsightsPage) StageRanked() []StageRow {
+	rows := p.StageFlow()
+	slices.SortStableFunc(rows, func(a, b StageRow) int { return cmp.Compare(b.share, a.share) })
+	return rows
+}
+
+func (p InsightsPage) StageBars() []StageBarView {
+	bars := make([]StageBarView, len(p.Stages.Bars))
+	for i, b := range p.Stages.Bars {
+		bars[i] = StageBarView{Label: b.Label, Rows: stageRows(b.Shares)}
+	}
+	return bars
+}
+
+func (p InsightsPage) StageSource() string {
+	if p.Stages.Source == insight.StagesFromConfig {
+		return "Stages: insights.stages"
+	}
+	return "Stages: skills these tickets loaded"
+}
+
+func (p InsightsPage) SkillRows() []SkillView {
+	rows := make([]SkillView, len(p.Stages.Skills))
+	for i, s := range p.Stages.Skills {
+		rows[i] = SkillView{
+			Skill: s.Skill, Tickets: s.Tickets, Pct: fmt.Sprintf("%.0f%%", s.Share*100),
+			Width:  int(s.Share * 100),
+			Tokens: formatMetric(insight.MetricTokens, float64(s.Tokens)),
+		}
+	}
+	return rows
 }
 
 func (p InsightsPage) HotspotShare(tickets int) int {
@@ -245,6 +337,7 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsPara
 		ReworkView: buildReworkTiles(p, c.rework),
 		Parks:      insight.ParkLedger(reworkFacts.Parks),
 		Jobs:       insight.JobLedger(reworkFacts, rollupChecks(f.repos, f.in.Obs.Settings)),
+		Stages:     insight.DeriveStages(c.facts, f.in.Obs.Settings[p.Repo].Insights.Stages, p.Repo != ""),
 	}, nil
 }
 
@@ -256,6 +349,7 @@ type insightsCostData struct {
 	cost    insight.Cost
 	rework  insight.Rework
 	fit     spend.Result
+	facts   []insight.TicketFact
 }
 
 func (r *Reader) insightsCost(ctx context.Context, now time.Time, p InsightsParams) (insightsCostData, error) {
@@ -281,7 +375,7 @@ func (r *Reader) insightsCost(ctx context.Context, now time.Time, p InsightsPara
 	}
 	fit := f.split[agentlog.SevenDay].Fit
 	return insightsCostData{
-		frame: f, params: p, loc: loc, current: current, fit: fit,
+		frame: f, params: p, loc: loc, current: current, fit: fit, facts: currentFacts,
 		cost:   insight.DeriveCost(currentFacts, priorFacts, p.Range, p.Metric, fit),
 		rework: insight.DeriveRework(currentFacts, priorFacts, p.Range, p.Rework),
 	}, nil

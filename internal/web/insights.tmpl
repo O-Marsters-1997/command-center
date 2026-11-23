@@ -7,6 +7,16 @@
   <path class="pulse-spark-line" d="{{.Spark}}"></path>
 </svg>{{end}}
 
+{{define "stageList"}}<ul class="pulse-limits" aria-label="stage share">
+  {{range .}}<li class="pulse-limit">
+    <span class="flex items-baseline justify-between gap-2"><span class="stage-key" data-stage="{{.Hue}}">{{.Label}}</span><b class="tabular-nums">{{.Pct}} <span class="text-muted font-normal">{{.Tokens}}</span></b></span>
+    <span class="meter" aria-hidden="true"><span class="meter-fill"{{if .Top}} data-top{{end}} style="width: {{.Width}}%"></span></span>
+  </li>
+  {{end -}}
+</ul>{{end}}
+
+{{define "unrecorded"}}{{if .}}<p class="module-sub mt-3 mb-0">{{.}} earlier {{if eq . 1}}ticket was{{else}}tickets were{{end}} not recorded with skill phases and {{if eq . 1}}is{{else}}are{{end}} left out.</p>{{end}}{{end}}
+
 {{template "shellStart" .}}
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
@@ -70,6 +80,7 @@
       {{else}}<p class="text-muted">No merged tickets in the last {{.Params.Days}} days</p>{{end}}
     </div>
   </section>
+  <div class="flex min-w-0 flex-col gap-4">
   <section class="pulse-card" aria-labelledby="limits-h">
     <h2 id="limits-h">Limits</h2>
     <ul class="pulse-limits" aria-label="limits">
@@ -82,6 +93,15 @@
     </ul>
     <p class="module-sub mt-4 mb-0">Readings come from the usage lines agents write while they run, so a window with no recent run has no reading.</p>
   </section>
+  <section class="pulse-card" aria-labelledby="stage-share-h">
+    <h2 id="stage-share-h">Stage share</h2>
+    <p class="module-sub mb-0">Where a ticket's tokens go, largest stage first.</p>
+    {{with .StageRanked}}<div class="mt-3">{{template "stageList" .}}</div>
+    <p class="module-sub mt-3 mb-0">{{$.StageSource}}</p>
+    {{else}}<p class="text-muted mt-3 mb-0">No recorded tickets in the last {{.Params.Days}} days</p>{{end}}
+    {{template "unrecorded" .Stages.Unrecorded}}
+  </section>
+  </div>
 </div>
 <section class="pulse-card mt-4" aria-labelledby="rework-h">
   <h2 id="rework-h">Rework</h2>
@@ -111,6 +131,45 @@
   </div>
   {{else}}<p class="text-muted mt-4 mb-0">No merged tickets in the last {{.Params.Days}} days</p>{{end}}
 </section>
+<section class="pulse-card mt-4" aria-labelledby="bars-h">
+  <h2 id="bars-h">Where a ticket's tokens go</h2>
+  <p class="module-sub mb-0">Each bar is 100% of the tokens that {{if .Params.Repo}}feature{{else}}repo{{end}}'s tickets spent.</p>
+  {{with .StageBars}}<ul class="stage-legend mt-3" aria-label="stages">
+    {{range $.StageFlow}}<li class="stage-key" data-stage="{{.Hue}}">{{.Label}}</li>
+    {{end -}}
+  </ul>
+  <ul class="stage-bars mt-3" aria-label="token share by stage">
+    {{range .}}<li class="stage-bar-row">
+      <span class="min-w-0 truncate" title="{{.Label}}">{{.Label}}</span>
+      <span class="stage-bar" role="img" aria-label="{{range .Rows}}{{.Label}} {{.Pct}}, {{end}}">{{range .Rows}}<span class="stage-fill" data-stage="{{.Hue}}" style="width: {{.Width}}%"></span>{{end}}</span>
+    </li>
+    {{end -}}
+  </ul>
+  <p class="module-sub mt-3 mb-0">{{$.StageSource}}</p>
+  {{else}}<p class="text-muted mt-3 mb-0">No recorded tickets in the last {{.Params.Days}} days</p>{{end}}
+  {{template "unrecorded" .Stages.Unrecorded}}
+</section>
+{{if .Params.Repo}}<section class="pulse-card mt-4" aria-labelledby="skills-h">
+  <h2 id="skills-h">Skills</h2>
+  <p class="module-sub mb-0">Skills these tickets loaded, the share of tickets that loaded each, and the tokens spent in them.</p>
+  {{if .SkillRows}}<div class="table-frame mt-3">
+    <table class="ledger w-full" aria-label="skills">
+      <thead><tr><th scope="col">Skill</th><th scope="col" class="text-right">Tickets</th><th scope="col" class="text-right">Tokens</th></tr></thead>
+      <tbody>
+        {{range .SkillRows}}<tr>
+          <th scope="row" class="w-full max-w-0"><span class="block truncate font-mono" title="{{.Skill}}">{{.Skill}}</span></th>
+          <td class="text-right tabular-nums"><span class="inline-flex items-center justify-end gap-2"><span class="ledger-bar" aria-hidden="true"><span style="width: {{.Width}}%"></span></span>{{.Tickets}} <span class="text-muted">{{.Pct}}</span></span></td>
+          <td class="text-right tabular-nums">{{.Tokens}}</td>
+        </tr>
+        {{end -}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p class="text-muted mt-3 mb-0">No skills loaded in the last {{.Params.Days}} days</p>{{end}}
+  {{template "unrecorded" .Stages.Unrecorded}}
+</section>
+{{else}}<p class="text-muted mt-4 mb-0">Pick a repo above to see its skills.</p>
+{{end -}}
 <div class="pulse-grid pulse-grid-even mt-4">
   <section class="pulse-card" aria-labelledby="parks-h">
     <h2 id="parks-h">Why runs parked</h2>
