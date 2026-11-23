@@ -127,6 +127,82 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	}
 }
 
+func TestStore_ReworkFacts(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	at := func(day, hour, minute int) time.Time { return time.Date(2026, 6, day, hour, minute, 0, 0, time.UTC) }
+	storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-2", "other", "feat-a")
+	storetest.FeatureTicket(t, store, "sandbox://CC-3", "cc-sandbox", "feat-b")
+
+	event := func(url string, kind storepkg.EventKind, when time.Time, detail string) {
+		t.Helper()
+		if err := store.AppendEvent(ctx, storepkg.Event{At: when, TicketURL: url, Kind: kind, Detail: detail}); err != nil {
+			t.Fatalf("AppendEvent(%s): %v", kind, err)
+		}
+	}
+	run := func(url string, cause plan.FollowUpCause, started, ended time.Time, m agentlog.RunMetrics) {
+		t.Helper()
+		id, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: url, Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "h" + started.String(), Cause: cause,
+		})
+		if err != nil {
+			t.Fatalf("InsertSessionRunSkeleton: %v", err)
+		}
+		if err := store.RecordSpawn(ctx, storepkg.Spawn{RunID: plan.RunID(id), StartedAt: started}); err != nil {
+			t.Fatalf("RecordSpawn: %v", err)
+		}
+		if err := store.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(id), Outcome: plan.OutcomePush, Metrics: option.Some(m), EndedAt: ended,
+		}); err != nil {
+			t.Fatalf("RecordDisposition: %v", err)
+		}
+	}
+
+	run("sandbox://CC-1", "", at(10, 7, 0), at(10, 8, 0), agentlog.RunMetrics{
+		Input: 10, CacheWrite: 20, CacheRead: 999, Output: 30,
+	})
+	event("sandbox://CC-1", storepkg.EventChecksLanded, at(9, 8, 0), "old check failed")
+	event("sandbox://CC-1", storepkg.EventChecksLanded, at(10, 8, 30), "unit tests failed")
+	event("sandbox://CC-1", storepkg.EventChecksLanded, at(10, 8, 30), "lint failed")
+	event("sandbox://CC-1", storepkg.EventChecksLanded, at(10, 8, 30), "ok-status-check failed")
+	event("sandbox://CC-1", storepkg.EventChecksLanded, at(10, 8, 35), "docs passed")
+	run("sandbox://CC-1", plan.CauseCIFailed, at(10, 8, 45), at(10, 9, 10), agentlog.RunMetrics{Input: 40, Output: 60})
+	event("sandbox://CC-1", storepkg.EventChecksLanded, at(10, 9, 15), "lint passed")
+	event("sandbox://CC-1", storepkg.EventParked, at(10, 9, 0), "verify_command failed; log at /data/1.log")
+	run("sandbox://CC-1", plan.CauseVerifyFailed, at(10, 9, 20), at(10, 9, 30), agentlog.RunMetrics{Input: 5})
+
+	event("sandbox://CC-2", storepkg.EventChecksLanded, at(10, 8, 30), "unit tests failed")
+	event("sandbox://CC-2", storepkg.EventParked, at(10, 9, 0), "other repo")
+	event("sandbox://CC-3", storepkg.EventParked, at(10, 9, 0), "other feature")
+
+	q := june10
+	q.Repo, q.Feature = "cc-sandbox", "feat-a"
+	got, err := store.ReworkFacts(ctx, q)
+	if err != nil {
+		t.Fatalf("ReworkFacts(%+v): %v", q, err)
+	}
+	want := insight.ReworkFacts{
+		Parks: []insight.ParkFact{{
+			Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Reason: "verify_command failed",
+			Detail: "verify_command failed; log at /data/1.log", At: at(10, 9, 0), Tokens: 60,
+		}},
+		Failed: []insight.FailedCheck{
+			{Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Name: "unit tests", At: at(10, 8, 30)},
+			{Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Name: "lint", At: at(10, 8, 30)},
+			{Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Name: "ok-status-check", At: at(10, 8, 30)},
+		},
+		Fixes: []insight.FixRun{{
+			Ticket: "sandbox://CC-1", LaunchedAt: at(10, 8, 45), Tokens: 100,
+			Checks: []string{"lint", "ok-status-check", "old check", "unit tests"},
+		}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ReworkFacts(%+v) mismatch (-want +got):\n%s", q, diff)
+	}
+}
+
 func TestStore_TicketInsightFacts(t *testing.T) {
 	store := openStore(t)
 	const url = "sandbox://CC-1"

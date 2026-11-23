@@ -1,9 +1,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan/insight"
@@ -94,4 +98,79 @@ func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map
 		}
 	}
 	return byURL, nil
+}
+
+type landedCheck struct {
+	at     time.Time
+	name   string
+	failed bool
+}
+
+func (s *Store) ReworkFacts(ctx context.Context, q SpendQuery) (insight.ReworkFacts, error) {
+	repo, feature, tz := nullIfEmpty(q.Repo), nullIfEmpty(q.Feature), q.timezone()
+	var facts insight.ReworkFacts
+
+	parks, err := s.q.ParkEvents(ctx, ccdb.ParkEventsParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ReworkFacts{}, fmt.Errorf("select park events: %w", err)
+	}
+	for _, p := range parks {
+		facts.Parks = append(facts.Parks, insight.ParkFact{
+			Ticket: p.TicketID, Repo: p.Repo, Reason: insight.ParkReason(p.Detail), Detail: p.Detail,
+			At: p.At, Tokens: p.Tokens,
+		})
+	}
+
+	landed, err := s.q.ChecksLandedEvents(ctx, ccdb.ChecksLandedEventsParams{
+		Repo: repo, Feature: feature, Timezone: tz, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ReworkFacts{}, fmt.Errorf("select landed checks: %w", err)
+	}
+	loc := cmp.Or(q.Loc, time.UTC)
+	sinceY, sinceM, sinceD := q.Since.Date()
+	since := time.Date(sinceY, sinceM, sinceD, 0, 0, 0, 0, loc)
+	byTicket := make(map[string][]landedCheck)
+	for _, e := range landed {
+		i := strings.LastIndexByte(e.Detail, ' ')
+		if i < 0 {
+			continue
+		}
+		check := landedCheck{at: e.At, name: e.Detail[:i], failed: e.Detail[i+1:] == "failed"}
+		byTicket[e.TicketID] = append(byTicket[e.TicketID], check)
+		if check.failed && !e.At.Before(since) {
+			facts.Failed = append(facts.Failed, insight.FailedCheck{
+				Ticket: e.TicketID, Repo: e.Repo, Name: check.name, At: e.At,
+			})
+		}
+	}
+
+	fixes, err := s.q.CIFixRuns(ctx, ccdb.CIFixRunsParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return insight.ReworkFacts{}, fmt.Errorf("select ci fix runs: %w", err)
+	}
+	for _, f := range fixes {
+		latest := make(map[string]bool)
+		for _, c := range byTicket[f.TicketID] {
+			if c.at.After(f.LaunchedAt) {
+				break
+			}
+			latest[c.name] = c.failed
+		}
+		var red []string
+		for name, failed := range latest {
+			if failed {
+				red = append(red, name)
+			}
+		}
+		slices.Sort(red)
+		facts.Fixes = append(facts.Fixes, insight.FixRun{
+			Ticket: f.TicketID, LaunchedAt: f.LaunchedAt, Tokens: f.Tokens, Checks: red,
+		})
+	}
+	return facts, nil
 }

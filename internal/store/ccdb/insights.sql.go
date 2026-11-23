@@ -87,6 +87,120 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 	return items, nil
 }
 
+const cIFixRuns = `-- name: CIFixRuns :many
+SELECT t.url AS ticket_id, r.proc_started_at::timestamptz AS launched_at,
+       (COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
+        + COALESCE((r.metrics->>'output')::bigint, 0))::bigint AS tokens
+FROM runs r
+JOIN tickets t ON t.url = r.ticket_id
+WHERE r.cause = 'ci_failed' AND r.proc_started_at IS NOT NULL
+  AND ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (r.proc_started_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY r.proc_started_at, r.id
+`
+
+type CIFixRunsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type CIFixRunsRow struct {
+	TicketID   string
+	LaunchedAt time.Time
+	Tokens     int64
+}
+
+func (q *Queries) CIFixRuns(ctx context.Context, arg CIFixRunsParams) ([]CIFixRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, cIFixRuns,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CIFixRunsRow
+	for rows.Next() {
+		var i CIFixRunsRow
+		if err := rows.Scan(&i.TicketID, &i.LaunchedAt, &i.Tokens); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const checksLandedEvents = `-- name: ChecksLandedEvents :many
+SELECT t.url AS ticket_id, t.repo, e.at, COALESCE(e.detail, '')::text AS detail
+FROM events e
+JOIN tickets t ON t.url = e.ticket_id
+WHERE e.kind = 'checks_landed'
+  AND ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (e.at AT TIME ZONE $3::text)::date <= $4::date
+ORDER BY e.at, e.id
+`
+
+type ChecksLandedEventsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Until    time.Time
+}
+
+type ChecksLandedEventsRow struct {
+	TicketID string
+	Repo     string
+	At       time.Time
+	Detail   string
+}
+
+func (q *Queries) ChecksLandedEvents(ctx context.Context, arg ChecksLandedEventsParams) ([]ChecksLandedEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, checksLandedEvents,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChecksLandedEventsRow
+	for rows.Next() {
+		var i ChecksLandedEventsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.Repo,
+			&i.At,
+			&i.Detail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertConflictPaths = `-- name: InsertConflictPaths :exec
 INSERT INTO conflict_paths (event_id, path, generated)
 SELECT $1, p.path, p.generated
@@ -169,6 +283,71 @@ func (q *Queries) MergedTicketFacts(ctx context.Context, arg MergedTicketFactsPa
 			&i.WeightUsd,
 			&i.Tokens,
 			&i.ToolCalls,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const parkEvents = `-- name: ParkEvents :many
+SELECT t.url AS ticket_id, t.repo, e.at, COALESCE(e.detail, '')::text AS detail,
+       COALESCE((SELECT SUM(COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
+                            + COALESCE((r.metrics->>'output')::bigint, 0))
+                 FROM runs r WHERE r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at <= e.at), 0)::bigint AS tokens
+FROM events e
+JOIN tickets t ON t.url = e.ticket_id
+WHERE e.kind = 'parked'
+  AND ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (e.at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY e.at, e.id
+`
+
+type ParkEventsParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type ParkEventsRow struct {
+	TicketID string
+	Repo     string
+	At       time.Time
+	Detail   string
+	Tokens   int64
+}
+
+func (q *Queries) ParkEvents(ctx context.Context, arg ParkEventsParams) ([]ParkEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, parkEvents,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ParkEventsRow
+	for rows.Next() {
+		var i ParkEventsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.Repo,
+			&i.At,
+			&i.Detail,
+			&i.Tokens,
 		); err != nil {
 			return nil, err
 		}
