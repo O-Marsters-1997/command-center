@@ -174,24 +174,3 @@ func (s *Store) ReworkFacts(ctx context.Context, q SpendQuery) (insight.ReworkFa
 	}
 	return facts, nil
 }
-
-func addMetrics(a, b agentlog.RunMetrics) agentlog.RunMetrics {
-	switch {
-	case a.Wall.IsSome() && b.Wall.IsSome():
-		a.Wall = option.Some(a.Wall.Unwrap() + b.Wall.Unwrap())
-	case b.Wall.IsSome():
-		a.Wall = b.Wall
-	}
-	a.Turns += b.Turns
-	a.Input += b.Input
-	a.CacheWrite += b.CacheWrite
-	a.CacheRead += b.CacheRead
-	a.Output += b.Output
-	for tool, n := range b.Tools {
-		if a.Tools == nil {
-			a.Tools = make(map[string]int)
-		}
-		a.Tools[tool] += n
-	}
-	return a
-}
