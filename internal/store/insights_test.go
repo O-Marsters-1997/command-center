@@ -109,6 +109,28 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	})
 	run("sandbox://CC-1", first, mergedAt.Add(time.Hour), 9, agentlog.RunMetrics{Input: 999})
 	storetest.Merged(t, store, "sandbox://CC-1", mergedAt)
+	event := func(kind storepkg.EventKind, when time.Time, detail string) {
+		t.Helper()
+		ev := storepkg.Event{At: when, TicketURL: "sandbox://CC-1", Kind: kind, Detail: detail}
+		if err := store.AppendEvent(t.Context(), ev); err != nil {
+			t.Fatalf("AppendEvent(%s): %v", kind, err)
+		}
+	}
+	for i, tip := range []string{"t1", "t2", "t3"} {
+		at := mergedAt.Add(time.Duration(i-4) * time.Hour)
+		if i == 2 {
+			at = mergedAt.Add(time.Hour)
+		}
+		storetest.Pushed(t, store, storetest.PushedOpts{URL: "sandbox://CC-1", Tip: tip, Base: "main", BaseTip: "b", At: at})
+	}
+	event(storepkg.EventVerdictTransition, mergedAt.Add(-4*time.Hour+time.Minute), "ci_failed: lint")
+	event(storepkg.EventVerdictTransition, mergedAt.Add(-3*time.Hour+time.Minute), "review_me: green")
+	event(storepkg.EventRefreshed, mergedAt.Add(-5*time.Hour), "merged origin/main")
+	event(storepkg.EventRefreshed, mergedAt.Add(-4*time.Hour), "merged origin/main")
+	event(storepkg.EventRestacked, mergedAt.Add(-3*time.Hour), "restacked onto origin/main")
+	event(storepkg.EventRefreshConflicted, mergedAt.Add(-2*time.Hour), "conflict")
+	event(storepkg.EventRefreshRefused, mergedAt.Add(-time.Hour), "dirty")
+	event(storepkg.EventRefreshed, mergedAt.Add(time.Hour), "after merge")
 	run("sandbox://CC-2", first, mergedAt.Add(-time.Hour), 1, agentlog.RunMetrics{})
 	storetest.Merged(t, store, "sandbox://CC-2", mergedAt)
 
@@ -121,6 +143,11 @@ func TestStore_MergedTicketFacts(t *testing.T) {
 	want := []insight.TicketFact{{
 		Ticket: "sandbox://CC-1", Repo: "cc-sandbox", Feature: "feat-a", FirstRunAt: first, MergedAt: mergedAt,
 		WeightUSD: 3, Tokens: 62, ToolCalls: 6,
+		Pushes: []insight.PushFact{
+			{At: mergedAt.Add(-4 * time.Hour), Verdict: insight.PushRed},
+			{At: mergedAt.Add(-3 * time.Hour), Verdict: insight.PushGreen},
+		},
+		Refreshes: 4, Conflicted: 1,
 	}}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(insight.TicketFact{}, "Title")); diff != "" {
 		t.Errorf("MergedTicketFacts(cc-sandbox, june 10) mismatch (-want +got):\n%s", diff)

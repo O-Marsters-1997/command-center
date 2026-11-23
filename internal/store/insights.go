@@ -16,11 +16,23 @@ import (
 )
 
 func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.TicketFact, error) {
+	repo, feature, tz := nullIfEmpty(q.Repo), nullIfEmpty(q.Feature), q.timezone()
 	rows, err := s.q.MergedTicketFacts(ctx, ccdb.MergedTicketFactsParams{
-		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("select merged ticket facts: %w", err)
+	}
+	pushRows, err := s.q.MergedTicketPushes(ctx, ccdb.MergedTicketPushesParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: q.Since, Until: q.Until,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select merged ticket pushes: %w", err)
+	}
+	pushes := make(map[string][]insight.PushFact)
+	for _, p := range pushRows {
+		push := insight.PushFact{At: p.PushedAt, Verdict: insight.PushVerdict(p.Verdict)}
+		pushes[p.TicketID] = append(pushes[p.TicketID], push)
 	}
 
 	facts := make([]insight.TicketFact, len(rows))
@@ -29,6 +41,7 @@ func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.
 			Ticket: row.TicketID, Title: row.Title, Repo: row.Repo, Feature: row.Feature,
 			FirstRunAt: row.FirstRunAt, MergedAt: row.MergedAt,
 			WeightUSD: row.WeightUsd, Tokens: row.Tokens, ToolCalls: int(row.ToolCalls),
+			Pushes: pushes[row.TicketID], Refreshes: int(row.Refreshes), Conflicted: int(row.Conflicted),
 		}
 	}
 	return facts, nil
