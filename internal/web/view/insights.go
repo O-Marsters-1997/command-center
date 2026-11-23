@@ -110,7 +110,9 @@ func (p InsightsPage) HotspotShare(tickets int) int {
 	return tickets * 100 / top
 }
 
-func (InsightsPage) TicketName(ticket string) string {
+func (InsightsPage) TicketName(ticket string) string { return ticketName(ticket) }
+
+func ticketName(ticket string) string {
 	name := ticket[strings.LastIndexByte(ticket, '/')+1:]
 	if _, err := strconv.Atoi(name); err == nil {
 		return "#" + name
@@ -133,29 +135,12 @@ var tileLabels = map[insight.Metric]string{
 }
 
 func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsParams) (InsightsPage, error) {
-	p.Params.Repo, p.Params.Feature = p.Repo, p.Feature
-	f, err := r.loadFrame(ctx, now, p.Params)
+	c, err := r.insightsCost(ctx, now, p)
 	if err != nil {
-		return InsightsPage{}, fmt.Errorf("load frame: %w", err)
+		return InsightsPage{}, err
 	}
-	p.Params, p.Repo, p.Feature = f.params, f.params.Repo, f.params.Feature
-
-	loc, err := time.LoadLocation(insightsTimezone(now.Location()))
-	if err != nil {
-		return InsightsPage{}, fmt.Errorf("load timezone: %w", err)
-	}
-	current, prior := insight.Windows(p.Range, now)
-	currentFacts, err := r.store.MergedTicketFacts(ctx, spendQuery(p, loc, current, 0))
-	if err != nil {
-		return InsightsPage{}, fmt.Errorf("load merged ticket facts: %w", err)
-	}
-	priorFacts, err := r.store.MergedTicketFacts(ctx, spendQuery(p, loc, prior, -1))
-	if err != nil {
-		return InsightsPage{}, fmt.Errorf("load prior merged ticket facts: %w", err)
-	}
-	fit := f.split[agentlog.SevenDay].Fit
-	cost := insight.DeriveCost(currentFacts, priorFacts, p.Range, p.Metric, fit)
-	conflicts, err := r.store.ConflictFacts(ctx, spendQuery(p, loc, current, 0))
+	f, p, cost, fit := c.frame, c.params, c.cost, c.fit
+	conflicts, err := r.store.ConflictFacts(ctx, spendQuery(p, c.loc, c.current, 0))
 	if err != nil {
 		return InsightsPage{}, fmt.Errorf("load conflict facts: %w", err)
 	}
@@ -187,6 +172,98 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, p InsightsPara
 		ChartSrc: p.path(insightsChart, func(*InsightsParams) {}),
 		Hotspots: insight.Hotspots(conflicts.Conflicts), Pairs: insight.StackPairs(conflicts),
 	}, nil
+}
+
+type insightsCostData struct {
+	frame   frame
+	params  InsightsParams
+	loc     *time.Location
+	current insight.Window
+	cost    insight.Cost
+	fit     spend.Result
+}
+
+func (r *Reader) insightsCost(ctx context.Context, now time.Time, p InsightsParams) (insightsCostData, error) {
+	p.Params.Repo, p.Params.Feature = p.Repo, p.Feature
+	f, err := r.loadFrame(ctx, now, p.Params)
+	if err != nil {
+		return insightsCostData{}, fmt.Errorf("load frame: %w", err)
+	}
+	p.Params, p.Repo, p.Feature = f.params, f.params.Repo, f.params.Feature
+
+	loc, err := time.LoadLocation(insightsTimezone(now.Location()))
+	if err != nil {
+		return insightsCostData{}, fmt.Errorf("load timezone: %w", err)
+	}
+	current, prior := insight.Windows(p.Range, now)
+	currentFacts, err := r.store.MergedTicketFacts(ctx, spendQuery(p, loc, current, 0))
+	if err != nil {
+		return insightsCostData{}, fmt.Errorf("load merged ticket facts: %w", err)
+	}
+	priorFacts, err := r.store.MergedTicketFacts(ctx, spendQuery(p, loc, prior, -1))
+	if err != nil {
+		return insightsCostData{}, fmt.Errorf("load prior merged ticket facts: %w", err)
+	}
+	fit := f.split[agentlog.SevenDay].Fit
+	return insightsCostData{
+		frame: f, params: p, loc: loc, current: current, fit: fit,
+		cost: insight.DeriveCost(currentFacts, priorFacts, p.Range, p.Metric, fit),
+	}, nil
+}
+
+type ChartWire struct {
+	Unit        string       `json:"unit"`
+	View        insight.View `json:"view"`
+	Dots        []DotWire    `json:"dots"`
+	Buckets     []BucketWire `json:"buckets"`
+	RangeMedian float64      `json:"range_median"`
+}
+
+type DotWire struct {
+	Ticket   string  `json:"ticket"`
+	Title    string  `json:"title"`
+	Href     string  `json:"href"`
+	MergedAt string  `json:"merged_at"`
+	Value    float64 `json:"value"`
+	Rolling  float64 `json:"rolling"`
+}
+
+type BucketWire struct {
+	Start  string  `json:"start"`
+	Median float64 `json:"median"`
+	N      int     `json:"n"`
+}
+
+var metricUnits = map[insight.Metric]string{
+	insight.MetricTokens: "tokens",
+	insight.MetricPct:    "pct",
+	insight.MetricWall:   "seconds",
+	insight.MetricTools:  "calls",
+}
+
+func (r *Reader) InsightsChart(ctx context.Context, now time.Time, p InsightsParams) (ChartWire, error) {
+	c, err := r.insightsCost(ctx, now, p)
+	if err != nil {
+		return ChartWire{}, err
+	}
+	wire := ChartWire{
+		Unit: metricUnits[c.params.Metric], View: c.params.View,
+		Dots: []DotWire{}, Buckets: []BucketWire{}, RangeMedian: c.cost.RangeMedian,
+	}
+	for _, d := range c.cost.Dots {
+		href := SessionPath(d.Ticket)
+		if href != "" {
+			href += "?log=insights"
+		}
+		wire.Dots = append(wire.Dots, DotWire{
+			Ticket: ticketName(d.Ticket), Title: d.Title, Href: href,
+			MergedAt: d.MergedAt.UTC().Format(time.RFC3339), Value: d.Value, Rolling: d.Rolling,
+		})
+	}
+	for _, b := range c.cost.Buckets {
+		wire.Buckets = append(wire.Buckets, BucketWire{Start: b.Start.UTC().Format(time.RFC3339), Median: b.Median, N: b.N})
+	}
+	return wire, nil
 }
 
 func spendQuery(p InsightsParams, loc *time.Location, w insight.Window, endShiftDays int) store.SpendQuery {

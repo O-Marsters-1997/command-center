@@ -66,6 +66,7 @@
     </div>
     <div class="mt-4">
       {{if .Cost.Dots}}<cc-insights-chart src="{{.ChartSrc}}">Loading chart…</cc-insights-chart>
+      <script type="module" src="/assets/dist/insights-chart.js"></script>
       {{else}}<p class="text-muted">No merged tickets in the last {{.Params.Days}} days</p>{{end}}
     </div>
   </section>
