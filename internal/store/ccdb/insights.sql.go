@@ -226,7 +226,11 @@ SELECT t.url AS ticket_id, t.title, t.repo, t.feature, m.merged_at,
        COALESCE(SUM(r.cost_usd), 0)::double precision AS weight_usd,
        COALESCE(SUM(COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
                     + COALESCE((r.metrics->>'output')::bigint, 0)), 0)::bigint AS tokens,
-       COALESCE(SUM((SELECT COALESCE(SUM(v::int), 0) FROM jsonb_each_text(COALESCE(r.metrics->'tools', '{}'::jsonb)) AS e(k, v))), 0)::bigint AS tool_calls
+       COALESCE(SUM((SELECT COALESCE(SUM(v::int), 0) FROM jsonb_each_text(COALESCE(r.metrics->'tools', '{}'::jsonb)) AS e(k, v))), 0)::bigint AS tool_calls,
+       (SELECT COUNT(*) FROM events e WHERE e.ticket_id = t.url AND e.at < m.merged_at
+        AND e.kind IN ('refreshed', 'restacked', 'refresh_conflicted'))::bigint AS refreshes,
+       (SELECT COUNT(*) FROM events e WHERE e.ticket_id = t.url AND e.at < m.merged_at
+        AND e.kind = 'refresh_conflicted')::bigint AS conflicted
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
 JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
@@ -256,6 +260,8 @@ type MergedTicketFactsRow struct {
 	WeightUsd  float64
 	Tokens     int64
 	ToolCalls  int64
+	Refreshes  int64
+	Conflicted int64
 }
 
 func (q *Queries) MergedTicketFacts(ctx context.Context, arg MergedTicketFactsParams) ([]MergedTicketFactsRow, error) {
@@ -283,7 +289,78 @@ func (q *Queries) MergedTicketFacts(ctx context.Context, arg MergedTicketFactsPa
 			&i.WeightUsd,
 			&i.Tokens,
 			&i.ToolCalls,
+			&i.Refreshes,
+			&i.Conflicted,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mergedTicketPushes = `-- name: MergedTicketPushes :many
+WITH merges AS (
+    SELECT ticket_id, MIN(at) AS merged_at FROM events WHERE kind = 'pr_merged' GROUP BY ticket_id
+),
+spans AS (
+    SELECT p.ticket_id, p.id, p.pushed_at,
+           COALESCE(LEAD(p.pushed_at) OVER (PARTITION BY p.ticket_id ORDER BY p.pushed_at, p.id), 'infinity'::timestamptz) AS next_at
+    FROM pushes p
+)
+SELECT s.ticket_id, s.pushed_at,
+       (CASE
+           WHEN EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = s.ticket_id AND e.kind = 'verdict_transition'
+                        AND e.detail LIKE 'review_me:%' AND e.at >= s.pushed_at AND e.at < s.next_at) THEN 'green'
+           WHEN EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = s.ticket_id AND e.kind = 'verdict_transition'
+                        AND e.detail LIKE 'ci_failed:%' AND e.at >= s.pushed_at AND e.at < s.next_at) THEN 'red'
+           ELSE 'pending'
+       END)::text AS verdict
+FROM spans s
+JOIN tickets t ON t.url = s.ticket_id
+JOIN merges m ON m.ticket_id = s.ticket_id AND s.pushed_at < m.merged_at
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+ORDER BY s.ticket_id, s.pushed_at, s.id
+`
+
+type MergedTicketPushesParams struct {
+	Repo     sql.NullString
+	Feature  sql.NullString
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+type MergedTicketPushesRow struct {
+	TicketID string
+	PushedAt time.Time
+	Verdict  string
+}
+
+func (q *Queries) MergedTicketPushes(ctx context.Context, arg MergedTicketPushesParams) ([]MergedTicketPushesRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketPushes,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MergedTicketPushesRow
+	for rows.Next() {
+		var i MergedTicketPushesRow
+		if err := rows.Scan(&i.TicketID, &i.PushedAt, &i.Verdict); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

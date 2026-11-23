@@ -79,6 +79,8 @@ type TicketFact struct {
 	WeightUSD                    float64
 	Tokens                       int64
 	ToolCalls                    int
+	Pushes                       []PushFact
+	Refreshes, Conflicted        int
 }
 
 type Change struct {
@@ -206,6 +208,10 @@ func toneOf(fraction float64) Tone {
 }
 
 func buckets(sorted []TicketFact, r Range, value func(TicketFact) float64) []Bucket {
+	return bucketsOf(sorted, r, func(g []TicketFact) float64 { return median(values(g, value)) })
+}
+
+func bucketsOf(sorted []TicketFact, r Range, summary func([]TicketFact) float64) []Bucket {
 	if len(sorted) == 0 {
 		return nil
 	}
@@ -218,18 +224,18 @@ func buckets(sorted []TicketFact, r Range, value func(TicketFact) float64) []Buc
 	}
 	last := bucketStart(sorted[len(sorted)-1].MergedAt, step)
 	out := make([]Bucket, count)
-	groups := make([][]float64, count)
+	groups := make([][]TicketFact, count)
 	for i := range out {
 		out[i].Start = last.AddDate(0, 0, (i-count+1)*step)
 	}
 	for _, f := range sorted {
 		start := bucketStart(f.MergedAt, step)
 		if i := slices.IndexFunc(out, func(b Bucket) bool { return b.Start.Equal(start) }); i >= 0 {
-			groups[i] = append(groups[i], value(f))
+			groups[i] = append(groups[i], f)
 		}
 	}
 	for i, g := range groups {
-		out[i].Median, out[i].N = median(g), len(g)
+		out[i].Median, out[i].N = summary(g), len(g)
 	}
 	return out
 }
