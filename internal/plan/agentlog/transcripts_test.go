@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/plan/spend"
 )
 
 func oneMillionInputTokensLine(timestamp, requestID string) string {
@@ -45,6 +47,30 @@ func TestLoadRequests(t *testing.T) {
 		}
 		if len(requests) != 3 {
 			t.Errorf("LoadRequests(dir) = %d requests, want 3", len(requests))
+		}
+	})
+
+	t.Run("decodes a Claude Code transcript's requestId", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		body, err := os.ReadFile("testdata/claude_transcript.jsonl")
+		if err != nil {
+			t.Fatalf("ReadFile(claude_transcript.jsonl): %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "session.jsonl"), body, 0o644); err != nil {
+			t.Fatalf("WriteFile(session.jsonl): %v", err)
+		}
+
+		requests, err := agentlog.LoadRequests(dir)
+		if err != nil {
+			t.Fatalf("LoadRequests() error = %v", err)
+		}
+		if len(requests) != 2 {
+			t.Fatalf("LoadRequests(dir) = %d requests, want 2", len(requests))
+		}
+		start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		if got := spend.SumWeight(requests, start, start.Add(time.Hour)); got <= 0 {
+			t.Errorf("SumWeight(requests) = %v, want above zero", got)
 		}
 	})
 
