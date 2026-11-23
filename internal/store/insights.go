@@ -66,6 +66,42 @@ func (s *Store) MergedTicketFacts(ctx context.Context, q SpendQuery) ([]insight.
 	return facts, nil
 }
 
+func (s *Store) TicketInsightFacts(ctx context.Context, ticket string) (insight.TicketFacts, error) {
+	key := nullIfEmpty(ticket)
+	runRows, err := s.q.TicketInsightRuns(ctx, key)
+	if err != nil {
+		return insight.TicketFacts{}, fmt.Errorf("select ticket runs: %w", err)
+	}
+	pushRows, err := s.q.TicketInsightPushes(ctx, key)
+	if err != nil {
+		return insight.TicketFacts{}, fmt.Errorf("select ticket pushes: %w", err)
+	}
+	merged, err := s.q.TicketMergedAt(ctx, key)
+	if err != nil {
+		return insight.TicketFacts{}, fmt.Errorf("select ticket merge: %w", err)
+	}
+
+	var facts insight.TicketFacts
+	for _, row := range runRows {
+		var m agentlog.RunMetrics
+		if err := json.Unmarshal(row.Metrics, &m); err != nil {
+			return insight.TicketFacts{}, fmt.Errorf("decode metrics of run %d: %w", row.ID, err)
+		}
+		facts.Runs = append(facts.Runs, insight.RunFact{
+			ID: row.ID, Step: row.Step, Kind: row.Kind,
+			StartedAt: row.ProcStartedAt.Time, EndedAt: row.EndedAt.Time,
+			WeightUSD: row.CostUsd, Tokens: m.Input + m.CacheWrite + m.Output, Tools: m.Tools, Outcome: row.Outcome,
+		})
+	}
+	for _, row := range pushRows {
+		facts.Pushes = append(facts.Pushes, insight.PushFact{At: row.PushedAt, Verdict: insight.PushVerdict(row.Verdict)})
+	}
+	if len(merged) > 0 {
+		facts.MergedAt = option.Some(merged[0])
+	}
+	return facts, nil
+}
+
 // BoardTicketSpend holds a ticket's current weight, merged or not.
 type BoardTicketSpend struct {
 	AgentUSD, FollowUpUSD float64
