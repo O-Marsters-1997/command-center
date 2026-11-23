@@ -26,6 +26,8 @@ colors:
   s-running-soft: "color-mix(in oklab, oklch(0.76 0.15 75), oklch(0.995 0.001 90) 86%)"
   s-done-soft: "color-mix(in oklab, oklch(0.6 0.14 155), oklch(0.995 0.001 90) 88%)"
   s-failed-soft: "color-mix(in oklab, oklch(0.6 0.2 27), oklch(0.995 0.001 90) 90%)"
+  viz: "oklch(0.58 0.2 295)"
+  viz-soft: "color-mix(in oklab, oklch(0.58 0.2 295), oklch(0.995 0.001 90) 88%)"
   hue-1: "oklch(0.93 0.045 200)"
   hue-1-ink: "oklch(0.42 0.1 200)"
   hue-2: "oklch(0.93 0.045 320)"
@@ -81,6 +83,7 @@ rounded:
   sm: "6px"
   lg: "10px"
   xl: "16px"
+  card: "14px"
   pill: "9999px"
 spacing:
   "1": "4px"
@@ -182,14 +185,14 @@ components:
 
 <!-- impeccable:design-map -->
 Name: Command Centre
-Colors: canvas oklch(0.968 0.002 90), surface oklch(0.995 0.001 90), surface-2 oklch(0.955 0.002 90), surface-3 oklch(0.925 0.003 90), fg oklch(0.22 0.004 270), fg-2 oklch(0.38 0.004 270), muted oklch(0.5 0.005 270) (+23 more in the frontmatter)
+Colors: canvas oklch(0.968 0.002 90), surface oklch(0.995 0.001 90), surface-2 oklch(0.955 0.002 90), surface-3 oklch(0.925 0.003 90), fg oklch(0.22 0.004 270), fg-2 oklch(0.38 0.004 270), muted oklch(0.5 0.005 270) (+25 more in the frontmatter)
 Fonts: Inter (display, headline, title, body, body-read, label); JetBrains Mono (mono)
 Spacing: 1 4px, 2 8px, 3 12px, 4 16px, 5 20px, 6 24px, 8 32px, 10 40px
-Radius: xs 4px, sm 6px, lg 10px, xl 16px, pill 9999px
+Radius: xs 4px, sm 6px, lg 10px, xl 16px, card 14px, pill 9999px
 North Star: "Signal"
 Rules:
 - The Your-Move Rule. Indigo marks the next action and nothing else.
-- The State-or-Nothing Rule. A colour is a state, a project's hue, or your next move.
+- The State-or-Nothing Rule. A colour is a state, a project's hue, or your next move; on Insights charts one violet `viz` hue also marks data.
 - The No-Literal Rule. Templates and islands never carry a colour literal.
 - The Sentence-Case Rule. Every heading, label and group head is sentence case.
 - The Mono-Is-Data Rule. Mono marks machine text.
@@ -200,13 +203,17 @@ Elevation:
 - Focus ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent-line)
 Don't:
 - Don't use ticket cards in lists, uppercase labels, gradients or a coloured sidebar.
+- Don't use `viz` for state, action or chrome, or a gradient, sparkline or 14px card outside
+  Insights charts ([ADR 28](docs/adr/0028-charts-get-one-data-hue.md)).
 - Don't add a token outside the frontmatter.
 - Don't colour `running` indigo or `checking` teal.
 - Don't draw full table grids, tinted table heads or `[bracket]` buttons.
-- Don't use mono as decoration, or a colour that is not a state, a project hue or your move.
+- Don't use mono as decoration, or a colour that is not a state, a project hue, your move or chart data (`viz`).
 - Don't add a dark theme, a component library, or a third-party font request.
 Do:
 - Do compose state colour through the named classes (`glyph`, `meter`, `meter-fill`,
+- Do keep `viz` to Insights chart marks: one violet hue, gradient area fills, sparklines, green/red
+  change chips (`s-done`, `s-failed`) and bordered 14px `rounded.card` cards with no shadow.
 - Do pair every glyph with its state word somewhere on screen.
 - Do keep one primary button per screen, on the owner's next move.
 - Do check every changed page at 1440px and 390px.
