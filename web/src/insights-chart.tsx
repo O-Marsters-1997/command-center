@@ -1,15 +1,25 @@
 import { Chart } from "@tanstack/charts/solid";
 import { Match, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { defineIsland } from "./island";
-import { type ChartWire, parseWire, ticketChart, weekChart } from "./insights-chart.ts";
+import {
+  type ChartWire,
+  type ReworkWire,
+  parseReworkWire,
+  parseWire,
+  reworkChart,
+  ticketChart,
+  weekChart,
+} from "./insights-chart.ts";
 
-type Status = { kind: "loading" } | { kind: "ok"; wire: ChartWire } | { kind: "error"; message: string };
+type Wire = ChartWire | ReworkWire;
+type Status = { kind: "loading" } | { kind: "ok"; wire: Wire } | { kind: "error"; message: string };
 
 const accent = () =>
   getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim() || "gray";
 
-defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
+defineIsland("cc-insights-chart", { src: "", mode: "" }, (props, element) => {
   const src = props.src || element.getAttribute("src") || "/insights/chart";
+  const rework = (props.mode || element.getAttribute("mode")) === "rework";
   const [status, setStatus] = createSignal<Status>({ kind: "loading" });
 
   const ctl = new AbortController();
@@ -17,7 +27,8 @@ defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
     try {
       const res = await fetch(src, { signal: ctl.signal });
       if (!res.ok) throw new Error(`chart request failed: ${res.status}`);
-      setStatus({ kind: "ok", wire: parseWire(await res.json()) });
+      const raw: unknown = await res.json();
+      setStatus({ kind: "ok", wire: rework ? parseReworkWire(raw) : parseWire(raw) });
     } catch (err) {
       if (ctl.signal.aborted) return;
       setStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) });
@@ -32,6 +43,7 @@ defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
   const definition = createMemo(() => {
     const w = wire();
     if (!w) return undefined;
+    if ("metric" in w) return reworkChart(w);
     return w.view === "week" ? weekChart(w, accent()) : ticketChart(w);
   });
 
@@ -51,7 +63,14 @@ defineIsland("cc-insights-chart", { src: "" }, (props, element) => {
         </p>
       </Match>
       <Match when={definition()}>
-        {(def) => <Chart definition={def()} ariaLabel="Merged ticket cost" aspectRatio={3} onSelect={open} />}
+        {(def) => (
+          <Chart
+            definition={def()}
+            ariaLabel={rework ? "Rework by week" : "Merged ticket cost"}
+            aspectRatio={3}
+            onSelect={open}
+          />
+        )}
       </Match>
     </Switch>
   );

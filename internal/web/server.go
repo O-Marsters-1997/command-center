@@ -130,6 +130,7 @@ func NewServer(d Deps, opts ...Option) *Server {
 	mux.Handle("GET /activity", s.handle(s.handleActivity))
 	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
 	mux.Handle("GET /insights/chart", s.handle(s.handleInsightsChart))
+	mux.Handle("GET /insights/rework", s.handle(s.handleInsightsRework))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", s.handle(s.handleLog))
@@ -399,6 +400,14 @@ func (s *Server) handleInsightsChart(w http.ResponseWriter, r *http.Request) err
 	wire, err := s.view.InsightsChart(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
 	if err != nil {
 		return fmt.Errorf("load insights chart: %w", err)
+	}
+	return writeJSON(w, wire)
+}
+
+func (s *Server) handleInsightsRework(w http.ResponseWriter, r *http.Request) error {
+	wire, err := s.view.InsightsRework(r.Context(), s.now(), view.ParseInsightsParams(r.URL.Query()))
+	if err != nil {
+		return fmt.Errorf("load insights rework: %w", err)
 	}
 	return writeJSON(w, wire)
 }

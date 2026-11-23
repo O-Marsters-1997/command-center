@@ -93,7 +93,8 @@ func TestInsightsPage(t *testing.T) {
 				t.Errorf("GET /insights tiles = %q, want %q", tiles, want)
 			}
 		}
-		if got := main.One(t, `cc-insights-chart`).HTML(); !strings.Contains(got, "/insights/chart") {
+		chart := main.One(t, `section[aria-labelledby="cost-h"] cc-insights-chart`)
+		if got := chart.HTML(); !strings.Contains(got, "/insights/chart") {
 			t.Errorf("GET /insights chart element = %q, want src to /insights/chart", got)
 		}
 		main.One(t, `[aria-label="limits"]`)
@@ -139,6 +140,44 @@ func TestInsightsPage(t *testing.T) {
 		pairs := main.One(t, "ul.insight-pairs").Text()
 		if !strings.Contains(pairs, "CC-1") || !strings.Contains(pairs, "CC-2") || strings.Contains(pairs, "gen/x.sql") {
 			t.Errorf("GET /insights pairs = %q, want CC-1 and CC-2 on internal/a.go only", pairs)
+		}
+	})
+
+	t.Run("empty rework ledgers say so and the rework choice survives in links", func(t *testing.T) {
+		t.Parallel()
+		root := htmltest.Parse(t, renderPath(t, newServer(openStore(t), now), "/insights?rework=pushes&range=7d"))
+		main := root.One(t, "main#main")
+
+		got := main.Text()
+		wants := []string{
+			"Why runs parked", "No parked runs in the last 7 days",
+			"Failing jobs", "No failing jobs in the last 7 days",
+		}
+		for _, want := range wants {
+			if !strings.Contains(got, want) {
+				t.Errorf("GET /insights text = %q, want %q", got, want)
+			}
+		}
+		root.One(t, `nav[aria-label="Rework metric"] a[href="/insights?range=7d"]`)
+		root.One(t, `nav[aria-label="Rework metric"] a[href="/insights?range=7d&rework=conflicted"]`)
+		root.One(t, `nav[aria-label="Range"] a[href="/insights?rework=pushes"]`)
+	})
+
+	t.Run("a parked ticket fills the park ledger", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		storetest.FeatureTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+		err := store.AppendEvent(t.Context(), storepkg.Event{
+			At: now.Add(-time.Hour), TicketURL: "sandbox://CC-1",
+			Kind: storepkg.EventParked, Detail: "needs a decision on 3 files",
+		})
+		if err != nil {
+			t.Fatalf("AppendEvent: %v", err)
+		}
+
+		main := htmltest.Parse(t, renderPath(t, newServer(store, now), "/insights")).One(t, "main#main")
+		if got := main.One(t, `table[aria-label="why runs parked"]`).Text(); !strings.Contains(got, "needs a decision on …") {
+			t.Errorf("GET /insights park ledger = %q, want the normalised reason", got)
 		}
 	})
 

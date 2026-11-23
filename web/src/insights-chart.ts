@@ -1,4 +1,5 @@
-import { areaY, defineChart, dot, lineY, ruleY } from "@tanstack/charts";
+import { areaY, barY, defineChart, dot, lineY, ruleY } from "@tanstack/charts";
+import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { scaleUtc } from "@tanstack/charts/scales/time";
 import { tooltip } from "@tanstack/charts/tooltip";
@@ -11,7 +12,14 @@ export type ChartWire = {
   range_median: number;
 };
 
-export type Dot = { ticket: string; title: string; href: string; merged: Date; value: number; rolling: number };
+export type Dot = {
+  ticket: string;
+  title: string;
+  href: string;
+  merged: Date;
+  value: number;
+  rolling: number;
+};
 export type Bucket = { week: Date; value: number; n: number };
 
 export const AREA_ID = "insights-area";
@@ -24,7 +32,11 @@ export function parseWire(raw: unknown): ChartWire {
   if (!isRecord(raw) || !Array.isArray(raw.dots) || !Array.isArray(raw.buckets)) {
     throw new Error("chart response is malformed");
   }
-  if ((raw.view !== "ticket" && raw.view !== "week") || typeof raw.unit !== "string" || typeof raw.range_median !== "number") {
+  if (
+    (raw.view !== "ticket" && raw.view !== "week") ||
+    typeof raw.unit !== "string" ||
+    typeof raw.range_median !== "number"
+  ) {
     throw new Error("chart response is malformed");
   }
   return raw as ChartWire;
@@ -44,7 +56,8 @@ export function formatValue(unit: string, v: number): string {
       return `${v.toFixed(1)}%`;
     case "seconds": {
       const s = Math.round(v);
-      if (s >= 3600) return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+      if (s >= 3600)
+        return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
       return s >= 60 ? `${Math.floor(s / 60)}m` : `${s}s`;
     }
     default:
@@ -124,5 +137,69 @@ export function weekChart(wire: ChartWire, color: string) {
         return `Week of ${formatDay(d.week)}\nMedian ${formatValue(wire.unit, d.value)} · ${d.n} tickets`;
       },
     },
+  });
+}
+
+export type ReworkWire = {
+  metric: "green" | "conflicted" | "pushes";
+  weeks: { start: string; hit: number; miss: number }[];
+  histogram: { start: string; median: number; n: number }[];
+};
+
+export type ReworkBar = { label: string; week: Date; total: number; hit: number; tip: string };
+
+export function parseReworkWire(raw: unknown): ReworkWire {
+  if (!isRecord(raw) || !Array.isArray(raw.weeks) || !Array.isArray(raw.histogram)) {
+    throw new Error("rework response is malformed");
+  }
+  if (raw.metric !== "green" && raw.metric !== "conflicted" && raw.metric !== "pushes") {
+    throw new Error("rework response is malformed");
+  }
+  return raw as ReworkWire;
+}
+
+const HIT_NOUN = { green: "green on the first push", conflicted: "refreshed without conflict", pushes: "" };
+
+export function reworkBars(wire: ReworkWire): ReworkBar[] {
+  if (wire.metric === "pushes") {
+    return wire.histogram.map((b) => {
+      const week = new Date(b.start);
+      return {
+        label: formatDay(week),
+        week,
+        total: b.median,
+        hit: b.median,
+        tip: `Week of ${formatDay(week)}\n${formatValue("pct", b.median)} needed three or more pushes · ${b.n} tickets`,
+      };
+    });
+  }
+  return wire.weeks.map((w) => {
+    const week = new Date(w.start);
+    const total = w.hit + w.miss;
+    return {
+      label: formatDay(week),
+      week,
+      total,
+      hit: w.hit,
+      tip: `Week of ${formatDay(week)}\n${w.hit} of ${total} tickets ${HIT_NOUN[wire.metric]}`,
+    };
+  });
+}
+
+export function reworkChart(wire: ReworkWire) {
+  const bars = reworkBars(wire);
+  const pct = wire.metric === "pushes";
+  const bar = (y2: "total" | "hit", fill: string, opacity: number) =>
+    barY(bars, { x: "label", y1: 0, y2, fill, fillOpacity: opacity, inset: 2 });
+  return defineChart({
+    marks: pct
+      ? [bar("hit", token("viz"), 1)]
+      : [bar("total", token("meta"), 0.35), bar("hit", token("viz"), 1)],
+    scales: {
+      x: { scale: scaleBand, axis: axisText },
+      y: scales(pct ? "pct" : "tickets").y,
+    },
+    focus: "nearest-x",
+    tooltip: { use: tooltip, sticky: false, format: (p) => (p.datum as ReworkBar).tip },
   });
 }
