@@ -213,6 +213,7 @@ type logLine struct {
 	Type            string    `json:"type"`
 	Timestamp       time.Time `json:"timestamp"`
 	RequestID       string    `json:"request_id"`
+	ClaudeRequestID string    `json:"requestId"`
 	ParentToolUseID string    `json:"parent_tool_use_id"`
 	Message         struct {
 		Model   string         `json:"model"`
@@ -258,6 +259,9 @@ func decode(line []byte) (logLine, error) {
 	var parsed logLine
 	if err := json.Unmarshal(line, &parsed); err != nil {
 		return parsed, fmt.Errorf("decode agent log line: %w", err)
+	}
+	if parsed.RequestID == "" {
+		parsed.RequestID = parsed.ClaudeRequestID
 	}
 	return parsed, nil
 }
