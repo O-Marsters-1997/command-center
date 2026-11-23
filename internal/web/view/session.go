@@ -225,7 +225,7 @@ type RawLog struct {
 func (r *Reader) Session(
 	ctx context.Context, now time.Time, ref SessionRef, raw option.Option[RawFilter],
 ) (SessionPage, error) {
-	board, row, err := r.sessionRow(ctx, now, ref)
+	board, row, err := r.readSessionRow(ctx, now, ref)
 	if err != nil {
 		return SessionPage{}, err
 	}
@@ -377,7 +377,7 @@ type ToolBar struct {
 }
 
 func (r *Reader) SessionInsights(ctx context.Context, now time.Time, ref SessionRef) (SessionInsights, error) {
-	board, row, err := r.sessionRow(ctx, now, ref)
+	board, row, err := r.readSessionRow(ctx, now, ref)
 	if err != nil {
 		return SessionInsights{}, err
 	}
@@ -390,7 +390,7 @@ func (r *Reader) SessionInsights(ctx context.Context, now time.Time, ref Session
 }
 
 func (r *Reader) TicketChart(ctx context.Context, ref SessionRef) (TicketChartWire, error) {
-	_, row, err := r.sessionRow(ctx, time.Time{}, ref)
+	_, row, err := r.readSessionRow(ctx, time.Time{}, ref)
 	if err != nil {
 		return TicketChartWire{}, err
 	}

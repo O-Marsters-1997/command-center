@@ -70,6 +70,33 @@ func (r *Reader) sessionRow(ctx context.Context, now time.Time, ref SessionRef) 
 	return board, row, nil
 }
 
+func (r *Reader) readSessionRow(ctx context.Context, now time.Time, ref SessionRef) (Board, Row, error) {
+	board, err := r.Board(ctx, now, Params{})
+	if err != nil {
+		return Board{}, Row{}, fmt.Errorf("load board: %w", err)
+	}
+	if row, ok := board.rowFor(ref); ok {
+		return board, row, nil
+	}
+	url := "https://github.com/" + ref.Owner + "/" + ref.Name + "/issues/" + ref.N
+	ticket, err := r.store.MergedWithdrawnTicket(ctx, url)
+	if errors.Is(err, store.ErrNotFound) {
+		return Board{}, Row{}, ErrSessionNotFound
+	}
+	if err != nil {
+		return Board{}, Row{}, fmt.Errorf("load merged ticket: %w", err)
+	}
+	return board, mergedRow(ticket), nil
+}
+
+func mergedRow(t store.Ticket) Row {
+	return Row{
+		URL: t.URL, Ref: ticketRef(t.URL), Repo: t.Repo, Feature: t.Feature, Title: t.Title, Branch: t.Branch,
+		State: plan.PRMerged, Stage: plan.StageMerged, Label: plan.PRMerged.Label(), Glyph: plan.PRMerged.Glyph(),
+		SessionPath: SessionPath(t.URL),
+	}
+}
+
 func (b Board) LaunchCount() int {
 	return len(slices.DeleteFunc(rowsIn(b.Groups), func(r Row) bool { return !r.Launchable }))
 }

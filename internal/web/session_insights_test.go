@@ -2,6 +2,7 @@ package web_test
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -66,6 +67,31 @@ func TestSessionInsightsTab(t *testing.T) {
 		}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("GET insights figures mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a withdrawn merged ticket still opens on its Insights tab", func(t *testing.T) {
+		t.Parallel()
+		st := insightsTicketStore(t, now, true)
+		if _, err := st.WithdrawTicket(t.Context(), "https://github.com/acme/alpha/issues/7", now, true); err != nil {
+			t.Fatalf("WithdrawTicket: %v", err)
+		}
+		renderPath(t, newServer(st, now), "/s/acme/alpha/7")
+		got := insightsFigures(t, insightsMain(t, st, now))
+		if got["Tokens"] != "1.5k" || got["Tool calls"] != "7" {
+			t.Errorf("GET insights figures = %v, want the merged ticket's tokens and tool calls", got)
+		}
+	})
+
+	t.Run("a withdrawn ticket that never merged stays not found", func(t *testing.T) {
+		t.Parallel()
+		st := insightsTicketStore(t, now, false)
+		if _, err := st.WithdrawTicket(t.Context(), "https://github.com/acme/alpha/issues/7", now, false); err != nil {
+			t.Fatalf("WithdrawTicket: %v", err)
+		}
+		rec := do(t, newServer(st, now), http.MethodGet, "/s/acme/alpha/7?log=insights", req{})
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET withdrawn unmerged session = %d, want 404", rec.Code)
 		}
 	})
 
