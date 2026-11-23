@@ -373,11 +373,7 @@ func (l logLine) events() []Event {
 	for _, block := range l.Message.Content {
 		switch {
 		case l.Type == "assistant" && block.Type == "tool_use":
-			event := block.toolEvent()
-			if event.Kind == Skill && l.ParentToolUseID != "" {
-				event = Event{Kind: Tool, Tool: block.Name, Detail: event.Tool, CallID: event.CallID}
-			}
-			events = append(events, event)
+			events = append(events, block.toolEvent())
 		case l.Type == "assistant" && block.Type == "text" && l.ParentToolUseID == "":
 			if say := strings.TrimSpace(block.Text); say != "" {
 				events = append(events, Event{Kind: Say, Detail: say})
