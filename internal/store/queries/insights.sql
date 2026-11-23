@@ -115,3 +115,33 @@ RETURNING id;
 INSERT INTO conflict_paths (event_id, path, generated)
 SELECT sqlc.arg(event_id), p.path, p.generated
 FROM jsonb_to_recordset(sqlc.arg(paths)::jsonb) AS p(path text, generated boolean);
+
+-- name: TicketInsightRuns :many
+SELECT r.id, r.step, r.kind, r.proc_started_at, r.ended_at,
+       COALESCE(r.cost_usd, 0)::double precision AS cost_usd,
+       COALESCE(r.metrics, '{}'::jsonb) AS metrics, COALESCE(r.outcome, '')::text AS outcome
+FROM runs r
+WHERE r.ticket_id = sqlc.arg(ticket) AND r.ended_at IS NOT NULL
+  AND r.ended_at < COALESCE((SELECT MIN(e.at) FROM events e WHERE e.ticket_id = r.ticket_id AND e.kind = 'pr_merged'), 'infinity'::timestamptz)
+ORDER BY r.id;
+
+-- name: TicketInsightPushes :many
+WITH spans AS (
+    SELECT p.id, p.pushed_at,
+           COALESCE(LEAD(p.pushed_at) OVER (ORDER BY p.pushed_at, p.id), 'infinity'::timestamptz) AS next_at
+    FROM pushes p
+    WHERE p.ticket_id = sqlc.arg(ticket)
+)
+SELECT s.pushed_at,
+       (CASE
+           WHEN EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = sqlc.arg(ticket) AND e.kind = 'verdict_transition'
+                        AND e.detail LIKE 'review_me:%' AND e.at >= s.pushed_at AND e.at < s.next_at) THEN 'green'
+           WHEN EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = sqlc.arg(ticket) AND e.kind = 'verdict_transition'
+                        AND e.detail LIKE 'ci_failed:%' AND e.at >= s.pushed_at AND e.at < s.next_at) THEN 'red'
+           ELSE 'pending'
+       END)::text AS verdict
+FROM spans s
+ORDER BY s.pushed_at, s.id;
+
+-- name: TicketMergedAt :many
+SELECT at FROM events WHERE ticket_id = sqlc.arg(ticket) AND kind = 'pr_merged' ORDER BY at LIMIT 1;
