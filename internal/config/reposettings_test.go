@@ -42,6 +42,9 @@ deny           = ["go.mod"]
 verify_command = ["go", "vet"]
 raise          = "manual"
 
+[insights]
+rollup_checks = ["gate", "*-all"]
+
 [checks]
 all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" }] }]
 `
@@ -53,7 +56,8 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 			Settings: config.RepoSettings{
 				Tracker: "linear", Stacking: true, CompatCheck: "compat", MergifySHA: "sha256:1",
 				Deny: []string{"go.mod"}, VerifyCommand: []string{"go", "vet"},
-				Raise: plan.RaiseManual,
+				Raise:    plan.RaiseManual,
+				Insights: plan.InsightsSettings{RollupChecks: []string{"gate", "*-all"}},
 				Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 					{Success: "Lint"},
 					{AnyOf: []verdict.Predicate{{Success: "A"}, {Author: "bot"}}},
@@ -74,6 +78,7 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 		}{
 			{"parse error", "stacking = true\ndeny = [\n", 2},
 			{"unknown key", "stacking = true\nstackin = true\n", 2},
+			{"unknown insights key", "[insights]\nrollup_checks = [\"a\"]\nrollup = [\"b\"]\n", 3},
 			{"invalid raise", "stacking = true\nraise = \"sometimes\"\n", 2},
 			{"invalid predicate", "stacking = true\n[checks]\nsuccess = \"a\"\nskipped = \"b\"\n", 2},
 		}

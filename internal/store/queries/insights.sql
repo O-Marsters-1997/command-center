@@ -105,3 +105,38 @@ WHERE (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
 GROUP BY t.url, t.title, t.repo, t.feature, m.merged_at
 HAVING MIN(r.proc_started_at) IS NOT NULL
 ORDER BY m.merged_at, t.url;
+
+-- name: ParkEvents :many
+SELECT t.url AS ticket_id, t.repo, e.at, COALESCE(e.detail, '')::text AS detail,
+       COALESCE((SELECT SUM(COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
+                            + COALESCE((r.metrics->>'output')::bigint, 0))
+                 FROM runs r WHERE r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at <= e.at), 0)::bigint AS tokens
+FROM events e
+JOIN tickets t ON t.url = e.ticket_id
+WHERE e.kind = 'parked'
+  AND (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
+  AND (e.at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date
+ORDER BY e.at, e.id;
+
+-- name: ChecksLandedEvents :many
+SELECT t.url AS ticket_id, t.repo, e.at, COALESCE(e.detail, '')::text AS detail
+FROM events e
+JOIN tickets t ON t.url = e.ticket_id
+WHERE e.kind = 'checks_landed'
+  AND (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
+  AND (e.at AT TIME ZONE sqlc.arg(timezone)::text)::date <= sqlc.arg(until)::date
+ORDER BY e.at, e.id;
+
+-- name: CIFixRuns :many
+SELECT t.url AS ticket_id, r.proc_started_at::timestamptz AS launched_at,
+       (COALESCE((r.metrics->>'input')::bigint, 0) + COALESCE((r.metrics->>'cache_write')::bigint, 0)
+        + COALESCE((r.metrics->>'output')::bigint, 0))::bigint AS tokens
+FROM runs r
+JOIN tickets t ON t.url = r.ticket_id
+WHERE r.cause = 'ci_failed' AND r.proc_started_at IS NOT NULL
+  AND (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
+  AND (r.proc_started_at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date
+ORDER BY r.proc_started_at, r.id;
