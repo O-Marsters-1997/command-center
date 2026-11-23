@@ -52,6 +52,9 @@
   --color-s-done-soft: color-mix(in oklab, var(--color-s-done), var(--color-surface) 88%);
   --color-s-failed-soft: color-mix(in oklab, var(--color-s-failed), var(--color-surface) 90%);
 
+  --color-viz: oklch(0.58 0.2 295);
+  --color-viz-soft: color-mix(in oklab, var(--color-viz), var(--color-surface) 88%);
+
   --color-hue-1: oklch(0.93 0.045 200);
   --color-hue-1-ink: oklch(0.42 0.1 200);
   --color-hue-2: oklch(0.93 0.045 320);
@@ -88,6 +91,7 @@
   --radius-sm: 6px;
   --radius-lg: 10px;
   --radius-xl: 16px;
+  --radius-card: 14px;
 
   --shadow-focus: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent-line);
   --shadow-float: 0 0 0 1px var(--color-border), 0 1px 1px var(--color-shadow-hairline),
