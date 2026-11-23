@@ -64,10 +64,26 @@ func (r *Reader) sessionRow(ctx context.Context, now time.Time, ref SessionRef) 
 		return Board{}, Row{}, fmt.Errorf("load board: %w", err)
 	}
 	row, ok := board.rowFor(ref)
-	if !ok {
+	if ok {
+		return board, row, nil
+	}
+	url := "https://github.com/" + ref.Owner + "/" + ref.Name + "/issues/" + ref.N
+	ticket, err := r.store.MergedWithdrawnTicket(ctx, url)
+	if errors.Is(err, store.ErrNotFound) {
 		return Board{}, Row{}, ErrSessionNotFound
 	}
-	return board, row, nil
+	if err != nil {
+		return Board{}, Row{}, fmt.Errorf("load merged ticket: %w", err)
+	}
+	return board, mergedRow(ticket), nil
+}
+
+func mergedRow(t store.Ticket) Row {
+	return Row{
+		URL: t.URL, Ref: ticketRef(t.URL), Repo: t.Repo, Feature: t.Feature, Title: t.Title, Branch: t.Branch,
+		State: plan.PRMerged, Stage: plan.StageMerged, Label: plan.PRMerged.Label(), Glyph: plan.PRMerged.Glyph(),
+		SessionPath: SessionPath(t.URL),
+	}
 }
 
 func (b Board) LaunchCount() int {

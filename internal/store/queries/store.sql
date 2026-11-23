@@ -52,6 +52,11 @@ WHERE url IN (SELECT jsonb_array_elements_text(sqlc.arg(urls)::jsonb)) AND withd
 -- name: ListWithdrawnTickets :many
 SELECT url, repo, branch FROM tickets WHERE withdrawn_at IS NOT NULL;
 
+-- name: GetMergedWithdrawnTicket :one
+SELECT t.url, t.repo, t.branch, t.title, t.feature FROM tickets t
+WHERE t.url = sqlc.arg(url) AND t.withdrawn_at IS NOT NULL
+  AND EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged');
+
 -- name: ListTicketsWithBlockers :many
 SELECT url, blocked_by FROM tickets WHERE withdrawn_at IS NULL;
 
