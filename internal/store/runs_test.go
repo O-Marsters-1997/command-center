@@ -364,7 +364,8 @@ func testRecordDispositionClosesSpawnIntent(t *testing.T, outcome plan.Outcome, 
 	ctx := t.Context()
 	runID := insertAgentRun(t, store)
 	recordSpawn(t, store, runID)
-	id, err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "sandbox://CC-1", Verb: plan.VerbReRun, At: testNow})
+	req := storepkg.VerbRequest{Ticket: "sandbox://CC-1", Verb: plan.VerbReRun, At: testNow}
+	id, err := store.QueueVerbIntent(ctx, req)
 	if err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
 	}
