@@ -9,7 +9,7 @@
 #
 #   cc --config cc/config.toml
 
-max_agents = 3
+max_agents = 1
 port       = 7777
 
 # {settings} is the app-owned deny file and {prompt} the composed prompt; the runner substitutes
