@@ -217,6 +217,9 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		summary.Question = row.Question.String
 		summary.Step, summary.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
 		summary.Cause = plan.FollowUpCause(row.Cause.String)
+		if err := json.Unmarshal([]byte(row.InFlight), &summary.InFlight); err != nil {
+			return nil, fmt.Errorf("decode in-flight tasks of run %d: %w", row.ID, err)
+		}
 		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil

@@ -2,9 +2,45 @@ package view_test
 
 import (
 	"testing"
+	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
+
+func TestReader_ObserveStale(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		age      time.Duration
+		interval time.Duration
+		want     bool
+	}{
+		{name: "a normal tick gap is fresh", age: 40 * time.Second, want: false},
+		{name: "past the floor is stale", age: 70 * time.Second, want: true},
+		{name: "slow ticks stretch the threshold", age: 70 * time.Second, interval: 40 * time.Second, want: false},
+		{name: "past twice a slow tick is stale", age: 90 * time.Second, interval: 40 * time.Second, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			st := cctest.Store(t)
+			obs := plan.Observation{ObservedAt: testNow.Add(-tt.age), TickInterval: tt.interval}
+			if err := st.SaveObservation(t.Context(), obs); err != nil {
+				t.Fatalf("SaveObservation: %v", err)
+			}
+			chrome, err := view.NewReader(st, "", view.ReaderSettings{}).Chrome(t.Context(), testNow, view.Params{})
+			if err != nil {
+				t.Fatalf("Chrome: %v", err)
+			}
+			if chrome.ObserveStale != tt.want {
+				t.Errorf("ObserveStale at age %s, interval %s = %t, want %t", tt.age, tt.interval, chrome.ObserveStale, tt.want)
+			}
+		})
+	}
+}
 
 func TestParseSidebar(t *testing.T) {
 	t.Parallel()

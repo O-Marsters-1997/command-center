@@ -57,7 +57,8 @@ SELECT COALESCE(baseline_sha, '')::text AS baseline_sha FROM runs WHERE id = sql
 
 -- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
-       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause
+       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause,
+       COALESCE(metrics->'in_flight', '[]'::jsonb)::text AS in_flight
 FROM runs
 WHERE ticket_id IS NOT NULL AND kind <> 'verify'
 ORDER BY ticket_id, id DESC;
