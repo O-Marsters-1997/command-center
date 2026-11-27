@@ -204,7 +204,7 @@ func TestRail(t *testing.T) {
 	t.Run("a stale reading shows its age", testRailStaleReading)
 	t.Run("insights limits say no reading", testInsightsNoReading)
 
-	t.Run("the observe chip reads stale at twenty seconds", func(t *testing.T) {
+	t.Run("the observe chip reads stale at sixty seconds", func(t *testing.T) {
 		t.Parallel()
 		observedAt := testNow
 		for _, tt := range []struct {
@@ -213,8 +213,8 @@ func TestRail(t *testing.T) {
 			want []string
 		}{
 			{name: "fresh", age: 2 * time.Second},
-			{name: "under twenty", age: 19 * time.Second},
-			{name: "at twenty", age: 20 * time.Second, want: []string{"last good observe: 20s ago"}},
+			{name: "a normal tick gap", age: 40 * time.Second},
+			{name: "at sixty", age: 60 * time.Second, want: []string{"last good observe: 1m0s ago"}},
 			{name: "well past", age: 5 * time.Minute, want: []string{"last good observe: 5m0s ago"}},
 		} {
 			t.Run(tt.name, func(t *testing.T) {

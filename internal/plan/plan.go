@@ -171,6 +171,7 @@ type RunFact struct {
 	Verify                   VerifyPhase
 	VerificationFailedReason Reason
 	Question                 string
+	InFlight                 []string
 	Next                     option.Option[Next]
 }
 
@@ -247,6 +248,11 @@ func statusFromRun(latest option.Option[RunFact], unlock Unlock, raise RaiseMode
 	case OutcomeUnknown:
 		fallthrough
 	default:
+		if len(run.InFlight) > 0 {
+			return Failed, Reason(fmt.Sprintf(
+				"no commits: the agent ended its turn with %s still running; log at %s",
+				strings.Join(run.InFlight, " and "), run.LogPath)), true
+		}
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
 	}
 }

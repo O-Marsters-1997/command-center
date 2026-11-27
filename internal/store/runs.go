@@ -92,13 +92,14 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 		metricsParam = raw
 	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Metrics:     metricsParam,
-		Outcome:     notNull(d.Outcome.String()),
-		ExitCode:    nullInt(d.ExitCode),
-		EndedAt:     notNullTime(d.EndedAt.UTC()),
-		CostUsd:     nullFloat(d.Cost),
-		LastMessage: nullString(d.LastMessage),
-		ID:          int64(d.RunID),
+		Metrics:       metricsParam,
+		Outcome:       notNull(d.Outcome.String()),
+		ExitCode:      nullInt(d.ExitCode),
+		EndedAt:       notNullTime(d.EndedAt.UTC()),
+		CostUsd:       nullFloat(d.Cost),
+		LastMessage:   nullString(d.LastMessage),
+		ID:            int64(d.RunID),
+		IntentOutcome: notNull(string(d.Outcome.IntentOutcome())),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
 }
@@ -216,6 +217,9 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 		summary.Question = row.Question.String
 		summary.Step, summary.WorkflowHash = plan.StepName(row.Step), row.WorkflowHash
 		summary.Cause = plan.FollowUpCause(row.Cause.String)
+		if err := json.Unmarshal([]byte(row.InFlight), &summary.InFlight); err != nil {
+			return nil, fmt.Errorf("decode in-flight tasks of run %d: %w", row.ID, err)
+		}
 		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil

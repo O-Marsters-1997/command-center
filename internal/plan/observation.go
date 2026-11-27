@@ -55,6 +55,7 @@ type RunObservation struct {
 
 type Observation struct {
 	ObservedAt        time.Time                        `json:"observed_at"`
+	TickInterval      time.Duration                    `json:"tick_interval"`
 	PRs               map[BranchRef]PR                 `json:"prs"`
 	Worktrees         map[BranchRef]string             `json:"worktrees"`
 	Runs              map[TicketURL]RunObservation     `json:"runs"`

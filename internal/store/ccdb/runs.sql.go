@@ -384,7 +384,8 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 
 const listLatestRunsByTicket = `-- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
-       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause
+       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause,
+       COALESCE(metrics->'in_flight', '[]'::jsonb)::text AS in_flight
 FROM runs
 WHERE ticket_id IS NOT NULL AND kind <> 'verify'
 ORDER BY ticket_id, id DESC
@@ -406,6 +407,7 @@ type ListLatestRunsByTicketRow struct {
 	Step          string
 	WorkflowHash  string
 	Cause         sql.NullString
+	InFlight      string
 }
 
 func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsByTicketRow, error) {
@@ -433,6 +435,7 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 			&i.Step,
 			&i.WorkflowHash,
 			&i.Cause,
+			&i.InFlight,
 		); err != nil {
 			return nil, err
 		}
@@ -703,20 +706,25 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 }
 
 const recordDisposition = `-- name: RecordDisposition :execrows
+WITH closed AS (
+  UPDATE intents SET outcome = $8, finished_at = $3
+  WHERE run_id = $7 AND finished_at IS NULL
+)
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
     cost_usd = $4, last_message = $5,
     metrics = $6
-WHERE id = $7 AND outcome IS NULL
+WHERE runs.id = $7 AND runs.outcome IS NULL
 `
 
 type RecordDispositionParams struct {
-	Outcome     sql.NullString
-	ExitCode    sql.NullInt64
-	EndedAt     sql.NullTime
-	CostUsd     sql.NullFloat64
-	LastMessage sql.NullString
-	Metrics     json.RawMessage
-	ID          int64
+	Outcome       sql.NullString
+	ExitCode      sql.NullInt64
+	EndedAt       sql.NullTime
+	CostUsd       sql.NullFloat64
+	LastMessage   sql.NullString
+	Metrics       json.RawMessage
+	ID            int64
+	IntentOutcome sql.NullString
 }
 
 func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionParams) (int64, error) {
@@ -728,6 +736,7 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.LastMessage,
 		arg.Metrics,
 		arg.ID,
+		arg.IntentOutcome,
 	)
 	if err != nil {
 		return 0, err

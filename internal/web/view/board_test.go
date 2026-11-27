@@ -5,9 +5,48 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
+
+func TestRow_ShowQueuedSpawn(t *testing.T) {
+	t.Parallel()
+
+	queued := func(verb plan.Verb) option.Option[plan.IntentStatus] {
+		rec := plan.IntentRecord{ID: 1, Verb: verb, At: testNow}
+		return option.Some(plan.StatusOf(rec, option.None[plan.RunSummary](), testNow))
+	}
+	tests := []struct {
+		name       string
+		verb       plan.Verb
+		wantGlyph  plan.GlyphWord
+		wantLabel  string
+		wantGroup  string
+		wantQueued bool
+	}{
+		{"re-run leaves needs you", plan.VerbReRun, plan.GlyphPending, "Re-run queued", plan.GroupInFlight, true},
+		{"other verbs keep the state", plan.VerbRetryPush, plan.GlyphFailed, "Failed", plan.GroupNeedsYou, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			row := view.Row{Glyph: plan.GlyphFailed, Label: "Failed", Detail: "no commits", Intent: queued(tt.verb)}
+			row.ShowQueuedSpawn()
+			group, _ := plan.RailGroup(row.Glyph)
+			if row.Glyph != tt.wantGlyph || row.Label != tt.wantLabel || group != tt.wantGroup {
+				t.Errorf("row = glyph %q label %q group %q, want %q %q %q",
+					row.Glyph, row.Label, group, tt.wantGlyph, tt.wantLabel, tt.wantGroup)
+			}
+			if row.Queued != tt.wantQueued {
+				t.Errorf("Queued = %v, want %v", row.Queued, tt.wantQueued)
+			}
+			if tt.wantQueued && row.Detail != "" {
+				t.Errorf("Detail = %q, want it cleared", row.Detail)
+			}
+		})
+	}
+}
 
 func groupURLs(groups []view.Group) [][]string {
 	out := [][]string{}

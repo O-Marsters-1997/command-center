@@ -16,7 +16,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-const observeStaleAfter = 20 * time.Second
+const observeStaleFloor = 60 * time.Second
+
+func observeStaleAfter(interval time.Duration) time.Duration {
+	return max(observeStaleFloor, 2*interval)
+}
+
 const eventPageSize = 500
 
 func EachTicketEvent(
@@ -303,7 +308,7 @@ func (r *Reader) buildChrome(f frame) Chrome {
 	}
 	if observed {
 		c.Observe = relative(now, obs.ObservedAt)
-		c.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
+		c.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter(obs.TickInterval)
 	}
 	if lastErr.IsSome() && (!observed || lastErr.Unwrap().At.After(obs.ObservedAt)) {
 		c.LastError = option.Some(TickError{Age: relative(now, lastErr.Unwrap().At), Message: lastErr.Unwrap().Message})

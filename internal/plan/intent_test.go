@@ -48,6 +48,9 @@ func TestStatusOf(t *testing.T) {
 
 	stale := agent
 	stale.Outcome = plan.IntentFailed
+	closedAgent := agent
+	closedAgent.Outcome = plan.IntentDone
+	closedAgent.FinishedAt = option.Some(finished)
 	queuedWithdrawn := base
 	queuedWithdrawn.Outcome = plan.IntentWithdrawn
 	queuedWithdrawn.ConsumedAt = option.Some(finished)
@@ -89,6 +92,7 @@ func TestStatusOf(t *testing.T) {
 		{"running agent verb", agent, runningRun, running},
 		{"agent run not loaded", agent, noRun, running},
 		{"running ignores stored outcome", stale, runningRun, running},
+		{"agent run replaced by a newer one", closedAgent, noRun, finishedDone},
 		{"withdrawn from queue", queuedWithdrawn, noRun, withdrawnAt(finished)},
 		{"done git verb", gitDone, noRun, finishedDone},
 		{"failed with detail", gitFailed, noRun, failedWithDetail},

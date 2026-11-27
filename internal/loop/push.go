@@ -185,5 +185,6 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, p plan.Push, obs plan.
 	if err := l.store.RecordPush(ctx, push); err != nil {
 		return handled{}, fmt.Errorf("record push of %s: %w", t.Branch, err)
 	}
-	return succeeded, l.event(ctx, url, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", p.LocalTip, base))
+	detail := fmt.Sprintf("pushed %s to %s (base %s)", p.LocalTip, t.Branch, base)
+	return succeeded, l.event(ctx, url, store.EventPushed, detail)
 }

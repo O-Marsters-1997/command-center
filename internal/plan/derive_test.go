@@ -51,6 +51,39 @@ func TestRules_Derive(t *testing.T) {
 	t.Run("draft reason", deriveDraftReason)
 	t.Run("workflow pass", deriveWorkflowPass)
 	t.Run("intent", deriveIntent)
+	t.Run("no-commit reason", deriveNoCommitReason)
+}
+
+func deriveNoCommitReason(t *testing.T) {
+	t.Parallel()
+
+	tk := ticket("1", "cc-1-first")
+	tests := []struct {
+		name     string
+		inFlight []string
+		want     string
+	}{
+		{name: "nothing running", want: "no commits after this run's baseline"},
+		{
+			name: "work running at turn end", inFlight: []string{"implementation subagent", "background command"},
+			want: "ended its turn with implementation subagent and background command still running",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			in := plan.Input{
+				Tickets: []plan.Ticket{tk},
+				Runs: map[plan.TicketURL]plan.RunSummary{
+					tk.URL: {Outcome: option.Some(plan.OutcomeFailed), InFlight: tt.inFlight},
+				},
+			}
+			got := entry(t, derive(plan.Rules{}, in), tk.URL)
+			if got.State != plan.Failed || !strings.Contains(string(got.Reason), tt.want) {
+				t.Errorf("state, reason = %v, %q; want failed containing %q", got.State, got.Reason, tt.want)
+			}
+		})
+	}
 }
 
 func deriveIntent(t *testing.T) {

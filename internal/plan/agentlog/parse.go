@@ -224,6 +224,10 @@ type logLine struct {
 	Subtype       string                 `json:"subtype"`
 	ResultText    string                 `json:"result"`
 	DurationMS    int64                  `json:"duration_ms"`
+	TaskID        string                 `json:"task_id"`
+	TaskType      string                 `json:"task_type"`
+	SubagentType  string                 `json:"subagent_type"`
+	Status        string                 `json:"status"`
 	NumTurns      int                    `json:"num_turns"`
 	CostUSD       option.Option[float64] `json:"total_cost_usd"`
 	Usage         usage                  `json:"usage"`
