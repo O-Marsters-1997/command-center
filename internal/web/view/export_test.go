@@ -1,5 +1,7 @@
 package view
 
+func (r *Row) ShowQueuedSpawn() { r.showQueuedSpawn() }
+
 var (
 	DetailOf        = detailOf
 	ApplyActivities = applyActivities
