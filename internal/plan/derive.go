@@ -38,6 +38,7 @@ type RunSummary struct {
 	Step          StepName
 	WorkflowHash  string
 	Cause         FollowUpCause
+	InFlight      []string
 }
 
 type PushRow struct {
@@ -538,6 +539,7 @@ func (r Rules) runFor(
 	if summary.Outcome.IsSome() {
 		fact.Outcome = summary.Outcome
 		fact.Question = summary.Question
+		fact.InFlight = summary.InFlight
 		if summary.Outcome.Unwrap() == OutcomePush {
 			pf := in.Pushes[t.URL]
 			fact.PushRefused = pf.Refused

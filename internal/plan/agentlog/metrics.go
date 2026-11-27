@@ -23,6 +23,49 @@ type RunMetrics struct {
 	Tools      map[string]int               `json:"tools"`
 	Skills     []string                     `json:"skills,omitempty"`
 	Phases     []PhaseTokens                `json:"phases,omitempty"`
+	InFlight   []string                     `json:"in_flight,omitempty"`
+}
+
+type taskLedger struct {
+	labels   map[string]string
+	order    []string
+	finished map[string]bool
+}
+
+func (t *taskLedger) observe(parsed logLine) {
+	if parsed.Type != "system" || parsed.TaskID == "" {
+		return
+	}
+	if t.labels == nil {
+		t.labels, t.finished = map[string]string{}, map[string]bool{}
+	}
+	switch parsed.Subtype {
+	case "task_started":
+		t.labels[parsed.TaskID] = taskLabel(parsed)
+		t.order = append(t.order, parsed.TaskID)
+	case "task_notification":
+		t.finished[parsed.TaskID] = parsed.Status == "completed"
+	}
+}
+
+func taskLabel(parsed logLine) string {
+	switch {
+	case parsed.SubagentType != "":
+		return parsed.SubagentType + " subagent"
+	case parsed.TaskType == "local_bash":
+		return "background command"
+	}
+	return "background task"
+}
+
+func (t *taskLedger) inFlight() []string {
+	var labels []string
+	for _, id := range t.order {
+		if label := t.labels[id]; !t.finished[id] && !slices.Contains(labels, label) {
+			labels = append(labels, label)
+		}
+	}
+	return labels
 }
 
 type PhaseTokens struct {
@@ -49,7 +92,9 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 	var metrics RunMetrics
 	skillOf := map[string]string{}
 	var requestSkills []string
+	tasks := taskLedger{}
 	requests, settled, decoded, err := readUsage(logPath, func(parsed logLine, added bool) {
+		tasks.observe(parsed)
 		if parsed.Type == "result" {
 			metrics.Wall = option.Some(time.Duration(parsed.DurationMS) * time.Millisecond)
 			return
@@ -90,6 +135,7 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 		return RunMetrics{}, fmt.Errorf("agent log %s: %w", logPath, ErrNoParseableLines)
 	}
 	metrics.Requests = requests
+	metrics.InFlight = tasks.inFlight()
 	index := map[string]int{}
 	for i, r := range requests {
 		j, ok := index[requestSkills[i]]

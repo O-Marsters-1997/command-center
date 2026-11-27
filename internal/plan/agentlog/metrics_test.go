@@ -57,6 +57,14 @@ func TestParseMetrics(t *testing.T) {
 			},
 		},
 		{
+			name:    "tasks stopped when the process exits are still in flight at turn end",
+			fixture: "run34.jsonl",
+			want: agentlog.RunMetrics{
+				CostUSD: option.Some(2.9447666), Wall: option.Some(6187 * time.Millisecond),
+				InFlight: []string{"implementation subagent", "background command"},
+			},
+		},
+		{
 			name:    "a dialect that emits no cost has no CostUSD, not zero",
 			fixture: "no_cost.jsonl",
 			want: agentlog.RunMetrics{

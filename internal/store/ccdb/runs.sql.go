@@ -384,7 +384,8 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 
 const listLatestRunsByTicket = `-- name: ListLatestRunsByTicket :many
 SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
-       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause
+       outcome, exit_code, ended_at, prompt_hash, kind, question, step, workflow_hash, cause,
+       COALESCE(metrics, 'null'::jsonb) AS metrics
 FROM runs
 WHERE ticket_id IS NOT NULL AND kind <> 'verify'
 ORDER BY ticket_id, id DESC
@@ -406,6 +407,7 @@ type ListLatestRunsByTicketRow struct {
 	Step          string
 	WorkflowHash  string
 	Cause         sql.NullString
+	Metrics       json.RawMessage
 }
 
 func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsByTicketRow, error) {
@@ -433,6 +435,7 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 			&i.Step,
 			&i.WorkflowHash,
 			&i.Cause,
+			&i.Metrics,
 		); err != nil {
 			return nil, err
 		}

@@ -32,6 +32,8 @@ type Loop struct {
 	trackerFor tracker.Resolver
 	nudgeCh    chan struct{}
 	workflows  map[string]plan.Workflow
+
+	lastObserved time.Time
 }
 
 func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
@@ -157,6 +159,10 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	now := l.clock.Now()
 	t := &tick{obs: obs, cancelled: map[int]bool{}, timing: &timing}
 	t.obs.ObservedAt = now
+	if !l.lastObserved.IsZero() {
+		t.obs.TickInterval = now.Sub(l.lastObserved)
+	}
+	l.lastObserved = now
 	var byURL map[plan.TicketURL]store.Ticket
 	err = l.timed(&timing.Absorb, func() error {
 		var err error
