@@ -77,7 +77,7 @@ func StatusOf(rec IntentRecord, run option.Option[RunSummary], now time.Time) In
 		if rec.HoldUntil.After(now) {
 			st.Phase = PhaseHeld
 		}
-	case rec.Run.IsSome():
+	case rec.Run.IsSome() && rec.FinishedAt.IsNone():
 		st.Phase = PhaseRunning
 		st.Outcome = IntentInProgress
 		if run.IsSome() && run.Unwrap().Outcome.IsSome() {
