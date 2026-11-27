@@ -44,7 +44,7 @@ func (t *taskLedger) observe(parsed logLine) {
 		t.labels[parsed.TaskID] = taskLabel(parsed)
 		t.order = append(t.order, parsed.TaskID)
 	case "task_notification":
-		t.finished[parsed.TaskID] = parsed.Status == "completed"
+		t.finished[parsed.TaskID] = parsed.Status != "stopped"
 	}
 }
 
