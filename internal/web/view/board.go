@@ -42,6 +42,7 @@ type Row struct {
 	BlockedBy      []string                         `json:"-"`
 	PendingVerbs   []plan.Verb                      `json:"-"`
 	Intent         option.Option[plan.IntentStatus] `json:"-"`
+	Queued         bool                             `json:"-"`
 	Base           string                           `json:"-"`
 	StackDepth     int                              `json:"-"`
 	MergeOrder     int                              `json:"-"`
@@ -225,9 +226,19 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 	for i := range rows {
 		rows[i].StackDepth = plan.StackDepth(rows[i].Branch, baseByBranch)
 		rows[i].MergeOrder = rows[i].StackDepth + 1
+		rows[i].showQueuedSpawn()
 	}
 	nameDependencies(rows, in.Tickets)
 	return rows
+}
+
+func (r *Row) showQueuedSpawn() {
+	st, ok := r.Intent.Get()
+	spawns := []plan.Verb{plan.VerbLaunch, plan.VerbReRun, plan.VerbFollowUp}
+	if !ok || st.Outcome != plan.IntentInProgress || !slices.Contains(spawns, st.Record.Verb) {
+		return
+	}
+	r.Glyph, r.Label, r.Detail, r.Queued = st.Glyph, intentLabel(st), "", true
 }
 
 func sortedChecks(checks map[string]plan.CheckState) []Check {
