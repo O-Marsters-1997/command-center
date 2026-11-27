@@ -343,6 +343,22 @@ func TestStore_WithdrawHeldIntent(t *testing.T) {
 
 func TestStore_RecordDisposition_closesSpawnIntent(t *testing.T) {
 	t.Parallel()
+	for _, tc := range []struct {
+		outcome plan.Outcome
+		want    plan.IntentOutcome
+	}{
+		{plan.OutcomePush, plan.IntentDone},
+		{plan.OutcomeFailed, plan.IntentFailed},
+	} {
+		t.Run(string(tc.want), func(t *testing.T) {
+			t.Parallel()
+			testRecordDispositionClosesSpawnIntent(t, tc.outcome, tc.want)
+		})
+	}
+}
+
+func testRecordDispositionClosesSpawnIntent(t *testing.T, outcome plan.Outcome, want plan.IntentOutcome) {
+	t.Helper()
 	store := openStore(t)
 	seedOneTicket(t, store)
 	ctx := t.Context()
@@ -358,7 +374,7 @@ func TestStore_RecordDisposition_closesSpawnIntent(t *testing.T) {
 	}
 	ended := testNow.Add(time.Minute)
 	if err := store.RecordDisposition(ctx, storepkg.Disposition{
-		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, EndedAt: ended,
+		RunID: plan.RunID(runID), Outcome: outcome, EndedAt: ended,
 	}); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
@@ -367,8 +383,8 @@ func TestStore_RecordDisposition_closesSpawnIntent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IntentHistory: %v", err)
 	}
-	if len(records) != 1 || records[0].Outcome != plan.IntentDone || !records[0].FinishedAt.Unwrap().Equal(ended) {
-		t.Errorf("IntentHistory = %+v, want one intent done at %v", records, ended)
+	if len(records) != 1 || records[0].Outcome != want || !records[0].FinishedAt.Unwrap().Equal(ended) {
+		t.Errorf("IntentHistory = %+v, want one intent %v at %v", records, want, ended)
 	}
 }
 
