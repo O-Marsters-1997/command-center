@@ -11,5 +11,11 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("load activity page: %w", err)
 	}
 	page.Sidebar = sidebarFrom(r)
-	return renderHTML(w, "activity.tmpl", page)
+	memVariant = r.URL.Query().Get("variant")
+	out := memProtoPage{ActivityPage: page}
+	if memVariant != "" {
+		out.Mem = newMemProto(s.now(), memVariant)
+		memVariant = out.Mem.Variant
+	}
+	return renderHTML(w, "activity.tmpl", out)
 }

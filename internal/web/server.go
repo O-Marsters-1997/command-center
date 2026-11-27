@@ -45,6 +45,8 @@ var templates = template.Must(template.New("").
 		"featurePath":       view.FeaturePath,
 		"featureGraphPath":  view.FeatureGraphPath,
 		"featureLaunchPath": view.FeatureLaunchPath,
+		"memPeak":           memPeak,
+		"memHeavy":          memHeavy,
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
 

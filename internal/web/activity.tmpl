@@ -3,8 +3,9 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
 {{- end}}
 
 {{define "activityRow" -}}
+{{- $peak := memPeak .ID .Action}}
 <details id="act-{{.ID}}" class="border-b border-border-soft" hx-preserve="true" data-row>
-  <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-2 py-1 hover:bg-surface-2 md:grid-cols-[3.5rem_auto_9rem_9rem_minmax(0,1fr)_9rem_5rem_4rem] md:gap-y-1">
+  <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-2 py-1 hover:bg-surface-2 {{if $peak}}md:grid-cols-[3.5rem_auto_9rem_9rem_minmax(0,1fr)_9rem_5rem_4rem_4.5rem]{{else}}md:grid-cols-[3.5rem_auto_9rem_9rem_minmax(0,1fr)_9rem_5rem_4rem]{{end}} md:gap-y-1">
     <time class="hidden text-xs text-muted md:block" datetime="{{.Queued.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.Queued.Format "15:04"}}</time>
     <span class="glyph" data-glyph="{{.Glyph}}" title="{{.Outcome}}"></span>
     <span class="min-w-0 truncate font-medium md:col-auto">{{.Action}}{{if .Auto}} <span class="flag">auto</span>{{end}} <span class="font-mono text-xs text-muted md:hidden">{{.Ref}}</span></span>
@@ -13,6 +14,9 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
     <span class="hidden truncate text-xs text-muted md:block">{{.Feature}}</span>
     <span class="col-start-3 row-start-1 text-right text-xs md:col-start-auto md:row-start-auto">{{.Outcome}}</span>
     <span class="hidden text-right text-xs text-muted md:block">{{.Duration}}</span>
+    {{- with $peak}}
+    <span class="hidden text-right font-mono text-xs tabular-nums md:block {{if memHeavy .}}text-[var(--color-s-failed)]{{else}}text-fg-2{{end}}" title="Peak memory of this run">{{.}}</span>
+    {{- end}}
   </summary>
   <div class="px-2 pb-3 pl-10 text-sm">
     <ol class="m-0 list-none p-0">
@@ -56,7 +60,9 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
       <option value="30d"{{if eq .Params.Range "30d"}} selected{{end}}>Last 30 days</option>
     </select>
     <noscript><button type="submit" class="btn btn-sm">Apply</button></noscript>
+    {{with .Mem}}<input type="hidden" name="variant" value="{{.Variant}}">{{end}}
   </div>
+  {{with .Mem}}{{template "memProto" .}}{{end}}
   <div id="activity-results">
     <div class="pill-tabs mt-3 mb-3 self-start" role="radiogroup" aria-label="Outcome">
       {{- range .Tabs}}
@@ -87,4 +93,5 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
     {{- end}}
   </div>
 </form>
+{{with .Mem}}{{template "memSwitcher" .}}{{end}}
 {{template "shellEnd" .}}

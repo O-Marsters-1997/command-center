@@ -1,0 +1,119 @@
+{{define "memProto" -}}
+{{if eq .Variant "A"}}{{template "memA" .}}{{else if eq .Variant "B"}}{{template "memB" .}}{{else}}{{template "memC" .}}{{end}}
+{{- end}}
+
+{{define "memLive" -}}
+<span class="glyph glyph-running glyph-pulse text-xs" data-glyph="running">Live</span>
+{{- end}}
+
+{{define "memA" -}}
+<section class="mt-4 mb-2" aria-labelledby="mem-a-h">
+  <div class="flex items-baseline gap-3">
+    <h2 id="mem-a-h" class="text-sm font-medium text-fg">Memory</h2>
+    <p class="m-0 text-xs text-muted">Peak machine memory each hour, last 7 days. Red hours crossed {{.Threshold}}%.</p>
+    <span class="ml-auto">{{template "memLive"}}</span>
+  </div>
+  <div class="mt-2 rounded-sm border border-border-soft px-3 pt-3 pb-2">
+    <div class="relative flex h-24 items-end gap-px" role="img" aria-label="Hourly peak memory, last 7 days">
+      <span class="pointer-events-none absolute inset-x-0 border-t border-dashed border-s-failed opacity-60" style="bottom: {{.Threshold}}%"></span>
+      <span class="pointer-events-none absolute right-0 font-mono text-[10px] text-muted" style="bottom: calc({{.Threshold}}% + 2px)">{{.Threshold}}%</span>
+      {{- range .Hours}}
+      <span class="block min-w-0 flex-1 rounded-t-[1px] {{if .Spike}}bg-s-failed{{else}}bg-surface-3 hover:bg-fg-2{{end}}" style="height: {{.Pct}}%" title="{{.Title}}"></span>
+      {{- end}}
+    </div>
+    <div class="mt-1.5 flex justify-between font-mono text-[11px] text-muted">{{range .DayLabels}}<span>{{.}}</span>{{end}}</div>
+  </div>
+</section>
+{{- end}}
+
+{{define "memB" -}}
+<section class="mt-4 mb-2" aria-labelledby="mem-b-h">
+  <h2 id="mem-b-h" class="flex h-[34px] items-center gap-3 border-b border-border-soft px-2 text-sm font-medium text-fg-2">Memory spikes
+    <span class="text-xs font-normal text-muted">{{len .Spikes}} this week above {{.Threshold}}%</span>
+    <span class="ml-auto font-normal">{{template "memLive"}}</span>
+  </h2>
+  {{- range $i, $s := .Spikes}}{{with $s}}
+  <details class="border-b border-border-soft"{{if eq $i 0}} open{{end}}>
+    <summary class="grid min-h-[46px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-2 py-1 hover:bg-surface-2 md:grid-cols-[5.5rem_auto_minmax(0,1fr)_7rem_7rem]">
+      <time class="hidden text-xs text-muted md:block">{{.At.Format "Mon 15:04"}}</time>
+      <span class="glyph" data-glyph="failed" title="spike"></span>
+      <span class="min-w-0 truncate"><span class="font-medium">{{.Pct}}% used</span> <span class="text-muted">· {{len .Runs}} agents alive · {{.Agents}} of it theirs</span></span>
+      <span class="hidden text-right font-mono text-xs text-fg-2 md:block">{{.GB}} / 16 GB</span>
+      <span class="text-right text-xs text-[var(--color-s-failed)]">spike</span>
+    </summary>
+    <div class="px-2 pb-3 md:pl-[7.5rem]">
+      <table class="w-full max-w-2xl text-sm">
+        <tbody>
+        {{- range .Runs}}
+          <tr class="border-b border-border-soft last:border-0">
+            <td class="py-1.5 pr-3 font-mono text-xs text-fg-2">{{.Ref}}</td>
+            <td class="min-w-0 py-1.5 pr-3 truncate">{{.Title}}</td>
+            <td class="w-28 py-1.5 pr-3"><span class="meter w-24" data-glyph="{{if ge .PeakMB 2048}}failed{{else}}queued{{end}}" aria-hidden="true"><span class="meter-fill" style="width: {{.Share}}%"></span></span></td>
+            <td class="w-20 whitespace-nowrap py-1.5 text-right font-mono text-xs tabular-nums">{{.Peak}}</td>
+          </tr>
+        {{- end}}
+          <tr class="text-muted"><td class="py-1.5 pr-3 text-xs" colspan="3">Docker</td><td class="whitespace-nowrap py-1.5 text-right font-mono text-xs tabular-nums">{{.DockerGB}}</td></tr>
+          <tr class="text-muted"><td class="py-1.5 pr-3 text-xs" colspan="3">Everything else on the machine</td><td class="whitespace-nowrap py-1.5 text-right font-mono text-xs tabular-nums">{{.OtherGB}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {{- end}}{{end}}
+</section>
+{{- end}}
+
+{{define "memC" -}}
+<section class="mt-4 mb-2" aria-labelledby="mem-c-h">
+  <div class="flex items-baseline gap-3">
+    <h2 id="mem-c-h" class="text-sm font-medium text-fg">Who was running when memory spiked</h2>
+    <p class="m-0 text-xs text-muted">Last 24 hours. Band is machine memory; each lane is one agent run, labelled with its peak.</p>
+    <span class="ml-auto">{{template "memLive"}}</span>
+  </div>
+  <div class="mt-2 rounded-sm border border-border-soft px-3 py-3">
+    <div class="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2 md:grid-cols-[9rem_minmax(0,1fr)] md:gap-x-3">
+      <span class="self-end text-xs text-muted">Machine</span>
+      <div class="relative h-10">
+        {{- range .Band}}
+        <span class="absolute bottom-0 w-[4.1%] {{if .Spike}}bg-s-failed{{else}}bg-surface-3{{end}}" style="left: {{printf "%.2f" .Left}}%; height: {{.Pct}}%" title="{{.Title}}"></span>
+        {{- end}}
+        {{- range .Band}}{{if .Spike}}
+        <span class="pointer-events-none absolute top-0 border-l border-dashed border-s-failed opacity-70" style="left: {{printf "%.2f" .Left}}%; height: calc(100% + {{len $.Lanes}} * 1.75rem + 0.5rem)"></span>
+        {{- end}}{{end}}
+      </div>
+      {{- range .Lanes}}
+      <span class="flex h-7 min-w-0 items-center truncate font-mono text-xs text-fg-2" title="{{.Title}}">{{.Ref}}</span>
+      <div class="relative h-7">
+        <span class="absolute top-1.5 flex h-4 items-center rounded-[3px] {{if .Heavy}}bg-[var(--color-s-failed-soft)]{{else}}bg-surface-3{{end}}" style="left: {{printf "%.2f" .Left}}%; width: {{printf "%.2f" .Width}}%" title="{{.Title}} · peak {{.Peak}}">
+          {{if .Alive}}<span class="glyph glyph-pulse ml-1" data-glyph="running"></span>{{end}}
+        </span>
+        {{if .LabelInside}}
+        <span class="absolute top-1.5 mr-1.5 whitespace-nowrap font-mono text-[11px] leading-4 {{if .Heavy}}text-[var(--color-s-failed)]{{else}}text-muted{{end}}" style="right: calc(100% - {{printf "%.2f" .Left}}% - {{printf "%.2f" .Width}}%)">{{.Peak}}</span>
+        {{else}}
+        <span class="absolute top-1.5 ml-1.5 whitespace-nowrap font-mono text-[11px] leading-4 {{if .Heavy}}text-[var(--color-s-failed)]{{else}}text-muted{{end}}" style="left: calc({{printf "%.2f" .Left}}% + {{printf "%.2f" .Width}}%)">{{.Peak}}</span>
+        {{end}}
+      </div>
+      {{- end}}
+      <span></span>
+      <div class="relative mt-1 h-4 font-mono text-[11px] text-muted">
+        {{- range .Ticks}}<span class="absolute -translate-x-1/2" style="left: {{printf "%.2f" .Left}}%">{{.Label}}</span>{{end}}
+      </div>
+    </div>
+  </div>
+</section>
+{{- end}}
+
+{{define "memSwitcher" -}}
+<nav class="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full bg-ink px-1.5 py-1 text-sm text-surface shadow-lg" aria-label="Prototype variants">
+  <a id="mem-prev" class="rounded-full px-2.5 py-1 text-surface no-underline hover:bg-fg-2" href="/activity?variant={{.Prev}}">‹</a>
+  <span class="px-2 font-mono text-xs">Prototype {{.Variant}} — {{.Name}}</span>
+  <a id="mem-next" class="rounded-full px-2.5 py-1 text-surface no-underline hover:bg-fg-2" href="/activity?variant={{.Next}}">›</a>
+</nav>
+<script>
+document.addEventListener("keydown", function (e) {
+  var t = e.target;
+  if (t.closest && t.closest("input, textarea, select, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") document.getElementById("mem-prev").click();
+  if (e.key === "ArrowRight") document.getElementById("mem-next").click();
+});
+</script>
+{{- end}}
