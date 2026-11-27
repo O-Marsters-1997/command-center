@@ -99,6 +99,8 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 		CostUsd:     nullFloat(d.Cost),
 		LastMessage: nullString(d.LastMessage),
 		ID:          int64(d.RunID),
+
+		IntentOutcome: notNull(string(d.Outcome.IntentOutcome())),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
 }

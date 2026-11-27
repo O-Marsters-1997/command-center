@@ -56,6 +56,13 @@ type IntentStatus struct {
 	Ended   option.Option[time.Time]
 }
 
+func (o Outcome) IntentOutcome() IntentOutcome {
+	if o.Glyph() == GlyphDone {
+		return IntentDone
+	}
+	return IntentFailed
+}
+
 func StatusOf(rec IntentRecord, run option.Option[RunSummary], now time.Time) IntentStatus {
 	st := IntentStatus{Record: rec, Outcome: rec.Outcome, Detail: rec.Detail}
 	switch {
@@ -77,10 +84,7 @@ func StatusOf(rec IntentRecord, run option.Option[RunSummary], now time.Time) In
 			s := run.Unwrap()
 			st.Phase = PhaseFinished
 			st.Ended = s.EndedAt
-			st.Outcome = IntentFailed
-			if s.Outcome.Unwrap().Glyph() == GlyphDone {
-				st.Outcome = IntentDone
-			}
+			st.Outcome = s.Outcome.Unwrap().IntentOutcome()
 		}
 	case rec.FinishedAt.IsSome():
 		st.Phase = PhaseFinished

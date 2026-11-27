@@ -15,10 +15,14 @@ WHERE id = sqlc.arg(id);
 UPDATE runs SET prompt = sqlc.arg(prompt) WHERE id = sqlc.arg(id);
 
 -- name: RecordDisposition :execrows
+WITH closed AS (
+  UPDATE intents SET outcome = sqlc.arg(intent_outcome), finished_at = sqlc.arg(ended_at)
+  WHERE run_id = sqlc.arg(id) AND finished_at IS NULL
+)
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
     cost_usd = sqlc.arg(cost_usd), last_message = sqlc.narg(last_message),
     metrics = sqlc.narg(metrics)
-WHERE id = sqlc.arg(id) AND outcome IS NULL;
+WHERE runs.id = sqlc.arg(id) AND runs.outcome IS NULL;
 
 -- name: TicketActivities :many
 SELECT e.ticket_id::text AS ticket_url, MAX(e.at)::timestamptz AS at,
