@@ -39,6 +39,7 @@ stacking       = true
 compat_check   = "compat"
 mergify_sha    = "sha256:1"
 deny           = ["go.mod"]
+mcp            = ["twenty", "codegraph"]
 verify_command = ["go", "vet"]
 raise          = "manual"
 
@@ -56,7 +57,7 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 		want := result{
 			Settings: config.RepoSettings{
 				Tracker: "linear", Stacking: true, CompatCheck: "compat", MergifySHA: "sha256:1",
-				Deny: []string{"go.mod"}, VerifyCommand: []string{"go", "vet"},
+				Deny: []string{"go.mod"}, MCP: []string{"twenty", "codegraph"}, VerifyCommand: []string{"go", "vet"},
 				Raise: plan.RaiseManual,
 				Insights: plan.InsightsSettings{
 					Stages: []string{"grill", "tdd"}, RollupChecks: []string{"gate", "*-all"},

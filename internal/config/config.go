@@ -9,6 +9,7 @@ type Config struct {
 	DataDir           string
 	DatabaseURL       string
 	ClaudeProjectsDir string
+	ClaudeUserConfig  string
 	MaxAgents         int
 	MaxVerifies       int
 	Port              int
@@ -33,6 +34,7 @@ var defaultAgentCommand = []string{
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
 	"--strict-mcp-config",
+	"--mcp-config", "{mcp_config}",
 	"--model", "{model}",
 	"--effort", "{effort}",
 	"{tools}",

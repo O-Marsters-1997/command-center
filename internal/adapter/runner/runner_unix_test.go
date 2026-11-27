@@ -144,6 +144,20 @@ func TestProcessRunner_Spawn(t *testing.T) {
 			want: func(cfg runner.SpawnConfig) string { return cfg.SystemPromptPath },
 		},
 		{
+			name:    "substitutes the mcp config path",
+			command: []string{"--mcp-config", "{mcp_config}"},
+			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				t.Helper()
+				cfg.MCPConfigPath = writeFile(t, "{}")
+			},
+			want: func(cfg runner.SpawnConfig) string { return "--mcp-config " + cfg.MCPConfigPath },
+		},
+		{
+			name:    "drops the mcp config flag when the path is empty",
+			command: []string{"before", "--mcp-config", "{mcp_config}", "after"},
+			want:    func(runner.SpawnConfig) string { return "before after" },
+		},
+		{
 			name:    "drops the system prompt flag when the path is empty",
 			command: []string{"before", "--append-system-prompt-file", "{system_prompt}", "after"},
 			want:    func(runner.SpawnConfig) string { return "before after" },

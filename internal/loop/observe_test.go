@@ -3,6 +3,7 @@ package loop_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -69,6 +70,16 @@ func TestNewObserver(t *testing.T) {
 		gittest.Run(t, f.repoPath, "push", "-q", "origin", "ticket")
 		if diff := cmp.Diff([]string{"go.mod"}, deny()); diff != "" {
 			t.Errorf("Settings[repo].Deny after a branch changed mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("an mcp server in neither .mcp.json nor ~/.claude.json is a settings error", func(t *testing.T) {
+		t.Parallel()
+		f := newObserverFixture(t)
+		pushSettingsFile(t, f.repoPath, "mcp = [\"ghost\"]\n")
+		obs := f.observation(t)
+		if got := obs.SettingsErrors["repo"]; !strings.Contains(got, "ghost") {
+			t.Errorf("SettingsErrors[repo] = %q, want it to name ghost", got)
 		}
 	})
 

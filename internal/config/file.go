@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 
@@ -52,6 +53,7 @@ func resolve(f fileConfig, env Env) (Config, error) {
 		DataDir:           dataDir,
 		DatabaseURL:       resolveDatabaseURL(f.DatabaseURL, env),
 		ClaudeProjectsDir: claudeProjectsDir,
+		ClaudeUserConfig:  filepath.Join(env.Home, ".claude.json"),
 		MaxAgents:         f.MaxAgents,
 		MaxVerifies:       f.MaxVerifies,
 		Port:              f.Port,

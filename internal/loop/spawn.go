@@ -241,17 +241,23 @@ func (l *Loop) spawnConfig(
 		return runner.SpawnConfig{}, err
 	}
 
+	mcpPath, err := l.mcpConfigFor(ctx, runID, spec.ticket.Repo)
+	if err != nil {
+		return runner.SpawnConfig{}, err
+	}
+
 	cfg := runner.SpawnConfig{
-		AgentCommand: l.cfg.AgentCommand,
-		WorktreePath: spec.worktree,
-		SettingsPath: l.ws.SettingsPath,
-		Model:        spec.choice.Model,
-		Effort:       spec.choice.Effort,
-		Tools:        step.Tools,
-		Prompt:       prompt,
-		PromptPath:   promptPath,
-		SessionID:    sessionID,
-		Resume:       spec.resumeSessionID != "",
+		AgentCommand:  l.cfg.AgentCommand,
+		WorktreePath:  spec.worktree,
+		SettingsPath:  l.ws.SettingsPath,
+		MCPConfigPath: mcpPath,
+		Model:         spec.choice.Model,
+		Effort:        spec.choice.Effort,
+		Tools:         step.Tools,
+		Prompt:        prompt,
+		PromptPath:    promptPath,
+		SessionID:     sessionID,
+		Resume:        spec.resumeSessionID != "",
 	}
 	if spec.kind.TakesSystemPrompt() {
 		cfg.SystemPromptPath = systemPromptPath
