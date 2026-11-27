@@ -16,6 +16,9 @@ const agentSettings = `{
       "WebFetch",
       "WebSearch"
     ]
+  },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": false
   }
 }
 `
