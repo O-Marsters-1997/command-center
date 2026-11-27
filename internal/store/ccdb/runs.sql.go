@@ -703,20 +703,25 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 }
 
 const recordDisposition = `-- name: RecordDisposition :execrows
+WITH closed AS (
+  UPDATE intents SET outcome = $8, finished_at = $3
+  WHERE run_id = $7 AND finished_at IS NULL
+)
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
     cost_usd = $4, last_message = $5,
     metrics = $6
-WHERE id = $7 AND outcome IS NULL
+WHERE runs.id = $7 AND runs.outcome IS NULL
 `
 
 type RecordDispositionParams struct {
-	Outcome     sql.NullString
-	ExitCode    sql.NullInt64
-	EndedAt     sql.NullTime
-	CostUsd     sql.NullFloat64
-	LastMessage sql.NullString
-	Metrics     json.RawMessage
-	ID          int64
+	Outcome       sql.NullString
+	ExitCode      sql.NullInt64
+	EndedAt       sql.NullTime
+	CostUsd       sql.NullFloat64
+	LastMessage   sql.NullString
+	Metrics       json.RawMessage
+	ID            int64
+	IntentOutcome sql.NullString
 }
 
 func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionParams) (int64, error) {
@@ -728,6 +733,7 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.LastMessage,
 		arg.Metrics,
 		arg.ID,
+		arg.IntentOutcome,
 	)
 	if err != nil {
 		return 0, err

@@ -92,13 +92,14 @@ func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 		metricsParam = raw
 	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Metrics:     metricsParam,
-		Outcome:     notNull(d.Outcome.String()),
-		ExitCode:    nullInt(d.ExitCode),
-		EndedAt:     notNullTime(d.EndedAt.UTC()),
-		CostUsd:     nullFloat(d.Cost),
-		LastMessage: nullString(d.LastMessage),
-		ID:          int64(d.RunID),
+		Metrics:       metricsParam,
+		Outcome:       notNull(d.Outcome.String()),
+		ExitCode:      nullInt(d.ExitCode),
+		EndedAt:       notNullTime(d.EndedAt.UTC()),
+		CostUsd:       nullFloat(d.Cost),
+		LastMessage:   nullString(d.LastMessage),
+		ID:            int64(d.RunID),
+		IntentOutcome: notNull(string(d.Outcome.IntentOutcome())),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
 }

@@ -341,6 +341,54 @@ func TestStore_WithdrawHeldIntent(t *testing.T) {
 	})
 }
 
+func TestStore_RecordDisposition_closesSpawnIntent(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		outcome plan.Outcome
+		want    plan.IntentOutcome
+	}{
+		{plan.OutcomePush, plan.IntentDone},
+		{plan.OutcomeFailed, plan.IntentFailed},
+	} {
+		t.Run(string(tc.want), func(t *testing.T) {
+			t.Parallel()
+			testRecordDispositionClosesSpawnIntent(t, tc.outcome, tc.want)
+		})
+	}
+}
+
+func testRecordDispositionClosesSpawnIntent(t *testing.T, outcome plan.Outcome, want plan.IntentOutcome) {
+	t.Helper()
+	store := openStore(t)
+	seedOneTicket(t, store)
+	ctx := t.Context()
+	runID := insertAgentRun(t, store)
+	recordSpawn(t, store, runID)
+	req := storepkg.VerbRequest{Ticket: "sandbox://CC-1", Verb: plan.VerbReRun, At: testNow}
+	id, err := store.QueueVerbIntent(ctx, req)
+	if err != nil {
+		t.Fatalf("QueueVerbIntent: %v", err)
+	}
+	consumption := storepkg.Consumption{At: testNow, Run: option.Some(plan.RunID(runID))}
+	if err := store.ConsumeVerbIntent(ctx, id, consumption); err != nil {
+		t.Fatalf("ConsumeVerbIntent: %v", err)
+	}
+	ended := testNow.Add(time.Minute)
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: outcome, EndedAt: ended,
+	}); err != nil {
+		t.Fatalf("RecordDisposition: %v", err)
+	}
+
+	records, err := store.IntentHistory(ctx, testNow)
+	if err != nil {
+		t.Fatalf("IntentHistory: %v", err)
+	}
+	if len(records) != 1 || records[0].Outcome != want || !records[0].FinishedAt.Unwrap().Equal(ended) {
+		t.Errorf("IntentHistory = %+v, want one intent %v at %v", records, want, ended)
+	}
+}
+
 func TestStore_IntentHistory(t *testing.T) {
 	t.Parallel()
 	const ticket = "sandbox://CC-1"
