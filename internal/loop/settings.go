@@ -32,7 +32,11 @@ func resolveMCP(ctx context.Context, checkout, userConfig string, names []string
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", userConfig, err)
 	}
-	return config.ResolveMCP(names, repoBody, userBody)
+	body, err := config.ResolveMCP(names, repoBody, userBody)
+	if err != nil {
+		return nil, fmt.Errorf("resolve mcp servers %v: %w", names, err)
+	}
+	return body, nil
 }
 
 func (l *Loop) mcpConfigFor(ctx context.Context, runID int64, repo string) (string, error) {

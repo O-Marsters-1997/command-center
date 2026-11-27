@@ -2,10 +2,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
 const MCPFile = ".mcp.json"
+
+var ErrUnknownMCPServer = errors.New("unknown mcp server")
 
 type mcpServers struct {
 	Servers map[string]json.RawMessage `json:"mcpServers"`
@@ -35,7 +38,7 @@ func ResolveMCP(names []string, repoBody, userBody []byte) ([]byte, error) {
 			def, ok = user.Servers[name]
 		}
 		if !ok {
-			return nil, fmt.Errorf("mcp server %q is in neither %s nor ~/.claude.json", name, MCPFile)
+			return nil, fmt.Errorf("%w %q: in neither %s nor ~/.claude.json", ErrUnknownMCPServer, name, MCPFile)
 		}
 		picked[name] = def
 	}

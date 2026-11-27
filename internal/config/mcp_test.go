@@ -1,7 +1,7 @@
 package config_test
 
 import (
-	"strings"
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -37,11 +37,11 @@ func TestResolveMCP(t *testing.T) {
 		}
 	})
 
-	t.Run("a name in neither file is an error naming it", func(t *testing.T) {
+	t.Run("a name in neither file is unknown", func(t *testing.T) {
 		t.Parallel()
 		_, err := config.ResolveMCP([]string{"ghost"}, []byte(repo), nil)
-		if err == nil || !strings.Contains(err.Error(), `"ghost"`) {
-			t.Errorf("ResolveMCP(ghost) error = %v, want one naming ghost", err)
+		if !errors.Is(err, config.ErrUnknownMCPServer) {
+			t.Errorf("ResolveMCP(ghost) error = %v, want %v", err, config.ErrUnknownMCPServer)
 		}
 	})
 }
