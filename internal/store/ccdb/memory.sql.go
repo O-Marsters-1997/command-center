@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const insertMemoryProcesses = `-- name: InsertMemoryProcesses :exec
@@ -46,6 +48,47 @@ func (q *Queries) InsertMemorySample(ctx context.Context, arg InsertMemorySample
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const memoryRunPeaks = `-- name: MemoryRunPeaks :many
+SELECT DISTINCT ON (peak.run_id) peak.run_id, peak.rss_bytes, s.total_bytes
+FROM (
+    SELECT p.run_id, p.sample_id, SUM(p.rss_bytes)::bigint AS rss_bytes
+    FROM memory_processes p
+    WHERE p.run_id = ANY($1::bigint[])
+    GROUP BY p.run_id, p.sample_id
+) peak
+JOIN memory_samples s ON s.id = peak.sample_id
+ORDER BY peak.run_id, peak.rss_bytes DESC, s.sampled_at DESC
+`
+
+type MemoryRunPeaksRow struct {
+	RunID      int64
+	RssBytes   int64
+	TotalBytes int64
+}
+
+func (q *Queries) MemoryRunPeaks(ctx context.Context, runs []int64) ([]MemoryRunPeaksRow, error) {
+	rows, err := q.db.QueryContext(ctx, memoryRunPeaks, pq.Array(runs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MemoryRunPeaksRow
+	for rows.Next() {
+		var i MemoryRunPeaksRow
+		if err := rows.Scan(&i.RunID, &i.RssBytes, &i.TotalBytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pruneMemorySamples = `-- name: PruneMemorySamples :execrows

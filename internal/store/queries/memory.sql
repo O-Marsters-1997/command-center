@@ -16,3 +16,14 @@ DELETE FROM memory_samples WHERE id IN (
     WHERE m.sampled_at < sqlc.arg(before)
     LIMIT sqlc.arg(batch)
 );
+
+-- name: MemoryRunPeaks :many
+SELECT DISTINCT ON (peak.run_id) peak.run_id, peak.rss_bytes, s.total_bytes
+FROM (
+    SELECT p.run_id, p.sample_id, SUM(p.rss_bytes)::bigint AS rss_bytes
+    FROM memory_processes p
+    WHERE p.run_id = ANY(sqlc.arg(runs)::bigint[])
+    GROUP BY p.run_id, p.sample_id
+) peak
+JOIN memory_samples s ON s.id = peak.sample_id
+ORDER BY peak.run_id, peak.rss_bytes DESC, s.sampled_at DESC;

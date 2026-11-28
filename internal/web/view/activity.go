@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/memory"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -219,6 +220,20 @@ type ActivityRow struct {
 	Took    time.Duration
 	Trail   []plan.IntentStep
 	Session string
+	Peak    option.Option[memory.RunPeak]
+}
+
+func (r ActivityRow) PeakText() string {
+	p, ok := r.Peak.Get()
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("Peak memory %.1f GB", float64(p.RSS)/1e9)
+}
+
+func (r ActivityRow) PeakHeavy() bool {
+	p, ok := r.Peak.Get()
+	return ok && p.Heavy()
 }
 
 func (r ActivityRow) Offset(s plan.IntentStep) string {
@@ -344,6 +359,8 @@ func (r *Reader) ActivityPage(ctx context.Context, now time.Time, q url.Values) 
 		tickets[plan.TicketURL(row.URL)] = row
 	}
 	var rows []ActivityRow
+	var runIDs []int64
+	runOf := map[int64]int64{}
 	for _, rec := range records {
 		ticket, known := tickets[rec.Ticket]
 		outsideProject := params.Project != "" && ticket.Project != params.Project
@@ -370,7 +387,20 @@ func (r *Reader) ActivityPage(ctx context.Context, now time.Time, q url.Values) 
 		if st.Ended.IsSome() {
 			row.Took = st.Ended.Unwrap().Sub(rec.ConsumedAt.UnwrapOr(rec.At))
 		}
+		if id, ok := rec.Run.Get(); ok {
+			runOf[rec.ID] = int64(id)
+			runIDs = append(runIDs, int64(id))
+		}
 		rows = append(rows, row)
+	}
+	peaks, err := r.store.MemoryRunPeaks(ctx, runIDs)
+	if err != nil {
+		return ActivityPage{}, err
+	}
+	for i := range rows {
+		if p, ok := peaks[runOf[rows[i].ID]]; ok {
+			rows[i].Peak = option.Some(p)
+		}
 	}
 	slices.SortFunc(rows, func(a, b ActivityRow) int {
 		return cmp.Or(b.Queued.Compare(a.Queued), cmp.Compare(b.ID, a.ID))
