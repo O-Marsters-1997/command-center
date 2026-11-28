@@ -16,3 +16,14 @@ DELETE FROM memory_samples WHERE id IN (
     WHERE m.sampled_at < sqlc.arg(before)
     LIMIT sqlc.arg(batch)
 );
+
+-- name: MemoryPeaks :many
+SELECT DISTINCT ON (floor(extract(epoch FROM m.sampled_at - sqlc.arg(from_at)::timestamptz) / sqlc.arg(step_secs)::float8))
+    m.id, m.sampled_at, m.total_bytes, m.used_bytes
+FROM memory_samples m
+WHERE m.sampled_at >= sqlc.arg(from_at)::timestamptz AND m.sampled_at < sqlc.arg(to_at)::timestamptz
+ORDER BY floor(extract(epoch FROM m.sampled_at - sqlc.arg(from_at)::timestamptz) / sqlc.arg(step_secs)::float8),
+    m.used_bytes DESC, m.id;
+
+-- name: MemoryProcesses :many
+SELECT run_id, pid, name, args, rss_bytes FROM memory_processes WHERE sample_id = sqlc.arg(sample_id) ORDER BY pid;
