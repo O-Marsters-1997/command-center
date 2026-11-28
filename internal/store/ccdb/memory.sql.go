@@ -9,8 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const insertMemoryProcesses = `-- name: InsertMemoryProcesses :exec
@@ -139,7 +137,7 @@ SELECT DISTINCT ON (peak.run_id) peak.run_id, peak.rss_bytes, s.total_bytes
 FROM (
     SELECT p.run_id, p.sample_id, SUM(p.rss_bytes)::bigint AS rss_bytes
     FROM memory_processes p
-    WHERE p.run_id = ANY($1::bigint[])
+    WHERE p.run_id = ANY(string_to_array($1::text, ',')::bigint[])
     GROUP BY p.run_id, p.sample_id
 ) peak
 JOIN memory_samples s ON s.id = peak.sample_id
@@ -152,8 +150,8 @@ type MemoryRunPeaksRow struct {
 	TotalBytes int64
 }
 
-func (q *Queries) MemoryRunPeaks(ctx context.Context, runs []int64) ([]MemoryRunPeaksRow, error) {
-	rows, err := q.db.QueryContext(ctx, memoryRunPeaks, pq.Array(runs))
+func (q *Queries) MemoryRunPeaks(ctx context.Context, runs string) ([]MemoryRunPeaksRow, error) {
+	rows, err := q.db.QueryContext(ctx, memoryRunPeaks, runs)
 	if err != nil {
 		return nil, err
 	}

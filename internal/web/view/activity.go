@@ -397,8 +397,8 @@ func (r *Reader) ActivityPage(ctx context.Context, now time.Time, q url.Values) 
 		rows = append(rows, row)
 	}
 	peaks, err := r.store.MemoryRunPeaks(ctx, runIDs)
-	if err != nil {
-		return ActivityPage{}, err
+	if err != nil && mem.readErr == "" {
+		mem.readErr = fmt.Sprintf("Could not load memory: %v", err)
 	}
 	for i := range rows {
 		if p, ok := peaks[runOf[rows[i].ID]]; ok {
