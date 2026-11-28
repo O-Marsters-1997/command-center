@@ -56,6 +56,22 @@ type LaunchMember struct {
 	PromptHash string
 }
 
+type MemoryProcess struct {
+	SampleID int64
+	RunID    int64
+	Pid      int32
+	Name     string
+	Args     string
+	RssBytes int64
+}
+
+type MemorySample struct {
+	ID         int64
+	SampledAt  time.Time
+	TotalBytes int64
+	UsedBytes  int64
+}
+
 type Meta struct {
 	Key   string
 	Value json.RawMessage

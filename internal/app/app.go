@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/gh"
+	"github.com/O-Marsters-1997/command-center/internal/adapter/meter"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/notify"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/runner"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/tracker"
@@ -24,12 +25,13 @@ import (
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
 type App struct {
-	cfg    config.Config
-	logger *slog.Logger
-	lock   *Flock
-	store  *store.Store
-	loop   *loop.Loop
-	server *web.Server
+	cfg     config.Config
+	logger  *slog.Logger
+	lock    *Flock
+	store   *store.Store
+	loop    *loop.Loop
+	sampler *loop.Sampler
+	server  *web.Server
 }
 
 type Seams struct {
@@ -39,6 +41,7 @@ type Seams struct {
 	RemoteOf loop.RemoteFunc
 	Forge    gh.Forge
 	Runner   runner.Runner
+	Meter    meter.Meter
 }
 
 func New(logger *slog.Logger, configPath string, env config.Env, seams Seams) (app *App, err error) {
@@ -50,6 +53,9 @@ func New(logger *slog.Logger, configPath string, env config.Env, seams Seams) (a
 	}
 	if seams.Runner == nil {
 		seams.Runner = runner.ProcessRunner{}
+	}
+	if seams.Meter == nil {
+		seams.Meter = meter.PS{}
 	}
 	if seams.RemoteOf == nil {
 		seams.RemoteOf = gh.CLI{}.RepoRemote
@@ -109,12 +115,13 @@ func New(logger *slog.Logger, configPath string, env config.Env, seams Seams) (a
 	})
 
 	return &App{
-		cfg:    cfg,
-		logger: logger,
-		lock:   lock,
-		store:  st,
-		loop:   lp,
-		server: server,
+		cfg:     cfg,
+		logger:  logger,
+		lock:    lock,
+		store:   st,
+		loop:    lp,
+		sampler: &loop.Sampler{Logger: logger, Store: st, Meter: seams.Meter, Clock: seams.Clock},
+		server:  server,
 	}, nil
 }
 
@@ -146,6 +153,13 @@ func (a *App) Run(ctx context.Context) error {
 		defer stop()
 		if err := a.loop.Run(ctx); err != nil {
 			return fmt.Errorf("run loop: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		defer stop()
+		if err := a.sampler.Run(ctx); err != nil {
+			return fmt.Errorf("run sampler: %w", err)
 		}
 		return nil
 	})

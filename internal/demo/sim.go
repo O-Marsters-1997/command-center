@@ -124,6 +124,7 @@ type Sim struct {
 	agent    *Agent
 	store    *store.Store
 	loop     *loop.Loop
+	sampler  *loop.Sampler
 	server   *web.Server
 	issues   []issue
 
@@ -195,7 +196,8 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
-		loop: lp, server: server, issues: issues,
+		loop: lp, server: server,
+		sampler: &loop.Sampler{Logger: logger, Store: st, Meter: NewMeter(agent), Clock: clock}, issues: issues,
 		authorised: map[string]bool{},
 	}
 	for _, feature := range features(issues) {
@@ -251,6 +253,9 @@ func (s *Sim) Tick(ctx context.Context) error {
 	}
 	if err := s.loop.RunOnce(ctx); err != nil {
 		return fmt.Errorf("run loop once: %w", err)
+	}
+	if err := s.sampler.SampleOnce(ctx); err != nil {
+		return fmt.Errorf("sample memory: %w", err)
 	}
 	states, err := s.states(ctx)
 	if err != nil {
