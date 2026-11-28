@@ -116,8 +116,13 @@ func parseMemoryQuery(q url.Values, now time.Time) (memory.Window, option.Option
 }
 
 func slideToNow(w memory.Window, now time.Time) memory.Window {
-	to := now.Truncate(w.Step()).Add(w.Step())
+	to := floorLocal(now, w.Step()).Add(w.Step())
 	return memory.Window{From: to.Add(-w.To.Sub(w.From)), To: to}
+}
+
+func floorLocal(t time.Time, step time.Duration) time.Time {
+	midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	return midnight.Add(t.Sub(midnight) / step * step)
 }
 
 func memoryTicks(w memory.Window) []Tick {
@@ -138,7 +143,7 @@ func memoryTicks(w memory.Window) []Tick {
 		case span > 12*time.Hour:
 			step = 3 * time.Hour
 		}
-		for t := w.From.Truncate(step).Add(step); t.Before(w.To); t = t.Add(step) {
+		for t := floorLocal(w.From, step).Add(step); t.Before(w.To); t = t.Add(step) {
 			at = append(at, t)
 		}
 	}
