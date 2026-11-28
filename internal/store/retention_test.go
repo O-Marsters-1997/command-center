@@ -28,8 +28,9 @@ func TestStore_PruneHistory(t *testing.T) {
 		reading        = `INSERT INTO utilization_readings (at, "window", utilization, resets_at) VALUES `
 		interval       = `INSERT INTO utilization_intervals ("window", start_at, end_at, ` +
 			`utilization_start, utilization_end, weight_usd) VALUES `
-		run  = "INSERT INTO runs (ticket_id, kind, step, workflow, workflow_hash, ended_at) VALUES "
-		push = "INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at) VALUES "
+		memorySample = "INSERT INTO memory_samples (id, sampled_at, total_bytes, used_bytes) OVERRIDING SYSTEM VALUE VALUES "
+		run          = "INSERT INTO runs (ticket_id, kind, step, workflow, workflow_hash, ended_at) VALUES "
+		push         = "INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at) VALUES "
 	)
 	for _, stmt := range []string{
 		consumedIntent + "(" + ago(60*day) + ", 'sandbox://CC-1', 'launch', " + ago(31*day) + ")",
@@ -49,7 +50,14 @@ func TestStore_PruneHistory(t *testing.T) {
 		interval + "('five_hour', " + ago(16*day) + ", " + ago(15*day) + ", 0, 0.1, 1)",
 		interval + "('five_hour', " + ago(14*day-time.Hour) + ", " + ago(13*day) + ", 0, 0.1, 1)",
 
+		memorySample + "(1, " + ago(8*day) + ", 10, 5)",
+		memorySample + "(2, " + ago(6*day) + ", 10, 5)",
+
 		run + "('sandbox://CC-1', 'agent', 'implement', 'v0', 'h', " + ago(500*day) + ")",
+		"INSERT INTO memory_processes (sample_id, run_id, pid, name, args, rss_bytes) " +
+			"SELECT 1, id, 1, 'a', 'a', 1 FROM runs",
+		"INSERT INTO memory_processes (sample_id, run_id, pid, name, args, rss_bytes) " +
+			"SELECT 2, id, 1, 'a', 'a', 1 FROM runs",
 		push + "('sandbox://CC-1', 'a', 'main', 'b', " + ago(500*day) + ")",
 	} {
 		mustExec(t.Context(), t, db, stmt)
@@ -76,6 +84,8 @@ func TestStore_PruneHistory(t *testing.T) {
 			`SELECT count(*) FROM utilization_readings WHERE "window" = 'seven_day'`, 1,
 		},
 		{"intervals keep those ending within 14 days", "SELECT count(*) FROM utilization_intervals", 1},
+		{"memory samples keep the last 7 days", "SELECT count(*) FROM memory_samples", 1},
+		{"memory processes follow their sample", "SELECT count(*) FROM memory_processes", 1},
 		{"runs survive", "SELECT count(*) FROM runs", 1},
 		{"pushes survive", "SELECT count(*) FROM pushes", 1},
 	}

@@ -13,6 +13,7 @@ const (
 	tickErrorRetention      = 30 * 24 * time.Hour
 	readingRetention        = 90 * 24 * time.Hour
 	intervalRetention       = 14 * 24 * time.Hour
+	memorySampleRetention   = 7 * 24 * time.Hour
 	pruneBatch              = 1000
 )
 
@@ -38,6 +39,11 @@ func (s *Store) PruneHistory(ctx context.Context, now time.Time) error {
 		Before: now.Add(-intervalRetention), Batch: pruneBatch,
 	}); err != nil {
 		return fmt.Errorf("prune intervals: %w", err)
+	}
+	if _, err := s.q.PruneMemorySamples(ctx, ccdb.PruneMemorySamplesParams{
+		Before: now.Add(-memorySampleRetention), Batch: pruneBatch,
+	}); err != nil {
+		return fmt.Errorf("prune memory samples: %w", err)
 	}
 	return nil
 }
