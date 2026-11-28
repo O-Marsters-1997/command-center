@@ -17,6 +17,17 @@ DELETE FROM memory_samples WHERE id IN (
     LIMIT sqlc.arg(batch)
 );
 
+-- name: MemoryRunPeaks :many
+SELECT DISTINCT ON (peak.run_id) peak.run_id, peak.rss_bytes, s.total_bytes
+FROM (
+    SELECT p.run_id, p.sample_id, SUM(p.rss_bytes)::bigint AS rss_bytes
+    FROM memory_processes p
+    WHERE p.run_id = ANY(string_to_array(sqlc.arg(runs)::text, ',')::bigint[])
+    GROUP BY p.run_id, p.sample_id
+) peak
+JOIN memory_samples s ON s.id = peak.sample_id
+ORDER BY peak.run_id, peak.rss_bytes DESC, s.sampled_at DESC;
+
 -- name: MemoryPeaks :many
 SELECT DISTINCT ON (floor(extract(epoch FROM m.sampled_at - sqlc.arg(from_at)::timestamptz) / sqlc.arg(step_secs)::float8))
     m.id, m.sampled_at, m.total_bytes, m.used_bytes

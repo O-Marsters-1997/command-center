@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/plan/memory"
 	"github.com/O-Marsters-1997/command-center/internal/plan/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
@@ -260,4 +261,27 @@ func TestApplyActivities(t *testing.T) {
 			t.Errorf("ApplyActivities() rows mismatch (-want +got):\n%s", diff)
 		}
 	})
+}
+
+func TestActivityRow_Peak(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		peak      option.Option[memory.RunPeak]
+		wantText  string
+		wantHeavy bool
+	}{
+		{"none", option.None[memory.RunPeak](), "", false},
+		{"light", option.Some(memory.RunPeak{RSS: 4_200_000_000, Total: 16_000_000_000}), "Peak memory 4.2 GB", false},
+		{"heavy", option.Some(memory.RunPeak{RSS: 15_000_000_000, Total: 16_000_000_000}), "Peak memory 15.0 GB", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			row := view.ActivityRow{Peak: tt.peak}
+			if row.PeakText() != tt.wantText || row.PeakHeavy() != tt.wantHeavy {
+				t.Errorf("PeakText, PeakHeavy = %q, %v; want %q, %v", row.PeakText(), row.PeakHeavy(), tt.wantText, tt.wantHeavy)
+			}
+		})
+	}
 }

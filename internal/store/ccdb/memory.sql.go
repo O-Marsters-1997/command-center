@@ -132,6 +132,47 @@ func (q *Queries) MemoryProcesses(ctx context.Context, sampleID int64) ([]Memory
 	return items, nil
 }
 
+const memoryRunPeaks = `-- name: MemoryRunPeaks :many
+SELECT DISTINCT ON (peak.run_id) peak.run_id, peak.rss_bytes, s.total_bytes
+FROM (
+    SELECT p.run_id, p.sample_id, SUM(p.rss_bytes)::bigint AS rss_bytes
+    FROM memory_processes p
+    WHERE p.run_id = ANY(string_to_array($1::text, ',')::bigint[])
+    GROUP BY p.run_id, p.sample_id
+) peak
+JOIN memory_samples s ON s.id = peak.sample_id
+ORDER BY peak.run_id, peak.rss_bytes DESC, s.sampled_at DESC
+`
+
+type MemoryRunPeaksRow struct {
+	RunID      int64
+	RssBytes   int64
+	TotalBytes int64
+}
+
+func (q *Queries) MemoryRunPeaks(ctx context.Context, runs string) ([]MemoryRunPeaksRow, error) {
+	rows, err := q.db.QueryContext(ctx, memoryRunPeaks, runs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MemoryRunPeaksRow
+	for rows.Next() {
+		var i MemoryRunPeaksRow
+		if err := rows.Scan(&i.RunID, &i.RssBytes, &i.TotalBytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneMemorySamples = `-- name: PruneMemorySamples :execrows
 DELETE FROM memory_samples WHERE id IN (
     SELECT m.id FROM memory_samples m

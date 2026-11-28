@@ -20,6 +20,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
       <li class="flex gap-3"><span class="w-12 text-right font-mono text-xs text-muted">{{$.Offset .}}</span><span>{{.Phase}}{{with .Outcome}} · {{.}}{{end}}</span></li>
       {{- end}}
     </ol>
+    {{with .PeakText}}<p class="mt-1 text-xs{{if $.PeakHeavy}} text-[var(--color-s-failed)]{{else}} text-muted{{end}}">{{.}}</p>{{end}}
     {{with .Session}}<a class="mt-2 inline-block" href="{{.}}" {{template "nav" .}}>Open session ›</a>{{end}}
   </div>
 </details>

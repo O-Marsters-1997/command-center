@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/memory"
@@ -64,4 +66,20 @@ func (s *Store) RecordMemorySample(ctx context.Context, sm memory.Sample) error 
 		}
 		return nil
 	})
+}
+
+func (s *Store) MemoryRunPeaks(ctx context.Context, runs []int64) (map[int64]memory.RunPeak, error) {
+	ids := make([]string, len(runs))
+	for i, id := range runs {
+		ids[i] = strconv.FormatInt(id, 10)
+	}
+	rows, err := s.q.MemoryRunPeaks(ctx, strings.Join(ids, ","))
+	if err != nil {
+		return nil, fmt.Errorf("read memory run peaks: %w", err)
+	}
+	peaks := make(map[int64]memory.RunPeak, len(rows))
+	for _, r := range rows {
+		peaks[r.RunID] = memory.RunPeak{RSS: r.RssBytes, Total: r.TotalBytes}
+	}
+	return peaks, nil
 }
