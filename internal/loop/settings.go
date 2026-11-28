@@ -1,12 +1,63 @@
 package loop
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 
+	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 )
+
+func resolveMCP(ctx context.Context, checkout, userConfig string, names []string) ([]byte, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	var repoBody []byte
+	found, err := git.HasFile(ctx, checkout, config.SettingsRef, config.MCPFile)
+	if err != nil {
+		return nil, fmt.Errorf("look for %s on %s: %w", config.MCPFile, config.SettingsRef, err)
+	}
+	if found {
+		text, err := git.ShowFile(ctx, checkout, config.SettingsRef, config.MCPFile)
+		if err != nil {
+			return nil, fmt.Errorf("read %s on %s: %w", config.MCPFile, config.SettingsRef, err)
+		}
+		repoBody = []byte(text)
+	}
+	userBody, err := os.ReadFile(userConfig)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read %s: %w", userConfig, err)
+	}
+	body, err := config.ResolveMCP(names, repoBody, userBody)
+	if err != nil {
+		return nil, fmt.Errorf("resolve mcp servers %v: %w", names, err)
+	}
+	return body, nil
+}
+
+func (l *Loop) mcpConfigFor(ctx context.Context, runID int64, repo string) (string, error) {
+	checkout := l.checkout(repo)
+	settings, _, err := readRepoSettings(ctx, checkout)
+	if err != nil {
+		return "", fmt.Errorf("read settings for run %d: %w", runID, err)
+	}
+	body, err := resolveMCP(ctx, checkout, l.cfg.ClaudeUserConfig, settings.MCP)
+	if err != nil {
+		return "", fmt.Errorf("resolve mcp servers for run %d: %w", runID, err)
+	}
+	if body == nil {
+		return "", nil
+	}
+	path := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.mcp.json", runID))
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		return "", fmt.Errorf("write mcp config for run %d: %w", runID, err)
+	}
+	return path, nil
+}
 
 const agentSettings = `{
   "permissions": {

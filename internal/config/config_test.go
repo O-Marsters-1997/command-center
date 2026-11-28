@@ -22,6 +22,7 @@ var defaultAgentCommand = []string{
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
 	"--strict-mcp-config",
+	"--mcp-config", "{mcp_config}",
 	"--model", "{model}",
 	"--effort", "{effort}",
 	"{tools}",

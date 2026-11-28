@@ -25,6 +25,7 @@ type SpawnConfig struct {
 	WorktreePath     string
 	SettingsPath     string
 	SystemPromptPath string
+	MCPConfigPath    string
 	Model            string
 	Effort           option.Option[plan.Effort]
 	Tools            []string
@@ -63,6 +64,7 @@ func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{worktree}", cfg.WorktreePath)
 	arg = strings.ReplaceAll(arg, "{settings}", cfg.SettingsPath)
 	arg = strings.ReplaceAll(arg, "{system_prompt}", cfg.SystemPromptPath)
+	arg = strings.ReplaceAll(arg, "{mcp_config}", cfg.MCPConfigPath)
 	arg = strings.ReplaceAll(arg, "{model}", cfg.Model)
 	arg = strings.ReplaceAll(arg, "{effort}", string(cfg.Effort.UnwrapOr("")))
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
@@ -85,6 +87,7 @@ func buildArgv(cfg SpawnConfig) []string {
 	omitWhenEmpty := map[string]string{
 		"{system_prompt}": cfg.SystemPromptPath,
 		"{effort}":        string(cfg.Effort.UnwrapOr("")),
+		"{mcp_config}":    cfg.MCPConfigPath,
 	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {

@@ -43,7 +43,7 @@ func NewObserver(st *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc
 		for _, repo := range repos {
 			path := config.CheckoutPath(cfg.DataDir, repo.Name)
 			read := repoRead{
-				name: repo.Name, path: path, branches: branchesFor(tickets, repo.Name),
+				name: repo.Name, path: path, userConfig: cfg.ClaudeUserConfig, branches: branchesFor(tickets, repo.Name),
 				pushed: pushedTipsFor(tickets, repo.Name, pushedTips),
 			}
 			part, err := observeRepo(ctx, forge, read, prevObs)
@@ -60,6 +60,7 @@ func NewObserver(st *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc
 
 type repoRead struct {
 	name, path string
+	userConfig string
 	branches   []string
 	pushed     map[string]plan.SHA
 }
@@ -83,6 +84,9 @@ func observeRepo(
 	}
 
 	settings, source, settingsErr := readRepoSettings(ctx, read.path)
+	if settingsErr == nil {
+		_, settingsErr = resolveMCP(ctx, read.path, read.userConfig, settings.MCP)
+	}
 	if settingsErr != nil {
 		obs.SettingsErrors[read.name] = settingsErr.Error()
 	} else {
