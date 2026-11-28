@@ -19,6 +19,10 @@ describe("brushSpan", () => {
   });
 });
 
+test("brushSpan rejects an empty chart", () => {
+  expect(() => brushSpan([], 0, 1)).toThrow(RangeError);
+});
+
 describe("move", () => {
   test.each([
     { name: "next inside", index: 1, delta: 1 as const, want: { kind: "select", index: 2 } },
