@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git"
 	"github.com/O-Marsters-1997/command-center/internal/adapter/git/gittest"
@@ -55,6 +57,21 @@ func partialSeed(t *testing.T) (seedPath, remote string) {
 	seedPath = filepath.Join(t.TempDir(), "seed")
 	gittest.Run(t, ".", "clone", "-q", "--filter=blob:none", remote, seedPath)
 	return seedPath, remote
+}
+
+func assertFull(t *testing.T, checkout string) {
+	t.Helper()
+	if cfg := gittest.Run(t, checkout, "config", "--list"); strings.Contains(cfg, "partialclonefilter") {
+		t.Errorf("checkout config still has a partial clone filter:\n%s", cfg)
+	}
+	promisors, err := filepath.Glob(filepath.Join(checkout, ".git", "objects", "pack", "*.promisor"))
+	if err != nil || len(promisors) != 0 {
+		t.Errorf("promisor packs = %v, %v, want none", promisors, err)
+	}
+	gittest.Run(t, checkout, "fsck", "--full")
+	if out := gittest.Run(t, checkout, "count-objects", "-v"); !strings.Contains(out, "garbage: 0") {
+		t.Errorf("count-objects -v = %q, want garbage: 0", out)
+	}
 }
 
 func TestEnsureCheckout(t *testing.T) {
@@ -148,20 +165,56 @@ func TestEnsureCheckout(t *testing.T) {
 		}
 	})
 
-	t.Run("seeded from a partial clone, the checkout can repack, and reuse repairs one that cannot", func(t *testing.T) {
+	t.Run("seeded from a partial clone, the checkout is a full clone", func(t *testing.T) {
 		t.Parallel()
 		seedPath, remote := partialSeed(t)
 		checkout := filepath.Join(t.TempDir(), "repos", "r")
 		if err := git.EnsureCheckout(t.Context(), "r", remote, seedPath, checkout); err != nil {
 			t.Fatalf("EnsureCheckout(seed) error = %v", err)
 		}
-		gittest.Run(t, checkout, "repack", "-a", "-d", "-q")
+		assertFull(t, checkout)
+	})
 
-		gittest.Run(t, checkout, "config", "--unset", "remote.origin.promisor")
+	t.Run("reuse converts an existing partial checkout to a full clone", func(t *testing.T) {
+		t.Parallel()
+		_, remote := partialSeed(t)
+		checkout := filepath.Join(t.TempDir(), "repos", "r")
+		gittest.Run(t, ".", "clone", "-q", "--filter=blob:none", remote, checkout)
+
 		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
 			t.Fatalf("EnsureCheckout(reuse) error = %v", err)
 		}
-		gittest.Run(t, checkout, "repack", "-a", "-d", "-q")
+		assertFull(t, checkout)
+	})
+
+	t.Run("reuse removes old temp packs and keeps recent ones", func(t *testing.T) {
+		t.Parallel()
+		_, remote := gittest.WithOrigin(t)
+		checkout := filepath.Join(t.TempDir(), "repos", "r")
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
+			t.Fatalf("EnsureCheckout(clone) error = %v", err)
+		}
+		packDir := filepath.Join(checkout, ".git", "objects", "pack")
+		old, recent := filepath.Join(packDir, "tmp_pack_old"), filepath.Join(packDir, "tmp_pack_recent")
+		for _, p := range []string{old, recent} {
+			if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+				t.Fatalf("WriteFile(%s): %v", p, err)
+			}
+		}
+		stale := time.Now().Add(-time.Hour)
+		if err := os.Chtimes(old, stale, stale); err != nil {
+			t.Fatalf("Chtimes(%s): %v", old, err)
+		}
+
+		if err := git.EnsureCheckout(t.Context(), "r", remote, "", checkout); err != nil {
+			t.Fatalf("EnsureCheckout(reuse) error = %v", err)
+		}
+		if _, err := os.Stat(old); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("old temp pack after EnsureCheckout: stat error = %v, want not exist", err)
+		}
+		if _, err := os.Stat(recent); err != nil {
+			t.Errorf("recent temp pack after EnsureCheckout: stat error = %v, want kept", err)
+		}
 	})
 
 	t.Run("replaces a leftover temporary clone", func(t *testing.T) {

@@ -80,23 +80,80 @@ func configure(ctx context.Context, repoPath string) error {
 			return fmt.Errorf("enable %s in %s: %w", key, repoPath, err)
 		}
 	}
-	return markOriginPromisorWhenPacksArePromised(ctx, repoPath)
+	dir, err := packDir(ctx, repoPath)
+	if err != nil {
+		return err
+	}
+	if err := sweepTmpPacks(dir); err != nil {
+		return err
+	}
+	return makeFull(ctx, repoPath, dir)
 }
 
-func markOriginPromisorWhenPacksArePromised(ctx context.Context, repoPath string) error {
+func packDir(ctx context.Context, repoPath string) (string, error) {
 	out, err := git(ctx, repoPath, "rev-parse", "--path-format=absolute", "--git-path", "objects/pack")
 	if err != nil {
-		return fmt.Errorf("locate pack directory: %w", err)
+		return "", fmt.Errorf("locate pack directory: %w", err)
 	}
-	promisors, err := filepath.Glob(filepath.Join(strings.TrimSpace(string(out)), "*.promisor"))
+	return strings.TrimSpace(string(out)), nil
+}
+
+func sweepTmpPacks(packDir string) error {
+	tmps, err := filepath.Glob(filepath.Join(packDir, "tmp_*"))
+	if err != nil {
+		return fmt.Errorf("list temp packs: %w", err)
+	}
+	for _, tmp := range tmps {
+		info, err := os.Stat(tmp)
+		switch {
+		case errors.Is(err, os.ErrNotExist), err == nil && time.Since(info.ModTime()) < longTimeout:
+			continue
+		case err != nil:
+			return fmt.Errorf("stat temp pack %s: %w", tmp, err)
+		}
+		if err := os.Remove(tmp); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove temp pack %s: %w", tmp, err)
+		}
+	}
+	return nil
+}
+
+func makeFull(ctx context.Context, repoPath, packDir string) error {
+	_, filtered, err := gitRun(ctx, repoPath, "config", "--get", "remote.origin.partialclonefilter")
+	if err != nil {
+		return fmt.Errorf("read partial clone filter of %s: %w", repoPath, err)
+	}
+	promisors, err := filepath.Glob(filepath.Join(packDir, "*.promisor"))
 	if err != nil {
 		return fmt.Errorf("list promisor packs: %w", err)
 	}
-	if len(promisors) == 0 {
+	if !filtered && len(promisors) == 0 {
 		return nil
 	}
-	if _, err := git(ctx, repoPath, "config", "remote.origin.promisor", "true"); err != nil {
-		return fmt.Errorf("mark origin as promisor in %s: %w", repoPath, err)
+	refetch := []string{"fetch", "--refetch", "--no-filter", "origin"}
+	if err := command.RunWithin(ctx, longTimeout, repoPath, "git", refetch...); err != nil {
+		return fmt.Errorf("refetch %s without a filter: %w", repoPath, err)
+	}
+	if _, err := git(ctx, repoPath, "config", "remote.origin.promisor", "false"); err != nil {
+		return fmt.Errorf("unmark origin as promisor in %s: %w", repoPath, err)
+	}
+	if err := command.RunWithin(ctx, longTimeout, repoPath, "git", "repack", "-a", "-d", "-q"); err != nil {
+		return fmt.Errorf("repack %s: %w", repoPath, err)
+	}
+	promisors, err = filepath.Glob(filepath.Join(packDir, "*.promisor"))
+	if err != nil {
+		return fmt.Errorf("list promisor packs: %w", err)
+	}
+	for _, p := range promisors {
+		if err := os.Remove(p); err != nil {
+			return fmt.Errorf("remove promisor marker %s: %w", p, err)
+		}
+	}
+	if !filtered {
+		return nil
+	}
+	if _, err := git(ctx, repoPath, "config", "--unset", "remote.origin.partialclonefilter"); err != nil {
+		return fmt.Errorf("unset partial clone filter in %s: %w", repoPath, err)
 	}
 	return nil
 }
