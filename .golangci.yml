@@ -91,6 +91,13 @@ linters:
               desc: insight derives from facts without shelling out
             - pkg: net/http
               desc: insight derives from facts without HTTP
+        memory-pure:
+          files: ["**/internal/plan/memory/**", "!$test"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/plan/memory
+            - github.com/O-Marsters-1997/command-center/internal/plan/option
         plan-pure:
           files: ["**/internal/plan/*.go", "!$test"]
           list-mode: strict
