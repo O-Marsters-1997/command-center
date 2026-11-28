@@ -127,14 +127,21 @@ func TestSampler_SampleOnce(t *testing.T) {
 	})
 }
 
-type flakyMeter struct{ calls int }
+type flakyMeter struct {
+	calls  int
+	cancel context.CancelFunc
+}
 
 func (m *flakyMeter) Read(context.Context, []int) (meter.Reading, error) {
 	m.calls++
-	if m.calls == 1 {
+	switch m.calls {
+	case 1:
 		return meter.Reading{}, errors.New("ps unavailable")
+	case 2:
+		return meter.Reading{Total: 1, Used: 1}, nil
 	}
-	return meter.Reading{Total: 1, Used: 1}, nil
+	m.cancel()
+	return meter.Reading{}, errors.New("stop")
 }
 
 type tickClock struct {
@@ -151,16 +158,15 @@ func TestSampler_Run(t *testing.T) {
 	clock := tickClock{at: f.at, ticks: make(chan time.Time)}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- f.sampler(&flakyMeter{}, clock).Run(ctx) }()
+	go func() { done <- f.sampler(&flakyMeter{cancel: cancel}, clock).Run(ctx) }()
 
 	clock.ticks <- f.at
 	clock.ticks <- f.at
-	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if got := f.count(t, "SELECT count(*) FROM memory_samples"); got < 1 {
-		t.Errorf("samples after a failed read then an interval = %d, want at least 1", got)
+	if got := f.count(t, "SELECT count(*) FROM memory_samples"); got != 1 {
+		t.Errorf("samples after a failed read, a good one and a cancelled one = %d, want 1", got)
 	}
 }

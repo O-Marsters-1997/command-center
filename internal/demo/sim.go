@@ -197,7 +197,8 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
 		loop: lp, server: server,
-		sampler: &loop.Sampler{Logger: logger, Store: st, Meter: NewMeter(agent), Clock: clock}, issues: issues,
+		issues:     issues,
+		sampler:    &loop.Sampler{Logger: logger, Store: st, Meter: NewMeter(agent), Clock: clock},
 		authorised: map[string]bool{},
 	}
 	for _, feature := range features(issues) {
