@@ -26,6 +26,43 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
 </details>
 {{- end}}
 
+{{define "memNav" -}}
+href="{{.}}" hx-get="{{.}}" hx-target="#mem" hx-select="#mem" hx-swap="outerHTML" hx-push-url="true"
+{{- end}}
+
+{{define "mem" -}}
+<section id="mem" class="mb-4" aria-labelledby="mem-h"
+  {{- if .Memory.Live}} hx-get="{{.MemoryPollPath}}" hx-trigger="every 5s" hx-target="this" hx-select="#mem" hx-swap="outerHTML" hx-sync="this:replace"{{end}}>
+  <div class="flex items-center gap-3">
+    <h2 id="mem-h" class="m-0 text-sm font-medium text-fg">Memory</h2>
+    <nav class="ml-auto flex items-center gap-0.5 font-mono text-xs" aria-label="Time range">
+      {{- range .Memory.Presets}}<a class="rounded-sm px-1.5 py-0.5 no-underline {{if .Current}}bg-surface-3 font-medium text-fg{{else}}text-muted hover:text-fg{{end}}" {{template "memNav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+    </nav>
+  </div>
+  {{with .Memory.ReadError}}<p class="banner ribbon mt-2" data-glyph="failed" role="alert">{{.}}</p>{{end}}
+  {{- if .Memory.Buckets}}
+  {{- $mem := .Memory}}
+  <div class="relative mt-3 flex h-24 items-end gap-px" role="group" aria-label="Peak memory over time">
+    <span class="pointer-events-none absolute inset-x-0 border-t border-dashed border-border" style="bottom: {{$mem.Threshold}}%"></span>
+    {{- range $mem.Buckets}}
+    <a class="group flex h-full min-w-0 flex-1 flex-col justify-end" {{template "memNav" ($.MemoryBucketPath .)}} title="{{$mem.Title .}}" aria-label="{{$mem.Title .}}"{{if eq .Index $mem.Selected}} aria-current="true"{{end}}><span class="block rounded-t-[1px] {{if .Spike}}bg-[var(--color-s-failed)]{{else}}bg-surface-3 group-hover:bg-muted{{end}} group-aria-[current]:bg-fg" style="height: {{$mem.Pct .}}%"></span></a>
+    {{- end}}
+  </div>
+  <div class="relative h-5 border-t border-border-soft font-mono text-[11px] text-muted" aria-hidden="true">
+    {{- range $mem.Ticks}}<span class="absolute top-0 h-full border-l border-border pl-1 pt-1 leading-none whitespace-nowrap" style="left: {{printf "%.2f" .Left}}%">{{.Label}}</span>{{end -}}
+  </div>
+  {{- end}}
+  {{- if .Memory.Caption.IsSome}}{{with .Memory.Caption.Unwrap}}
+  <p class="m-0 mt-3 text-sm text-fg" aria-live="polite">
+    <span class="mr-2 whitespace-nowrap font-mono text-xs text-fg-2">{{.Label}}</span>
+    {{- if .GB}}<span class="mr-2 whitespace-nowrap font-mono text-xs tabular-nums {{if .Spike}}text-[var(--color-s-failed)]{{else}}text-fg-2{{end}}">{{.GB}}</span>
+    {{- if .Culprit.IsSome}}{{with .Culprit.Unwrap}}Mostly <code class="font-mono text-[0.9em]">{{.Name}}</code> across {{.Runs}} run{{if ne .Runs 1}}s{{end}}.{{end}}{{else}}No agents running.{{end}}
+    {{- else}}No samples.{{end}}
+  </p>
+  {{- end}}{{end}}
+</section>
+{{- end}}
+
 {{template "shellStart" .}}
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
@@ -33,6 +70,7 @@ hx-get="{{.}}" hx-target="#activity-results" hx-select="#activity-results" hx-sw
 <h1>Activity</h1>
 <p class="page-purpose">What was asked of command centre and how it ended, over the last 30 days.</p>
 {{with .ReadError}}<p class="banner ribbon" data-glyph="failed" role="alert">{{.}}</p>{{end}}
+{{template "mem" .}}
 <form id="activity-filters" action="/activity" method="get" role="search"
   hx-get="/activity" hx-target="#activity-results" hx-select="#activity-results" hx-swap="outerHTML" hx-push-url="true"
   hx-sync="this:replace" hx-trigger="change, input changed delay:250ms from:#activity-q">

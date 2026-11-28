@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan/memory"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -14,6 +15,32 @@ type memoryProcRow struct {
 	Name     string `json:"name"`
 	Args     string `json:"args"`
 	RSSBytes int64  `json:"rss_bytes"`
+}
+
+func (s *Store) MemoryPeaks(ctx context.Context, w memory.Window, step time.Duration) ([]memory.BucketPeak, error) {
+	rows, err := s.q.MemoryPeaks(ctx, ccdb.MemoryPeaksParams{FromAt: w.From, ToAt: w.To, StepSecs: step.Seconds()})
+	if err != nil {
+		return nil, fmt.Errorf("select memory peaks: %w", err)
+	}
+	peaks := make([]memory.BucketPeak, len(rows))
+	for i, r := range rows {
+		peaks[i] = memory.BucketPeak{
+			Start: r.SampledAt, Sample: memory.SampleID(r.ID), Total: r.TotalBytes, Used: r.UsedBytes,
+		}
+	}
+	return peaks, nil
+}
+
+func (s *Store) MemoryProcesses(ctx context.Context, id memory.SampleID) ([]memory.ProcFact, error) {
+	rows, err := s.q.MemoryProcesses(ctx, int64(id))
+	if err != nil {
+		return nil, fmt.Errorf("select memory processes: %w", err)
+	}
+	procs := make([]memory.ProcFact, len(rows))
+	for i, r := range rows {
+		procs[i] = memory.ProcFact{RunID: r.RunID, Pid: int(r.Pid), Name: r.Name, Args: r.Args, RSS: r.RssBytes}
+	}
+	return procs, nil
 }
 
 func (s *Store) RecordMemorySample(ctx context.Context, sm memory.Sample) error {

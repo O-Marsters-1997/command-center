@@ -50,6 +50,90 @@ func (q *Queries) InsertMemorySample(ctx context.Context, arg InsertMemorySample
 	return id, err
 }
 
+const memoryPeaks = `-- name: MemoryPeaks :many
+SELECT DISTINCT ON (floor(extract(epoch FROM m.sampled_at - $1::timestamptz) / $2::float8))
+    m.id, m.sampled_at, m.total_bytes, m.used_bytes
+FROM memory_samples m
+WHERE m.sampled_at >= $1::timestamptz AND m.sampled_at < $3::timestamptz
+ORDER BY floor(extract(epoch FROM m.sampled_at - $1::timestamptz) / $2::float8),
+    m.used_bytes DESC, m.id
+`
+
+type MemoryPeaksParams struct {
+	FromAt   time.Time
+	StepSecs float64
+	ToAt     time.Time
+}
+
+func (q *Queries) MemoryPeaks(ctx context.Context, arg MemoryPeaksParams) ([]MemorySample, error) {
+	rows, err := q.db.QueryContext(ctx, memoryPeaks, arg.FromAt, arg.StepSecs, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MemorySample
+	for rows.Next() {
+		var i MemorySample
+		if err := rows.Scan(
+			&i.ID,
+			&i.SampledAt,
+			&i.TotalBytes,
+			&i.UsedBytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const memoryProcesses = `-- name: MemoryProcesses :many
+SELECT run_id, pid, name, args, rss_bytes FROM memory_processes WHERE sample_id = $1 ORDER BY pid
+`
+
+type MemoryProcessesRow struct {
+	RunID    int64
+	Pid      int32
+	Name     string
+	Args     string
+	RssBytes int64
+}
+
+func (q *Queries) MemoryProcesses(ctx context.Context, sampleID int64) ([]MemoryProcessesRow, error) {
+	rows, err := q.db.QueryContext(ctx, memoryProcesses, sampleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MemoryProcessesRow
+	for rows.Next() {
+		var i MemoryProcessesRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.Pid,
+			&i.Name,
+			&i.Args,
+			&i.RssBytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const memoryRunPeaks = `-- name: MemoryRunPeaks :many
 SELECT DISTINCT ON (peak.run_id) peak.run_id, peak.rss_bytes, s.total_bytes
 FROM (

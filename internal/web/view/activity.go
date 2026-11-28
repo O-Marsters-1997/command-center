@@ -133,6 +133,7 @@ type ActivityPage struct {
 	Pages    int
 	Verbs    []plan.Verb
 	Empty    string
+	Memory   MemoryChart
 	features []string
 	readErr  string
 }
@@ -348,9 +349,11 @@ func (r *Reader) ActivityPage(ctx context.Context, now time.Time, q url.Values) 
 	chrome.setCurrent("")
 	chrome.titled("Activity")
 	chrome.Crumbs = []Crumb{{Label: "Activity"}}
+	mem := r.memoryChart(ctx, params, q, now)
 	records, err := r.store.IntentHistory(ctx, now.Add(-activityRetention))
 	if err != nil {
 		page := NewActivityPage(chrome, params, nil, nil, now)
+		page.Memory = mem
 		page.readErr = fmt.Sprintf("Could not load activity: %v", err)
 		return page, nil
 	}
@@ -405,7 +408,9 @@ func (r *Reader) ActivityPage(ctx context.Context, now time.Time, q url.Values) 
 	slices.SortFunc(rows, func(a, b ActivityRow) int {
 		return cmp.Or(b.Queued.Compare(a.Queued), cmp.Compare(b.ID, a.ID))
 	})
-	return NewActivityPage(chrome, params, rows, distinctFeatures(f.tickets), now), nil
+	page := NewActivityPage(chrome, params, rows, distinctFeatures(f.tickets), now)
+	page.Memory = mem
+	return page, nil
 }
 
 func (r *Reader) intentRun(
