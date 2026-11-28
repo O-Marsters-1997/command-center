@@ -94,3 +94,7 @@ type tick struct {
 
 	spawnedCommands int
 }
+
+func (t *tick) started() plan.Load {
+	return plan.Load{Agents: len(t.spawned) - t.spawnedCommands, Commands: t.spawnedCommands}
+}

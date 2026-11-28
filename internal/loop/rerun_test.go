@@ -116,4 +116,60 @@ func TestReRun(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("five queued against max_agents three start three and hold two", func(t *testing.T) {
+		t.Parallel()
+		tickets := []storepkg.Ticket{
+			sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4"), sandboxTicket("5"),
+		}
+		f := newLoopFixture(t, withMaxAgents(3), withTickets(tickets...))
+		for i, ticket := range tickets {
+			runID, _, err := f.Store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
+				Ticket: ticket.URL, Kind: "agent", PromptHash: composeHash(ticket.URL),
+			})
+			if err != nil {
+				t.Fatalf("InsertSessionRunSkeleton(%q): %v", ticket.URL, err)
+			}
+			spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 100 + i, StartedAt: testAt, LogPath: "/state/runs/old.jsonl"}
+			if err := f.Store.RecordSpawn(t.Context(), spawn); err != nil {
+				t.Fatalf("RecordSpawn(%d): %v", runID, err)
+			}
+			if err := f.Store.RecordDisposition(t.Context(), storepkg.Disposition{
+				RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(1),
+				Cost: option.None[float64](), EndedAt: testAt,
+			}); err != nil {
+				t.Fatalf("RecordDisposition(%d): %v", runID, err)
+			}
+			storetest.Verb(t, f.Store, storepkg.VerbRequest{Ticket: ticket.URL, Verb: "re-run", At: testAt})
+		}
+		pending := func() int {
+			intents, err := f.Store.PendingVerbIntents(t.Context(), "re-run")
+			if err != nil {
+				t.Fatalf("PendingVerbIntents: %v", err)
+			}
+			return len(intents)
+		}
+
+		f.Tick(t)
+		if got, want := len(f.Fake.Spawns()), 3; got != want {
+			t.Errorf("spawns after the first tick = %d, want %d", got, want)
+		}
+		if got, want := pending(), 2; got != want {
+			t.Errorf("pending re-runs after the first tick = %d, want %d", got, want)
+		}
+
+		f.Tick(t)
+		if got, want := len(f.Fake.Spawns()), 3; got != want {
+			t.Errorf("spawns while all three agents run = %d, want %d", got, want)
+		}
+
+		f.Fake.Exit(1, 0)
+		f.Tick(t)
+		if got, want := len(f.Fake.Spawns()), 4; got != want {
+			t.Errorf("spawns after one agent exits = %d, want %d", got, want)
+		}
+		if got, want := pending(), 1; got != want {
+			t.Errorf("pending re-runs after one agent exits = %d, want %d", got, want)
+		}
+	})
 }

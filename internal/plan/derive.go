@@ -187,6 +187,11 @@ func (s Snapshot) LaunchAfter(spawned []TicketURL) []TicketURL {
 	return LaunchPlan(s.launch, load, s.caps, s.spendPaused)
 }
 
+func (s Snapshot) SlotFree(command bool, started Load) bool {
+	load := Load{Agents: s.load.Agents + started.Agents, Commands: s.load.Commands + started.Commands}
+	return load.fits(command, s.caps)
+}
+
 func (s Snapshot) Skipping() Snapshot {
 	repos := s.SkippedRepos()
 	if len(repos) == 0 {
