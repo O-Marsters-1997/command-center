@@ -66,7 +66,7 @@ func agentPrompt(ticket store.Ticket, launched plan.Ticket) string {
 func (l *Loop) launchEligible(
 	ctx context.Context, snap plan.Snapshot, t *tick, byTicket map[plan.TicketURL]store.Ticket,
 ) error {
-	for _, ticketURL := range snap.LaunchAfter(t.started()) {
+	for _, ticketURL := range snap.LaunchAfter(t.spawned) {
 		if slices.Contains(t.spawned, ticketURL) {
 			continue
 		}

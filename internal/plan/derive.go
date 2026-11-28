@@ -177,16 +177,19 @@ type Snapshot struct {
 	now         time.Time
 }
 
-func (s Snapshot) LaunchAfter(started Load) []TicketURL {
-	return LaunchPlan(s.launch, s.loadAfter(started), s.caps, s.spendPaused)
+func (s Snapshot) LaunchAfter(spawned []TicketURL) []TicketURL {
+	load := s.load
+	for _, c := range s.launch {
+		if slices.Contains(spawned, c.URL) {
+			load = load.charge(c.command())
+		}
+	}
+	return LaunchPlan(s.launch, load, s.caps, s.spendPaused)
 }
 
 func (s Snapshot) SlotFree(command bool, started Load) bool {
-	return s.loadAfter(started).fits(command, s.caps)
-}
-
-func (s Snapshot) loadAfter(started Load) Load {
-	return Load{Agents: s.load.Agents + started.Agents, Commands: s.load.Commands + started.Commands}
+	load := Load{Agents: s.load.Agents + started.Agents, Commands: s.load.Commands + started.Commands}
+	return load.fits(command, s.caps)
 }
 
 func (s Snapshot) Skipping() Snapshot {
