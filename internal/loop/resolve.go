@@ -69,6 +69,9 @@ func (l *Loop) resolveOne(
 		}
 	}
 
+	if !snap.SlotFree(false, t.started()) {
+		return handled{}, errIntentPending
+	}
 	baseline, err := l.baseline(ctx, ticket)
 	if err != nil {
 		return handled{}, err

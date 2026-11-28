@@ -75,6 +75,9 @@ func (l *Loop) followUpOne(
 	if refusal != "" {
 		return l.refuse(ctx, ticket.URL, store.EventFollowUpRefused, refusal)
 	}
+	if !snap.SlotFree(false, t.started()) {
+		return handled{}, errIntentPending
+	}
 
 	baselineSHA, err := l.baseline(ctx, ticket)
 	if err != nil {
@@ -192,7 +195,7 @@ func (l *Loop) applyReRunIntents(
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		runID, err := l.reRunOne(ctx, t, ticket, entry, baseBranch)
+		runID, err := l.reRunOne(ctx, snap, t, ticket, entry, baseBranch)
 		if err != nil {
 			return handled{}, err
 		}
@@ -201,10 +204,13 @@ func (l *Loop) applyReRunIntents(
 }
 
 func (l *Loop) reRunOne(
-	ctx context.Context, t *tick, ticket store.Ticket, entry plan.Entry, baseBranch string,
+	ctx context.Context, snap plan.Snapshot, t *tick, ticket store.Ticket, entry plan.Entry, baseBranch string,
 ) (plan.RunID, error) {
 	launched, promptHash := entry.Ticket, entry.PromptHash
 	begin := l.startOf(entry, t.obs)
+	if !snap.SlotFree(begin.step.Command, t.started()) {
+		return 0, errIntentPending
+	}
 	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, l.checkout(ticket.Repo), ticket.Branch); err != nil {

@@ -140,7 +140,7 @@ func testConfigAndWorkspace(
 	t *testing.T, root string, maxAgents int, agentCommand []string,
 ) (config.Config, config.Workspace) {
 	t.Helper()
-	cfg := config.Config{DataDir: root, MaxAgents: maxAgents, MaxVerifies: 1, AgentCommand: agentCommand}
+	cfg := config.Config{DataDir: root, MaxAgents: max(maxAgents, 1), MaxVerifies: 1, AgentCommand: agentCommand}
 	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
